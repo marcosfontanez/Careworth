@@ -1,0 +1,64 @@
+# Build from repository root:
+#   docker build -f Dockerfile.export-worker -t pulseverse-export .
+# Fly: fly deploy -c fly.export-worker.toml
+
+FROM node:22-bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY export-worker/package.json export-worker/package-lock.json ./
+RUN npm install
+COPY export-worker/tsconfig.json ./
+COPY export-worker/src ./src
+COPY assets/video/pulseverse-endcard.mp4 ./bundled/pulseverse-endcard-src.mp4
+COPY assets/images/pulseverse-logo.png ./bundled/pulseverse-logo-src.png
+# Pre-normalize the end card to 1080x1920 / 30fps / 48kHz AAC stereo at build time.
+# Runtime can then concat it directly without scaling, padding, or audio resampling,
+# saving 3-5 seconds of CPU on every single export job.
+RUN ffmpeg -y -i ./bundled/pulseverse-endcard-src.mp4 \
+    -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p" \
+    -c:v libx264 -preset slow -crf 18 -movflags +faststart \
+    -c:a aac -ar 48000 -ac 2 -b:a 160k \
+    ./bundled/pulseverse-endcard.mp4 \
+ && rm ./bundled/pulseverse-endcard-src.mp4
+# Build a true RGBA watermark from the source logo. The bundled logo asset is
+# a JPEG-on-PNG-extension with a SOLID BLACK background (no real alpha channel),
+# which is why earlier overlay attempts showed the background rectangle/grid even
+# after we forced `format=rgba`. We use FFmpeg's `colorkey` filter to chroma-key
+# black -> transparent at build time, producing an honest RGBA PNG that overlays
+# cleanly on top of any video.
+#
+# Filter chain (left → right):
+#   crop=in_h:in_h               center-crop the source down to a perfect square
+#                                so the logo isn't dwarfed by black space on the
+#                                sides. The source is 1024x682 (3:2), this gives
+#                                a 682x682 square framed around the logo.
+#   colorkey=0x000000:0.18:0.10  make pixels within ~18% similarity to pure black
+#                                fully transparent. Kept conservative on purpose:
+#                                higher thresholds (0.30+) start eating into the
+#                                dark teal portions of the logo, leaving it hollow.
+#                                The 10% blend gives a soft alpha edge so the
+#                                anti-aliased outline doesn't look pixelated.
+#   format=rgba                  lock the result to a real alpha-channel format.
+#   scale=480:480                fixed final size so the runtime pipeline only
+#                                does a single cheap scale-down to LOGO_PX.
+RUN ffmpeg -y -i ./bundled/pulseverse-logo-src.png \
+    -vf "crop=in_h:in_h,colorkey=0x000000:0.18:0.10,format=rgba,scale=480:480:flags=lanczos" \
+    -frames:v 1 ./bundled/pulseverse-watermark.png \
+ && cp ./bundled/pulseverse-logo-src.png ./bundled/pulseverse-logo.png \
+ && rm ./bundled/pulseverse-logo-src.png
+RUN npx tsc -p tsconfig.json
+
+FROM node:22-bookworm-slim AS run
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV NODE_ENV=production
+COPY export-worker/package.json export-worker/package-lock.json ./
+RUN npm install --omit=dev
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/bundled ./bundled
+EXPOSE 8080
+CMD ["node", "dist/index.js"]

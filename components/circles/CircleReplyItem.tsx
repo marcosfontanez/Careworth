@@ -1,0 +1,108 @@
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, borderRadius } from '@/theme';
+import { timeAgo } from '@/utils/format';
+import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import type { CircleReply, CreatorSummary } from '@/types';
+
+type Props = {
+  reply: CircleReply;
+  /** When set with `threadId` + anonymous circle slug, hides real identity and highlights OP replies. */
+  circleSlug?: string;
+  threadAuthorId?: string;
+  threadId?: string;
+};
+
+export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }: Props) {
+  const isAnonRoom = isAnonymousConfessionCircle(circleSlug);
+  const author: CreatorSummary = useMemo(
+    () =>
+      reply.author ?? {
+        id: reply.authorId,
+        displayName: 'Member',
+        avatarUrl: '',
+        role: 'RN',
+        specialty: 'General',
+        city: '',
+        state: '',
+        isVerified: false,
+      },
+    [reply.author, reply.authorId],
+  );
+
+  const displayName = useMemo(() => {
+    if (isAnonRoom && threadId) return anonymousDisplayName(reply.authorId, threadId);
+    return author.displayName;
+  }, [isAnonRoom, threadId, reply.authorId, author.displayName]);
+
+  const isOp = Boolean(
+    isAnonRoom && threadAuthorId && threadId && reply.authorId === threadAuthorId,
+  );
+
+  return (
+    <View style={styles.row}>
+      {isAnonRoom ? (
+        <View style={[styles.avatar, isOp && styles.opNeonRing]}>
+          <Ionicons name="eye-off-outline" size={18} color={colors.dark.textMuted} />
+        </View>
+      ) : (
+        <Image source={{ uri: author.avatarUrl }} style={styles.avatar} />
+      )}
+      <View style={styles.main}>
+        <View style={styles.head}>
+          <Text style={styles.name} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={styles.time}>{timeAgo(reply.createdAt)}</Text>
+        </View>
+        <Text style={styles.role} numberOfLines={1}>
+          {isAnonRoom ? (isOp ? 'Original poster' : 'Anonymous') : author.role}
+        </Text>
+        <Text style={styles.body}>{reply.body}</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.dark.border,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.dark.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  opNeonRing: {
+    borderWidth: 2,
+    borderColor: colors.primary.teal,
+    shadowColor: colors.primary.teal,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  main: { flex: 1, minWidth: 0 },
+  head: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  name: { fontSize: 13, fontWeight: '800', color: colors.dark.text, flex: 1 },
+  time: { fontSize: 11, color: colors.dark.textMuted },
+  role: { fontSize: 10, fontWeight: '600', color: colors.primary.teal, marginTop: 2 },
+  body: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.dark.textSecondary,
+  },
+});

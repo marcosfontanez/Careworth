@@ -1,0 +1,36 @@
+# PulseVerse FFmpeg export worker
+# Prerequisites: apply supabase/migrations/036_exports_storage_bucket.sql
+# Secrets: fly secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_JWT_SECRET=...
+# Optional: EXPORT_RATE_LIMIT_PER_HOUR=20 EXPORT_SIGNED_URL_SECS=3600
+#
+# Deploy from repo root:
+#   fly deploy -c fly.export-worker.toml
+
+app = 'pulseverse-export'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile.export-worker'
+
+[env]
+  PORT = '8080'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Job state lives in-memory; routing polls to a different machine 404s, so run a single warm machine.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  interval = '15s'
+  timeout = '2s'
+  grace_period = '5s'
+  method = 'GET'
+  path = '/health'
+
+# FFmpeg/libx264 needs ~512MB+ for 1080p re-encode. 1GB shared CPU keeps it cheap when auto-stopped.
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'

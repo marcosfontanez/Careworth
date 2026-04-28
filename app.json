@@ -1,0 +1,147 @@
+{
+  "expo": {
+    "name": "PulseVerse",
+    "slug": "CareWorth",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/pulseverse-logo.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "pulseverse",
+    "splash": {
+      "image": "./assets/images/pulseverse-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A1628"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pulseverse.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "PulseVerse needs camera access to record videos and take photos for your posts.",
+        "NSPhotoLibraryUsageDescription": "PulseVerse needs photo library access to share images and videos.",
+        "NSPhotoLibraryAddUsageDescription": "PulseVerse saves videos and photos you download to your library.",
+        "NSMicrophoneUsageDescription": "PulseVerse needs microphone access to record videos with audio.",
+        "NSFaceIDUsageDescription": "PulseVerse uses Face ID for secure authentication.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "associatedDomains": [
+        "applinks:pulseverse.app"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/pulseverse-logo.png",
+        "backgroundColor": "#0A1628"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.pulseverse.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_IMAGES"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "pulseverse.app",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "pulseverse"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/pulseverse-logo.png",
+      "bundler": "metro",
+      "name": "PulseVerse",
+      "shortName": "PulseVerse",
+      "description": "Built for Healthcare Life.",
+      "themeColor": "#0A1628",
+      "backgroundColor": "#0A1628"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-video",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PulseVerse needs access to your photos to share images.",
+          "cameraPermission": "PulseVerse needs camera access to take photos and record videos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "PulseVerse can access photos when you pick media for posts.",
+          "savePhotosPermission": "PulseVerse saves videos and photos you download to your gallery.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/pulseverse-logo.png",
+          "color": "#1E4ED8",
+          "sounds": [],
+          "mode": "production"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PulseVerse needs camera access to record videos and take photos.",
+          "microphonePermission": "PulseVerse needs microphone access to record videos with audio.",
+          "recordAudioAndroid": true
+        }
+      ],
+      "expo-web-browser",
+      "expo-apple-authentication",
+      "expo-audio",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "",
+          "project": ""
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "45474eb0-9910-4871-974d-9bd110a724e1"
+      }
+    },
+    "owner": "care-worth",
+    "updates": {
+      "url": "https://u.expo.dev/45474eb0-9910-4871-974d-9bd110a724e1"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}
