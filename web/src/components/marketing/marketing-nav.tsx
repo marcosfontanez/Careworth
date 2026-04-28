@@ -64,7 +64,7 @@ export function MarketingNav() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.85)] backdrop-blur-xl">
-      <div className={cn("relative flex h-16 items-center justify-between gap-6", marketingGutterX)}>
+      <div className={cn("relative flex min-h-[5.5rem] items-center justify-between gap-4 py-2 sm:min-h-[6rem] sm:gap-6", marketingGutterX)}>
         <MarketingLogo className="shrink-0" />
         <nav
           className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-7 lg:flex"

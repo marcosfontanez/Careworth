@@ -61,7 +61,7 @@ const groups: { title: string; items: Item[] }[] = [
 export function AdminSidebar({ currentPath }: { currentPath: string }) {
   return (
     <aside className="flex w-[16.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center justify-between gap-2 border-b border-sidebar-border px-3">
+      <div className="flex min-h-[5rem] items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2">
         <MarketingLogo variant="admin" className="min-w-0" />
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Admin</span>
       </div>

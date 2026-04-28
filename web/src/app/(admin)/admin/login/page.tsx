@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Activity } from "lucide-react";
+import Image from "next/image";
 
 import { signInAdmin } from "@/app/(admin)/admin/actions";
-import { site } from "@/lib/design-tokens";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,10 +41,17 @@ export default async function AdminLoginPage({
         )}
       >
         <div className="mb-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#0066ff] text-white shadow-lg shadow-primary/30">
-            <Activity className="h-6 w-6" strokeWidth={2.2} aria-hidden />
+          <div className="mx-auto flex justify-center">
+            <Image
+              src="/brand/pulseverse-logo-lockup.png"
+              alt=""
+              width={1024}
+              height={1024}
+              className="h-28 w-auto max-w-[min(92vw,340px)] object-contain sm:h-32"
+              priority
+            />
           </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">{site.name} admin</h1>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-foreground">Staff admin</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Staff sign-in. Your profile must have <span className="text-foreground/90">role_admin</span> in Supabase.
           </p>
