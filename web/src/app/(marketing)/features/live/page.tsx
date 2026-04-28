@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
+
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeatureLiveLanding } from "@/components/marketing/feature-live-landing";
+import { canonical, m } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { ...m.featuresLive, alternates: canonical("/features/live") };
 
 export default function LiveFeaturePage() {
   return (

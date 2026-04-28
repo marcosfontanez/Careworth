@@ -13,8 +13,7 @@ export default function AdminInsightsPage() {
       <Card className="border-border/80 bg-gradient-to-r from-card/95 to-primary/[0.06] shadow-sm ring-1 ring-white/[0.04]">
         <CardContent className="p-6 text-sm leading-relaxed text-muted-foreground">
           <p>
-            This workspace is designed to grow with your warehouse: start with directionally accurate mocks, then swap
-            tabs for real segment definitions, funnel windows, and trust metrics without restructuring the UI.
+            This workspace is designed to grow with your warehouse: sample KPIs and charts ship first; swap in real segment definitions, funnel windows, and trust metrics without restructuring the UI.
           </p>
           <p className="mt-3">
             Use <span className="font-medium text-foreground">Overview</span> for executive pulse,{" "}

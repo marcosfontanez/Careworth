@@ -365,3 +365,36 @@ export async function loadAdminCounts() {
     return { users: 0, openReports: 0, circles: 0, liveSessions: 0 };
   }
 }
+
+export type AuditEventRow = {
+  id: string;
+  event_name: string;
+  created_at: string;
+  user_id: string | null;
+};
+
+/** Recent product analytics (admin RLS). Surfaces as a read-only activity stream in Settings. */
+export async function loadRecentAnalyticsEvents(limit = 25): Promise<AuditEventRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("analytics_events")
+      .select("id, event_name, created_at, user_id")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data?.length) {
+      return [];
+    }
+
+    return data.map((r) => ({
+      id: String(r.id),
+      event_name: String(r.event_name),
+      created_at: r.created_at as string,
+      user_id: (r.user_id as string | null) ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}

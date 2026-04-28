@@ -13,11 +13,12 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
+import { NewsletterSignup } from "@/components/marketing/newsletter-signup";
 import { SupportFaqAccordion } from "@/components/marketing/support-faq-accordion";
 import { marketingCardMuted, marketingEyebrow, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
+import { getSupportEmail } from "@/lib/site-constants";
 import { supportFaqItems } from "@/mock/marketing";
 
 const helpTiles = [
@@ -29,13 +30,24 @@ const helpTiles = [
   { title: "Partners", body: "Press, access programs, and institution pilots.", icon: Headphones },
 ] as const;
 
-const contactCards = [
-  { title: "Contact support", body: "Priority threads for trust & safety and access issues.", icon: Headphones, href: "/contact" },
-  { title: "Email us", body: "support@CareWorth.example", icon: Mail, href: "mailto:support@CareWorth.example" },
-  { title: "Response time", body: "We typically respond within 24–48 business hours.", icon: Clock, href: "/faq", badge: "24–48h avg." },
-] as const;
-
 export function SupportCenterContent() {
+  const supportEmail = getSupportEmail();
+  const contactCards = [
+    {
+      title: "Contact support",
+      body: "Priority threads for trust & safety and access issues.",
+      icon: Headphones,
+      href: "/contact",
+    },
+    { title: "Email us", body: supportEmail, icon: Mail, href: `mailto:${supportEmail}` },
+    {
+      title: "Response time",
+      body: "We typically respond within 24–48 business hours.",
+      icon: Clock,
+      href: "/faq",
+      badge: "24–48h avg.",
+    },
+  ] as const;
   return (
     <>
       <section className="relative overflow-hidden pb-16 pt-8 sm:pt-12">
@@ -147,11 +159,28 @@ export function SupportCenterContent() {
         </div>
 
         <div className="mt-20 grid gap-6 md:grid-cols-3">
-          {[
-            { title: "Safety & reporting", body: "In-app flags route to trained moderators with clinical context.", icon: Shield },
-            { title: "Community guidelines", body: "How we protect culture without chilling good-faith debate.", icon: BookOpen },
-            { title: "Privacy & security", body: "Data minimization, controls, and transparent retention (placeholders).", icon: Sparkles },
-          ].map((b) => {
+          {(
+            [
+              {
+                title: "Safety & reporting",
+                body: "In-app flags route to trained moderators with clinical context.",
+                icon: Shield,
+                href: "/community-guidelines",
+              },
+              {
+                title: "Community guidelines",
+                body: "How we protect culture without chilling good-faith debate.",
+                icon: BookOpen,
+                href: "/community-guidelines",
+              },
+              {
+                title: "Privacy & security",
+                body: "Data minimization, retention controls, and terms in our Privacy Policy.",
+                icon: Sparkles,
+                href: "/privacy",
+              },
+            ] as const
+          ).map((b) => {
             const Icon = b.icon;
             return (
               <div key={b.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
@@ -160,7 +189,7 @@ export function SupportCenterContent() {
                 </div>
                 <h3 className="mt-4 text-center text-lg font-semibold text-foreground">{b.title}</h3>
                 <p className="mt-2 text-center text-sm text-muted-foreground">{b.body}</p>
-                <Link href="/community-guidelines" className="mt-4 block text-center text-sm font-semibold text-primary hover:underline">
+                <Link href={b.href} className="mt-4 block text-center text-sm font-semibold text-primary hover:underline">
                   Learn more
                 </Link>
               </div>
@@ -171,15 +200,8 @@ export function SupportCenterContent() {
         <div className="relative mt-20 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0c1f4a]/90 via-[rgba(5,10,20,0.95)] to-primary/20 p-8">
           <h3 className="text-lg font-bold text-foreground">Subscribe to help updates</h3>
           <p className="mt-1 text-sm text-muted-foreground">Product changes, trust &amp; safety notices, and Live ops tips.</p>
-          <div className="mt-4 flex max-w-md gap-2">
-            <Input
-              type="email"
-              placeholder="Email"
-              className="border-white/10 bg-white/[0.06] placeholder:text-muted-foreground"
-            />
-            <Button type="button" size="icon" className="shrink-0 rounded-xl bg-white text-[#050a14] hover:bg-white/90" aria-label="Subscribe">
-              →
-            </Button>
+          <div className="mt-4 max-w-md">
+            <NewsletterSignup source="support" />
           </div>
         </div>
       </MarketingPageShell>

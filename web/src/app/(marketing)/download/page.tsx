@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { Button } from "@/components/ui/button";
 import { marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
+import { canonical, m } from "@/lib/page-metadata";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = { ...m.download, alternates: canonical("/download") };
 
 export default function DownloadPage() {
   return (

@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ContactForm } from "@/components/marketing/contact-form";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { Button } from "@/components/ui/button";
+import { canonical, m } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { ...m.contact, alternates: canonical("/contact") };
 
 export default async function ContactPage({
   searchParams,

@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
+
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeatureCirclesLanding } from "@/components/marketing/feature-circles-landing";
+import { canonical, m } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { ...m.featuresCircles, alternates: canonical("/features/circles") };
 
 export default function CirclesFeaturePage() {
   return (

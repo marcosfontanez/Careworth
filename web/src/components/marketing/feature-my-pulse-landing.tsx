@@ -23,7 +23,7 @@ function ProfileViewsSpark() {
           />
         ))}
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground">Last 7 days · mock</p>
+      <p className="mt-2 text-[10px] text-muted-foreground">Illustrative trend · not live account data</p>
     </div>
   );
 }

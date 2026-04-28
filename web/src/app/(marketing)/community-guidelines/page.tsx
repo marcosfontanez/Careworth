@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
+
 import { LegalDoc } from "@/components/marketing/legal-doc";
+import { canonical, m } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { ...m.communityGuidelines, alternates: canonical("/community-guidelines") };
 
 const toc = [
   { id: "expectations", label: "Core expectations" },

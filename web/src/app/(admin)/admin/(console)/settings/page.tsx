@@ -3,52 +3,52 @@ import { AdminPanelCard } from "@/components/admin/admin-panel-card";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { loadRecentAnalyticsEvents } from "@/lib/admin/queries";
 import { FileClock } from "lucide-react";
 
-const mockAuditTail = [
-  { id: "1", at: "2026-04-27 15:01", action: "Strict live review toggled off", actor: "lead_taylor" },
-  { id: "2", at: "2026-04-27 11:40", action: "Circle featured order updated", actor: "ops_api" },
-  { id: "3", at: "2026-04-26 09:12", action: "PHI auto-queue sensitivity raised", actor: "trust_policy" },
-];
+export default async function AdminSettingsPage() {
+  const events = await loadRecentAnalyticsEvents(30);
 
-export default function AdminSettingsPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Settings" }]}
         title="Settings"
-        description="Platform controls — feature flags and policy placeholders."
+        description="Platform controls — connect moderation policy and feature flags to your backend when ready."
       />
       <div className="grid gap-4 md:grid-cols-2">
         <AdminPanelCard>
           <CardHeader>
             <CardTitle>Moderation defaults</CardTitle>
-            <CardDescription>Auto-hold thresholds, PHI pattern lists — wire to policy service.</CardDescription>
+            <CardDescription>
+              Visual toggles only until wired to your policy service. Turning options here does not change production
+              behavior yet.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="live-flag">Strict live review</Label>
-              <Switch id="live-flag" />
+              <Switch id="live-flag" disabled />
             </div>
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="appeal-auto">Auto-queue PHI risk</Label>
-              <Switch id="appeal-auto" defaultChecked />
+              <Switch id="appeal-auto" defaultChecked disabled />
             </div>
           </CardContent>
         </AdminPanelCard>
         <AdminPanelCard>
           <CardHeader>
             <CardTitle>Product flags</CardTitle>
-            <CardDescription>Mirror mobile feature flag service when connected.</CardDescription>
+            <CardDescription>Mirror mobile feature flags from your remote config when integrated.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="creator-fund">Creator fund</Label>
-              <Switch id="creator-fund" />
+              <Switch id="creator-fund" disabled />
             </div>
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="ads">Sponsored surfaces</Label>
-              <Switch id="ads" defaultChecked />
+              <Switch id="ads" defaultChecked disabled />
             </div>
           </CardContent>
         </AdminPanelCard>
@@ -57,22 +57,32 @@ export default function AdminSettingsPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <FileClock className="h-4 w-4 text-primary" aria-hidden />
-            <CardTitle>Audit tail</CardTitle>
+            <CardTitle>Recent product events</CardTitle>
           </div>
-          <CardDescription>Placeholder stream — wire to immutable audit log / SIEM.</CardDescription>
+          <CardDescription>
+            Latest rows from <span className="font-mono text-xs">analytics_events</span> (read-only). For a full audit
+            trail, export to your SIEM or add a dedicated admin audit table.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {mockAuditTail.map((row) => (
-            <div
-              key={row.id}
-              className="flex flex-col gap-1 rounded-lg border border-border/60 bg-secondary/20 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <p className="font-medium text-foreground">{row.action}</p>
-              <p className="text-xs tabular-nums text-muted-foreground">
-                {row.at} · {row.actor}
-              </p>
-            </div>
-          ))}
+          {events.length ? (
+            events.map((row) => (
+              <div
+                key={row.id}
+                className="flex flex-col gap-1 rounded-lg border border-border/60 bg-secondary/20 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <p className="font-medium text-foreground">{row.event_name}</p>
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {new Date(row.created_at).toLocaleString()}
+                  {row.user_id ? ` · ${String(row.user_id).slice(0, 8)}…` : ""}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground">
+              No analytics events yet, or Supabase env not configured. Events appear here as the mobile app records them.
+            </p>
+          )}
         </CardContent>
       </AdminPanelCard>
     </div>

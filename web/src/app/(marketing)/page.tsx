@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { CtaSection } from "@/components/marketing/cta-section";
 import { HomeFeatureShowcase } from "@/components/marketing/home-feature-showcase";
 import { HomeProductOverview } from "@/components/marketing/home-product-overview";
@@ -7,6 +9,9 @@ import { HomeStatsSplit } from "@/components/marketing/home-stats-split";
 import { HomeTestimonials } from "@/components/marketing/home-testimonials";
 import { HomeWhySix } from "@/components/marketing/home-why-six";
 import { HeroSection } from "@/components/marketing/hero-section";
+import { canonical, m } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { ...m.home, alternates: canonical("/") };
 
 export default function HomePage() {
   return (

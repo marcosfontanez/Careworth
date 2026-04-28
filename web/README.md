@@ -34,9 +34,14 @@ On **Vercel**, add the same variables under Project → Settings → Environment
 
 Apply migrations in `../supabase/migrations` (including `064_web_marketing_leads_and_admin_rls.sql`) so marketing tables and admin RLS policies exist.
 
-## Structure
+## Launch checklist
 
-| Area | Path |
+1. Set all variables in `.env.example` on Vercel (especially `NEXT_PUBLIC_SITE_URL` and contact emails).
+2. Apply Supabase migrations (including `064_web_marketing_leads_and_admin_rls.sql`).
+3. Add **Auth redirect URLs** for your production domain in Supabase.
+4. Have **counsel review** Privacy Policy and Terms before public marketing push.
+5. Confirm at least one `profiles.role_admin` account can sign in at `/admin/login`.
+
 |------|------|
 | Public routes | `src/app/(marketing)/*` |
 | Admin routes | `src/app/(admin)/admin/*` |

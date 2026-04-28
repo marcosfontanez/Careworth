@@ -153,7 +153,7 @@ export function ModeratorWorkloadPanel({
     <AdminPanelCard>
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold">Active moderators</CardTitle>
-        <p className="text-xs text-muted-foreground">Workload overview · mock</p>
+        <p className="text-xs text-muted-foreground">Operational snapshot (sample)</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {moderators.map((m) => (

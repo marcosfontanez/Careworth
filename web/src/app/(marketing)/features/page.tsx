@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, LayoutGrid } from "lucide-react";
 import { CtaSection } from "@/components/marketing/cta-section";
@@ -14,8 +15,11 @@ import {
   marketingSectionTitle,
   shadowPrimaryCta,
 } from "@/lib/ui-classes";
+import { canonical, m } from "@/lib/page-metadata";
 import { cn } from "@/lib/utils";
 import { featuresHubGrid, featuresHubIntro, homeFeatureSpotlights } from "@/mock/marketing";
+
+export const metadata: Metadata = { ...m.features, alternates: canonical("/features") };
 
 export default function FeaturesHubPage() {
   return (

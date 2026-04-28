@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
+
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeatureFeedLanding } from "@/components/marketing/feature-feed-landing";
+import { canonical, m } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { ...m.featuresFeed, alternates: canonical("/features/feed") };
 
 export default function FeedFeaturePage() {
   return (

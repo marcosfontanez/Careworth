@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
+
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { FaqAccordion } from "@/components/marketing/faq-accordion";
 import { marketingCardMuted } from "@/lib/ui-classes";
+import { canonical, m } from "@/lib/page-metadata";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = { ...m.faq, alternates: canonical("/faq") };
 
 const items = [
   {

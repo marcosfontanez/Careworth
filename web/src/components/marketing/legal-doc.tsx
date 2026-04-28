@@ -44,7 +44,8 @@ export function LegalDoc({
       >
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Last updated {updated} · Placeholder legal copy for structure — replace with counsel-approved text.
+          Last updated {updated}. Review with qualified legal counsel before relying on this text as your sole policy
+          document.
         </p>
         <div className="mt-10 space-y-4 leading-relaxed text-muted-foreground [&_h2]:scroll-mt-28 [&_h2]:border-b [&_h2]:border-border/60 [&_h2]:pb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-foreground [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5">
           {children}

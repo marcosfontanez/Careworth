@@ -60,7 +60,7 @@ export function InsightsWorkspace() {
       </TabsContent>
       <TabsContent value="audience" className="space-y-6">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Breakdowns by profession, specialty, geography, experience — mock segment tiles ship with your warehouse.
+          Breakdowns by profession, specialty, geography, and experience — connect your warehouse to replace sample tiles.
         </p>
         <AudienceDonutChart />
       </TabsContent>
@@ -94,7 +94,7 @@ export function InsightsWorkspace() {
       </TabsContent>
       <TabsContent value="circles" className="space-y-6">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Fastest growing, most joined, trending topics — mock bar chart below.
+          Fastest growing, most joined, trending topics — sample bar chart until analytics are wired.
         </p>
         <TopCirclesBarChart />
       </TabsContent>
@@ -120,7 +120,7 @@ export function InsightsWorkspace() {
             { label: "Impressions (30d)", value: "18.2M" },
             { label: "CTR", value: "1.96%" },
             { label: "Engaged actions", value: "240K" },
-            { label: "Brand lift (mock)", value: "+3.2" },
+            { label: "Brand lift (sample)", value: "+3.2" },
           ]}
         />
       </TabsContent>
