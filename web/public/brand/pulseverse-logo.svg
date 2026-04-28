@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 300" role="img" aria-label="PulseVerse">
+  <defs>
+    <linearGradient id="pv-icon" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="pv-word" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="40%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <!-- Orbit -->
+  <ellipse
+    cx="130"
+    cy="112"
+    rx="78"
+    ry="52"
+    fill="none"
+    stroke="url(#pv-icon)"
+    stroke-width="2.2"
+    opacity="0.92"
+    transform="rotate(-26 130 112)"
+  />
+  <circle cx="198" cy="66" r="7.5" fill="#22d3ee"/>
+  <!-- P mark (even-odd: counter opens middle for pulse line visibility) -->
+  <path
+    fill="url(#pv-icon)"
+    fill-rule="evenodd"
+    d="M72 36v152h32v-36h22q44 0 44-40 0-40-44-40h-22V36H72zm32 40h19q22 0 22 22 0 22-22 22h-19V76z"
+  />
+  <!-- EKG -->
+  <path
+    fill="none"
+    stroke="#ecfeff"
+    stroke-width="3.4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M76 108h14l8-22 10 44 10-32 8 22h46"
+  />
+  <!-- Wordmark -->
+  <text
+    x="140"
+    y="264"
+    text-anchor="middle"
+    font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+    font-size="34"
+    font-weight="800"
+    letter-spacing="-0.03em"
+    fill="url(#pv-word)"
+  >
+    PulseVerse
+  </text>
+</svg>

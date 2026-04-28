@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 import { signInAdmin } from "@/app/(admin)/admin/actions";
 import { Button } from "@/components/ui/button";
@@ -42,13 +41,15 @@ export default async function AdminLoginPage({
       >
         <div className="mb-8 text-center">
           <div className="mx-auto flex justify-center">
-            <Image
-              src="/brand/pulseverse-logo-lockup.png"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/pulseverse-logo.svg"
               alt=""
-              width={1024}
-              height={1024}
-              className="h-28 w-auto max-w-[min(92vw,340px)] object-contain sm:h-32"
-              priority
+              width={280}
+              height={300}
+              decoding="async"
+              fetchPriority="high"
+              className="h-32 w-auto max-w-[min(92vw,360px)] object-contain sm:h-36"
             />
           </div>
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-foreground">Staff admin</h1>

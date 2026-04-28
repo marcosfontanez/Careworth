@@ -1,9 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { site } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
-const LOGO_SRC = "/brand/pulseverse-logo-lockup.png";
+/** Vector lockup — true transparency, no raster matte. */
+const LOGO_SRC = "/brand/pulseverse-logo.svg";
 
 type Variant = "nav" | "footer" | "admin";
 
@@ -20,19 +20,20 @@ export function MarketingLogo({ className, variant = "nav" }: { className?: stri
       className={cn("inline-flex shrink-0 items-center", className)}
       aria-label={`${site.name} home`}
     >
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element -- SVG asset; avoids raster checkerboard */}
+      <img
         src={LOGO_SRC}
         alt=""
-        width={1024}
-        height={1024}
-        priority={variant === "nav"}
+        width={280}
+        height={300}
+        decoding="async"
+        fetchPriority={variant === "nav" ? "high" : "auto"}
         className={cn(
           "w-auto max-w-[min(88vw,320px)] object-contain object-left sm:max-w-[360px] md:max-w-[400px]",
           variant === "footer" && "max-w-[min(92vw,380px)] sm:max-w-[420px]",
           variant === "admin" && "max-w-[240px] sm:max-w-[280px]",
           heights[variant],
         )}
-        sizes="(max-width: 640px) 320px, (max-width: 1024px) 360px, 400px"
       />
     </Link>
   );
