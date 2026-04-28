@@ -15,7 +15,7 @@ export default function CommunityGuidelinesPage() {
   return (
     <LegalDoc title="Community Guidelines" toc={toc}>
       <p>
-        CareWorth is a culture network for healthcare professionals. Be respectful, accurate, and mindful of patient
+        PulseVerse is a culture network for healthcare professionals. Be respectful, accurate, and mindful of patient
         privacy. Moderation may restrict accounts that harm community safety.
       </p>
       <h2 id="expectations">Core expectations</h2>

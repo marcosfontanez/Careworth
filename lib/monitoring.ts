@@ -40,6 +40,6 @@ export function sendSentryTestEvent(): SentryTestResult {
     };
   }
 
-  Sentry.captureException(new Error('[manual test] CareWorth Sentry ping from Settings'));
+  Sentry.captureException(new Error('[manual test] PulseVerse Sentry ping from Settings'));
   return { sent: true };
 }

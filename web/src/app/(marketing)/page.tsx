@@ -28,7 +28,7 @@ export default function HomePage() {
         title="Your community. Your voice. Your Pulse."
         description="Join clinicians, students, and teams building healthcare culture — with trust, clarity, and room to breathe."
         primaryHref="/download"
-        primaryLabel="Join CareWorth now"
+        primaryLabel="Join PulseVerse now"
         secondaryHref="/contact"
         secondaryLabel="Talk to partnerships"
       />

@@ -22,7 +22,7 @@ export default function PrivacyPage() {
     <LegalDoc title="Privacy Policy" toc={toc}>
       <h2 id="intro">Introduction</h2>
       <p>
-        This Privacy Policy describes how CareWorth (“we”, “us”) handles information when you use our websites and
+        This Privacy Policy describes how PulseVerse (“we”, “us”) handles information when you use our websites and
         applications. It is intended for a professional audience in healthcare.{" "}
         <strong>Have this document reviewed by qualified legal counsel</strong> before treating it as final for your
         launch. Effective date: April 27, 2026.

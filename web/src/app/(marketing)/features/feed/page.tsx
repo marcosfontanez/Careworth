@@ -14,7 +14,7 @@ export default function FeedFeaturePage() {
         title="Your community. Your voice. Your Pulse."
         description="Scroll with context, create with credibility, and grow with moderators who understand medicine."
         primaryHref="/download"
-        primaryLabel="Join CareWorth now"
+        primaryLabel="Join PulseVerse now"
         secondaryHref="/features/circles"
         secondaryLabel="Explore Circles"
       />

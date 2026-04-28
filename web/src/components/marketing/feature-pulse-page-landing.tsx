@@ -61,7 +61,7 @@ export function FeaturePulsePageLanding() {
             <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
               Build your{" "}
               <span className="bg-gradient-to-r from-foreground to-foreground bg-clip-text">professional home</span> on{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">CareWorth.</span>
+              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">PulseVerse.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
               Premium profile, rolling five-post feed, pins, media hub, and everything that syncs with how you actually
@@ -77,7 +77,7 @@ export function FeaturePulsePageLanding() {
               <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
                 <Link href="/features" className="inline-flex items-center gap-2">
                   <UserCircle className="h-4 w-4" />
-                  Explore CareWorth
+                  Explore PulseVerse
                 </Link>
               </Button>
             </div>

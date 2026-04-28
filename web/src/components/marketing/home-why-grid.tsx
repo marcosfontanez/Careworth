@@ -10,7 +10,7 @@ export function HomeWhyGrid() {
     <section className="py-20 sm:py-24">
       <div className={marketingGutterX}>
         <SectionHeader
-          eyebrow="Why CareWorth"
+          eyebrow="Why PulseVerse"
           title="Checked your Pulse lately?"
           description="We’re building the cultural layer healthcare never had — not another enterprise directory."
         />

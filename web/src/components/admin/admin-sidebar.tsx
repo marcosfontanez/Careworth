@@ -17,6 +17,7 @@ import {
 
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { Badge } from "@/components/ui/badge";
+import { site } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; icon: LucideIcon; badge?: number };
@@ -66,7 +67,7 @@ export function AdminSidebar({ currentPath }: { currentPath: string }) {
           <Activity className="h-5 w-5" strokeWidth={2.2} aria-hidden />
         </div>
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-semibold tracking-tight text-foreground">CareWorth</p>
+          <p className="truncate text-sm font-semibold tracking-tight text-foreground">{site.name}</p>
           <p className="text-xs text-muted-foreground">Admin console</p>
         </div>
       </div>

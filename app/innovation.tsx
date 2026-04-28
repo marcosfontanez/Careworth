@@ -11,7 +11,7 @@ const SECTIONS: { id: string; title: string; body: string }[] = [
     id: 'pulse',
     title: 'Pulse+',
     body:
-      'CareWorth layers clinical context on top of short video: evidence links, shift-aware surfacing, and wellbeing breaks without losing the fast feed.',
+      'PulseVerse layers clinical context on top of short video: evidence links, shift-aware surfacing, and wellbeing breaks without losing the fast feed.',
   },
   {
     id: 'evidence',

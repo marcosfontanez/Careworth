@@ -57,7 +57,7 @@ export function SupportCenterContent() {
             <p className={marketingEyebrow}>Support center</p>
             <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl">
               Help for every part of{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">CareWorth.</span>
+              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">PulseVerse.</span>
             </h1>
             <div className="mt-8 flex gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5 ring-1 ring-white/[0.05]">
               <div className="flex flex-1 items-center gap-2 rounded-xl bg-[rgba(5,10,20,0.6)] px-4 py-3 text-sm text-muted-foreground">

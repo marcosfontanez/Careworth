@@ -68,7 +68,7 @@ export function HeroSection() {
                 asChild
               >
                 <Link href="/download" className="inline-flex items-center gap-2">
-                  Join CareWorth
+                  Join PulseVerse
                   <ArrowRight className="h-5 w-5" aria-hidden />
                 </Link>
               </Button>

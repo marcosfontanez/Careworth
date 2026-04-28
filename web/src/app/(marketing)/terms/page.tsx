@@ -20,7 +20,7 @@ export default function TermsPage() {
     <LegalDoc title="Terms of Service" toc={toc}>
       <h2 id="intro">Introduction</h2>
       <p>
-        These Terms of Service govern access to and use of CareWorth websites and applications.{" "}
+        These Terms of Service govern access to and use of PulseVerse websites and applications.{" "}
         <strong>Have them reviewed and approved by your counsel</strong> before launch. Effective date: April 27, 2026.
       </p>
       <p className="text-sm text-muted-foreground">{getLegalNotice()}</p>
@@ -32,7 +32,7 @@ export default function TermsPage() {
       <h2 id="license">License to operate</h2>
       <p>
         Subject to these terms, we grant you a limited, non-exclusive, non-transferable license to use the service. You
-        grant CareWorth the licenses reasonably necessary to host, display, and distribute content you submit —
+        grant PulseVerse the licenses reasonably necessary to host, display, and distribute content you submit —
         consistent with your privacy selections and product settings.
       </p>
       <h2 id="acceptable">Acceptable use</h2>

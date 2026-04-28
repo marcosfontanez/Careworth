@@ -1,5 +1,5 @@
 /**
- * Single source of truth for CareWorth My Pulse layout (live profile + posts).
+ * Single source of truth for PulseVerse My Pulse layout (live profile + posts).
  *
  * Layout (top → bottom, per premium Pulse Page overhaul):
  *   1. Banner + floating back/more

@@ -11,11 +11,11 @@ export const metadata: Metadata = { ...m.faq, alternates: canonical("/faq") };
 
 const items = [
   {
-    q: "Who is CareWorth for?",
+    q: "Who is PulseVerse for?",
     a: "Licensed or training healthcare professionals and aligned teams — from bedside to classroom — who want culture, not another corporate directory.",
   },
   {
-    q: "Is CareWorth HIPAA-compliant?",
+    q: "Is PulseVerse HIPAA-compliant?",
     a: "The product is designed with healthcare-grade trust and safety expectations. Specific compliance posture depends on your deployment and BAA needs — talk to us for enterprise health pathways.",
   },
   {
@@ -23,7 +23,7 @@ const items = [
     a: "Reports flow into trained moderator queues with severity, category, and live tooling. Appeals capture context for review.",
   },
   {
-    q: "Can I use CareWorth for medical advice?",
+    q: "Can I use PulseVerse for medical advice?",
     a: "No. Educational storytelling is welcome; individualized medical advice belongs in proper clinical channels. Community guidelines spell this out.",
   },
   {
@@ -35,7 +35,7 @@ const items = [
 export default function FaqPage() {
   return (
     <MarketingPageShell width="tight">
-      <SectionHeader title="FAQ" description="Quick answers for professionals considering CareWorth." />
+      <SectionHeader title="FAQ" description="Quick answers for professionals considering PulseVerse." />
       <div className={cn("mt-10 rounded-2xl border border-white/10 p-4 ring-1 ring-white/[0.04] sm:p-6", marketingCardMuted)}>
         <FaqAccordion items={items} />
       </div>

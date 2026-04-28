@@ -1,4 +1,4 @@
-# CareWorth web (Next.js)
+# PulseVerse web (Next.js)
 
 Public marketing site and Supabase-authenticated admin console in one App Router project.
 

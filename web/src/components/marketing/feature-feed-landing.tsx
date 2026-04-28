@@ -49,7 +49,7 @@ export function FeatureFeedLanding() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
                 <Link href="/download" className="inline-flex items-center gap-2">
-                  Join CareWorth
+                  Join PulseVerse
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

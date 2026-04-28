@@ -24,7 +24,7 @@ export function HomeStatsSplit() {
               </span>
             </h2>
             <p className="mt-5 max-w-lg text-lg text-muted-foreground">
-              CareWorth grows where clinicians already show up — with rooms, live moments, and profiles worth revisiting.
+              PulseVerse grows where clinicians already show up — with rooms, live moments, and profiles worth revisiting.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
