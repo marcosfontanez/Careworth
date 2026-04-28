@@ -40,14 +40,7 @@ export function HeroSection() {
       <div className={cn("relative", marketingGutterX)}>
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-10">
           <div>
-            <p
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border border-[rgba(148,163,184,0.2)] bg-[rgba(12,21,36,0.6)] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)] backdrop-blur-sm",
-              )}
-            >
-              The culture network
-            </p>
-            <h1 className="mt-6 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem] xl:text-6xl">
+            <h1 className="mt-2 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem] xl:text-6xl">
               Healthcare culture,{" "}
               <span className="bg-gradient-to-r from-primary via-[#4d9fff] to-[var(--accent)] bg-clip-text text-transparent">
                 all in one place.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Circle, Radio, Rss, UserCircle } from "lucide-react";
+import { ArrowRight, Circle, LineChart, Radio, Rss } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { marketingGutterX, marketingCardInteractive } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
@@ -54,24 +54,29 @@ const cards = [
     ),
   },
   {
-    href: "/features/pulse-page",
-    title: "My Pulse · Pulse Page",
-    desc: "Your professional surface and private hub — presence that feels human, not corporate.",
-    icon: UserCircle,
+    href: "/features/my-pulse",
+    title: "My Pulse",
+    desc: "Profile views, post engagement, and connections — your private momentum dashboard.",
+    icon: LineChart,
     preview: (
-      <div className="rounded-lg bg-black/30 p-2">
-        <div className="flex items-center gap-2">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-[var(--accent)]/30" />
-          <div className="flex-1 space-y-1">
-            <div className="h-2 w-2/3 rounded bg-white/15" />
-            <div className="flex gap-2 text-[10px] text-muted-foreground">
-              <span>1.2K followers</span>
-              <span>·</span>
-              <span>86 posts</span>
-            </div>
-          </div>
+      <div className="space-y-2 rounded-lg bg-black/30 p-2">
+        <div className="flex justify-between text-[10px] text-muted-foreground">
+          <span>Profile views</span>
+          <span className="font-semibold text-[var(--accent)]">+18%</span>
         </div>
-        <div className="mt-2 h-12 rounded-md bg-white/[0.04]" />
+        <div className="flex h-14 items-end gap-0.5 px-1">
+          {[40, 55, 48, 62, 58, 70, 78, 85, 92].map((h, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-t-sm bg-gradient-to-t from-primary/30 to-[var(--accent)]/70"
+              style={{ height: `${h}%` }}
+            />
+          ))}
+        </div>
+        <div className="flex gap-3 text-[10px] text-muted-foreground">
+          <span>Engagement</span>
+          <span>Connections</span>
+        </div>
       </div>
     ),
   },
@@ -108,12 +113,7 @@ export function HomeFeatureShowcase() {
                     href={c.href}
                     className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
                   >
-                    Explore{" "}
-                    {c.href.includes("pulse-page")
-                      ? "Pulse Page"
-                      : c.href.includes("my-pulse")
-                        ? "My Pulse"
-                        : c.title.split("·")[0].trim()}
+                    Explore {c.title}
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                 </div>

@@ -18,10 +18,10 @@ const columns = [
   {
     title: "Company",
     links: [
-      { href: "/about", label: "About" },
+      { href: "/about", label: "About us" },
+      { href: "/contact", label: "Careers" },
+      { href: "/contact", label: "Press" },
       { href: "/contact", label: "Contact" },
-      { href: "/partners", label: "Partners" },
-      { href: "/download", label: "Download" },
     ],
   },
   {

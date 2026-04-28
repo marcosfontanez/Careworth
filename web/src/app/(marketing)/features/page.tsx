@@ -58,7 +58,7 @@ export default function FeaturesHubPage() {
               </p>
             </div>
           </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {homeFeatureSpotlights.map((s) => (
               <Link key={s.tag} href={s.href} className="group">
                 <Card className={cn("h-full", marketingCardInteractive)}>
@@ -88,7 +88,7 @@ export default function FeaturesHubPage() {
           <p className="mt-2 max-w-2xl leading-relaxed text-muted-foreground">
             Same account, same trust model — swap context without switching apps.
           </p>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {featuresHubGrid.map((l) => (
               <Link key={l.href} href={l.href} className="group">
                 <Card className={cn("h-full", marketingCardInteractive)}>

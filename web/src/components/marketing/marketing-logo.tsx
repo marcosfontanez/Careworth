@@ -1,15 +1,34 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Activity } from "lucide-react";
 import { site } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
-export function MarketingLogo({ className }: { className?: string }) {
+const LOGO_SRC = "/brand/pulseverse-logo-lockup.png";
+
+type Variant = "nav" | "footer" | "admin";
+
+const heights: Record<Variant, string> = {
+  nav: "h-9 sm:h-10",
+  footer: "h-11 sm:h-12",
+  admin: "h-8",
+};
+
+export function MarketingLogo({ className, variant = "nav" }: { className?: string; variant?: Variant }) {
   return (
-    <Link href="/" className={cn("flex items-center gap-3", className)}>
-      <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#0066ff] text-white shadow-[0_0_24px_-4px_rgba(45,127,249,0.7)]">
-        <Activity className="h-5 w-5" strokeWidth={2.25} aria-hidden />
-      </span>
-      <span className="text-lg font-bold tracking-tight text-foreground">{site.name}</span>
+    <Link
+      href="/"
+      className={cn("inline-flex shrink-0 items-center", className)}
+      aria-label={`${site.name} home`}
+    >
+      <Image
+        src={LOGO_SRC}
+        alt=""
+        width={1024}
+        height={1024}
+        priority={variant === "nav"}
+        className={cn("w-auto max-w-[148px] object-contain object-left sm:max-w-[168px]", heights[variant])}
+        sizes="(max-width: 640px) 140px, 168px"
+      />
     </Link>
   );
 }

@@ -49,7 +49,7 @@
   /* Matches high-fidelity mock palette (navy + royal blue + cyan highlights) */
   --color-pv-navy: #050a14;
   --color-pv-navy-deep: #030712;
-  --color-pv-electric: #2d7ff9;
+  --color-pv-electric: #2563eb;
   --color-pv-teal: #00d2ff;
   --color-pv-aqua: #38bdf8;
   --color-pv-gold: #e5b84b;
@@ -63,7 +63,7 @@
   --card-foreground: #f8fafc;
   --popover: #0c1524;
   --popover-foreground: #f8fafc;
-  --primary: #2d7ff9;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
   --secondary: #111c2e;
   --secondary-foreground: #f8fafc;
@@ -74,20 +74,20 @@
   --destructive: #f87171;
   --border: rgba(148, 163, 184, 0.12);
   --input: rgba(148, 163, 184, 0.16);
-  --ring: #2d7ff9;
-  --chart-1: #2d7ff9;
+  --ring: #2563eb;
+  --chart-1: #2563eb;
   --chart-2: #00d2ff;
   --chart-3: #a78bfa;
   --chart-4: #38bdf8;
   --chart-5: #94a3b8;
   --sidebar: #060d18;
   --sidebar-foreground: #e8eef7;
-  --sidebar-primary: #2d7ff9;
+  --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #0f1828;
   --sidebar-accent-foreground: #f8fafc;
   --sidebar-border: rgba(148, 163, 184, 0.1);
-  --sidebar-ring: #2d7ff9;
+  --sidebar-ring: #2563eb;
   --radius: 0.75rem;
 }
 
@@ -104,7 +104,7 @@
     }
   }
   body {
-    @apply min-h-screen bg-background bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(45,127,249,0.12),transparent_55%)] text-foreground antialiased;
+    @apply min-h-screen bg-background bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(37,99,235,0.12),transparent_55%)] text-foreground antialiased;
   }
   ::selection {
     background: color-mix(in oklab, var(--primary) 38%, transparent);

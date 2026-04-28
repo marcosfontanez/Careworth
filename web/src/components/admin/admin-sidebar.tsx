@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   BarChart3,
   Flag,
   LayoutDashboard,
@@ -16,8 +15,8 @@ import {
 } from "lucide-react";
 
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
+import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { Badge } from "@/components/ui/badge";
-import { site } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; icon: LucideIcon; badge?: number };
@@ -62,14 +61,9 @@ const groups: { title: string; items: Item[] }[] = [
 export function AdminSidebar({ currentPath }: { currentPath: string }) {
   return (
     <aside className="flex w-[16.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center gap-3 border-b border-sidebar-border px-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-[#0066ff] text-white shadow-lg shadow-primary/25">
-          <Activity className="h-5 w-5" strokeWidth={2.2} aria-hidden />
-        </div>
-        <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-semibold tracking-tight text-foreground">{site.name}</p>
-          <p className="text-xs text-muted-foreground">Admin console</p>
-        </div>
+      <div className="flex h-14 items-center justify-between gap-2 border-b border-sidebar-border px-3">
+        <MarketingLogo variant="admin" className="min-w-0" />
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Admin</span>
       </div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4" aria-label="Admin">
         {groups.map((group) => (

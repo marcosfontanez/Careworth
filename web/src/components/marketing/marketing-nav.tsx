@@ -9,23 +9,23 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
+/** Matches primary marketing mocks: hub + pillar landings (no Feed / My Pulse in top rail). */
 const centerLinks: { href: string; label: string; match: (path: string) => boolean }[] = [
   {
     href: "/features",
     label: "Features",
     match: (p) =>
-      p.startsWith("/features") &&
-      !p.startsWith("/features/feed") &&
-      !p.startsWith("/features/circles") &&
-      !p.startsWith("/features/live") &&
-      !p.startsWith("/features/pulse-page") &&
-      !p.startsWith("/features/my-pulse"),
+      p === "/features" ||
+      (p.startsWith("/features") &&
+        !p.startsWith("/features/feed") &&
+        !p.startsWith("/features/circles") &&
+        !p.startsWith("/features/live") &&
+        !p.startsWith("/features/pulse-page") &&
+        !p.startsWith("/features/my-pulse")),
   },
-  { href: "/features/feed", label: "Feed", match: (p) => p.startsWith("/features/feed") },
   { href: "/features/circles", label: "Circles", match: (p) => p.startsWith("/features/circles") },
   { href: "/features/live", label: "Live", match: (p) => p.startsWith("/features/live") },
   { href: "/features/pulse-page", label: "Pulse Page", match: (p) => p.startsWith("/features/pulse-page") },
-  { href: "/features/my-pulse", label: "My Pulse", match: (p) => p.startsWith("/features/my-pulse") },
   { href: "/support", label: "Support", match: (p) => p.startsWith("/support") },
   { href: "/advertisers", label: "Advertisers", match: (p) => p.startsWith("/advertisers") },
 ];
@@ -50,7 +50,7 @@ function NavLink({
       {label}
       <span
         className={cn(
-          "absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary transition-opacity",
+          "absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--accent)] shadow-[0_0_12px_rgba(0,210,255,0.45)] transition-opacity",
           active ? "opacity-100" : "opacity-0 hover:opacity-40",
         )}
         aria-hidden

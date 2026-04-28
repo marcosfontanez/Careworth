@@ -15,6 +15,5 @@ export const pv = {
 export const site = {
   name: "PulseVerse",
   tagline: "Healthcare culture, all in one place.",
-  description:
-    "The social platform for healthcare professionals — feed, Circles, Live, Pulse Page, and My Pulse.",
+  description: "The social platform for the global healthcare community.",
 } as const;

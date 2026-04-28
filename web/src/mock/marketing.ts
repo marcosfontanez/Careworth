@@ -46,6 +46,12 @@ export const homeFeatureSpotlights = [
     body: "Pins, remixes, and links that show how you show up in medicine — polished, expressive, yours.",
     href: "/features/pulse-page",
   },
+  {
+    tag: "My Pulse",
+    title: "Your private dashboard for momentum.",
+    body: "Rolling activity, profile views, and engagement signals — your rhythm between shifts, without the noise.",
+    href: "/features/my-pulse",
+  },
 ] as const;
 
 export const homePulseDuo = {
@@ -423,10 +429,8 @@ export const featuresHubStatsBar = [
 
 export const featuresComparisonRows = [
   { label: "Built for healthcare professionals", us: "full" as const, them: "no" as const },
-  { label: "Ad-light / professional context", us: "full" as const, them: "limited" as const },
-  { label: "Live & interactive teaching", us: "full" as const, them: "partial" as const },
-  { label: "Topic rooms (Circles)", us: "full" as const, them: "no" as const },
-  { label: "Trust & safety for clinical UGC", us: "full" as const, them: "partial" as const },
-  { label: "Public identity (Pulse Page)", us: "full" as const, them: "no" as const },
+  { label: "Verified healthcare community", us: "full" as const, them: "limited" as const },
+  { label: "Purpose-driven conversations", us: "full" as const, them: "partial" as const },
+  { label: "Ad-free experience", us: "full" as const, them: "limited" as const },
 ] as const;
 
