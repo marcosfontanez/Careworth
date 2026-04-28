@@ -222,7 +222,7 @@ export function FeatureLiveLanding() {
         </div>
 
         <div className="mt-14">
-          <h2 className="text-center text-xl font-bold text-foreground sm:text-2xl">Why go Live on PulseVerse?</h2>
+          <h2 className="text-center text-xl font-bold text-foreground sm:text-2xl">Why go Live on CareWorth?</h2>
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {liveWhyGoLive.map((item) => (
               <div key={item.title} className="text-center">

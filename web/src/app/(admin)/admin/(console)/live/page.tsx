@@ -12,15 +12,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { liveOpsSummary, mockLiveSessions } from "@/mock/data";
+import { loadLiveSessions } from "@/lib/admin/queries";
+import { liveOpsSummary } from "@/mock/data";
 
-export default function AdminLivePage() {
+export default async function AdminLivePage() {
+  const sessions = await loadLiveSessions();
+
   return (
     <div className="space-y-8">
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Live" }]}
         title="Live"
-        description="Sessions, flags, and host controls — operations console mock."
+        description={`Streams from Supabase — ${sessions.length} rows (includes ended for ops).`}
       />
       <AdminOpsStrip items={liveOpsSummary} className="xl:grid-cols-3" />
       <AdminPanelCard>
@@ -41,26 +44,34 @@ export default function AdminLivePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockLiveSessions.map((s) => (
-                <TableRow key={s.id} className="border-border">
-                  <TableCell className="max-w-xs font-medium">{s.title}</TableCell>
-                  <TableCell>{s.host}</TableCell>
-                  <TableCell className="tabular-nums">{s.viewers}</TableCell>
-                  <TableCell className="tabular-nums">{s.peak}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={s.status} />
-                  </TableCell>
-                  <TableCell className="tabular-nums">{s.flags}</TableCell>
-                  <TableCell className="space-x-2 text-right">
-                    <Button size="sm" variant="outline">
-                      Review
-                    </Button>
-                    <Button size="sm" variant="destructive">
-                      End
-                    </Button>
+              {sessions.length ? (
+                sessions.map((s) => (
+                  <TableRow key={s.id} className="border-border">
+                    <TableCell className="max-w-xs font-medium">{s.title}</TableCell>
+                    <TableCell>{s.host}</TableCell>
+                    <TableCell className="tabular-nums">{s.viewers}</TableCell>
+                    <TableCell className="tabular-nums">{s.peak}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={s.status} />
+                    </TableCell>
+                    <TableCell className="tabular-nums">{s.flags}</TableCell>
+                    <TableCell className="space-x-2 text-right">
+                      <Button size="sm" variant="outline">
+                        Review
+                      </Button>
+                      <Button size="sm" variant="destructive">
+                        End
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-muted-foreground">
+                    No streams returned.
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

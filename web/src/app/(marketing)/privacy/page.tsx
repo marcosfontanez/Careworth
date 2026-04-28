@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <LegalDoc title="Privacy Policy" toc={toc}>
       <p>
-        PulseVerse respects the sensitivity of healthcare identity. This placeholder outlines sections your counsel will
+        CareWorth respects the sensitivity of healthcare identity. This placeholder outlines sections your counsel will
         finalize: data categories collected, processing purposes, retention, subprocessors, regional rights, and contact.
       </p>
       <h2 id="collect">What we collect</h2>
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         safety retention policies.
       </p>
       <h2 id="contact">Contact</h2>
-      <p>privacy@pulseverse.app (placeholder)</p>
+      <p>privacy@CareWorth.app (placeholder)</p>
     </LegalDoc>
   );
 }

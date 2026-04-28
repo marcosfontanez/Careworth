@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { site } from "@/lib/design-tokens";
+import { NewsletterSignup } from "@/components/marketing/newsletter-signup";
 import { marketingGutterX } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -137,20 +136,8 @@ export function MarketingFooter() {
           <div className="sm:col-span-2 lg:col-span-2">
             <p className="text-sm font-semibold text-foreground">Stay connected</p>
             <p className="mt-2 text-sm text-muted-foreground">Product updates and trust &amp; safety news.</p>
-            <div className="mt-4 flex gap-2" role="group" aria-label="Newsletter signup">
-              <Input
-                type="email"
-                placeholder="Email"
-                className="border-white/10 bg-white/[0.04] placeholder:text-muted-foreground"
-              />
-              <Button
-                type="button"
-                size="icon"
-                className="shrink-0 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
-                aria-label="Subscribe"
-              >
-                →
-              </Button>
+            <div role="group" aria-label="Newsletter signup">
+              <NewsletterSignup source="footer" />
             </div>
           </div>
         </div>

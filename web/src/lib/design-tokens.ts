@@ -1,4 +1,4 @@
-/** PulseVerse brand — source of truth for non–CSS-module references. Tailwind class bundles: see `ui-classes.ts`. */
+/** CareWorth brand — source of truth for non–CSS-module references. Tailwind class bundles: see `ui-classes.ts`. */
 export const pv = {
   navy: "#0B1F3A",
   navyDeep: "#060E1A",
@@ -13,7 +13,7 @@ export const pv = {
 } as const;
 
 export const site = {
-  name: "PulseVerse",
+  name: "CareWorth",
   tagline: "Healthcare culture, all in one place.",
   description:
     "The social platform for healthcare professionals — feed, Circles, Live, Pulse Page, and My Pulse.",

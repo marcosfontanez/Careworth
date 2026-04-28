@@ -4,7 +4,7 @@ export const homeProductOverview = {
   eyebrow: "Product overview",
   title: "Built for healthcare life — not another corporate graph.",
   description:
-    "PulseVerse stitches together the surfaces clinicians actually use after the pager stops: discovery, specialty rooms, live credibility, and identity that feels human.",
+    "CareWorth stitches together the surfaces clinicians actually use after the pager stops: discovery, specialty rooms, live credibility, and identity that feels human.",
   pillars: [
     {
       title: "Culture-first",
@@ -108,7 +108,7 @@ export const homeTestimonials = [
 /** Features hub — hero + grid copy (routes under /features). */
 export const featuresHubIntro = {
   eyebrow: "Features overview",
-  title: "Explore everything PulseVerse can do.",
+  title: "Explore everything CareWorth can do.",
   description:
     "Feed, Circles, Live, Pulse Page, and My Pulse — one account, one trust model, and surfaces that match how healthcare culture actually moves.",
 };
@@ -320,7 +320,7 @@ export const liveWhyGoLive = [
 
 export const supportFaqItems = [
   {
-    q: "What is PulseVerse?",
+    q: "What is CareWorth?",
     a: "A social platform for healthcare professionals — feed, Circles, Live, and Pulse Page — with moderation built for clinical culture.",
   },
   {
@@ -332,8 +332,8 @@ export const supportFaqItems = [
     a: "Use the overflow menu on posts, comments, or profiles. For live streams, flag from the player — live incidents are prioritized.",
   },
   {
-    q: "Is PulseVerse HIPAA-ready?",
-    a: "PulseVerse is not a system of record for PHI. Do not post identifiable patient information; violations may be removed or escalated.",
+    q: "Is CareWorth HIPAA-ready?",
+    a: "CareWorth is not a system of record for PHI. Do not post identifiable patient information; violations may be removed or escalated.",
   },
 ] as const;
 

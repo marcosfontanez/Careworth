@@ -27,18 +27,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { loadAdminCounts, loadAdminUsers, loadReports } from "@/lib/admin/queries";
+import { formatCount } from "@/lib/admin/format";
 import {
   dashboardAlertStrip,
   dashboardKpis,
-  mockReports,
-  mockUsers,
   moderatorWorkload,
   recentAdminActivity,
   reportQueueSummary,
   systemHealthServices,
 } from "@/mock/data";
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  const [counts, liveReports, liveUsers] = await Promise.all([
+    loadAdminCounts(),
+    loadReports(),
+    loadAdminUsers(),
+  ]);
+
+  const kpiRow = dashboardKpis.map((k) => {
+    if (k.key === "users") return { ...k, value: formatCount(counts.users), delta: "live", trend: "up" as const };
+    if (k.key === "reports")
+      return { ...k, value: formatCount(counts.openReports), delta: "open queue", trend: "down" as const };
+    if (k.key === "live")
+      return { ...k, value: formatCount(counts.liveSessions), delta: "live now", trend: "up" as const };
+    return k;
+  });
+
+  const reportPreview = liveReports.length ? liveReports.slice(0, 4) : [];
+  const userPreview = liveUsers.length ? liveUsers.slice(0, 5) : [];
+
   return (
     <div className="space-y-8">
       <AdminPageHeader
@@ -48,7 +66,7 @@ export default function AdminDashboardPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span className="hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-muted-foreground md:inline">
-              Apr 21 – Apr 27, 2026
+              Live counts from Supabase · charts illustrative
             </span>
             <Button variant="outline" size="sm" className="border-white/15 bg-transparent">
               Export report
@@ -60,7 +78,7 @@ export default function AdminDashboardPage() {
         }
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {dashboardKpis.map((k) => (
+        {kpiRow.map((k) => (
           <KpiStatCard
             key={k.key}
             label={k.label}
@@ -84,7 +102,7 @@ export default function AdminDashboardPage() {
         <AdminPanelCard className="lg:col-span-2">
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle>User growth</CardTitle>
-            <span className="text-xs font-medium text-muted-foreground">Last 8 months · mock</span>
+            <span className="text-xs font-medium text-muted-foreground">Last 8 months · illustrative</span>
           </CardHeader>
           <CardContent>
             <GrowthChart />
@@ -112,6 +130,7 @@ export default function AdminDashboardPage() {
         <AdminPanelCard>
           <CardHeader>
             <CardTitle>Moderation queue</CardTitle>
+            <p className="text-xs text-muted-foreground">{liveReports.length} from database</p>
           </CardHeader>
           <CardContent>
             <Table>
@@ -124,25 +143,34 @@ export default function AdminDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockReports.slice(0, 4).map((r) => (
-                  <TableRow key={r.id} className="border-border">
-                    <TableCell className="font-medium capitalize">{r.type.replace("_", " ")}</TableCell>
-                    <TableCell className="max-w-[180px] truncate text-muted-foreground">{r.preview}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={r.severity} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={r.status} />
+                {reportPreview.length ? (
+                  reportPreview.map((r) => (
+                    <TableRow key={r.id} className="border-border">
+                      <TableCell className="font-medium capitalize">{r.type.replace("_", " ")}</TableCell>
+                      <TableCell className="max-w-[180px] truncate text-muted-foreground">{r.preview}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={r.severity} />
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={r.status} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground">
+                      No open reports in Supabase yet.
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </AdminPanelCard>
         <AdminPanelCard>
           <CardHeader>
-            <CardTitle>Notable users</CardTitle>
+            <CardTitle>Recent profiles</CardTitle>
+            <p className="text-xs text-muted-foreground">{liveUsers.length} loaded</p>
           </CardHeader>
           <CardContent>
             <Table>
@@ -154,15 +182,23 @@ export default function AdminDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockUsers.slice(0, 5).map((u) => (
-                  <TableRow key={u.id} className="border-border">
-                    <TableCell className="font-medium">{u.displayName}</TableCell>
-                    <TableCell className="text-muted-foreground">{u.profession}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={u.status} />
+                {userPreview.length ? (
+                  userPreview.map((u) => (
+                    <TableRow key={u.id} className="border-border">
+                      <TableCell className="font-medium">{u.displayName}</TableCell>
+                      <TableCell className="text-muted-foreground">{u.profession}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={u.status} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-muted-foreground">
+                      No profiles returned (check RLS / connection).
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -172,7 +208,7 @@ export default function AdminDashboardPage() {
         <AdminPanelCard className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Trust &amp; safety · top report reasons</CardTitle>
-            <p className="text-xs text-muted-foreground">Category mix · mock</p>
+            <p className="text-xs text-muted-foreground">Category mix · illustrative</p>
           </CardHeader>
           <CardContent>
             <ReportReasonsDonutChart />
@@ -181,7 +217,7 @@ export default function AdminDashboardPage() {
         <AdminPanelCard className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Reports by source</CardTitle>
-            <p className="text-xs text-muted-foreground">Live · comments · DMs · feed</p>
+            <p className="text-xs text-muted-foreground">Illustrative · wire warehouse later</p>
           </CardHeader>
           <CardContent>
             <ReportsBySourceBarChart />
@@ -195,6 +231,7 @@ export default function AdminDashboardPage() {
       <AdminPanelCard>
         <CardHeader>
           <CardTitle>Top circles by activity</CardTitle>
+          <p className="text-xs text-muted-foreground">Illustrative ranking</p>
         </CardHeader>
         <CardContent>
           <TopCirclesBarChart />

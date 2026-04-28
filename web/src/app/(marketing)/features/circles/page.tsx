@@ -9,7 +9,7 @@ export default function CirclesFeaturePage() {
         title="Your community. Your voice. Your Pulse."
         description="Pick your Circles, follow the culture you trust, and share what matters back to My Pulse."
         primaryHref="/download"
-        primaryLabel="Join PulseVerse now"
+        primaryLabel="Join CareWorth now"
         secondaryHref="/contact"
         secondaryLabel="Talk to partnerships"
       />

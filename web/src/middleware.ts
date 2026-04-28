@@ -1,21 +1,27 @@
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-const ADMIN_COOKIE = "pv_admin_session";
+import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  if (!pathname.startsWith("/admin")) return NextResponse.next();
-  if (pathname.startsWith("/admin/login")) return NextResponse.next();
-
-  const session = request.cookies.get(ADMIN_COOKIE)?.value;
-  if (!session) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
   }
-  return NextResponse.next();
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    if (pathname.startsWith("/admin/login")) {
+      return NextResponse.next();
+    }
+    const u = request.nextUrl.clone();
+    u.pathname = "/admin/login";
+    u.searchParams.set("error", "config");
+    return NextResponse.redirect(u);
+  }
+
+  return updateSupabaseSession(request);
 }
 
 export const config = {

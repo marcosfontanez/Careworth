@@ -8,7 +8,7 @@ export default function AdminInsightsPage() {
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Insights" }]}
         title="Insights"
-        description="Data and intelligence — mock charts and KPIs for layout and warehouse wiring."
+        description="Charts and segment tiles below are illustrative until you connect your analytics warehouse; Trust tab reuses the same chart components as the dashboard."
       />
       <Card className="border-border/80 bg-gradient-to-r from-card/95 to-primary/[0.06] shadow-sm ring-1 ring-white/[0.04]">
         <CardContent className="p-6 text-sm leading-relaxed text-muted-foreground">

@@ -24,7 +24,7 @@ export default function AboutPage() {
       <SectionHeader
         eyebrow="About"
         title="Social infrastructure for healthcare culture"
-        description="PulseVerse exists because healthcare professionals deserve a network that feels as alive as the work — without being reduced to a line on a directory."
+        description="CareWorth exists because healthcare professionals deserve a network that feels as alive as the work — without being reduced to a line on a directory."
       />
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {pillars.map((p) => (

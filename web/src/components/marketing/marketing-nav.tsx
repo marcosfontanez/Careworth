@@ -89,7 +89,7 @@ export function MarketingNav() {
             asChild
           >
             <Link href="/download" className="inline-flex items-center gap-2">
-                  Join PulseVerse
+                  Join CareWorth
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
           </Button>
@@ -113,7 +113,7 @@ export function MarketingNav() {
                     </Link>
                   ))}
                   <Link href="/download" className="mt-4">
-                    <Button className="w-full rounded-full bg-primary font-semibold">Join PulseVerse</Button>
+                    <Button className="w-full rounded-full bg-primary font-semibold">Join CareWorth</Button>
                   </Link>
                 </div>
               </SheetContent>

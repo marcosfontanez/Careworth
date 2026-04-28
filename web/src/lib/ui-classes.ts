@@ -1,5 +1,5 @@
 /**
- * PulseVerse web — Tailwind class bundles for visual consistency.
+ * CareWorth web — Tailwind class bundles for visual consistency.
  * Aligned to mockups: royal blue primary, cyan accents, glass cards.
  */
 

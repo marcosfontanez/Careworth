@@ -1,36 +1,35 @@
-import { SectionHeader } from "@/components/marketing/section-header";
-import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { marketingCardMuted } from "@/lib/ui-classes";
-import { cn } from "@/lib/utils";
+import Link from "next/link";
 
-export default function ContactPage() {
+import { ContactForm } from "@/components/marketing/contact-form";
+import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
+import { SectionHeader } from "@/components/marketing/section-header";
+import { Button } from "@/components/ui/button";
+
+export default async function ContactPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sent?: string }>;
+}) {
+  const q = await searchParams;
+  const sent = q.sent === "1";
+
   return (
     <MarketingPageShell width="form">
       <SectionHeader
         title="Contact"
         description="Partnerships, press, trust & safety, and early access — we read every note."
       />
-      <form className={cn("mt-10 space-y-4 rounded-2xl p-6 sm:p-8", marketingCardMuted)}>
-        <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
-          <Input id="name" placeholder="Your name" className="border-white/10 bg-white/[0.04]" />
+      {sent ? (
+        <div className="mt-10 space-y-4 rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent)]/5 p-8 text-center">
+          <p className="text-lg font-semibold text-foreground">Message received</p>
+          <p className="text-sm text-muted-foreground">Thanks — our team will get back to you shortly.</p>
+          <Button asChild variant="outline" className="mt-2 border-white/20">
+            <Link href="/">Back to home</Link>
+          </Button>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="you@health.org" className="border-white/10 bg-white/[0.04]" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="msg">Message</Label>
-          <Textarea id="msg" placeholder="How can we help?" className="min-h-28 border-white/10 bg-white/[0.04]" />
-        </div>
-        <Button type="button" className={cn("w-full font-semibold", "bg-primary text-primary-foreground shadow-[0_0_24px_-8px_rgba(45,127,249,0.55)]")}>
-          Send (mock — wire to API later)
-        </Button>
-      </form>
+      ) : (
+        <ContactForm />
+      )}
     </MarketingPageShell>
   );
 }

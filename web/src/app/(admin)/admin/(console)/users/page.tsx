@@ -1,16 +1,17 @@
 import { UsersConsole } from "@/components/admin/users-console";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { mockUsers } from "@/mock/data";
+import { loadAdminUsers } from "@/lib/admin/queries";
 
-export default function AdminUsersPage() {
+export default async function AdminUsersPage() {
+  const users = await loadAdminUsers();
   return (
     <div className="space-y-8">
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Users" }]}
         title="Users"
-        description="Search, filter, suspend, ban — mock data for console review."
+        description={`Directory from Supabase — ${users.length} profiles (bans when active).`}
       />
-      <UsersConsole users={mockUsers} />
+      <UsersConsole users={users} />
     </div>
   );
 }

@@ -49,7 +49,7 @@ export function ReportsConsole({ reports }: { reports: ReportRow[] }) {
       <AdminPanelCard>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>All reports</CardTitle>
-          <p className="text-xs text-muted-foreground">{filtered.length} shown · mock</p>
+          <p className="text-xs text-muted-foreground">{filtered.length} shown · live data</p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>

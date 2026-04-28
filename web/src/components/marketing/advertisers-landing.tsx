@@ -90,7 +90,7 @@ export function AdvertisersLanding() {
               </span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              PulseVerse is the premium healthcare audience platform where professionals learn, connect, and lead — with
+              CareWorth is the premium healthcare audience platform where professionals learn, connect, and lead — with
               moderation and category fit baked in.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">

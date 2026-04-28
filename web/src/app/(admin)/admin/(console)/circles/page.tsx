@@ -12,16 +12,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { circlesOpsSummary, mockCircles } from "@/mock/data";
+import { loadCircles } from "@/lib/admin/queries";
+import { circlesOpsSummary } from "@/mock/data";
 
-export default function AdminCirclesPage() {
+export default async function AdminCirclesPage() {
+  const circles = await loadCircles();
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <AdminPageHeader
           breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Circles" }]}
           title="Circles"
-          description="Create, edit, featured order — connect to Supabase when ready."
+          description={`Communities from Supabase — ${circles.length} rows.`}
         />
         <div className="flex shrink-0 gap-2">
           <Input placeholder="Search circle…" className="w-56 bg-secondary/40" />
@@ -47,24 +50,32 @@ export default function AdminCirclesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockCircles.map((c) => (
-                <TableRow key={c.id} className="border-border">
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground">/{c.slug}</TableCell>
-                  <TableCell className="tabular-nums">{c.members.toLocaleString()}</TableCell>
-                  <TableCell className="tabular-nums">{c.posts24h}</TableCell>
-                  <TableCell className="tabular-nums">{c.featuredOrder ?? "—"}</TableCell>
-                  <TableCell className="tabular-nums">{c.trendScore}</TableCell>
-                  <TableCell className="space-x-2 text-right">
-                    <Button size="sm" variant="outline">
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="secondary">
-                      Moderate
-                    </Button>
+              {circles.length ? (
+                circles.map((c) => (
+                  <TableRow key={c.id} className="border-border">
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="text-muted-foreground">/{c.slug}</TableCell>
+                    <TableCell className="tabular-nums">{c.members.toLocaleString()}</TableCell>
+                    <TableCell className="tabular-nums">{c.posts24h}</TableCell>
+                    <TableCell className="tabular-nums">{c.featuredOrder ?? "—"}</TableCell>
+                    <TableCell className="tabular-nums">{c.trendScore}</TableCell>
+                    <TableCell className="space-x-2 text-right">
+                      <Button size="sm" variant="outline">
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="secondary">
+                        Moderate
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-muted-foreground">
+                    No communities found.
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

@@ -32,7 +32,7 @@ export default function FeaturesHubPage() {
           />
           <div className="relative mt-8 flex flex-wrap gap-3">
             <Button asChild className={cn("bg-primary text-primary-foreground", shadowPrimaryCta)}>
-              <Link href="/download">Join PulseVerse</Link>
+              <Link href="/download">Join CareWorth</Link>
             </Button>
             <Button asChild variant="outline" className="border-border/80 bg-card/40">
               <Link href="/contact">Partner with us</Link>
@@ -108,7 +108,7 @@ export default function FeaturesHubPage() {
         title="Your community. Your voice. Your Pulse."
         description="Get early access to the network built for how healthcare actually connects."
         primaryHref="/download"
-        primaryLabel="Join PulseVerse now"
+        primaryLabel="Join CareWorth now"
         secondaryHref="/contact"
         secondaryLabel="Talk to partnerships"
       />

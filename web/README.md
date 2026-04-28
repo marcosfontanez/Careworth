@@ -1,6 +1,6 @@
-# PulseVerse web platform
+# CareWorth web (Next.js)
 
-Next.js (App Router) + TypeScript + Tailwind CSS v4 + shadcn/ui (Base UI primitives). Public marketing site and protected admin console share one codebase.
+Public marketing site and Supabase-authenticated admin console in one App Router project.
 
 ## Scripts
 
@@ -11,26 +11,35 @@ npm run build
 npm start
 ```
 
-## Admin (mock auth)
+## Environment variables
 
-1. Open `/admin/login`.
-2. Enter any non-empty email and password.
-3. Session cookie `pv_admin_session` unlocks `/admin/*` (see `src/middleware.ts`).
+Copy `.env.example` to `.env.local` and fill in values from the Supabase dashboard (Settings → API).
 
-## Structure (high level)
+| Variable | Where used |
+|----------|------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Auth + admin data reads |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Auth + admin data reads |
+| `SUPABASE_SERVICE_ROLE_KEY` | Contact form + newsletter (server only) |
+| `NEXT_PUBLIC_SITE_URL` | Canonical URL for SEO (`metadataBase`, sitemap) |
+
+On **Vercel**, add the same variables under Project → Settings → Environment Variables. After changing them, redeploy.
+
+## Admin
+
+1. Ensure your Supabase user has a row in `public.profiles` with **`role_admin = true`** (and has signed up via the same email in Auth).
+2. Open `/admin/login` and sign in with that email and password.
+3. Non-admin users are signed out and redirected with an error.
+
+## Database
+
+Apply migrations in `../supabase/migrations` (including `064_web_marketing_leads_and_admin_rls.sql`) so marketing tables and admin RLS policies exist.
+
+## Structure
 
 | Area | Path |
 |------|------|
 | Public routes | `src/app/(marketing)/*` |
-| Admin routes | `src/app/(admin)/admin/*` — shell in `(console)` |
-| Design tokens | `src/lib/design-tokens.ts`, `src/app/globals.css` |
-| Mock data | `src/mock/data.ts` |
-| Marketing components | `src/components/marketing/*` |
-| Admin components | `src/components/admin/*` |
-
-## TODO / integrations
-
-- Replace mock auth with Supabase (or your IdP) + `role_admin` checks.
-- Wire admin tables to your API / Supabase with the same RLS as the mobile app.
-- Add real analytics warehouse for Insights tabs.
-- Silence monorepo Turbopack root warning: set `turbopack.root` in `next.config.ts` if the repo keeps two lockfiles.
+| Admin routes | `src/app/(admin)/admin/*` |
+| Supabase (server) | `src/lib/supabase/*` |
+| Admin queries | `src/lib/admin/queries.ts` |
+| Design tokens | `src/lib/design-tokens.ts` |

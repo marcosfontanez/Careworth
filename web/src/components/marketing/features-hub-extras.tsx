@@ -51,18 +51,18 @@ export function FeaturesComparisonSection() {
           <p className={marketingEyebrow}>Compare</p>
           <h2 className={cn(marketingSectionTitle, "mt-2")}>More than a platform. A better way to connect.</h2>
           <p className="mt-4 max-w-md text-muted-foreground">
-            PulseVerse is built for the cultural layer clinicians never had — not consumer social glued to a
+            CareWorth is built for the cultural layer clinicians never had — not consumer social glued to a
             directory.
           </p>
         </div>
         <div className={cn("rounded-2xl p-6 sm:p-8", marketingCardMuted)}>
-          <h3 className="text-center text-lg font-bold text-foreground">Why PulseVerse stands out</h3>
+          <h3 className="text-center text-lg font-bold text-foreground">Why CareWorth stands out</h3>
           <div className="mt-6 overflow-x-auto">
             <table className="w-full min-w-[280px] text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left">
                   <th className="pb-2 pr-4 font-medium text-muted-foreground" />
-                  <th className="w-24 pb-2 text-center text-xs font-semibold text-[var(--accent)]">PulseVerse</th>
+                  <th className="w-24 pb-2 text-center text-xs font-semibold text-[var(--accent)]">CareWorth</th>
                   <th className="w-24 pb-2 text-center text-xs font-semibold text-muted-foreground">Others</th>
                 </tr>
               </thead>

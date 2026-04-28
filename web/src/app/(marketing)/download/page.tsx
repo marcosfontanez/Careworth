@@ -11,7 +11,7 @@ export default function DownloadPage() {
       <SectionHeader
         eyebrow="Get the app"
         title="Join early access"
-        description="PulseVerse is rolling out to clinicians, students, and allied teams. Request access — we'll follow up with TestFlight / Play tracks as regions open."
+        description="CareWorth is rolling out to clinicians, students, and allied teams. Request access — we'll follow up with TestFlight / Play tracks as regions open."
       />
       <div className={cn("mt-12 rounded-2xl p-8", marketingCardMuted)}>
         <div className="flex flex-wrap gap-3">

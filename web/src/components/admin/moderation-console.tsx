@@ -79,7 +79,7 @@ export function ModerationConsole({ reports }: { reports: ReportRow[] }) {
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div>
             <CardTitle className="text-base">Reports queue</CardTitle>
-            <p className="mt-1 text-xs text-muted-foreground">{reports.length} open · mock data</p>
+            <p className="mt-1 text-xs text-muted-foreground">{reports.length} in queue · live data</p>
           </div>
           <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="More">
             <MoreHorizontal className="h-4 w-4" />

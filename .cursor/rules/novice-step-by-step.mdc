@@ -1,0 +1,18 @@
+---
+description: User is a novice; give detailed step-by-step instructions for any manual tasks.
+alwaysApply: true
+---
+
+# Communication: novice-friendly steps
+
+Marco is learning. When anything must be done **by the user** (browser dashboards, GitHub, Vercel, Supabase, DNS, terminals outside what the agent runs), the assistant must:
+
+1. **Use numbered steps** — one main action per step when possible.
+2. **Name the place** — product name + area (e.g. "Vercel → your project → Settings → General").
+3. **Name the control** — button, tab, or field label as shown in the UI (use **bold** for labels).
+4. **Say what they should see** — so they know they're in the right screen.
+5. **Say the goal** of the step in plain language before or after the clicks.
+6. **Avoid unexplained jargon** — or define it once in simple terms.
+7. **For paste-backs** — tell them exactly what to copy (e.g. "last 20 lines of the build log") if debugging.
+
+Automated work the agent can do in the repo (edit files, run local commands) does not need the same verbosity unless the user asks for an explanation.
