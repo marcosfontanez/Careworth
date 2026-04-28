@@ -1,0 +1,21 @@
+---
+description: After changing the Next.js site under web/, commit and push from repo root
+globs: web/**/*
+alwaysApply: false
+---
+
+# Push website changes to Git
+
+When a task **modifies files under `web/`** (or finishes work where the site was updated), **before ending the turn**:
+
+1. **Repo root** — run commands from the monorepo root (parent of `web/`), not from inside `web/`.
+2. **`git status`** — if there are no changes to commit, skip the rest.
+3. **Stage** — `git add web/` plus any other paths touched in the same task (e.g. root `app.json`, `supabase/` if the change was part of the same deliverable).
+4. **Commit** — `git commit -m "concise message describing the site change"`.
+5. **Push** — `git push origin HEAD` (works on PowerShell, bash, and zsh).
+
+**Do not** `git push --force` unless the user explicitly asks.
+
+If **push fails** (auth, rejected, behind remote), paste the full error for the user and suggest `git pull --rebase` then retry, or fixing credentials — do not assume success.
+
+If the user **explicitly** asked to skip commit/push for this session, respect that.
