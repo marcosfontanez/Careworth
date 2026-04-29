@@ -70,6 +70,7 @@ export default async function AdminLoginPage({
               id="email"
               name="email"
               type="email"
+              required
               autoComplete="username"
               placeholder="you@organization.org"
               className="border-white/10 bg-white/[0.04]"
@@ -81,6 +82,7 @@ export default async function AdminLoginPage({
               id="password"
               name="password"
               type="password"
+              required
               autoComplete="current-password"
               className="border-white/10 bg-white/[0.04]"
             />
