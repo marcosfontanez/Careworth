@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { site } from "@/lib/design-tokens";
 import { getPublicSiteUrl } from "@/lib/site-url";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -37,7 +38,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`dark ${inter.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-background font-sans text-foreground antialiased">{children}</body>
+      <body className="min-h-full flex flex-col bg-background font-sans text-foreground antialiased">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
