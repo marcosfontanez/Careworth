@@ -16,7 +16,9 @@ function errorMessage(code: string | undefined) {
     case "forbidden":
       return "This account is not authorized for the admin console.";
     case "config":
-      return "Server is missing Supabase configuration. Add environment variables on Vercel.";
+      return process.env.VERCEL === "1"
+        ? "Supabase isn’t configured on this deployment. In Vercel: Project → Settings → Environment Variables — add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (from Supabase → Project Settings → API), apply to Production, then Redeploy."
+        : "Supabase isn’t configured locally. In web/, ensure .env.local sets NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then restart npm run dev.";
     default:
       return null;
   }
