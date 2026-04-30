@@ -1,19 +1,7 @@
--- Pulse Score: steeper sub-score curves so ~100 overall stays rare and
--- monthly leaderboards stay meaningful. v2 (058) Rhythm was tuned so
--- ~15 posts + 20-day streak could max Rhythm alone, which inflated many
--- users into the top band.
---
--- Changes (all in compute_pulse_subscores):
---   • Reach: gentler log (16·log10 vs 20·log10) — big audiences still win,
---     but 100 requires a very large following.
---   • Resonance: 25·log10 vs 30·log10 on engagement-per-post.
---   • Rhythm: lower ceilings — post volume + streak cap at 72 combined (not 100).
---     Superseded by 075: cap restored to 100 with stricter post/streak than 058.
---   • Range: convex (power 1.35 on type coverage) so missing one format hurts;
---     all six types still = 100.
---   • Reciprocity: 10·log10 vs 12·log10 on weighted actions.
---
--- Leaderboard: tie-break on sub-scores (resonance, reach, …) when overall ties.
+-- After 074, monthly max overall was ~94 because Rhythm capped at 72.
+-- Restore Rhythm ceiling to 100 so a “perfect month” is possible, but keep
+-- 074’s steeper coefficients: maxing Rhythm needs ~26 posts AND ~26-day streak
+-- (vs 058’s ~15 posts + ~20 days), so 100 overall stays very rare.
 
 create or replace function public.compute_pulse_subscores(
   p_user_id     uuid,
@@ -134,11 +122,11 @@ begin
     into v_streak_days
     from public.user_streaks where user_id = p_user_id;
 
-  -- Post slice: 2 pts/post, cap 40 (~20 posts). Streak: ~1.5 pts/day, cap 32 (~22 days).
-  -- Combined cap 72 — makes a “perfect 100” overall impossible until 075.
-  s_rhythm := least(40, v_total_posts_made::int * 2)
-            + least(32, (round(coalesce(v_streak_days, 0) * 1.5)::int));
-  s_rhythm := least(72, greatest(0, s_rhythm));
+  -- Post slice capped 52 (~26 posts at 2 pts). Streak slice capped 48 (~26 days at 1.85 pts).
+  -- Both near-max needed for Rhythm 100; stricter than 058’s 15 posts + 20 streak.
+  s_rhythm := least(52, v_total_posts_made::int * 2)
+            + least(48, (round(coalesce(v_streak_days, 0) * 1.85)::int));
+  s_rhythm := least(100, greatest(0, s_rhythm));
 
   v_has_thought := exists (
     select 1 from public.profile_updates
@@ -276,60 +264,5 @@ begin
 end;
 $$;
 
-create or replace function public.get_top_current_pulse(
-  p_limit     int  default 5,
-  p_circle_id uuid default null
-)
-returns table (
-  user_id       uuid,
-  username      text,
-  display_name  text,
-  avatar_url    text,
-  overall       int,
-  tier          text,
-  month_start   date
-)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  with active as (
-    select m.user_id, m.overall, m.tier, m.month_start,
-           m.reach, m.resonance, m.rhythm, m.range_, m.reciprocity
-    from public.user_monthly_pulse_scores m
-    where m.month_start = public.pulse_current_month()
-      and m.finalized = false
-      and (
-        p_circle_id is null
-        or exists (
-          select 1 from public.community_members cm
-          where cm.community_id = p_circle_id and cm.user_id = m.user_id
-        )
-      )
-  )
-  select a.user_id,
-         p.username,
-         p.display_name,
-         p.avatar_url,
-         a.overall,
-         a.tier,
-         a.month_start
-  from active a
-  join public.profiles p on p.id = a.user_id
-  order by
-    a.overall desc,
-    a.resonance desc,
-    a.reach desc,
-    a.reciprocity desc,
-    a.rhythm desc,
-    a.range_ desc,
-    p.username asc nulls last
-  limit greatest(1, least(p_limit, 50));
-$$;
-
 grant execute on function public.compute_pulse_subscores(uuid, date)
-  to authenticated, anon, service_role;
-
-grant execute on function public.get_top_current_pulse(int, uuid)
   to authenticated, anon, service_role;

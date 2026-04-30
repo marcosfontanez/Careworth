@@ -293,7 +293,7 @@ export function weakestSubScore(
  * teaching happens on the coaching nudge and sub-score bars.
  */
 export const PULSE_SCORE_EXPLAINER =
-  'Your Pulse Score blends five axes: Reach, Resonance, Rhythm, Range, and Reciprocity (each 0–100), then averages them. Curves are tuned so a perfect 100 is rare — strong Rhythm or Range alone won’t max you out. It resets on the 1st of every month UTC; lifetime total adds up finalized months for the all-time board.';
+  'Your Pulse Score blends five axes: Reach, Resonance, Rhythm, Range, and Reciprocity (each 0–100), then averages them. A perfect 100 is possible but very rare — you need strong performance on every axis, not just posting often. It resets on the 1st of every month UTC; lifetime total adds up finalized months for the all-time board.';
 
 // ────────────────────────────────────────────────────────────────────
 // Tier-progress helper — "Almost there" nudge
