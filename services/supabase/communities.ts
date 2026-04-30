@@ -68,6 +68,16 @@ export const communitiesService = {
     return rowToCommunity(data);
   },
 
+  /** Fetch by slug list; order matches `slugs` (missing rows skipped). */
+  async getBySlugsOrdered(slugs: string[]): Promise<Community[]> {
+    const uniq = [...new Set(slugs.filter(Boolean))];
+    if (uniq.length === 0) return [];
+    const { data, error } = await supabase.from('communities').select('*').in('slug', uniq);
+    if (error) throw error;
+    const bySlug = new Map((data ?? []).map((row: any) => [row.slug, rowToCommunity(row)]));
+    return uniq.map((s) => bySlug.get(s)).filter((c): c is Community => c != null);
+  },
+
   async getJoined(userId: string): Promise<Community[]> {
     const { data, error } = await supabase
       .from('community_members')

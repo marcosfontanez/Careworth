@@ -1,5 +1,5 @@
 import type { Community, CircleThread, Post, TrendingTopic24h } from '@/types';
-import { FEATURED_CIRCLE_SLUGS_ORDER } from '@/constants/circleDiscovery';
+import { FEATURED_CIRCLE_SLUGS_ORDER, PROMOTED_NEW_CIRCLE_SLUGS } from '@/constants/circleDiscovery';
 import { communitiesService, postsService, circleThreadsDb } from './supabase';
 
 function trendingScoreThread(t: TrendingTopic24h): number {
@@ -150,10 +150,17 @@ export const circleContentService = {
     }
   },
 
-  /** Three most recently created communities (new rooms). */
+  /**
+   * “New circles” row: curated slugs first (so fresh rooms surface even when older
+   * communities have newer `created_at` from admin edits), then recently created.
+   */
   async getNewCircles(): Promise<Community[]> {
     try {
-      return await communitiesService.getRecentlyAdded(3);
+      const promoted = await communitiesService.getBySlugsOrdered([...PROMOTED_NEW_CIRCLE_SLUGS]);
+      const recent = await communitiesService.getRecentlyAdded(12);
+      const promotedSet = new Set([...PROMOTED_NEW_CIRCLE_SLUGS]);
+      const rest = recent.filter((c) => !promotedSet.has(c.slug));
+      return [...promoted, ...rest].slice(0, 5);
     } catch {
       return [];
     }
