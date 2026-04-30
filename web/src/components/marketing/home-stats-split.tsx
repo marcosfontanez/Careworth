@@ -1,31 +1,34 @@
 import { Globe2, Users, Radio, Heart } from "lucide-react";
-import { marketingGutterX } from "@/lib/ui-classes";
 import type { LucideIcon } from "lucide-react";
 
-const stats: { label: string; value: string; icon: LucideIcon }[] = [
-  { label: "Healthcare professionals", value: "850K+", icon: Users },
-  { label: "Countries", value: "190+", icon: Globe2 },
-  { label: "Active Circles", value: "25K+", icon: Heart },
-  { label: "Live sessions hosted", value: "3.7K+", icon: Radio },
-];
+import type { Locale } from "@/lib/i18n";
+import { getHomeStatsSplitCopy } from "@/lib/marketing-copy/home-page-sections";
+import { marketingGutterX } from "@/lib/ui-classes";
 
-export function HomeStatsSplit() {
+const statIcons: readonly LucideIcon[] = [Users, Globe2, Heart, Radio];
+
+export function HomeStatsSplit({ locale }: { locale: Locale }) {
+  const c = getHomeStatsSplitCopy(locale);
+  const stats = c.statLabels.map((label, i) => ({
+    label,
+    value: (["850K+", "190+", "25K+", "3.7K+"] as const)[i] ?? "",
+    icon: statIcons[i] ?? Users,
+  }));
+
   return (
     <section className="border-t border-[rgba(148,163,184,0.08)] py-20 sm:py-24">
       <div className={marketingGutterX}>
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
             <h2 className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
-              A community that{" "}
-              <span className="bg-gradient-to-r from-primary to-[var(--accent)] bg-clip-text text-transparent">cares.</span>{" "}
-              A network that{" "}
+              {c.titleLead}{" "}
+              <span className="bg-gradient-to-r from-primary to-[var(--accent)] bg-clip-text text-transparent">{c.titleCare}</span>{" "}
+              {c.titleMid}{" "}
               <span className="bg-gradient-to-r from-primary to-[var(--accent)] bg-clip-text text-transparent">
-                empowers.
+                {c.titleEmpower}
               </span>
             </h2>
-            <p className="mt-5 max-w-lg text-lg text-muted-foreground">
-              PulseVerse grows where clinicians already show up — with rooms, live moments, and profiles worth revisiting.
-            </p>
+            <p className="mt-5 max-w-lg text-lg text-muted-foreground">{c.description}</p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {stats.map((s) => {

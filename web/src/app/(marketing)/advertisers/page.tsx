@@ -1,20 +1,25 @@
 import { AdvertisersLanding } from "@/components/marketing/advertisers-landing";
 import { CtaSection } from "@/components/marketing/cta-section";
+import { getAdvertisersLandingCopy } from "@/lib/marketing-copy/advertisers-landing";
+import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
 export const generateMetadata = () => generateMarketingMetadata("advertisers");
 
-export default function AdvertisersPage() {
+export default async function AdvertisersPage() {
+  const locale = await getMarketingLocale();
+  const c = getAdvertisersLandingCopy(locale);
+
   return (
     <>
-      <AdvertisersLanding />
+      <AdvertisersLanding locale={locale} />
       <CtaSection
-        title="Let's build something meaningful together."
-        description="Media kits, partnership pilots, and brand-safe placements — start with a conversation."
+        title={c.bottomCta.title}
+        description={c.bottomCta.description}
         primaryHref="/contact"
-        primaryLabel="Request media kit"
+        primaryLabel={c.bottomCta.primaryLabel}
         secondaryHref="/contact"
-        secondaryLabel="Talk to partnerships"
+        secondaryLabel={c.bottomCta.secondaryLabel}
         analyticsScope="advertisers_bottom"
       />
     </>

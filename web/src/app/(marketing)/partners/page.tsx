@@ -2,38 +2,24 @@ import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { CtaSection } from "@/components/marketing/cta-section";
-import { marketingCardMuted, marketingInlineLink } from "@/lib/ui-classes";
+import { getPartnersPageCopy } from "@/lib/marketing-copy/partners-page";
+import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
+import { marketingCardMuted, marketingInlineLink } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 export const generateMetadata = () => generateMarketingMetadata("partners");
 
-const offers = [
-  {
-    title: "Education series",
-    body: "Co-branded Live with moderated Q&A, clear disclosures, and optional integration with Circles programming — built for discovery-first Live, not static webinars.",
-  },
-  {
-    title: "Circles & community",
-    body: "Sponsored room headers and editorial support in premium healthcare topic spaces — with paths for highlights to surface on Pulse Page via My Pulse.",
-  },
-  {
-    title: "Research-ready analytics",
-    body: "Directional engagement and segment visibility with consent boundaries, evolving toward credible partner Data & Insights — expand under your data agreement.",
-  },
-] as const;
+export default async function PartnersPage() {
+  const locale = await getMarketingLocale();
+  const c = getPartnersPageCopy(locale);
 
-export default function PartnersPage() {
   return (
     <>
       <MarketingPageShell width="medium" breadcrumbPath="/partners">
-        <SectionHeader
-          eyebrow="Partners"
-          title="Build with healthcare culture"
-          description="Institutions, associations, and innovators partner with PulseVerse to reach clinicians in Feed, Circles, Live, and on Pulse Page — with moderation seriousness, trust tooling, and identity surfaces that respect how teams actually connect."
-        />
+        <SectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
         <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {offers.map((o) => (
+          {c.offers.map((o) => (
             <div key={o.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
               <h2 className="text-lg font-semibold text-foreground">{o.title}</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{o.body}</p>
@@ -41,18 +27,18 @@ export default function PartnersPage() {
           ))}
         </div>
         <p className="mt-10 text-center text-sm text-muted-foreground">
-          Enterprise pathways, BAAs, and regional rollouts — start on the{" "}
+          {c.contactLead}{" "}
           <MarketingDestinationLink href="/contact" analyticsSource="partners_inline_contact" className={marketingInlineLink}>
-            contact form
+            {c.contactLinkLabel}
           </MarketingDestinationLink>
           .
         </p>
       </MarketingPageShell>
       <CtaSection
-        title="Talk partnerships"
-        description="Tell us about your organization and the communities you serve."
+        title={c.ctaTitle}
+        description={c.ctaDescription}
         primaryHref="/contact"
-        primaryLabel="Contact us"
+        primaryLabel={c.ctaPrimaryLabel}
         analyticsScope="partners_bottom"
       />
     </>

@@ -31,13 +31,13 @@ export default async function HomePage() {
     <>
       <HeroSection locale={locale} />
       <HomeFeatureShowcase locale={locale} />
-      <HomeProductOverview />
+      <HomeProductOverview locale={locale} />
       <HomeSpotlightSection locale={locale} />
-      <HomePulseDuo />
-      <HomeMyPulseSignature />
+      <HomePulseDuo locale={locale} />
+      <HomeMyPulseSignature locale={locale} />
       <HomeWhySix locale={locale} />
-      <HomeStatsSplit />
-      <HomeTestimonials />
+      <HomeStatsSplit locale={locale} />
+      <HomeTestimonials locale={locale} />
       <CtaSection
         title={cta.title}
         description={cta.description}

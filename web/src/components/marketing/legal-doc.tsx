@@ -12,7 +12,7 @@ export function LegalDoc({
 }: {
   title: string;
   updated?: string;
-  toc?: { id: string; label: string }[];
+  toc?: readonly { id: string; label: string }[];
   children: React.ReactNode;
   breadcrumbPath?: string;
 }) {

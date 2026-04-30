@@ -16,86 +16,19 @@ import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrum
 import { Button } from "@/components/ui/button";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
+import type { Locale } from "@/lib/i18n";
+import { getAdvertisersLandingCopy } from "@/lib/marketing-copy/advertisers-landing";
 import { marketingCardMuted, marketingEyebrow, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
-const audiences = [
-  {
-    title: "Nurses",
-    count: "450K+ professionals",
-    body: "Shift culture, floor humor, and education that respects the bedside.",
-    tint: "from-sky-500/20 to-blue-900/40",
-  },
-  {
-    title: "Physicians & APPs",
-    count: "280K+ professionals",
-    body: "Specialty depth, debate, and live teaching without generic noise.",
-    tint: "from-primary/25 to-slate-900/50",
-  },
-  {
-    title: "Pharmacists",
-    count: "110K+ professionals",
-    body: "Drug information, adherence stories, and collaborative care threads.",
-    tint: "from-emerald-500/20 to-slate-900/45",
-  },
-  {
-    title: "Allied health",
-    count: "120K+ professionals",
-    body: "Imaging, lab, therapy, and operations — the whole care team.",
-    tint: "from-violet-500/20 to-slate-900/45",
-  },
-] as const;
+const placementIcons = [LayoutPanelTop, Users, Video, Radio] as const;
+const driveIcons = [HeartHandshake, Radio, BarChart2, Globe] as const;
+const solutionIcons = [Megaphone, Users, Radio, Video, BarChart2] as const;
+const scaleIcons = [Users, Globe, Radio, Video] as const;
 
-const placements = [
-  { title: "Sponsored feed", body: "Native cards that match clinician reading patterns.", icon: LayoutPanelTop },
-  { title: "Pulse Page takeover", body: "Brand-forward frames on high-trust profiles.", icon: Users },
-  { title: "Live sponsorships", body: "Lower-thirds and labels with moderator review.", icon: Video },
-  { title: "Circles headers", body: "Community surfaces where specialty culture gathers.", icon: Radio },
-] as const;
+export function AdvertisersLanding({ locale }: { locale: Locale }) {
+  const c = getAdvertisersLandingCopy(locale);
 
-const driveEngagement = [
-  { title: "Peer knowledge", body: "Specialty rooms and threaded expertise.", icon: HeartHandshake },
-  { title: "Live education", body: "CME-style moments with interactive Q&A.", icon: Radio },
-  { title: "Career signals", body: "Roles, growth, and mentorship visibility.", icon: BarChart2 },
-  { title: "Real-world insight", body: "Stories that reflect how care actually feels.", icon: Globe },
-] as const;
-
-const solutions = [
-  { title: "Sponsored feed", icon: Megaphone },
-  { title: "Creator collabs", icon: Users },
-  { title: "Circles sponsorships", icon: Radio },
-  { title: "Live partnerships", icon: Video },
-  { title: "Campaign reporting", icon: BarChart2 },
-] as const;
-
-const differentiation = [
-  {
-    title: "Healthcare-native, not borrowed social",
-    body: "The Feed, Circles, Live, and Pulse Page model is built for licensed culture — not consumer timelines retrofitted with a blue check.",
-  },
-  {
-    title: "Premium creator + community environment",
-    body: "Hosts, educators, and clinicians show up with real identity surfaces — Pulse Page, My Pulse, Media Hub — so brands sit next to credible voices.",
-  },
-  {
-    title: "Trust & safety with clinical context",
-    body: "Moderation queues, live escalation, and appeals are designed for how healthcare audiences actually debate and learn.",
-  },
-  {
-    title: "Roadmap: credible Data & Insights",
-    body: "Directional reach, resonance, and segment reporting is being built with consent boundaries — ask partnerships for the latest partner analytics posture.",
-  },
-] as const;
-
-const safetyChecks = [
-  "100% professional community",
-  "Human content moderation",
-  "No DTC pharma spam lanes",
-  "Transparent placement labels",
-  "Appeals & brand escalation paths",
-] as const;
-
-export function AdvertisersLanding() {
   return (
     <>
       <MarketingBreadcrumbs path="/advertisers" />
@@ -103,78 +36,68 @@ export function AdvertisersLanding() {
         <div className="pointer-events-none absolute -left-32 top-20 h-96 w-96 rounded-full bg-primary/15 blur-[100px]" />
         <div className={cn(marketingGutterX, "relative grid gap-14 lg:grid-cols-2 lg:items-center")}>
           <div>
-            <p className={marketingEyebrow}>Advertisers &amp; partners</p>
+            <p className={marketingEyebrow}>{c.hero.eyebrow}</p>
             <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.35rem]">
-              Reach healthcare{" "}
+              {c.hero.titleBefore}{" "}
               <span className="bg-gradient-to-r from-primary via-[#4d9fff] to-[var(--accent)] bg-clip-text text-transparent">
-                where culture lives.
+                {c.hero.titleGradient}
               </span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              PulseVerse is the premium healthcare audience platform where professionals learn, connect, and lead — with
-              moderation and category fit baked in.
-            </p>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">{c.hero.body}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
                 <MarketingDestinationLink href="/contact" analyticsSource="advertisers_hero_media_kit" className="inline-flex items-center gap-2">
-                  Request media kit
+                  {c.hero.ctaMediaKit}
                   <ArrowRight className="h-4 w-4" />
                 </MarketingDestinationLink>
               </Button>
               <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
                 <MarketingDestinationLink href="/contact" analyticsSource="advertisers_hero_partnerships">
-                  Talk to partnerships
+                  {c.hero.ctaPartnerships}
                 </MarketingDestinationLink>
               </Button>
             </div>
           </div>
           <div className="relative grid gap-4 sm:grid-cols-2">
             <div className={cn("rounded-2xl border border-white/10 p-5", marketingCardMuted, "sm:translate-y-8")}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Feed preview</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">{c.preview.feedLabel}</p>
               <div className="mt-4 space-y-2">
                 {[1, 2].map((i) => (
                   <div key={i} className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-xs text-muted-foreground">
-                    Sponsored insight card {i} · cards / clips / live
+                    {c.preview.sponsoredLine.replace("{n}", String(i))}
                   </div>
                 ))}
               </div>
             </div>
             <div className={cn("rounded-2xl border border-white/10 p-5", marketingCardMuted)}>
-              <p className="text-xs font-semibold text-muted-foreground">Live placement</p>
+              <p className="text-xs font-semibold text-muted-foreground">{c.preview.liveLabel}</p>
               <div className="mt-4 aspect-video rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 ring-1 ring-primary/25">
-                <div className="flex h-full items-end p-3 text-[10px] text-white/80">Brand lower-third · verified host</div>
+                <div className="flex h-full items-end p-3 text-[10px] text-white/80">{c.preview.lowerThird}</div>
               </div>
             </div>
           </div>
+
         </div>
       </section>
 
       <MarketingPageShell className="!py-0 pb-10">
-        <p className={marketingEyebrow}>Why healthcare brands start here</p>
-        <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">
-          A credible media-kit entry — built for HCP attention, not generic impressions.
-        </h2>
+        <p className={marketingEyebrow}>{c.whyEyebrow}</p>
+        <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.whyTitle}</h2>
         <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {differentiation.map((d) => (
+          {c.differentiation.map((d) => (
             <div key={d.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
               <p className="text-sm font-semibold text-foreground">{d.title}</p>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d.body}</p>
             </div>
           ))}
         </div>
-        <p className="mt-8 text-sm leading-relaxed text-muted-foreground">
-          Placements span the surfaces clinicians already trust: Feed cards, Pulse Page frames, Live sponsorships with
-          moderator review, and Circles headers where specialty culture concentrates — with audience segmentation language
-          that respects role, specialty, and shift context.
-        </p>
+        <p className="mt-8 text-sm leading-relaxed text-muted-foreground">{c.whyFooter}</p>
       </MarketingPageShell>
 
       <MarketingPageShell className="!py-0 pb-6">
-        <h2 className="max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">
-          Premium access to healthcare&apos;s most influential audiences.
-        </h2>
+        <h2 className="max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.audiencesTitle}</h2>
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {audiences.map((a) => (
+          {c.audiences.map((a) => (
             <div
               key={a.title}
               className={cn(
@@ -194,29 +117,24 @@ export function AdvertisersLanding() {
 
         <div className="mt-16 grid gap-6 lg:grid-cols-2">
           <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
-            <p className={marketingEyebrow}>Scale</p>
+            <p className={marketingEyebrow}>{c.scaleEyebrow}</p>
             <div className="mt-6 grid gap-6 sm:grid-cols-2">
-              {[
-                { label: "850K+ healthcare professionals", icon: Users },
-                { label: "190+ countries", icon: Globe },
-                { label: "25K+ active Circles", icon: Radio },
-                { label: "3.7K+ Live sessions hosted", icon: Video },
-              ].map((row) => {
-                const Icon = row.icon;
+              {c.scaleStats.map((label, i) => {
+                const Icon = scaleIcons[i] ?? Users;
                 return (
-                  <div key={row.label} className="flex gap-3">
+                  <div key={label} className="flex gap-3">
                     <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                    <p className="text-sm font-medium text-foreground">{row.label}</p>
+                    <p className="text-sm font-medium text-foreground">{label}</p>
                   </div>
                 );
               })}
             </div>
           </div>
           <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
-            <h3 className="text-lg font-bold text-foreground">What drives engagement</h3>
+            <h3 className="text-lg font-bold text-foreground">{c.drivesTitle}</h3>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              {driveEngagement.map((d) => {
-                const Icon = d.icon;
+              {c.driveEngagement.map((d, i) => {
+                const Icon = driveIcons[i] ?? HeartHandshake;
                 return (
                   <div key={d.title} className="flex gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
@@ -234,11 +152,11 @@ export function AdvertisersLanding() {
         </div>
 
         <div className="mt-20">
-          <p className={marketingEyebrow}>High-impact ad placements</p>
-          <h2 className="mt-2 text-2xl font-bold text-foreground">Formats built for clinician attention</h2>
+          <p className={marketingEyebrow}>{c.placementsEyebrow}</p>
+          <h2 className="mt-2 text-2xl font-bold text-foreground">{c.placementsTitle}</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {placements.map((p) => {
-              const Icon = p.icon;
+            {c.placements.map((p, i) => {
+              const Icon = placementIcons[i] ?? LayoutPanelTop;
               return (
                 <div key={p.title} className={cn("rounded-2xl p-5", marketingCardMuted)}>
                   <div className="mb-12 aspect-[4/3] rounded-xl border border-dashed border-white/15 bg-white/[0.02]" />
@@ -253,10 +171,10 @@ export function AdvertisersLanding() {
 
         <div className={cn("mt-16 grid gap-8 rounded-2xl border border-[var(--accent)]/25 bg-[rgba(12,21,36,0.65)] p-8 lg:grid-cols-2 lg:items-center", marketingCardMuted)}>
           <div>
-            <p className={marketingEyebrow}>Brand safe · clinician trusted</p>
-            <h2 className="mt-3 text-2xl font-bold text-foreground">Your brand next to content that passes the ward-room test.</h2>
+            <p className={marketingEyebrow}>{c.safeEyebrow}</p>
+            <h2 className="mt-3 text-2xl font-bold text-foreground">{c.safeTitle}</h2>
             <ul className="mt-6 space-y-3">
-              {safetyChecks.map((line) => (
+              {c.safetyChecks.map((line) => (
                 <li key={line} className="flex gap-2 text-sm text-muted-foreground">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" />
                   {line}
@@ -272,10 +190,10 @@ export function AdvertisersLanding() {
         </div>
 
         <div className="mt-20">
-          <h2 className="text-xl font-bold text-foreground">Partnership solutions</h2>
+          <h2 className="text-xl font-bold text-foreground">{c.solutionsTitle}</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {solutions.map((s) => {
-              const Icon = s.icon;
+            {c.solutions.map((s, i) => {
+              const Icon = solutionIcons[i] ?? Megaphone;
               return (
                 <div key={s.title} className={cn("rounded-2xl p-5 text-center", marketingCardMuted)}>
                   <Icon className="mx-auto h-6 w-6 text-primary" />

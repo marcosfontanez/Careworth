@@ -1,11 +1,12 @@
 import { SectionHeader } from "@/components/marketing/section-header";
-import { homeProductOverview } from "@/mock/marketing";
 import { Card, CardContent } from "@/components/ui/card";
+import type { Locale } from "@/lib/i18n";
+import { getHomeProductOverviewCopy } from "@/lib/marketing-copy/home-page-sections";
 import { marketingGutterX, marketingCardMuted } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
-export function HomeProductOverview() {
-  const { eyebrow, title, description, pillars } = homeProductOverview;
+export function HomeProductOverview({ locale }: { locale: Locale }) {
+  const { eyebrow, title, description, pillars } = getHomeProductOverviewCopy(locale);
   return (
     <section
       className={cn(
