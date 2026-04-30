@@ -29,12 +29,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # npm 11.0–11.11.0: `npm ci` could falsely report lockfile out-of-sync when the
-      # lockfile lists optional deps for other platforms (linux vs windows). Bump npm first.
+      # Lockfile is maintained with npm 11. npm 10's `npm ci` errors on this lockfile
+      # (optional transitive deps e.g. @emnapi/*). Match the npm major used for installs.
       - name: Install
         run: |
-          npm install -g npm@11.11.1
-          npm --version
+          npm install -g npm@11.6.2
           npm ci --no-audit --no-fund
 
       - name: ESLint
@@ -69,8 +68,7 @@ jobs:
       - name: Install
         working-directory: web
         run: |
-          npm install -g npm@11.11.1
-          npm --version
+          npm install -g npm@11.6.2
           npm ci --no-audit --no-fund
 
       - name: Lighthouse CI (production server)
