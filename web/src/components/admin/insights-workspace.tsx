@@ -1,8 +1,11 @@
 "use client";
 
+import { AdvertiserEngagementDashboard } from "@/components/admin/advertiser-engagement-dashboard";
 import {
   AudienceDonutChart,
+  EngagementOverviewChart,
   GrowthChart,
+  MiniLineChart,
   ReportReasonsDonutChart,
   ReportsBySourceBarChart,
   TopCirclesBarChart,
@@ -11,12 +14,48 @@ import { AdminPanelCard } from "@/components/admin/admin-panel-card";
 import { InsightsKpiGrid } from "@/components/admin/insights-kpi-grid";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { insightsOverviewKpis, trustSafetyMetrics } from "@/mock/data";
+import type {
+  AudienceSlice,
+  CircleActivityBar,
+  EngagementDayPoint,
+  GrowthPoint,
+  ReportReasonSlice,
+  ReportSourceBar,
+} from "@/types/admin-charts";
+import type { AdvertiserEngagementPayload } from "@/types/advertiser-engagement";
 
 const tabClass =
   "rounded-md px-3 py-1.5 text-xs sm:text-sm data-active:bg-sidebar-accent data-active:text-foreground data-active:ring-1 data-active:ring-primary/15";
 
-export function InsightsWorkspace() {
+export type InsightsWorkspaceProps = {
+  growthSeries: GrowthPoint[];
+  audienceDonut: AudienceSlice[];
+  engagementWeek: EngagementDayPoint[];
+  topCircles: CircleActivityBar[];
+  reportReasons: ReportReasonSlice[];
+  reportsBySource: ReportSourceBar[];
+  overviewKpis: { label: string; value: string }[];
+  trustKpis: { label: string; value: string }[];
+  advertiserEngagement: AdvertiserEngagementPayload;
+  liveKpis: { label: string; value: string }[];
+  campaignKpis: { label: string; value: string }[];
+  myPulseKpis: { label: string; value: string }[];
+};
+
+export function InsightsWorkspace({
+  growthSeries,
+  audienceDonut,
+  engagementWeek,
+  topCircles,
+  reportReasons,
+  reportsBySource,
+  overviewKpis,
+  trustKpis,
+  advertiserEngagement,
+  liveKpis,
+  campaignKpis,
+  myPulseKpis,
+}: InsightsWorkspaceProps) {
   return (
     <Tabs defaultValue="overview" className="space-y-6">
       <TabsList className="flex h-auto max-w-full flex-wrap justify-start gap-1 bg-secondary/40 p-1 ring-1 ring-white/[0.04]">
@@ -38,14 +77,14 @@ export function InsightsWorkspace() {
         ))}
       </TabsList>
       <TabsContent value="overview" className="space-y-6">
-        <InsightsKpiGrid items={insightsOverviewKpis} />
+        <InsightsKpiGrid items={overviewKpis} />
         <div className="grid gap-6 lg:grid-cols-2">
           <AdminPanelCard>
             <CardHeader>
               <CardTitle>Growth</CardTitle>
             </CardHeader>
             <CardContent>
-              <GrowthChart />
+              <GrowthChart data={growthSeries} />
             </CardContent>
           </AdminPanelCard>
           <AdminPanelCard>
@@ -53,86 +92,80 @@ export function InsightsWorkspace() {
               <CardTitle>Profession mix</CardTitle>
             </CardHeader>
             <CardContent>
-              <AudienceDonutChart />
+              <AudienceDonutChart data={audienceDonut} />
             </CardContent>
           </AdminPanelCard>
         </div>
       </TabsContent>
       <TabsContent value="audience" className="space-y-6">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Breakdowns by profession, specialty, geography, and experience — connect your warehouse to replace sample tiles.
+          Role distribution from profiles (recent sample capped for performance).
         </p>
-        <AudienceDonutChart />
+        <AudienceDonutChart data={audienceDonut} />
       </TabsContent>
       <TabsContent value="engagement" className="space-y-6">
-        <InsightsKpiGrid
-          items={[
-            { label: "DAU / MAU", value: "26.5%" },
-            { label: "Sessions / user", value: "4.2" },
-            { label: "Avg session", value: "12m 45s" },
-            { label: "Feed depth", value: "28 posts" },
-            { label: "Engagement rate", value: "18.7%" },
-            { label: "W4 retention", value: "41%" },
-          ]}
-        />
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Brand-planner view: reach proxies, funnels, inventory, and content performance. Figures use Supabase rollups
+          with documented caps; treat reach as directional unless you widen samples in SQL.
+        </p>
+        <AdvertiserEngagementDashboard payload={advertiserEngagement} />
+        <AdminPanelCard>
+          <CardHeader>
+            <CardTitle>7-day activity mix (legacy chart)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EngagementOverviewChart data={engagementWeek} />
+          </CardContent>
+        </AdminPanelCard>
       </TabsContent>
       <TabsContent value="content" className="space-y-6">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Top viewed / shared / saved clips — connect to warehouse for watch time and completion.
+          Communities ranked by stored post counts.
         </p>
-        <TopCirclesBarChart />
+        <TopCirclesBarChart data={topCircles} />
       </TabsContent>
       <TabsContent value="my_pulse" className="space-y-6">
-        <InsightsKpiGrid
-          items={[
-            { label: "My Pulse posts (30d)", value: "182K" },
-            { label: "Text share", value: "34%" },
-            { label: "Link tap rate", value: "12.4%" },
-            { label: "Avg engagement / post", value: "214" },
-          ]}
-        />
+        <InsightsKpiGrid items={myPulseKpis} />
       </TabsContent>
       <TabsContent value="circles" className="space-y-6">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Fastest growing, most joined, trending topics — sample bar chart until analytics are wired.
-        </p>
-        <TopCirclesBarChart />
+        <p className="text-sm leading-relaxed text-muted-foreground">Relative post volume by circle.</p>
+        <TopCirclesBarChart data={topCircles} />
       </TabsContent>
       <TabsContent value="live" className="space-y-6">
-        <InsightsKpiGrid
-          items={[
-            { label: "Sessions started (30d)", value: "3,409" },
-            { label: "Avg viewers", value: "412" },
-            { label: "Peak concurrent", value: "12.4K" },
-            { label: "Avg watch time", value: "7m 12s" },
-          ]}
-        />
+        <InsightsKpiGrid items={liveKpis} />
       </TabsContent>
       <TabsContent value="creators" className="space-y-6">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Top creators, fastest growing, live hosts — join creator warehouse.
-        </p>
-        <GrowthChart />
+        <p className="text-sm leading-relaxed text-muted-foreground">User growth trend (same series as dashboard).</p>
+        <GrowthChart data={growthSeries} />
+        <AdminPanelCard>
+          <CardHeader>
+            <CardTitle>Trailing months (sparkline)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MiniLineChart data={growthSeries} />
+          </CardContent>
+        </AdminPanelCard>
       </TabsContent>
       <TabsContent value="campaigns" className="space-y-6">
-        <InsightsKpiGrid
-          items={[
-            { label: "Impressions (30d)", value: "18.2M" },
-            { label: "CTR", value: "1.96%" },
-            { label: "Engaged actions", value: "240K" },
-            { label: "Brand lift (sample)", value: "+3.2" },
-          ]}
-        />
+        <InsightsKpiGrid items={campaignKpis} />
       </TabsContent>
       <TabsContent value="trust" className="space-y-6">
-        <InsightsKpiGrid items={trustSafetyMetrics} />
+        <InsightsKpiGrid items={trustKpis} />
         <div className="grid gap-6 lg:grid-cols-2">
           <AdminPanelCard>
             <CardHeader>
               <CardTitle>Reports by source</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <ReportsBySourceBarChart />
+              <ReportsBySourceBarChart data={reportsBySource} />
+            </CardContent>
+          </AdminPanelCard>
+          <AdminPanelCard>
+            <CardHeader>
+              <CardTitle>Report reasons</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ReportReasonsDonutChart data={reportReasons} />
             </CardContent>
           </AdminPanelCard>
         </div>

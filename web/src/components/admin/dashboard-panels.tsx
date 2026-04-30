@@ -47,22 +47,26 @@ export function RecentActivityList({
         <CardTitle className="text-base font-semibold">Recent activity</CardTitle>
       </CardHeader>
       <CardContent className="space-y-0">
-        {items.map((item, i) => (
-          <div
-            key={item.id}
-            className={cn(
-              "flex gap-3 py-3 text-sm",
-              i < items.length - 1 && "border-b border-border/80",
-            )}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-foreground">{item.summary}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {item.actor} · {formatShortAgo(item.at)}
-              </p>
+        {items.length === 0 ? (
+          <p className="py-6 text-sm text-muted-foreground">No recent events matched (reports, appeals, analytics).</p>
+        ) : (
+          items.map((item, i) => (
+            <div
+              key={item.id}
+              className={cn(
+                "flex gap-3 py-3 text-sm",
+                i < items.length - 1 && "border-b border-border/80",
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-foreground">{item.summary}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {item.actor} · {formatShortAgo(item.at)}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </CardContent>
     </AdminPanelCard>
   );
@@ -153,26 +157,30 @@ export function ModeratorWorkloadPanel({
     <AdminPanelCard>
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold">Active moderators</CardTitle>
-        <p className="text-xs text-muted-foreground">Operational snapshot (sample)</p>
+        <p className="text-xs text-muted-foreground">Reviews completed in the last rolling 7 days</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {moderators.map((m) => (
-          <div key={m.id}>
-            <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="font-medium text-foreground">{m.name}</span>
-              <span className="tabular-nums text-muted-foreground">{m.load}%</span>
+        {moderators.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No reviewer assignments in the last 7 days.</p>
+        ) : (
+          moderators.map((m) => (
+            <div key={m.id}>
+              <div className="mb-1 flex items-center justify-between text-sm">
+                <span className="font-medium text-foreground">{m.name}</span>
+                <span className="tabular-nums text-muted-foreground">{m.load}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-secondary ring-1 ring-white/[0.04]">
+                <div
+                  className={cn(
+                    "h-full rounded-full bg-gradient-to-r from-primary to-[#00d2ff]",
+                    m.load > 80 && "from-amber-500 to-orange-400",
+                  )}
+                  style={{ width: `${m.load}%` }}
+                />
+              </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-secondary ring-1 ring-white/[0.04]">
-              <div
-                className={cn(
-                  "h-full rounded-full bg-gradient-to-r from-primary to-[#00d2ff]",
-                  m.load > 80 && "from-amber-500 to-orange-400",
-                )}
-                style={{ width: `${m.load}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </CardContent>
     </AdminPanelCard>
   );

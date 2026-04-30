@@ -36,6 +36,14 @@ export const adminPanelSurface =
 export const marketingElevatedFrame =
   "rounded-2xl border border-[rgba(148,163,184,0.14)] bg-[rgba(12,21,36,0.75)] shadow-[0_24px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-md";
 
+/** Inline links on dark marketing surfaces — sky-300 meets ~4.5:1 on navy/footer (#030712); primary blue did not. */
+export const marketingInlineLink =
+  "font-medium text-sky-300 underline decoration-sky-300/70 underline-offset-[3px] hover:text-sky-200 hover:decoration-sky-200";
+
+/** Heavier weight for card “Explore” links (same contrast token as `marketingInlineLink`). */
+export const marketingInlineLinkStrong =
+  "font-semibold text-sky-300 underline decoration-sky-300/70 underline-offset-[3px] hover:text-sky-200 hover:decoration-sky-200";
+
 /** Marketing primary CTA — pill, mock style */
 export const marketingCtaPrimary =
   "rounded-full bg-primary px-6 font-semibold text-primary-foreground hover:bg-primary/90";

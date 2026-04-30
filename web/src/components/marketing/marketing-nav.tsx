@@ -3,32 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Menu } from "lucide-react";
+import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import type { Locale } from "@/lib/i18n";
+import { getMarketingCenterLinks, getMarketingNavStrings } from "@/lib/marketing-copy/nav";
 import { marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
-
-/** Matches primary marketing mocks: hub + pillar landings (no Feed / My Pulse in top rail). */
-const centerLinks: { href: string; label: string; match: (path: string) => boolean }[] = [
-  {
-    href: "/features",
-    label: "Features",
-    match: (p) =>
-      p === "/features" ||
-      (p.startsWith("/features") &&
-        !p.startsWith("/features/feed") &&
-        !p.startsWith("/features/circles") &&
-        !p.startsWith("/features/live") &&
-        !p.startsWith("/features/pulse-page") &&
-        !p.startsWith("/features/my-pulse")),
-  },
-  { href: "/features/circles", label: "Circles", match: (p) => p.startsWith("/features/circles") },
-  { href: "/features/live", label: "Live", match: (p) => p.startsWith("/features/live") },
-  { href: "/features/pulse-page", label: "Pulse Page", match: (p) => p.startsWith("/features/pulse-page") },
-  { href: "/support", label: "Support", match: (p) => p.startsWith("/support") },
-  { href: "/advertisers", label: "Advertisers", match: (p) => p.startsWith("/advertisers") },
-];
 
 function NavLink({
   href,
@@ -59,8 +41,10 @@ function NavLink({
   );
 }
 
-export function MarketingNav() {
+export function MarketingNav({ locale }: { locale: Locale }) {
   const pathname = usePathname() ?? "";
+  const centerLinks = getMarketingCenterLinks(locale);
+  const strings = getMarketingNavStrings(locale);
 
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.85)] backdrop-blur-xl">
@@ -77,7 +61,7 @@ export function MarketingNav() {
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <Button variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex" asChild>
-            <Link href="/admin/login">Log in</Link>
+            <Link href="/admin/login">{strings.logIn}</Link>
           </Button>
           <Button
             size="sm"
@@ -88,10 +72,10 @@ export function MarketingNav() {
             )}
             asChild
           >
-            <Link href="/download" className="inline-flex items-center gap-2">
-                  Join PulseVerse
+            <MarketingDestinationLink href="/download" analyticsSource="nav_desktop_join" className="inline-flex items-center gap-2">
+                  {strings.join}
                   <ArrowRight className="h-4 w-4" aria-hidden />
-                </Link>
+                </MarketingDestinationLink>
           </Button>
           <div className="lg:hidden">
             <Sheet>
@@ -99,7 +83,7 @@ export function MarketingNav() {
                 className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground outline-none hover:bg-secondary"
               >
                 <Menu className="h-5 w-5" />
-                <span className="sr-only">Menu</span>
+                <span className="sr-only">{strings.menuLabel}</span>
               </SheetTrigger>
               <SheetContent side="right" className="border-border bg-card">
                 <div className="mt-8 flex flex-col gap-1">
@@ -112,9 +96,17 @@ export function MarketingNav() {
                       {item.label}
                     </Link>
                   ))}
-                  <Link href="/download" className="mt-4">
-                    <Button className="w-full rounded-full bg-primary font-semibold">Join PulseVerse</Button>
+                  <Link
+                    href="/admin/login"
+                    className="rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    {strings.logIn}
                   </Link>
+                  <Button className="mt-4 w-full rounded-full bg-primary font-semibold" asChild>
+                    <MarketingDestinationLink href="/download" analyticsSource="nav_mobile_join">
+                      {strings.join}
+                    </MarketingDestinationLink>
+                  </Button>
                 </div>
               </SheetContent>
             </Sheet>

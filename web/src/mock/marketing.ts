@@ -4,7 +4,7 @@ export const homeProductOverview = {
   eyebrow: "Product overview",
   title: "Built for healthcare life — not another corporate graph.",
   description:
-    "PulseVerse stitches together the surfaces clinicians actually use after the pager stops: discovery, specialty rooms, live credibility, and identity that feels human.",
+    "PulseVerse stitches together what clinicians use after the pager stops: short-form Feed culture, premium Circles, discovery-first Live, and Pulse Page identity with Current Vibe, My Pulse, and Media Hub.",
   pillars: [
     {
       title: "Culture-first",
@@ -25,42 +25,42 @@ export const homeFeatureSpotlights = [
   {
     tag: "Feed",
     title: "Culture-forward discovery — tuned for who you are in medicine.",
-    body: "Short-form video, images, and threads that respect specialty, shift, and credibility — not generic endless scroll.",
+    body: "Short-form healthcare culture and creator content — video, images, and threads that respect specialty, shift, and credibility.",
     href: "/features/feed",
   },
   {
     tag: "Circles",
-    title: "Rooms that feel like your floor — not generic forums.",
-    body: "Memes to mentorship, night shift to subspecialty. Threads, reactions, and moderators who speak your abbreviations.",
+    title: "Premium topic spaces — healthcare-native, not forum chaos.",
+    body: "Specialty and culture communities with high-signal threads — connected to Pulse Page and easy to share back into My Pulse.",
     href: "/features/circles",
   },
   {
     tag: "Live",
-    title: "AMAs and teaching moments with a safety lens.",
-    body: "Go live for Q&A, boards prep, or cath lab stories — with incident workflows when chat goes clinical.",
+    title: "Real-time healthcare culture — discover what’s live now.",
+    body: "Featured streams, top rooms, rising creators, and browse by topic — social, active, and creator-led (not a webinar grid).",
     href: "/features/live",
   },
   {
     tag: "Pulse Page",
-    title: "A profile surface beyond the résumé.",
-    body: "Pins, remixes, and links that show how you show up in medicine — polished, expressive, yours.",
+    title: "Your identity home — expressive, creator-style, clinically grounded.",
+    body: "Profile presence, Current Vibe, My Pulse, and Media Hub in one premium surface — music, moments, and momentum together.",
     href: "/features/pulse-page",
   },
   {
     tag: "My Pulse",
-    title: "Your private dashboard for momentum.",
-    body: "Rolling activity, profile views, and engagement signals — your rhythm between shifts, without the noise.",
+    title: "Keep your Pulse fresh — five updates, always current.",
+    body: "A rolling strip of your latest five posts: Thought, Clip, Link, or Pics. Add a sixth and the oldest rolls off — never cluttered.",
     href: "/features/my-pulse",
   },
 ] as const;
 
 export const homePulseDuo = {
   eyebrow: "Pulse Page · My Pulse",
-  title: "Public presence + private rhythm.",
+  title: "One identity home — many ways to show up.",
   pulsePage:
-    "Pulse Page is how the community sees you — clips you’re proud of, pins that matter, and a vibe that matches your practice.",
+    "Pulse Page is your professional and personal hub: verification, creator-style layout, Current Vibe (a premium mini music player), Media Hub, and the social energy of a living profile.",
   myPulse:
-    "My Pulse is yours between shifts: saves, revisits, and connections without turning into a second inbox.",
+    "My Pulse sits on your Pulse Page as a rolling feed of your latest five updates — Thought, Clip, Link, or Pics — newest first, designed to stay fresh instead of turning into a stale wall.",
   links: [
     { label: "Pulse Page", href: "/features/pulse-page" },
     { label: "My Pulse", href: "/features/my-pulse" },
@@ -116,34 +116,34 @@ export const featuresHubIntro = {
   eyebrow: "Features overview",
   title: "Explore everything PulseVerse can do.",
   description:
-    "Feed, Circles, Live, Pulse Page, and My Pulse — one account, one trust model, and surfaces that match how healthcare culture actually moves.",
+    "Feed, Circles, Live, Pulse Page, and My Pulse — one account, one trust model, and surfaces tuned to how healthcare culture actually moves (with Media Hub living right on your Pulse Page).",
 };
 
 export const featuresHubGrid = [
   {
     href: "/features/feed",
     title: "Feed",
-    desc: "Short-form culture tuned for healthcare context — discovery that respects how you work.",
+    desc: "Short-form healthcare culture and creator content — discovery that respects how you work.",
   },
   {
     href: "/features/circles",
     title: "Circles",
-    desc: "Specialty and culture rooms that feel alive — threads, reactions, moderators who speak your abbreviations.",
+    desc: "Healthcare communities and topic spaces — premium rooms, not generic forums.",
   },
   {
     href: "/features/live",
     title: "Live",
-    desc: "AMAs and teaching moments with live moderation built for clinical Q&A.",
+    desc: "Real-time healthcare conversations and discovery — Featured, Top Live Now, Rising Lives, browse by topic.",
   },
   {
     href: "/features/pulse-page",
     title: "Pulse Page",
-    desc: "Your public presence beyond a resume — pins, remixes, and expressive layout.",
+    desc: "Your identity home — profile, Current Vibe, My Pulse, and Media Hub in one creator-grade surface.",
   },
   {
     href: "/features/my-pulse",
     title: "My Pulse",
-    desc: "Private hub for saves, activity, and connections — rhythm between shifts.",
+    desc: "Rolling five-item update feed on your Pulse Page — Thought, Clip, Link, Pics — always current.",
   },
 ] as const;
 
@@ -174,16 +174,16 @@ export const featureDetailExtras: Record<
     eyebrow: "Circles",
     steps: [
       {
-        title: "Pick your room",
-        body: "Join culture-first spaces from memes to morbidity & mortality vibes — your call.",
+        title: "Find your topic",
+        body: "Healthcare-specific circles — specialty, shift, wellness, and culture — with depth that feels premium, not old-school forum energy.",
       },
       {
-        title: "Thread it out",
-        body: "Reactions, replies, and mods who understand healthcare tone and slang.",
+        title: "Talk with signal",
+        body: "Threads and reactions tuned for clinicians; moderators who understand tone, slang, and clinical context.",
       },
       {
-        title: "Spotlight growth",
-        body: "Featured rooms can be curated without suffocating organic momentum.",
+        title: "Bring it back to your Pulse",
+        body: "Repost highlights into My Pulse so your identity page reflects the communities you care about.",
       },
     ],
   },
@@ -191,16 +191,16 @@ export const featureDetailExtras: Record<
     eyebrow: "Live",
     steps: [
       {
+        title: "Discover what’s happening now",
+        body: "Featured Live, Top Live Now, Rising Lives, and browse by topic — built for active discovery, not a schedule-first webinar grid.",
+      },
+      {
         title: "Go live with purpose",
-        body: "AMAs, teaching, ward stories — structured for hosts who educate, not just entertain.",
+        body: "Creator-led conversations, AMAs, and teaching moments — with moderation tooling meant for licensed audiences.",
       },
       {
         title: "Chat that scales",
-        body: "Moderation tooling built for fast-moving clinical Q&A and escalation.",
-      },
-      {
-        title: "Review after stream",
-        body: "Summaries and flags feed the same trust console as posts and comments.",
+        body: "Fast clinical Q&A, escalation paths, and post-live signals that feed the same trust systems as the Feed.",
       },
     ],
   },
@@ -208,16 +208,16 @@ export const featureDetailExtras: Record<
     eyebrow: "Pulse Page",
     steps: [
       {
-        title: "Curate your surface",
-        body: "Pins, highlights, and media-forward layout — leaving stiff templates behind.",
+        title: "Own your identity surface",
+        body: "Premium profile presence — verification, headline, and creator-grade layout that feels alive, not like a PDF.",
       },
       {
-        title: "Link with intent",
-        body: "Articles, foundations, causes — credibility without corporate chrome.",
+        title: "Set the atmosphere",
+        body: "Current Vibe is a mini music player on your page — what you’re listening to becomes part of how people experience your Pulse.",
       },
       {
-        title: "Grow revisits",
-        body: "Designed so colleagues come back when they want your lens — not a one-off profile stamp.",
+        title: "Media Hub + My Pulse",
+        body: "Recent videos, favorites, and photos in one compact library — alongside a rolling five-item My Pulse strip (Thought, Clip, Link, Pics).",
       },
     ],
   },
@@ -225,16 +225,16 @@ export const featureDetailExtras: Record<
     eyebrow: "My Pulse",
     steps: [
       {
-        title: "Save what matters",
-        body: "Clips, threads, references — organized for recall between long stretches.",
+        title: "Five updates, always fresh",
+        body: "Only your latest five items are visible. Newest on top; adding a sixth pushes the oldest off — intentional, not cluttered.",
       },
       {
-        title: "Track your activity",
-        body: "Your private ledger of engagement — with privacy modes respected.",
+        title: "Four ways to post",
+        body: "Thought, Clip, Link, Pics — clips are always from inside PulseVerse (yours or saved from the Feed); links go outward; pics capture day-to-day moments.",
       },
       {
-        title: "Nurture connections",
-        body: "People you actually talk shop with — not vanity follower graphs.",
+        title: "Identity, not a metrics wall",
+        body: "My Pulse is how people read your rhythm at a glance. Supporting stats can exist elsewhere — this strip is about what you’re sharing now.",
       },
     ],
   },
@@ -275,10 +275,10 @@ export const circlesDiscoverTags = [
 
 export const circlesWhyBetter = [
   "Verified healthcare professionals",
-  "Topic-first rooms — not generic noise",
+  "Topic-first rooms — high-signal, healthcare-native",
   "Moderation tuned for clinical context",
   "No ads cluttering your threads",
-  "Share back to My Pulse in one tap",
+  "Repost into My Pulse when something resonates",
 ] as const;
 
 /** Live marketing landing */
@@ -287,8 +287,8 @@ export const liveFeaturedSessions = [
   {
     title: "New grad residency prep",
     host: "Jordan Lee, RN",
-    status: "scheduled" as const,
-    viewers: "—",
+    status: "live" as const,
+    viewers: "420",
     specialty: "Education",
   },
   {
@@ -300,6 +300,14 @@ export const liveFeaturedSessions = [
   },
 ] as const;
 
+export const liveRisingLives = [
+  { title: "Pharmacy counter stories", host: "Sam Okonkwo", viewers: "up 3.1×" },
+  { title: "Night shift debrief", host: "Anonymous RN", viewers: "up 2.4×" },
+  { title: "Ask a cards attending", host: "Dr. Arjun Patel", viewers: "up 1.9×" },
+  { title: "OR teamwork wins", host: "Maya Chen", viewers: "up 1.6×" },
+  { title: "Med school AMA", host: "Faculty panel", viewers: "up 1.4×" },
+] as const;
+
 export const liveTopNow = [
   { rank: 1, title: "Ask a cards attending", host: "Dr. Arjun Patel", viewers: "1.2K" },
   { rank: 2, title: "Night shift debrief", host: "Anonymous RN", viewers: "880" },
@@ -308,62 +316,44 @@ export const liveTopNow = [
   { rank: 5, title: "Med school AMA", host: "Faculty panel", viewers: "290" },
 ] as const;
 
-export const liveDiscoverCategories = [
-  { title: "All live sessions", desc: "Everything broadcasting now" },
-  { title: "Specialties", desc: "Cards, neuro, surg, and more" },
+/** Browse-by-topic tiles (Live tab) */
+export const liveTopicBrowse = [
+  { title: "Critical care", desc: "Teaching, check-ins, acuity talk" },
+  { title: "Nursing", desc: "Shift culture, mentorship, humor" },
   { title: "Wellness", desc: "Sustainability on and off shift" },
-  { title: "Patient & caregiver", desc: "Lived experience voices" },
+  { title: "Education", desc: "Boards, training, new grads" },
 ] as const;
 
 export const liveWhyGoLive = [
   { title: "Clinician trust", body: "Labels, verification, and rooms built for licensed audiences." },
-  { title: "Interactive Q&A", body: "Upvotes, queues, and moderation that keeps chat respectful." },
-  { title: "Credibility", body: "Host tools for citations, disclaimers, and context." },
+  { title: "Discovery-first", body: "Featured, top, rising, and topic browse — built for what’s live right now." },
+  { title: "Interactive Q&A", body: "Queues and moderation that keep fast clinical chat respectful." },
+  { title: "Creator-led", body: "Hosts educate and entertain with tools for citations, disclaimers, and context." },
   { title: "Co-hosts", body: "Bring moderators and guests without friction." },
-  { title: "Safety workflows", body: "Live incidents route to trained reviewers." },
-  { title: "Replay-ready", body: "Sessions become teaching artifacts for Circles." },
-] as const;
-
-export const supportFaqItems = [
-  {
-    q: "What is PulseVerse?",
-    a: "A social platform for healthcare professionals — feed, Circles, Live, and Pulse Page — with moderation built for clinical culture.",
-  },
-  {
-    q: "How do I verify my account?",
-    a: "Verification paths vary by region and credential type. Start from Settings → Verification and follow the guided checklist.",
-  },
-  {
-    q: "How do I report content?",
-    a: "Use the overflow menu on posts, comments, or profiles. For live streams, flag from the player — live incidents are prioritized.",
-  },
-  {
-    q: "Is PulseVerse HIPAA-ready?",
-    a: "PulseVerse is not a system of record for PHI. Do not post identifiable patient information; violations may be removed or escalated.",
-  },
+  { title: "Safety workflows", body: "Live incidents route to trained reviewers with clinical context." },
 ] as const;
 
 /** Pulse Page marketing — five capability cards */
 export const pulsePageShareWays = [
-  { title: "Your premium profile", body: "Headline, role, verification, and following — built for clinicians.", emoji: "👤" },
-  { title: "Current vibe", body: "Optional status — study mode, off-shift, or on service.", emoji: "🎵" },
-  { title: "My Pulse (5 posts)", body: "A rolling window of your best public posts.", emoji: "📣" },
-  { title: "Post types", body: "Thought, clip, link, pics — pick the format that fits.", emoji: "✨" },
-  { title: "Media hub", body: "Photos, clips, and collections in one glanceable grid.", emoji: "🖼️" },
+  { title: "Your premium profile", body: "Headline, role, verification, and following — creator-friendly and healthcare-specific.", emoji: "👤" },
+  { title: "Current Vibe", body: "A premium mini music player — your now-playing track shapes the atmosphere of your Pulse Page.", emoji: "🎵" },
+  { title: "My Pulse", body: "Only your latest five updates, newest first — Thought, Clip, Link, or Pics — designed to stay fresh.", emoji: "📣" },
+  { title: "Four update types", body: "Thought, Clip, Link, Pics — clips stay inside PulseVerse; links point outward; pics capture everyday moments.", emoji: "✨" },
+  { title: "Media Hub", body: "Your compact library — Recent Videos, Favorites, and My Photos — all on Pulse Page.", emoji: "🖼️" },
 ] as const;
 
 export const pulsePageShowcase = [
-  { title: "Recent videos", kicker: "Teaching · clips", cta: "View all videos" },
-  { title: "Favorites", kicker: "Books · threads · resources", cta: "View favorites" },
-  { title: "Photos", kicker: "Cases & moments (de-identified)", cta: "View gallery" },
+  { title: "Recent Videos", kicker: "Media Hub", cta: "Open Media Hub" },
+  { title: "Favorites", kicker: "Media Hub", cta: "View favorites" },
+  { title: "My Photos", kicker: "Media Hub", cta: "View gallery" },
 ] as const;
 
 export const pulsePageWhyProfessionals = [
   { title: "Build trust", body: "Show how you practice — not just where you trained." },
-  { title: "Stay top of mind", body: "A pulse people revisit between shifts." },
-  { title: "Own your narrative", body: "Pins, highlights, and order that YOU control." },
-  { title: "Grow thoughtfully", body: "Signals for credibility — not vanity spam." },
-  { title: "Portable presence", body: "Links, media, and story — export-friendly by design.", },
+  { title: "Stay current", body: "Music, Media Hub, and a five-item My Pulse strip keep your page alive between visits." },
+  { title: "Own your narrative", body: "Creator-style layout and content types YOU control." },
+  { title: "Grow thoughtfully", body: "Credibility-forward presence — not vanity spam." },
+  { title: "Portable presence", body: "Links, media, and story — export-friendly by design." },
 ] as const;
 
 export const pulsePageAudienceSegments = [
@@ -374,26 +364,27 @@ export const pulsePageAudienceSegments = [
   { title: "Organizations", body: "Programs and societies with a verified home base." },
 ] as const;
 
-/** My Pulse — personal dashboard marketing */
-export const myPulseHighlights = [
-  { label: "Profile views (7d)", value: "+18%", trend: "up" as const, sub: "vs prior week" },
-  { label: "Engagement", value: "4.2K", trend: "up" as const, sub: "reactions & replies" },
-  { label: "Connections", value: "612", trend: "neutral" as const, sub: "meaningful mutuals" },
-  { label: "Live watched", value: "12h", trend: "up" as const, sub: "last 30 days" },
+/** My Pulse — rolling feed (illustrative slots for marketing mocks) */
+export const myPulseFeedSlots = [
+  { type: "Thought" as const, preview: "Grateful for the team that stayed late." },
+  { type: "Clip" as const, preview: "From Feed · cath lab teaching moment" },
+  { type: "Link" as const, preview: "New guideline + why it matters on our floor" },
+  { type: "Pics" as const, preview: "Coffee before rounds (de-identified)" },
+  { type: "Thought" as const, preview: "Oldest visible slot — adding one more drops this item" },
 ] as const;
 
-export const myPulsePrivateFeatures = [
+export const myPulseCoreIdeas = [
   {
-    title: "Saved & collections",
-    body: "Clip what you need between rounds — organized without turning into a second inbox.",
+    title: "Five updates, by design",
+    body: "Only your latest five items show on Pulse Page. Newest at the top; a sixth post pushes the oldest off — intentional freshness, not an endless history wall.",
   },
   {
-    title: "Activity you control",
-    body: "See what you engaged with — with privacy modes that respect night-shift life.",
+    title: "Thought · Clip · Link · Pics",
+    body: "Four formats for how healthcare life actually looks: quick notes, in-app clips, outbound links with context, and photo moments you want to share.",
   },
   {
-    title: "Connection map",
-    body: "People you actually talk shop with — not generic follower graphs.",
+    title: "Clips stay inside PulseVerse",
+    body: "A Clip is from your content or something you saved from the Feed — native to our culture layer, not random external embeds.",
   },
 ] as const;
 

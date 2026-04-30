@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { site } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
@@ -20,14 +21,14 @@ export function MarketingLogo({ className, variant = "nav" }: { className?: stri
       className={cn("inline-flex shrink-0 items-center", className)}
       aria-label={`${site.name} home`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- SVG asset; avoids raster checkerboard */}
-      <img
+      <Image
         src={LOGO_SRC}
         alt=""
         width={280}
         height={300}
-        decoding="async"
-        fetchPriority={variant === "nav" ? "high" : "auto"}
+        sizes="(max-width: 640px) 88vw, (max-width: 768px) 360px, 400px"
+        priority={variant === "nav"}
+        unoptimized
         className={cn(
           "w-auto max-w-[min(88vw,320px)] object-contain object-left sm:max-w-[360px] md:max-w-[400px]",
           variant === "footer" && "max-w-[min(92vw,380px)] sm:max-w-[420px]",

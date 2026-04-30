@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AdminFilterChip } from "@/components/admin/admin-filter-chip";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -96,8 +97,8 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
                   <TableCell className="text-muted-foreground">{u.joinedAt}</TableCell>
                   <TableCell className="text-muted-foreground">{u.lastActive}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline">
-                      Review
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href="/admin/moderation">Safety queue</Link>
                     </Button>
                   </TableCell>
                 </TableRow>

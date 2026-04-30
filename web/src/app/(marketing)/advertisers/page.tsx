@@ -17,6 +17,7 @@ export default function AdvertisersPage() {
         primaryLabel="Request media kit"
         secondaryHref="/contact"
         secondaryLabel="Talk to partnerships"
+        analyticsScope="advertisers_bottom"
       />
     </>
   );

@@ -176,6 +176,51 @@ on the Pro plan.
 
 ---
 
+## 8. Platform / enterprise tables (`067` + `068`)
+
+After `067_platform_enterprise_foundation.sql` (and `068_cleanup_placement_trust_rls.sql` if you had an older 067 apply), confirm objects exist:
+
+```sql
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+  and table_name in (
+    'user_analytics_consent',
+    'admin_audit_log',
+    'feature_flags',
+    'experiments',
+    'experiment_assignments',
+    'partner_api_keys',
+    'webhook_outbox',
+    'admin_saved_views',
+    'scheduled_export_jobs',
+    'placement_trust_scores',
+    'fraud_review_queue',
+    'warehouse_export_runs',
+    'sponsor_deals',
+    'compliance_tasks',
+    'analytics_event_schema_versions'
+  )
+order by 1;
+```
+
+Expect **15 rows**. `placement_trust_scores` should have **one** admin-facing policy
+(`Admins manage placement trust`), not a separate read-only duplicate.
+
+**Notes**
+
+- `experiment_assignments`: no INSERT policy for `authenticated` — writes are intended via **service role** (or future RPC). Same pattern as other ops tables.
+- Admin dashboard loaders use the service role when `SUPABASE_SERVICE_ROLE_KEY` is set; RLS still protects ad-hoc SQL / misconfigured clients.
+
+---
+
+## 7. Enterprise / platform migrations (067–068)
+
+1. Apply **`067_platform_enterprise_foundation.sql`** for admin audit log, feature flags, consent tables, partner/webhook stubs, and `profiles.preferred_locale` / digest prefs.
+2. Apply **`068_cleanup_placement_trust_rls.sql`** if a prior 067 revision left a duplicate **`Admins read placement trust`** policy on `placement_trust_scores` (068 drops it; the ALL policy remains). Safe to re-run.
+
+---
+
 ## Sign-off
 
 | Date | Reviewer | Notes |

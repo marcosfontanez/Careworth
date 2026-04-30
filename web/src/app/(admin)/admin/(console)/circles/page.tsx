@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -12,11 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { loadCircles } from "@/lib/admin/queries";
-import { circlesOpsSummary } from "@/mock/data";
+import { loadCircles, loadCirclesOpsStrip } from "@/lib/admin/queries";
 
 export default async function AdminCirclesPage() {
-  const circles = await loadCircles();
+  const [circles, ops] = await Promise.all([loadCircles(), loadCirclesOpsStrip()]);
 
   return (
     <div className="space-y-8">
@@ -28,10 +29,12 @@ export default async function AdminCirclesPage() {
         />
         <div className="flex shrink-0 gap-2">
           <Input placeholder="Search circle…" className="w-56 bg-secondary/40" />
-          <Button className="bg-primary text-primary-foreground">New circle</Button>
+          <Button className="bg-primary text-primary-foreground" type="button" disabled title="Create via Supabase or API">
+            New circle
+          </Button>
         </div>
       </div>
-      <AdminOpsStrip items={circlesOpsSummary} className="xl:grid-cols-3" />
+      <AdminOpsStrip items={ops.length ? ops : [{ label: "Circles", value: "0", hint: "no data" }]} className="xl:grid-cols-3" />
       <AdminPanelCard>
         <CardHeader>
           <CardTitle>All circles</CardTitle>
@@ -60,11 +63,11 @@ export default async function AdminCirclesPage() {
                     <TableCell className="tabular-nums">{c.featuredOrder ?? "—"}</TableCell>
                     <TableCell className="tabular-nums">{c.trendScore}</TableCell>
                     <TableCell className="space-x-2 text-right">
-                      <Button size="sm" variant="outline">
+                      <Button size="sm" variant="outline" type="button" disabled title="Edit in Supabase Studio">
                         Edit
                       </Button>
-                      <Button size="sm" variant="secondary">
-                        Moderate
+                      <Button size="sm" variant="secondary" asChild>
+                        <Link href="/admin/moderation">Moderate</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

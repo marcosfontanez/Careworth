@@ -25,6 +25,9 @@ export async function signInAdmin(formData: FormData) {
     redirect("/admin/login?error=auth");
   }
 
+  // Ensure auth cookies are written before redirect (important for subsequent server actions).
+  await supabase.auth.getSession();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

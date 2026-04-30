@@ -15,7 +15,7 @@ const pillars = [
   },
   {
     title: "Vision",
-    body: "A trusted surface where feed, rooms, live, and identity layer together — built for growth, moderation, and creator dignity.",
+    body: "A trusted surface where Feed, Circles, Live, and Pulse Page — with Current Vibe, My Pulse, and Media Hub — layer together for growth, moderation, and creator dignity.",
   },
   {
     title: "Principles",
@@ -25,7 +25,7 @@ const pillars = [
 
 export default function AboutPage() {
   return (
-    <MarketingPageShell width="medium">
+    <MarketingPageShell width="medium" breadcrumbPath="/about">
       <SectionHeader
         eyebrow="About"
         title="Social infrastructure for healthcare culture"

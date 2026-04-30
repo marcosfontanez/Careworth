@@ -4,10 +4,12 @@ import {
   BarChart3,
   Flag,
   LayoutDashboard,
+  Layers,
   Megaphone,
   Orbit,
   Radio,
   Scale,
+  ScrollText,
   Settings,
   Shield,
   Sparkles,
@@ -30,6 +32,13 @@ const groups: { title: string; items: Item[] }[] = [
     ],
   },
   {
+    title: "Operations",
+    items: [
+      { href: "/admin/audit", label: "Audit log", icon: ScrollText },
+      { href: "/admin/platform", label: "Platform", icon: Layers },
+    ],
+  },
+  {
     title: "Community",
     items: [
       { href: "/admin/users", label: "Users", icon: Users },
@@ -42,7 +51,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { href: "/admin/moderation", label: "Moderation", icon: Shield },
       { href: "/admin/reports", label: "Reports", icon: Flag },
-      { href: "/admin/appeals", label: "Appeals", icon: Scale, badge: 8 },
+      { href: "/admin/appeals", label: "Appeals", icon: Scale },
     ],
   },
   {
@@ -58,7 +67,13 @@ const groups: { title: string; items: Item[] }[] = [
   },
 ];
 
-export function AdminSidebar({ currentPath }: { currentPath: string }) {
+export function AdminSidebar({
+  currentPath,
+  pendingAppealsCount = 0,
+}: {
+  currentPath: string;
+  pendingAppealsCount?: number;
+}) {
   return (
     <aside className="flex w-[16.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="flex min-h-[5rem] items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2">
@@ -72,7 +87,9 @@ export function AdminSidebar({ currentPath }: { currentPath: string }) {
               {group.title}
             </p>
             <div className="space-y-0.5">
-              {group.items.map(({ href, label, icon: Icon, badge }) => {
+              {group.items.map(({ href, label, icon: Icon, badge: staticBadge }) => {
+                const badge =
+                  href === "/admin/appeals" && pendingAppealsCount > 0 ? pendingAppealsCount : staticBadge;
                 const active =
                   currentPath === href || (href !== "/admin/dashboard" && currentPath.startsWith(href));
                 return (

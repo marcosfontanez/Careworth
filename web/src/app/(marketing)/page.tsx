@@ -1,36 +1,52 @@
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 
 import { CtaSection } from "@/components/marketing/cta-section";
 import { HomeFeatureShowcase } from "@/components/marketing/home-feature-showcase";
 import { HomeProductOverview } from "@/components/marketing/home-product-overview";
-import { HomePulseDuo } from "@/components/marketing/home-pulse-duo";
-import { HomeSpotlightSection } from "@/components/marketing/home-spotlight-section";
-import { HomeStatsSplit } from "@/components/marketing/home-stats-split";
-import { HomeTestimonials } from "@/components/marketing/home-testimonials";
-import { HomeWhySix } from "@/components/marketing/home-why-six";
 import { HeroSection } from "@/components/marketing/hero-section";
+import { getHomeCtaCopy } from "@/lib/marketing-copy/home";
+import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { canonical, m } from "@/lib/page-metadata";
+
+const HomeSpotlightSection = dynamic(() =>
+  import("@/components/marketing/home-spotlight-section").then((mod) => mod.HomeSpotlightSection),
+);
+const HomePulseDuo = dynamic(() => import("@/components/marketing/home-pulse-duo").then((mod) => mod.HomePulseDuo));
+const HomeMyPulseSignature = dynamic(() =>
+  import("@/components/marketing/home-my-pulse-signature").then((mod) => mod.HomeMyPulseSignature),
+);
+const HomeWhySix = dynamic(() => import("@/components/marketing/home-why-six").then((mod) => mod.HomeWhySix));
+const HomeStatsSplit = dynamic(() => import("@/components/marketing/home-stats-split").then((mod) => mod.HomeStatsSplit));
+const HomeTestimonials = dynamic(() =>
+  import("@/components/marketing/home-testimonials").then((mod) => mod.HomeTestimonials),
+);
 
 export const metadata: Metadata = { ...m.home, alternates: canonical("/") };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const locale = await getMarketingLocale();
+  const cta = getHomeCtaCopy(locale);
+
   return (
     <>
-      <HeroSection />
-      <HomeFeatureShowcase />
+      <HeroSection locale={locale} />
+      <HomeFeatureShowcase locale={locale} />
       <HomeProductOverview />
       <HomeSpotlightSection />
       <HomePulseDuo />
+      <HomeMyPulseSignature />
       <HomeWhySix />
       <HomeStatsSplit />
       <HomeTestimonials />
       <CtaSection
-        title="Your community. Your voice. Your Pulse."
-        description="Join clinicians, students, and teams building healthcare culture — with trust, clarity, and room to breathe."
+        title={cta.title}
+        description={cta.description}
         primaryHref="/download"
-        primaryLabel="Join PulseVerse now"
+        primaryLabel={cta.primaryLabel}
         secondaryHref="/contact"
-        secondaryLabel="Talk to partnerships"
+        secondaryLabel={cta.secondaryLabel}
+        analyticsScope="home_bottom"
       />
     </>
   );

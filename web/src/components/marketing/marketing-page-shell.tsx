@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+
+import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
 import {
   marketingShell,
   marketingShellForm,
@@ -18,10 +20,18 @@ export function MarketingPageShell({
   children,
   width = "wide",
   className,
+  breadcrumbPath,
 }: {
   children: ReactNode;
   width?: keyof typeof widths;
   className?: string;
+  /** Sets visual breadcrumbs + BreadcrumbList JSON-LD (omit on home). */
+  breadcrumbPath?: string;
 }) {
-  return <div className={cn(widths[width], className)}>{children}</div>;
+  return (
+    <>
+      {breadcrumbPath ? <MarketingBreadcrumbs path={breadcrumbPath} /> : null}
+      <div className={cn(widths[width], className)}>{children}</div>
+    </>
+  );
 }

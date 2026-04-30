@@ -1,10 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { signInAdmin } from "@/app/(admin)/admin/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { adminPanelSurface } from "@/lib/ui-classes";
+import { adminPanelSurface, marketingInlineLink } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 function errorMessage(code: string | undefined) {
@@ -33,7 +34,11 @@ export default async function AdminLoginPage({
   const err = errorMessage(q.error);
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#050a14] px-4">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#050a14] px-4 outline-none"
+    >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(45,127,249,0.22),transparent)]" />
       <div
         className={cn(
@@ -43,20 +48,24 @@ export default async function AdminLoginPage({
       >
         <div className="mb-8 text-center">
           <div className="mx-auto flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/brand/pulseverse-logo.svg"
               alt=""
               width={280}
               height={300}
-              decoding="async"
-              fetchPriority="high"
+              priority
+              unoptimized
+              sizes="(max-width: 640px) 92vw, 360px"
               className="h-32 w-auto max-w-[min(92vw,360px)] object-contain sm:h-36"
             />
           </div>
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-foreground">Staff admin</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Staff sign-in. Your profile must have <span className="text-foreground/90">role_admin</span> in Supabase.
+            Your profile must have <span className="text-foreground/90">role_admin</span> in Supabase. For dashboard
+            and insights totals, set server-only{" "}
+            <span className="text-foreground/90">SUPABASE_SERVICE_ROLE_KEY</span> in{" "}
+            <code className="rounded bg-white/5 px-1 py-px">.env.local</code> or Vercel (Project Settings → API →
+            service_role).
           </p>
         </div>
         {err && (
@@ -97,11 +106,11 @@ export default async function AdminLoginPage({
           </Button>
         </form>
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          <Link href="/" className="text-primary hover:underline">
+          <Link href="/" className={marketingInlineLink}>
             ← Back to marketing site
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

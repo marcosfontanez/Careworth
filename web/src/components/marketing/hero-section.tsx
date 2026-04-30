@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, Radio, Shield, UserCircle } from "lucide-react";
+import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { Button } from "@/components/ui/button";
 import { site } from "@/lib/design-tokens";
+import { getHomeHeroCopy } from "@/lib/marketing-copy/home";
 import { marketingElevatedFrame, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
+import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 function PulseWaveBackdrop({ className }: { className?: string }) {
@@ -32,7 +35,8 @@ function PulseWaveBackdrop({ className }: { className?: string }) {
   );
 }
 
-export function HeroSection() {
+export function HeroSection({ locale }: { locale: Locale }) {
+  const t = getHomeHeroCopy(locale);
   return (
     <section className="relative overflow-hidden pb-16 pt-10 sm:pb-24 sm:pt-14">
       <div className="pointer-events-none absolute -left-32 top-0 h-[420px] w-[420px] rounded-full bg-primary/[0.12] blur-[100px]" />
@@ -40,16 +44,13 @@ export function HeroSection() {
       <div className={cn("relative", marketingGutterX)}>
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-10">
           <div>
-            <h1 className="mt-2 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem] xl:text-6xl">
-              Healthcare culture,{" "}
+            <h1 className="mt-2 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem] xl:text-6xl">
+              {t.headlineLead}{" "}
               <span className="bg-gradient-to-r from-primary via-[#4d9fff] to-[var(--accent)] bg-clip-text text-transparent">
-                all in one place.
+                {t.headlineAccent}
               </span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              The social platform for the global healthcare community — feed, Circles, Live, and Pulse Page. Built for
-              professionals who want real connection, not another stiff directory.
-            </p>
+            <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">{t.subhead}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button
                 size="lg"
@@ -60,10 +61,10 @@ export function HeroSection() {
                 )}
                 asChild
               >
-                <Link href="/download" className="inline-flex items-center gap-2">
-                  Join PulseVerse
+                <MarketingDestinationLink href="/download" analyticsSource="hero_primary" className="inline-flex items-center gap-2">
+                  {t.primaryCta}
                   <ArrowRight className="h-5 w-5" aria-hidden />
-                </Link>
+                </MarketingDestinationLink>
               </Button>
               <Button
                 size="lg"
@@ -73,26 +74,26 @@ export function HeroSection() {
               >
                 <Link href="/features/pulse-page" className="inline-flex items-center gap-2">
                   <UserCircle className="h-5 w-5 text-primary" aria-hidden />
-                  Explore Pulse Page
+                  {t.secondaryCta}
                 </Link>
               </Button>
             </div>
             <ul className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-muted-foreground">
               <li className="flex items-center gap-2">
                 <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                <span className="font-medium text-foreground/90">Safe &amp; verified</span>
+                <span className="font-medium text-foreground/90">{t.bulletSafe}</span>
               </li>
               <li className="flex items-center gap-2">
                 <UserCircle className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                <span className="font-medium text-foreground/90">Real connections</span>
+                <span className="font-medium text-foreground/90">{t.bulletConnections}</span>
               </li>
               <li className="flex items-center gap-2">
                 <Radio className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                <span className="font-medium text-foreground/90">Live &amp; on-demand</span>
+                <span className="font-medium text-foreground/90">{t.bulletLive}</span>
               </li>
             </ul>
             <p className="mt-8 text-sm text-muted-foreground">
-              {site.name} — where clinicians, students, and teams build culture that lasts.
+              {site.name} — {t.tagline}
             </p>
           </div>
 
@@ -114,7 +115,10 @@ export function HeroSection() {
                       </div>
                     </div>
                     <div className="space-y-2 p-2">
-                      <div className="h-20 rounded-lg bg-primary/15" />
+                      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[9px] text-muted-foreground">
+                        <span className="font-semibold text-[var(--accent)]">Current Vibe</span> · now playing
+                      </div>
+                      <div className="h-16 rounded-lg bg-primary/15" />
                       <div className="h-2 rounded bg-white/10" />
                       <div className="h-2 w-5/6 rounded bg-white/5" />
                     </div>
@@ -139,17 +143,18 @@ export function HeroSection() {
                         <div className="h-2 w-4/5 rounded bg-white/5" />
                       </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      <div className="h-16 rounded-lg bg-white/[0.04]" />
-                      <div className="h-16 rounded-lg bg-primary/20" />
-                      <div className="h-16 rounded-lg bg-white/[0.04]" />
+                    <div className="mt-4 space-y-1.5">
+                      {["Thought", "Clip", "Link", "Pics", "Thought"].map((t, i) => (
+                        <div key={`${t}-${i}`} className="flex items-center gap-2 rounded-md bg-white/[0.04] px-2 py-1">
+                          <span className="text-[9px] font-bold uppercase text-primary">{t}</span>
+                          <div className="h-1 flex-1 rounded bg-white/10" />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
-              <p className="mt-4 text-center text-xs text-muted-foreground">
-                Product frames · swap for marketing captures anytime
-              </p>
+              <p className="mt-4 text-center text-xs text-muted-foreground">{t.framesCaption}</p>
             </div>
           </div>
         </div>

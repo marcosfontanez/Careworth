@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -70,8 +72,8 @@ export default async function AdminCreatorsPage() {
                     </TableCell>
                     <TableCell className="tabular-nums">{c.score}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline">
-                        Review
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href="/admin/users">User directory</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

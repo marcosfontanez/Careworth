@@ -36,6 +36,12 @@ export async function updateSupabaseSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  // Same-origin fetch to /api/admin/* must refresh auth cookies too; Route Handlers enforce staff.
+  if (pathname.startsWith("/api/admin")) {
+    return response;
+  }
+
   const isAdminLogin = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
   const isAdminArea = pathname.startsWith("/admin");
 

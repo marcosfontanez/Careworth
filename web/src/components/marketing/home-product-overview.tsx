@@ -7,7 +7,12 @@ import { cn } from "@/lib/utils";
 export function HomeProductOverview() {
   const { eyebrow, title, description, pillars } = homeProductOverview;
   return (
-    <section className="border-b border-border/80 bg-gradient-to-b from-background to-pv-navy-deep/20 py-20 sm:py-24">
+    <section
+      className={cn(
+        "border-b border-border/80 bg-gradient-to-b from-background to-pv-navy-deep/20 py-20 sm:py-24",
+        "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:duration-700 motion-safe:fill-mode-both",
+      )}
+    >
       <div className={marketingGutterX}>
         <SectionHeader eyebrow={eyebrow} title={title} description={description} />
         <div className="mt-14 grid gap-4 md:grid-cols-3">

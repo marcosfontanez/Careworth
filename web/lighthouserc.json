@@ -1,0 +1,29 @@
+{
+  "ci": {
+    "collect": {
+      "numberOfRuns": 1,
+      "settings": {
+        "preset": "desktop"
+      },
+      "startServerCommand": "cross-env PORT=4173 npm run start",
+      "startServerReadyPattern": "Ready in",
+      "url": [
+        "http://127.0.0.1:4173/",
+        "http://127.0.0.1:4173/faq",
+        "http://127.0.0.1:4173/trust",
+        "http://127.0.0.1:4173/privacy",
+        "http://127.0.0.1:4173/features/pulse-page",
+        "http://127.0.0.1:4173/contact",
+        "http://127.0.0.1:4173/download"
+      ]
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.65 }],
+        "categories:accessibility": ["error", { "minScore": 0.88 }],
+        "categories:best-practices": ["warn", { "minScore": 0.82 }],
+        "categories:seo": ["warn", { "minScore": 0.85 }]
+      }
+    }
+  }
+}

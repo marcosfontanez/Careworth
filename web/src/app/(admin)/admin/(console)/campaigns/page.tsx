@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -62,8 +64,8 @@ export default async function AdminCampaignsPage() {
                     <TableCell className="tabular-nums">{c.impressions.toLocaleString()}</TableCell>
                     <TableCell className="tabular-nums">{c.ctr.toFixed(2)}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline">
-                        Report
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href="/admin/insights">View insights</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

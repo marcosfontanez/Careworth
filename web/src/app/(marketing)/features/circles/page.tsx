@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeatureCirclesLanding } from "@/components/marketing/feature-circles-landing";
 import { canonical, m } from "@/lib/page-metadata";
@@ -9,6 +10,7 @@ export const metadata: Metadata = { ...m.featuresCircles, alternates: canonical(
 export default function CirclesFeaturePage() {
   return (
     <>
+      <MarketingBreadcrumbs path="/features/circles" />
       <FeatureCirclesLanding />
       <CtaSection
         title="Your community. Your voice. Your Pulse."
@@ -17,6 +19,7 @@ export default function CirclesFeaturePage() {
         primaryLabel="Join PulseVerse now"
         secondaryHref="/contact"
         secondaryLabel="Talk to partnerships"
+        analyticsScope="feature_circles"
       />
     </>
   );

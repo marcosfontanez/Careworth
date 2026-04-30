@@ -4,26 +4,73 @@ import { ModerationConsole } from "@/components/admin/moderation-console";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { KpiStatCard } from "@/components/admin/kpi-stat-card";
 import { Button } from "@/components/ui/button";
-import { loadReports } from "@/lib/admin/queries";
+import { loadModerationKpiStats, loadReports } from "@/lib/admin/queries";
 import { formatCount } from "@/lib/admin/format";
-import { moderationOverviewKpis } from "@/mock/data";
 
-export default async function AdminModerationPage() {
-  const reports = await loadReports();
-  const open = reports.filter((r) => r.status === "pending" || r.status === "under_review").length;
-  const critical = reports.filter((r) => r.severity === "critical").length;
-  const kpi = moderationOverviewKpis.map((k) => {
-    if (k.key === "open") return { ...k, value: formatCount(open), delta: "live" };
-    if (k.key === "critical") return { ...k, value: formatCount(critical), delta: "flagged" };
-    return k;
-  });
+export default async function AdminModerationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ report?: string }>;
+}) {
+  const q = await searchParams;
+  const [reports, stats] = await Promise.all([loadReports({ openQueueOnly: true }), loadModerationKpiStats()]);
+
+  const avgLabel =
+    stats.avgResolutionHours != null && Number.isFinite(stats.avgResolutionHours)
+      ? stats.avgResolutionHours < 1
+        ? `${Math.round(stats.avgResolutionHours * 60)}m`
+        : `${stats.avgResolutionHours.toFixed(1)}h`
+      : "—";
+
+  const kpi = [
+    {
+      key: "open",
+      label: "Open reports",
+      value: formatCount(stats.open),
+      delta: "status = pending",
+      trend: "up" as const,
+      accent: "primary" as const,
+    },
+    {
+      key: "review",
+      label: "Needs review",
+      value: formatCount(stats.needsReview),
+      delta: "status = reviewed",
+      trend: "up" as const,
+      accent: "accent" as const,
+    },
+    {
+      key: "resolved",
+      label: "Resolved today",
+      value: formatCount(stats.resolvedToday),
+      delta: "closed · UTC day",
+      trend: "up" as const,
+      accent: "violet" as const,
+    },
+    {
+      key: "critical",
+      label: "Critical alerts",
+      value: formatCount(stats.critical),
+      delta: "open · PHI / medical / live",
+      trend: "down" as const,
+      accent: "destructive" as const,
+    },
+    {
+      key: "avg",
+      label: "Avg resolution",
+      value: avgLabel,
+      delta: "recent closed sample",
+      trend: "down" as const,
+      accent: "amber" as const,
+    },
+  ];
 
   return (
     <div className="space-y-8">
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Moderation & insights" }]}
         title="Moderation & insights"
-        description="Trust & safety queue — wired to Supabase reports; KPI mix is partly live."
+        description="Open queue (pending & in review). Reject = no violation; Uphold = agree with report and close. Full history: Reports in the sidebar."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" className="border-white/15 bg-transparent">
@@ -49,7 +96,7 @@ export default async function AdminModerationPage() {
           />
         ))}
       </div>
-      <ModerationConsole reports={reports} />
+      <ModerationConsole reports={reports} initialReportId={q.report ?? null} />
     </div>
   );
 }

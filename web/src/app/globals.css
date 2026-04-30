@@ -103,8 +103,23 @@
       scroll-behavior: auto;
     }
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
   body {
-    @apply min-h-screen bg-background bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(37,99,235,0.12),transparent_55%)] text-foreground antialiased;
+    @apply min-h-dvh bg-background bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(37,99,235,0.12),transparent_55%)] text-foreground antialiased;
+  }
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
   }
   ::selection {
     background: color-mix(in oklab, var(--primary) 38%, transparent);

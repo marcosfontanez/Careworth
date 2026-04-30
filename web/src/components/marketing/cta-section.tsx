@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marketingGutterX } from "@/lib/ui-classes";
@@ -10,6 +10,7 @@ export function CtaSection({
   primaryLabel,
   secondaryHref,
   secondaryLabel,
+  analyticsScope,
 }: {
   title: string;
   description: string;
@@ -17,6 +18,8 @@ export function CtaSection({
   primaryLabel: string;
   secondaryHref?: string;
   secondaryLabel?: string;
+  /** Prefix for `marketing_cta_click` on /download and /contact only (_primary / _secondary). */
+  analyticsScope?: string;
 }) {
   return (
     <section className="py-16 sm:py-20">
@@ -42,10 +45,14 @@ export function CtaSection({
                   className="h-12 rounded-full bg-white px-8 font-semibold text-[#050a14] hover:bg-white/90"
                   asChild
                 >
-                  <Link href={primaryHref} className="inline-flex items-center gap-2">
+                  <MarketingDestinationLink
+                    href={primaryHref}
+                    className="inline-flex items-center gap-2"
+                    analyticsSource={analyticsScope ? `${analyticsScope}_primary` : undefined}
+                  >
                     {primaryLabel}
                     <ArrowRight className="h-5 w-5" aria-hidden />
-                  </Link>
+                  </MarketingDestinationLink>
                 </Button>
                 {secondaryHref && secondaryLabel && (
                   <Button
@@ -54,7 +61,10 @@ export function CtaSection({
                     className="h-12 rounded-full border-white/25 bg-transparent px-7 font-semibold text-foreground hover:bg-white/5"
                     asChild
                   >
-                    <Link href={secondaryHref}>{secondaryLabel}</Link>
+                    <MarketingDestinationLink
+                      href={secondaryHref}
+                      analyticsSource={analyticsScope ? `${analyticsScope}_secondary` : undefined}
+                    >{secondaryLabel}</MarketingDestinationLink>
                   </Button>
                 )}
               </div>

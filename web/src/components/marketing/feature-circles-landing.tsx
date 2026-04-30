@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta, marketingInlineLinkStrong } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import {
   circlesDiscoverTags,
@@ -50,8 +50,8 @@ export function FeatureCirclesLanding() {
               <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">people.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Join private, topic-based communities built for healthcare professionals. Share knowledge, ask questions,
-              and grow together—with people who get it.
+              Join healthcare-specific, topic-based circles — premium rooms with high-signal threads. Share what lands
+              with you straight back to My Pulse on your Pulse Page.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
@@ -118,9 +118,12 @@ export function FeatureCirclesLanding() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Featured Circles</h2>
-            <p className="mt-2 max-w-xl text-muted-foreground">Culture hubs clinicians actually join — from humor to high-acuity rooms.</p>
+            <p className="mt-2 max-w-xl text-muted-foreground">
+              Specialty, shift, and culture hubs — moderated with clinical context and designed to feel elevated, not
+              like legacy forums.
+            </p>
           </div>
-          <Link href="/download" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          <Link href="/download" className={cn("inline-flex items-center gap-1 text-sm", marketingInlineLinkStrong)}>
             Explore all Circles
             <ArrowRight className="h-4 w-4" />
           </Link>

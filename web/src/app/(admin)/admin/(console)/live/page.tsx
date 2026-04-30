@@ -1,3 +1,6 @@
+import Link from "next/link";
+
+import { LiveStreamEndButton } from "@/components/admin/live-stream-end-button";
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -12,11 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { loadLiveSessions } from "@/lib/admin/queries";
-import { liveOpsSummary } from "@/mock/data";
+import { loadLiveOpsStrip, loadLiveSessions } from "@/lib/admin/queries";
 
 export default async function AdminLivePage() {
-  const sessions = await loadLiveSessions();
+  const [sessions, ops] = await Promise.all([loadLiveSessions(), loadLiveOpsStrip()]);
 
   return (
     <div className="space-y-8">
@@ -25,7 +27,7 @@ export default async function AdminLivePage() {
         title="Live"
         description={`Streams from Supabase — ${sessions.length} rows (includes ended for ops).`}
       />
-      <AdminOpsStrip items={liveOpsSummary} className="xl:grid-cols-3" />
+      <AdminOpsStrip items={ops} className="xl:grid-cols-3" />
       <AdminPanelCard>
         <CardHeader>
           <CardTitle>Streams</CardTitle>
@@ -56,12 +58,10 @@ export default async function AdminLivePage() {
                     </TableCell>
                     <TableCell className="tabular-nums">{s.flags}</TableCell>
                     <TableCell className="space-x-2 text-right">
-                      <Button size="sm" variant="outline">
-                        Review
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href="/admin/moderation">Review</Link>
                       </Button>
-                      <Button size="sm" variant="destructive">
-                        End
-                      </Button>
+                      <LiveStreamEndButton streamId={s.id} disabled={s.status === "ended"} />
                     </TableCell>
                   </TableRow>
                 ))

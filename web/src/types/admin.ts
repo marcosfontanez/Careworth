@@ -42,8 +42,15 @@ export interface ReportRow {
   type: ReportType;
   targetId: string;
   preview: string;
+  /** Full reporter note / fallback description */
+  details: string;
+  /** Staff-only audit trail (when column exists) */
+  staffNotes?: string | null;
   reporterName: string;
+  reporterId: string;
   subjectName: string;
+  subjectDisplayName: string;
+  subjectMeta: string;
   reason: ReportReason;
   status: ReportStatus;
   severity: Severity;
@@ -109,3 +116,18 @@ export interface CreatorRow {
   verified: boolean;
   score: number;
 }
+
+export type AdminNotificationItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  at: string;
+};
+
+export type AdminNotificationDigest = {
+  items: AdminNotificationItem[];
+  unreadCount: number;
+  /** Pending appeals (for sidebar badge). */
+  pendingAppealsCount: number;
+};

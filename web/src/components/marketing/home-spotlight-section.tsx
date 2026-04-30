@@ -10,7 +10,7 @@ export function HomeSpotlightSection() {
         <SectionHeader
           eyebrow="Feature spotlight"
           title="Feed, Circles, Live, Pulse Page — where culture lives."
-          description="Four surfaces that carry healthcare culture: discovery, rooms, real-time credibility, and identity that doesn’t flatten you into a badge."
+          description="Discovery, premium topic rooms, real-time Live, and a creator-grade Pulse Page with My Pulse and Media Hub — without flattening you into a badge."
         />
         <div className="mt-14 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {homeFeatureSpotlights.map((s) => (

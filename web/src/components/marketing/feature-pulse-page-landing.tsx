@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, BarChart3, Link2, MessageSquare, Sparkles, UserCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta, marketingInlineLinkStrong } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import {
   pulsePageAudienceSegments,
@@ -28,6 +28,18 @@ function DeviceCluster() {
             <div>
               <p className="text-sm font-semibold text-foreground">Dr. Sara Khan</p>
               <p className="text-xs text-muted-foreground">1.2K followers · verified</p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-primary/20 bg-black/30 p-3">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--accent)]">Current Vibe</p>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-[10px] text-muted-foreground">
+                ▶
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] font-medium text-foreground">Night-shift focus playlist</p>
+                <p className="truncate text-[10px] text-muted-foreground">Now playing · mini player</p>
+              </div>
             </div>
           </div>
         </div>
@@ -64,8 +76,8 @@ export function FeaturePulsePageLanding() {
               <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">PulseVerse.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Premium profile, rolling five-post feed, pins, media hub, and everything that syncs with how you actually
-              show up in medicine.
+              Your identity home on PulseVerse: premium profile, Current Vibe mini player, My Pulse (latest five updates),
+              and Media Hub — music, moments, and momentum in one creator-grade surface.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
@@ -88,7 +100,7 @@ export function FeaturePulsePageLanding() {
               </span>
               <span className="inline-flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-primary" />
-                Rolling 5-post feed
+                Rolling 5 updates · My Pulse
               </span>
               <span className="inline-flex items-center gap-2">
                 <Link2 className="h-4 w-4 text-primary" />
@@ -103,7 +115,10 @@ export function FeaturePulsePageLanding() {
       <section className={cn(marketingGutterX, "pb-16")}>
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">One profile. Many ways to share.</h2>
-          <p className="mt-3 text-muted-foreground">Surface your credibility without stiff templates — mix formats the way clinicians already consume culture.</p>
+          <p className="mt-3 text-muted-foreground">
+            Thought, Clip, Link, and Pics stay tight on My Pulse; Current Vibe sets the soundtrack; Media Hub carries your
+            teaching clips, favorites, and photos — a living page, not a static bio.
+          </p>
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {pulsePageShareWays.map((item) => (
@@ -120,8 +135,11 @@ export function FeaturePulsePageLanding() {
 
       <section className={cn(marketingGutterX, "pb-20")}>
         <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-2xl font-bold text-foreground sm:text-3xl">Highlight your work, your way.</h2>
-          <p className="mt-3 text-muted-foreground">Videos, reading lists, and photography — with credentialed context.</p>
+          <h2 className="text-2xl font-bold text-foreground sm:text-3xl">Media Hub — your library on Pulse Page.</h2>
+          <p className="mt-3 text-muted-foreground">
+            Recent Videos, Favorites, and My Photos in one compact, glanceable grid. Identity up top; polish and proof
+            underneath.
+          </p>
         </div>
         <div className="mt-10 grid gap-6 lg:grid-cols-3">
           {pulsePageShowcase.map((s) => (
@@ -135,7 +153,7 @@ export function FeaturePulsePageLanding() {
                 </div>
               </div>
               <div className="flex flex-1 flex-col p-5">
-                <Link href="/download" className="mt-auto inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                <Link href="/download" className={cn("mt-auto inline-flex items-center gap-1 text-sm", marketingInlineLinkStrong)}>
                   {s.cta}
                   <ArrowRight className="h-4 w-4" />
                 </Link>

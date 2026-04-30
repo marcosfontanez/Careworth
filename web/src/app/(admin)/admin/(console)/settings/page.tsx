@@ -1,13 +1,40 @@
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
+import { StaffPreferencesForm } from "@/components/admin/staff-preferences-form";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { loadRecentAnalyticsEvents } from "@/lib/admin/queries";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n";
+import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { FileClock } from "lucide-react";
 
+async function loadStaffProfilePrefs(): Promise<{ preferredLocale: Locale; productDigestEmail: boolean } | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+      .from("profiles")
+      .select("preferred_locale, product_digest_email")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!data) return null;
+    const preferredLocale = isLocale(data.preferred_locale) ? data.preferred_locale : DEFAULT_LOCALE;
+    return {
+      preferredLocale,
+      productDigestEmail: Boolean(data.product_digest_email),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default async function AdminSettingsPage() {
-  const events = await loadRecentAnalyticsEvents(30);
+  const [events, staffPrefs] = await Promise.all([loadRecentAnalyticsEvents(30), loadStaffProfilePrefs()]);
 
   return (
     <div className="space-y-8">
@@ -16,6 +43,22 @@ export default async function AdminSettingsPage() {
         title="Settings"
         description="Platform controls — connect moderation policy and feature flags to your backend when ready."
       />
+      {staffPrefs ? (
+        <AdminPanelCard>
+          <CardHeader>
+            <CardTitle>Your account</CardTitle>
+            <CardDescription>
+              Preferences stored on your PulseVerse profile (same schema as mobile). Applies to this staff user only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <StaffPreferencesForm
+              preferredLocale={staffPrefs.preferredLocale}
+              productDigestEmail={staffPrefs.productDigestEmail}
+            />
+          </CardContent>
+        </AdminPanelCard>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         <AdminPanelCard>
           <CardHeader>

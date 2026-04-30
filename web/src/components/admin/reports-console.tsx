@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AdminFilterChip } from "@/components/admin/admin-filter-chip";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -80,8 +81,10 @@ export function ReportsConsole({ reports }: { reports: ReportRow[] }) {
                     <StatusBadge status={r.status} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline">
-                      Open
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/admin/moderation?report=${encodeURIComponent(r.id)}`}>
+                        Open
+                      </Link>
                     </Button>
                   </TableCell>
                 </TableRow>

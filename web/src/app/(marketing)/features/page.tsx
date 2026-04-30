@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, LayoutGrid } from "lucide-react";
+import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeaturesComparisonSection, FeaturesHubStatsBar } from "@/components/marketing/features-hub-extras";
 import { HomeWhySix } from "@/components/marketing/home-why-six";
@@ -15,51 +16,57 @@ import {
   marketingSectionTitle,
   shadowPrimaryCta,
 } from "@/lib/ui-classes";
+import { getFeaturesHubCopy } from "@/lib/marketing-copy/features-hub";
+import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { canonical, m } from "@/lib/page-metadata";
 import { cn } from "@/lib/utils";
-import { featuresHubGrid, featuresHubIntro, homeFeatureSpotlights } from "@/mock/marketing";
 
 export const metadata: Metadata = { ...m.features, alternates: canonical("/features") };
 
-export default function FeaturesHubPage() {
+export default async function FeaturesHubPage() {
+  const locale = await getMarketingLocale();
+  const copy = getFeaturesHubCopy(locale);
+
   return (
     <>
-      <MarketingPageShell>
+      <MarketingPageShell breadcrumbPath="/features">
         <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-br from-card/90 via-background to-primary/[0.07] px-6 py-12 sm:px-10 sm:py-14">
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/15 blur-3xl" aria-hidden />
           <div className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-pv-electric/10 blur-3xl" aria-hidden />
           <SectionHeader
             className="relative mx-0 max-w-3xl text-left"
-            eyebrow={featuresHubIntro.eyebrow}
-            title={featuresHubIntro.title}
-            description={featuresHubIntro.description}
+            eyebrow={copy.intro.eyebrow}
+            title={copy.intro.title}
+            description={copy.intro.description}
           />
           <div className="relative mt-8 flex flex-wrap gap-3">
             <Button asChild className={cn("bg-primary text-primary-foreground", shadowPrimaryCta)}>
-              <Link href="/download">Join PulseVerse</Link>
+              <MarketingDestinationLink href="/download" analyticsSource="features_hub_join">
+                {copy.join}
+              </MarketingDestinationLink>
             </Button>
             <Button asChild variant="outline" className="border-border/80 bg-card/40">
-              <Link href="/contact">Partner with us</Link>
+              <MarketingDestinationLink href="/contact" analyticsSource="features_hub_partner">
+                {copy.partner}
+              </MarketingDestinationLink>
             </Button>
           </div>
         </div>
       </MarketingPageShell>
 
-      <FeaturesHubStatsBar />
+      <FeaturesHubStatsBar stats={copy.stats} />
 
       <MarketingPageShell className="!pt-0">
         <div className="mt-4">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className={cn(marketingEyebrow, "tracking-widest")}>Spotlights</p>
-              <h2 className={cn(marketingSectionTitle, "mt-2")}>Where culture shows up first</h2>
-              <p className="mt-2 max-w-2xl leading-relaxed text-muted-foreground">
-                Feed discovery, Circles rooms, Live credibility, and Pulse identity — start anywhere, stay in one network.
-              </p>
+              <p className={cn(marketingEyebrow, "tracking-widest")}>{copy.spotlightsEyebrow}</p>
+              <h2 className={cn(marketingSectionTitle, "mt-2")}>{copy.spotlightsTitle}</h2>
+              <p className="mt-2 max-w-2xl leading-relaxed text-muted-foreground">{copy.spotlightsBody}</p>
             </div>
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {homeFeatureSpotlights.map((s) => (
+            {copy.spotlights.map((s) => (
               <Link key={s.tag} href={s.href} className="group">
                 <Card className={cn("h-full", marketingCardInteractive)}>
                   <CardHeader>
@@ -69,7 +76,7 @@ export default function FeaturesHubPage() {
                     <CardTitle className="mt-3 text-lg leading-snug">{s.title}</CardTitle>
                     <CardDescription className="text-base leading-relaxed">{s.body}</CardDescription>
                     <p className="mt-4 flex items-center gap-1 text-sm font-medium text-primary">
-                      Explore
+                      {copy.explore}
                       <ArrowRight className="h-4 w-4 opacity-0 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" />
                     </p>
                   </CardHeader>
@@ -82,14 +89,12 @@ export default function FeaturesHubPage() {
         <div className="mt-20">
           <div className="flex items-center gap-2 text-muted-foreground">
             <LayoutGrid className="h-4 w-4 text-primary" aria-hidden />
-            <p className={cn(marketingEyebrow, "tracking-widest")}>All surfaces</p>
+            <p className={cn(marketingEyebrow, "tracking-widest")}>{copy.allSurfacesEyebrow}</p>
           </div>
-          <h2 className={cn(marketingSectionTitle, "mt-2")}>Five pillars, one product</h2>
-          <p className="mt-2 max-w-2xl leading-relaxed text-muted-foreground">
-            Same account, same trust model — swap context without switching apps.
-          </p>
+          <h2 className={cn(marketingSectionTitle, "mt-2")}>{copy.allSurfacesTitle}</h2>
+          <p className="mt-2 max-w-2xl leading-relaxed text-muted-foreground">{copy.allSurfacesBody}</p>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {featuresHubGrid.map((l) => (
+            {copy.grid.map((l) => (
               <Link key={l.href} href={l.href} className="group">
                 <Card className={cn("h-full", marketingCardInteractive)}>
                   <CardHeader>
@@ -106,15 +111,27 @@ export default function FeaturesHubPage() {
         </div>
       </MarketingPageShell>
 
-      <FeaturesComparisonSection />
+      <FeaturesComparisonSection
+        eyebrow={copy.compareEyebrow}
+        title={copy.compareTitle}
+        body={copy.compareBody}
+        tableTitle={copy.compareTableTitle}
+        colUs={copy.compareColUs}
+        colThem={copy.compareColThem}
+        rows={copy.comparisonRows}
+        cellLimited={copy.compareCellLimited}
+        cellDash={copy.compareCellDash}
+        includedAria={copy.compareIncludedAria}
+      />
       <HomeWhySix />
       <CtaSection
-        title="Your community. Your voice. Your Pulse."
-        description="Get early access to the network built for how healthcare actually connects."
+        title={copy.bottomCta.title}
+        description={copy.bottomCta.description}
         primaryHref="/download"
-        primaryLabel="Join PulseVerse now"
+        primaryLabel={copy.bottomCta.primaryLabel}
         secondaryHref="/contact"
-        secondaryLabel="Talk to partnerships"
+        secondaryLabel={copy.bottomCta.secondaryLabel}
+        analyticsScope="features_hub"
       />
     </>
   );

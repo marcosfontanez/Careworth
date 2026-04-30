@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  ChevronRight,
   Flame,
   MessageSquare,
   Radio,
@@ -14,8 +13,9 @@ import { Button } from "@/components/ui/button";
 import { marketingGutterX, marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import {
-  liveDiscoverCategories,
   liveFeaturedSessions,
+  liveRisingLives,
+  liveTopicBrowse,
   liveTopNow,
   liveWhyGoLive,
 } from "@/mock/marketing";
@@ -43,8 +43,8 @@ export function FeatureLiveLanding() {
               world.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Host AMAs, teaching moments, and on-shift stories with HD video, respectful chat, and moderation built for
-              licensed audiences.
+              Discover what&apos;s live right now — Featured Live, Top Live Now, Rising Lives, and browse by topic — with
+              HD video, respectful chat, and moderation built for licensed healthcare audiences.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
@@ -124,13 +124,8 @@ export function FeatureLiveLanding() {
             <div key={s.title} className={cn("overflow-hidden rounded-2xl border border-white/10", marketingCardMuted)}>
               <div className="relative aspect-video bg-gradient-to-br from-slate-800 to-slate-950">
                 <div className="absolute left-3 top-3">
-                  <span
-                    className={cn(
-                      "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                      s.status === "live" ? "bg-red-600 text-white" : "bg-white/15 text-foreground",
-                    )}
-                  >
-                    {s.status === "live" ? "Live" : "Scheduled"}
+                  <span className="rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Live
                   </span>
                 </div>
                 <div className="absolute bottom-3 right-3 rounded-md bg-black/55 px-2 py-0.5 text-[10px] text-white">
@@ -153,7 +148,7 @@ export function FeatureLiveLanding() {
           <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Flame className="h-4 w-4 text-orange-400" />
-              Top Lives right now
+              Top Live Now
             </h3>
             <ol className="mt-4 space-y-4">
               {liveTopNow.map((row) => (
@@ -170,9 +165,30 @@ export function FeatureLiveLanding() {
           </div>
 
           <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
-            <h3 className="text-sm font-semibold text-foreground">Discover more</h3>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Flame className="h-4 w-4 text-[var(--accent)]" />
+              Rising Lives
+            </h3>
+            <p className="mt-2 text-xs text-muted-foreground">Momentum streams gaining audience right now.</p>
+            <ol className="mt-4 space-y-4">
+              {liveRisingLives.map((row, idx) => (
+                <li key={row.title} className="flex gap-3 text-sm">
+                  <span className="font-mono text-xs text-muted-foreground">{idx + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{row.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{row.host}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-emerald-300/90">{row.viewers}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
+            <h3 className="text-sm font-semibold text-foreground">Browse by Topic</h3>
+            <p className="mt-2 text-xs text-muted-foreground">Jump into the conversations that match your practice.</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {liveDiscoverCategories.map((c) => (
+              {liveTopicBrowse.map((c) => (
                 <div
                   key={c.title}
                   className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-primary/35"
@@ -183,41 +199,6 @@ export function FeatureLiveLanding() {
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
-            <h3 className="text-sm font-semibold text-foreground">Creator spotlight</h3>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="h-14 w-14 rounded-full bg-gradient-to-br from-primary to-violet-500" />
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-foreground">Dr. Arjun Patel</p>
-                <p className="text-xs text-muted-foreground">Critical care · verified host</p>
-              </div>
-              <Button size="sm" variant="secondary" className="shrink-0 border border-white/10">
-                Follow
-              </Button>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[10px] text-muted-foreground">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] py-2">
-                <p className="font-semibold text-foreground">12.4K</p>
-                <p>Followers</p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] py-2">
-                <p className="font-semibold text-foreground">89</p>
-                <p>Lives</p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] py-2">
-                <p className="font-semibold text-emerald-300">97%</p>
-                <p>Positive</p>
-              </div>
-            </div>
-            <Link
-              href="/download"
-              className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-            >
-              View profile
-              <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
         </div>
 

@@ -7,16 +7,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { Locale } from "@/lib/i18n";
+import { formatContactTopicSnippet, getContactFormCopy } from "@/lib/marketing-copy/contact";
 import { marketingCardMuted } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 const initial: MarketingFormState = {};
 
-export function ContactForm() {
+export function ContactForm({ initialTopic = "", locale }: { initialTopic?: string; locale: Locale }) {
   const [state, formAction, pending] = useActionState(submitContactForm, initial);
+  const t = getContactFormCopy(locale);
+  const topicHuman = initialTopic ? formatContactTopicSnippet(initialTopic) : "";
+  const messagePlaceholder = initialTopic
+    ? t.messagePlaceholderTopic.replace("{topic}", topicHuman)
+    : t.messagePlaceholderDefault;
 
   return (
     <form action={formAction} className={cn("mt-10 space-y-4 rounded-2xl p-6 sm:p-8", marketingCardMuted)}>
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="topic" value={initialTopic} />
       {/* Honeypot */}
       <input type="text" name="company_website" autoComplete="off" tabIndex={-1} className="hidden" aria-hidden />
       {state?.error && (
@@ -25,33 +34,33 @@ export function ContactForm() {
         </p>
       )}
       <div className="space-y-2">
-        <Label htmlFor="name">Name</Label>
+        <Label htmlFor="name">{t.nameLabel}</Label>
         <Input
           id="name"
           name="name"
           required
-          placeholder="Your name"
+          placeholder={t.namePlaceholder}
           className="border-white/10 bg-white/[0.04]"
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t.emailLabel}</Label>
         <Input
           id="email"
           name="email"
           type="email"
           required
-          placeholder="you@health.org"
+          placeholder={t.emailPlaceholder}
           className="border-white/10 bg-white/[0.04]"
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="msg">Message</Label>
+        <Label htmlFor="msg">{t.messageLabel}</Label>
         <Textarea
           id="msg"
           name="message"
           required
-          placeholder="How can we help?"
+          placeholder={messagePlaceholder}
           className="min-h-28 border-white/10 bg-white/[0.04]"
         />
       </div>
@@ -63,7 +72,7 @@ export function ContactForm() {
           "bg-primary text-primary-foreground shadow-[0_0_24px_-8px_rgba(45,127,249,0.55)]",
         )}
       >
-        {pending ? "Sending…" : "Send message"}
+        {pending ? t.submitting : t.submit}
       </Button>
     </form>
   );

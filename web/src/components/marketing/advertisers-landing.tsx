@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   ArrowRight,
   BarChart2,
@@ -13,7 +12,9 @@ import {
   Video,
 } from "lucide-react";
 
+import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
 import { Button } from "@/components/ui/button";
+import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { marketingCardMuted, marketingEyebrow, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,25 @@ const solutions = [
   { title: "Campaign reporting", icon: BarChart2 },
 ] as const;
 
+const differentiation = [
+  {
+    title: "Healthcare-native, not borrowed social",
+    body: "The Feed, Circles, Live, and Pulse Page model is built for licensed culture — not consumer timelines retrofitted with a blue check.",
+  },
+  {
+    title: "Premium creator + community environment",
+    body: "Hosts, educators, and clinicians show up with real identity surfaces — Pulse Page, My Pulse, Media Hub — so brands sit next to credible voices.",
+  },
+  {
+    title: "Trust & safety with clinical context",
+    body: "Moderation queues, live escalation, and appeals are designed for how healthcare audiences actually debate and learn.",
+  },
+  {
+    title: "Roadmap: credible Data & Insights",
+    body: "Directional reach, resonance, and segment reporting is being built with consent boundaries — ask partnerships for the latest partner analytics posture.",
+  },
+] as const;
+
 const safetyChecks = [
   "100% professional community",
   "Human content moderation",
@@ -78,6 +98,7 @@ const safetyChecks = [
 export function AdvertisersLanding() {
   return (
     <>
+      <MarketingBreadcrumbs path="/advertisers" />
       <section className="relative overflow-hidden pb-20 pt-10 sm:pt-14">
         <div className="pointer-events-none absolute -left-32 top-20 h-96 w-96 rounded-full bg-primary/15 blur-[100px]" />
         <div className={cn(marketingGutterX, "relative grid gap-14 lg:grid-cols-2 lg:items-center")}>
@@ -95,13 +116,15 @@ export function AdvertisersLanding() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
-                <Link href="/contact" className="inline-flex items-center gap-2">
+                <MarketingDestinationLink href="/contact" analyticsSource="advertisers_hero_media_kit" className="inline-flex items-center gap-2">
                   Request media kit
                   <ArrowRight className="h-4 w-4" />
-                </Link>
+                </MarketingDestinationLink>
               </Button>
               <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
-                <Link href="/contact">Talk to partnerships</Link>
+                <MarketingDestinationLink href="/contact" analyticsSource="advertisers_hero_partnerships">
+                  Talk to partnerships
+                </MarketingDestinationLink>
               </Button>
             </div>
           </div>
@@ -125,6 +148,26 @@ export function AdvertisersLanding() {
           </div>
         </div>
       </section>
+
+      <MarketingPageShell className="!py-0 pb-10">
+        <p className={marketingEyebrow}>Why healthcare brands start here</p>
+        <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">
+          A credible media-kit entry — built for HCP attention, not generic impressions.
+        </h2>
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
+          {differentiation.map((d) => (
+            <div key={d.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
+              <p className="text-sm font-semibold text-foreground">{d.title}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d.body}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-8 text-sm leading-relaxed text-muted-foreground">
+          Placements span the surfaces clinicians already trust: Feed cards, Pulse Page frames, Live sponsorships with
+          moderator review, and Circles headers where specialty culture concentrates — with audience segmentation language
+          that respects role, specialty, and shift context.
+        </p>
+      </MarketingPageShell>
 
       <MarketingPageShell className="!py-0 pb-6">
         <h2 className="max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">

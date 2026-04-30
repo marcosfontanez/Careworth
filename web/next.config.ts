@@ -1,6 +1,8 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
+import { marketingContentSecurityPolicy } from "./src/lib/content-security-policy";
+
 const webRoot = path.join(__dirname);
 const webNodeModules = path.join(webRoot, "node_modules");
 
@@ -9,14 +11,26 @@ const moduleAliases: Record<string, string> = {
   "tw-animate-css": path.join(webNodeModules, "tw-animate-css"),
 };
 
-const securityHeaders = [
-  { key: "X-DNS-Prefetch-Control", value: "on" },
-  { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-];
+function securityHeaders(): { key: string; value: string }[] {
+  const base = [
+    { key: "X-DNS-Prefetch-Control", value: "on" },
+    { key: "X-Content-Type-Options", value: "nosniff" },
+    { key: "X-Frame-Options", value: "DENY" },
+    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+    { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  ];
+  if (process.env.NODE_ENV === "production") {
+    base.push({ key: "Content-Security-Policy", value: marketingContentSecurityPolicy() });
+  }
+  return base;
+}
 
 const nextConfig: NextConfig = {
+  images: {
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
   /*
    * Monorepo: default `next dev` uses Turbopack; CSS `@import "tailwindcss"` still resolves from the
    * repo root (Expo’s Tailwind v3). Webpack + explicit aliases fixes dev. Production build may use
@@ -40,7 +54,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/(.*)",
-        headers: securityHeaders,
+        headers: securityHeaders(),
       },
     ];
   },
