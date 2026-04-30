@@ -102,6 +102,7 @@ export async function persistQueryCache() {
  */
 const SKIP_RESTORE_KEYS = new Set([
   'communities',
+  'circles',
   'feed',
   'feedInf',
   'streams',

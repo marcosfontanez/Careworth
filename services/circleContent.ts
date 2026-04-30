@@ -158,7 +158,7 @@ export const circleContentService = {
     try {
       const promoted = await communitiesService.getBySlugsOrdered([...PROMOTED_NEW_CIRCLE_SLUGS]);
       const recent = await communitiesService.getRecentlyAdded(12);
-      const promotedSet = new Set([...PROMOTED_NEW_CIRCLE_SLUGS]);
+      const promotedSet = new Set<string>([...PROMOTED_NEW_CIRCLE_SLUGS]);
       const rest = recent.filter((c) => !promotedSet.has(c.slug));
       return [...promoted, ...rest].slice(0, 5);
     } catch {

@@ -268,12 +268,14 @@ export function useFeaturedCommunities() {
 
 export function useCirclesHome() {
   return useQuery({
-    queryKey: ['circles', 'home', 3],
+    /** Bump version when featured/new-circles logic changes so clients don’t keep stale persisted data. */
+    queryKey: ['circles', 'home', 'v4'],
     queryFn: async () => ({
       featured: await circleContentService.getFeaturedCircles(),
       trending: await circleContentService.getTrending24h(),
       newCircles: await circleContentService.getNewCircles(),
     }),
+    staleTime: 1000 * 60,
   });
 }
 
