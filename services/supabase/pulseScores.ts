@@ -25,7 +25,9 @@ import type {
 
 function toTier(raw: unknown): PulseTier {
   const v = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-  if (v === 'pulse' || v === 'rhythm' || v === 'beat' || v === 'anthem') return v;
+  if (v === 'murmur' || v === 'pulse' || v === 'rhythm' || v === 'beat' || v === 'anthem') {
+    return v;
+  }
   return 'murmur';
 }
 

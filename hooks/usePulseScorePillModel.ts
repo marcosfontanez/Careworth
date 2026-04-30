@@ -50,11 +50,13 @@ export function usePulseScorePillModel(
     rpcOverall == null || (isError && !snapshot) || (isLoading && !snapshot);
   const resolvedOverall = useFallback ? fallbackOverall : (rpcOverall ?? 0);
 
-  const lastNonZeroRef = useRef<number>(resolvedOverall > 0 ? resolvedOverall : 0);
-  if (resolvedOverall > 0 && resolvedOverall !== lastNonZeroRef.current) {
+  const lastNonZeroRef = useRef<number>(0);
+  if (resolvedOverall > 0) {
     lastNonZeroRef.current = resolvedOverall;
   }
-  const overall = resolvedOverall > 0 ? resolvedOverall : lastNonZeroRef.current;
+  /** While the RPC is still loading, avoid flashing 0 if we already showed a positive score. */
+  const overall =
+    useFallback && resolvedOverall === 0 ? lastNonZeroRef.current : resolvedOverall;
 
   const rpcTier: PulseTier | undefined = snapshot?.tier;
   const initialTierSafe = normalisePulseTier(initialTier);
