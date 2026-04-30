@@ -327,6 +327,8 @@ export interface UserProfile {
   privacyMode: PrivacyMode;
   interests: ContentInterest[];
   isVerified: boolean;
+  /** When true, user can open in-app staff routes (e.g. `/admin`). Mirrors `profiles.role_admin`. */
+  roleAdmin?: boolean;
   shiftPreference: ShiftPreference;
   /** Identity capsules — vibe, humor, role culture */
   identityTags?: string[];
@@ -580,7 +582,7 @@ export interface NotificationItem {
   targetId?: string;
 }
 
-/** Original video post whose audio others can attach when filming (sound library). */
+/** Original video post whose audio others can attach when filming (sound library). Curated entries in `sound_catalog` rank higher in `search_sound_library`. */
 export interface SoundLibraryRow {
   postId: string;
   soundTitle: string;

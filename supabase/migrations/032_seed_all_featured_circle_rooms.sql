@@ -60,7 +60,7 @@ values
   (
     'therapy',
     'Therapy',
-    '🧠',
+    '🩼',
     'PT, OT, speech-language pathology, and rehab — caseloads, documentation, and patient progress.',
     '#8B5CF6',
     12000,

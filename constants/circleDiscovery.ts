@@ -7,10 +7,12 @@ export const FEATURED_CIRCLE_SLUGS_ORDER = [
   'memes',
   'confessions',
   'nurses',
+  'student-nurses',
   'pct-cna',
   'doctors',
   'pharmacists',
   'therapy',
+  'gaming',
 ] as const;
 
 export const NEW_CIRCLE_SLUGS = [

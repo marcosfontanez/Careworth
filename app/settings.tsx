@@ -145,6 +145,22 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {profile?.roleAdmin ? (
+          <>
+            <Text style={styles.sectionTitle}>Staff</Text>
+            <View style={styles.card}>
+              <SettingRow
+                icon="shield-checkmark-outline"
+                iconColor={colors.primary.royal}
+                label="Admin panel"
+                subtitle="Moderation, users, curated sounds"
+                onPress={() => router.push('/admin')}
+                right={<Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />}
+              />
+            </View>
+          </>
+        ) : null}
+
         <Text style={styles.sectionTitle}>Notifications</Text>
         <View style={styles.card}>
           <SettingRow

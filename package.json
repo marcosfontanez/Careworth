@@ -15,7 +15,10 @@
     "db:stop": "supabase stop",
     "eas:build:dev": "eas build --profile development",
     "eas:build:dev:ios": "eas build --profile development --platform ios",
-    "eas:build:dev:android": "eas build --profile development --platform android"
+    "eas:build:dev:android": "eas build --profile development --platform android",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 250",
+    "db:types": "node scripts/gen-supabase-types.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -74,6 +77,8 @@
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.1.0",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "^10.0.0",
     "supabase": "^2.93.1",
     "typescript": "~5.9.2"
   },

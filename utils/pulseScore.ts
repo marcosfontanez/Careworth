@@ -106,6 +106,20 @@ export function tierMeta(id: PulseTier | string | null | undefined): PulseTierMe
   return PULSE_TIERS.find((t) => t.id === id) ?? PULSE_TIERS[0];
 }
 
+/**
+ * Normalise a raw `pulse_tier` / profiles column string into the tier
+ * union. Unrecognised values return undefined so callers can fall back to
+ * {@link tierForScore}.
+ */
+export function normalisePulseTier(raw: string | null | undefined): PulseTier | undefined {
+  if (!raw) return undefined;
+  const v = raw.trim().toLowerCase();
+  if (v === 'murmur' || v === 'pulse' || v === 'rhythm' || v === 'beat' || v === 'anthem') {
+    return v;
+  }
+  return undefined;
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Sub-score descriptors (used by the history sheet + coaching nudges)
 // ────────────────────────────────────────────────────────────────────

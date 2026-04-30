@@ -66,6 +66,7 @@ export const socialNotificationsService = {
       .from('notifications')
       .insert({
         user_id: userId,
+        actor_id: userId,
         type: 'streak_milestone',
         message: `You hit a ${streakCount}-day streak! Keep it going!`,
         read: false,
@@ -101,6 +102,7 @@ export const socialNotificationsService = {
       .from('notifications')
       .insert({
         user_id: userId,
+        actor_id: userId,
         type: 'milestone_earned',
         message: `You earned the "${milestoneTitle}" milestone!`,
         read: false,

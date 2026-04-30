@@ -95,7 +95,7 @@ export const hostEarningsService = {
       hostId: row.host_id,
       streamId: row.stream_id,
       senderId: row.sender_id,
-      source: row.source,
+      source: row.source as HostEarningsEntry['source'],
       coins: row.coins,
       giftId: row.gift_id,
       giftName: row.gift_name,

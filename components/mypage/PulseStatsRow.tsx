@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -9,19 +8,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing } from '@/theme';
-import { pulseScoresService } from '@/services/supabase';
-import {
-  PULSE_TIERS,
-  formatPulseStat,
-  tierForScore,
-  type PulseTier,
-} from '@/utils/pulseScore';
+import { formatPulseStat } from '@/utils/pulseScore';
 import { hasSeenPulseTooltip, markPulseTooltipSeen } from '@/lib/pulseTooltipSeen';
 import { PulseHistorySheet } from './PulseHistorySheet';
+import { PulseScorePill } from './PulseScorePill';
+import { usePulseScorePillModel } from '@/hooks/usePulseScorePillModel';
 
 interface PulseStatsRowProps {
   /** Profile owner id — score is always the owner's, never the viewer's. */
@@ -140,101 +133,13 @@ export function PulseStatsRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tooltipVisible]);
 
-  /**
-   * Live fetch. We keep staleTime tight so the number reconciles within
-   * a minute of any engagement the user makes — the RPC is cheap (single
-   * user, indexed joins) and it also upserts the active-month row so
-   * leaderboards update for free on every read.
-   *
-   * `placeholderData` seeds the query with the denormalized profile
-   * columns so the very first render shows the correct score instead
-   * of a `0` flicker while the RPC is in flight. This means the
-   * snapshot is *never* null in practice — the fallback chain below
-   * is only exercised if the denorm itself is missing (brand-new
-   * accounts) or the RPC is broken AND the profile prop is null.
-   *
-   * `isError` is still surfaced so the pill can keep falling back to
-   * the denorm if the RPC grant hasn't propagated yet or the RPC
-   * itself errors (the migration 058 STABLE bug, the 060 column-
-   * shadow bug, etc — past lessons we should never re-learn).
-   */
-  const {
-    data: snapshot,
-    isError,
-    isLoading,
-  } = useQuery({
-    queryKey: ['pulseScoreCurrent', userId],
-    queryFn: () => pulseScoresService.getCurrent(userId),
-    enabled: !!userId,
-    staleTime: 60_000,
-    retry: 1,
-    placeholderData:
-      Number.isFinite(initialScore) && initialScore != null
-        ? {
-            reach: 0,
-            resonance: 0,
-            rhythm: 0,
-            range: 0,
-            reciprocity: 0,
-            overall: Number(initialScore),
-            tier: (normaliseTier(initialTier) ?? tierForScore(Number(initialScore)).id) as PulseTier,
-            monthStart: '',
-            streakDays: 0,
-          }
-        : undefined,
-  });
+  const { overall, tier } = usePulseScorePillModel(userId, initialScore, initialTier);
 
   const handleOpenHistory = () => {
     Haptics.selectionAsync().catch(() => undefined);
     dismissTooltip();
     setHistoryOpen(true);
   };
-
-  /**
-   * Resolution order for the number shown in the pill:
-   *   1. Live RPC snapshot (authoritative, recomputes on every read).
-   *   2. Denormalized `profile.pulse_score_current` passed in as
-   *      `initialScore` — kept in sync by migration 059's trigger.
-   *   3. Last non-zero value we've ever seen this session (sticky).
-   *   4. 0 (brand-new account with no activity yet).
-   *
-   * Because (2) is also wired into the query as `placeholderData`, the
-   * pill never flashes "0" on a user who already has a score, even
-   * while (1) is in-flight. (3) guards against transient races where
-   * the RPC errors and `initialScore` is briefly null on a route push
-   * — once we've shown a real number we never silently regress to 0
-   * mid-session. The trade-off is tiny: a brand-new month reset will
-   * start at 0 on first read of the next month, then the sticky ref
-   * tracks correctly from there. We accept that — flickering the
-   * owner's own score back to 0 is a much worse experience than a
-   * one-frame stale value at month boundary.
-   */
-  const rpcOverall = snapshot?.overall;
-  const fallbackOverall = Number.isFinite(initialScore) ? Number(initialScore) : 0;
-  const useFallback =
-    rpcOverall == null || (isError && !snapshot) || (isLoading && !snapshot);
-  const resolvedOverall = useFallback ? fallbackOverall : (rpcOverall ?? 0);
-
-  // Sticky last-known-good. Initialised to whatever non-zero value we
-  // already have on first render so the very first paint isn't gated
-  // on a re-render.
-  const lastNonZeroRef = useRef<number>(resolvedOverall > 0 ? resolvedOverall : 0);
-  if (resolvedOverall > 0 && resolvedOverall !== lastNonZeroRef.current) {
-    lastNonZeroRef.current = resolvedOverall;
-  }
-  const overall = resolvedOverall > 0 ? resolvedOverall : lastNonZeroRef.current;
-
-  /**
-   * Tier resolution mirrors the score fallback chain — prefer the live
-   * RPC tier when we have it, otherwise honour whatever tier label the
-   * profile row carries, otherwise derive from the resolved score.
-   */
-  const rpcTier: PulseTier | undefined = snapshot?.tier;
-  const initialTierSafe = normaliseTier(initialTier);
-  const tier =
-    (rpcTier && PULSE_TIERS[rpcTier]) ||
-    (initialTierSafe && PULSE_TIERS[initialTierSafe]) ||
-    tierForScore(overall);
 
   return (
     <>
@@ -252,12 +157,13 @@ export function PulseStatsRow({
         />
         <View style={styles.divider} />
         <View style={styles.pulseCellWrap}>
-          <PulseScoreCell
+          <PulseScorePill
+            style={styles.cell}
             value={String(overall)}
             tierLabel={tier.label}
             tierAccent={tier.accent}
             tierGlow={tier.glow}
-            onOpen={handleOpenHistory}
+            onPress={handleOpenHistory}
           />
           {tooltipVisible ? (
             <PulseFirstTimeTooltip
@@ -339,21 +245,6 @@ function PulseFirstTimeTooltip({
   );
 }
 
-/**
- * Normalise a raw `pulse_tier` string from the profiles table into the
- * `PulseTier` union. Defensive against older profiles or typos — if we
- * don't recognise the value we return undefined and let the caller
- * derive a tier from the score.
- */
-function normaliseTier(raw: string | null | undefined): PulseTier | undefined {
-  if (!raw) return undefined;
-  const v = raw.trim().toLowerCase();
-  if (v === 'murmur' || v === 'pulse' || v === 'rhythm' || v === 'beat' || v === 'anthem') {
-    return v;
-  }
-  return undefined;
-}
-
 function StatCell({
   value,
   label,
@@ -378,109 +269,6 @@ function StatCell({
         {label}
       </Text>
     </Container>
-  );
-}
-
-/**
- * The hero cell on this strip. Wraps the score digit in a gradient-lined
- * pill with a soft breathing glow; a small tier chip sits below the
- * score so "Pulse Score" reads as an identity artifact, not just a
- * number. The whole cell is a single tap target that opens the history
- * sheet — the info-button idiom is gone because the sheet itself IS the
- * explainer.
- */
-function PulseScoreCell({
-  value,
-  tierLabel,
-  tierAccent,
-  tierGlow,
-  onOpen,
-}: {
-  value: string;
-  tierLabel: string;
-  tierAccent: string;
-  tierGlow: string;
-  onOpen: () => void;
-}) {
-  const glow = useRef(new Animated.Value(0.55)).current;
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, {
-          toValue: 1,
-          duration: 1600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glow, {
-          toValue: 0.55,
-          duration: 1600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [glow]);
-
-  return (
-    <Pressable
-      style={styles.cell}
-      onPress={onOpen}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel="View Pulse Score history"
-    >
-      <View style={styles.scoreWrap}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.scoreHalo,
-            {
-              backgroundColor: tierGlow,
-              opacity: glow.interpolate({
-                inputRange: [0.55, 1],
-                outputRange: [0.35, 0.75],
-              }),
-              transform: [
-                {
-                  scale: glow.interpolate({
-                    inputRange: [0.55, 1],
-                    outputRange: [1, 1.12],
-                  }),
-                },
-              ],
-            },
-          ]}
-        />
-        <LinearGradient
-          colors={[tierAccent, '#22D3EE', '#A855F7']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.scoreRing}
-        >
-          <View style={styles.scoreInner}>
-            <Text style={styles.scoreValue} numberOfLines={1}>
-              {value}
-            </Text>
-          </View>
-        </LinearGradient>
-      </View>
-
-      <View
-        style={[
-          styles.tierChipOuter,
-          { backgroundColor: `${tierAccent}1E`, borderColor: `${tierAccent}66` },
-        ]}
-      >
-        <Text style={[styles.tierChipText, { color: tierAccent }]} numberOfLines={1}>
-          {tierLabel.toUpperCase()}
-        </Text>
-        <Ionicons name="chevron-forward" size={9} color={tierAccent} />
-      </View>
-    </Pressable>
   );
 }
 
@@ -514,58 +302,6 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-  },
-
-  // Pulse Score pill
-  scoreWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreHalo: {
-    position: 'absolute',
-    top: -6,
-    left: -6,
-    right: -6,
-    bottom: -6,
-    borderRadius: 999,
-  },
-  scoreRing: {
-    borderRadius: 999,
-    padding: 1.5,
-  },
-  scoreInner: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(5,11,20,0.94)',
-    minWidth: 62,
-    alignItems: 'center',
-  },
-  scoreValue: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: '#FFF',
-    letterSpacing: -0.3,
-    textShadowColor: 'rgba(20,184,166,0.55)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-    fontVariant: ['tabular-nums'],
-  },
-
-  tierChipOuter: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  tierChipText: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 0.6,
   },
 
   // First-time tooltip

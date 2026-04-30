@@ -13,5 +13,12 @@
     "**/*.ts",
     "**/*.tsx",
     "nativewind-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "web",
+    "export-worker",
+    "supabase/functions",
+    ".expo"
   ]
 }

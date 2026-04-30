@@ -25,7 +25,7 @@ function SignedThumbImage({
   contentFit = 'cover',
 }: {
   uri: string;
-  style: ThumbStyle;
+  style: StyleProp<ImageStyle>;
   contentFit?: ImageContentFit;
 }) {
   /**
@@ -108,7 +108,7 @@ export function RecentMediaThumb({ post, style }: { post: Post; style: ThumbStyl
 
   const staticUri = postStaticImagePreviewUri(post);
   if (staticUri) {
-    return <SignedThumbImage uri={staticUri} style={style} />;
+    return <SignedThumbImage uri={staticUri} style={style as StyleProp<ImageStyle>} />;
   }
 
   if (post.type === 'text' || post.type === 'discussion' || post.type === 'confession') {

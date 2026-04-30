@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { Database } from '@/lib/database.types';
 import type {
   EligibleCircleDiscussion,
   Post,
@@ -128,19 +129,13 @@ export const profileUpdatesDb = {
     // (see `services/supabase/posts.ts` for the same cast). The RPC itself
     // is defined in migration 050 and runs with SECURITY DEFINER to
     // enforce ownership on the server.
-    const { error } = await supabase.rpc(
-      'pin_profile_update',
-      { p_update_id: updateId } as never,
-    );
+    const { error } = await supabase.rpc('pin_profile_update', { p_update_id: updateId });
     if (error) throw error;
   },
 
   /** Inverse of {@link pin}. Clears the pin for a row the caller owns. */
   async unpin(updateId: string): Promise<void> {
-    const { error } = await supabase.rpc(
-      'unpin_profile_update',
-      { p_update_id: updateId } as never,
-    );
+    const { error } = await supabase.rpc('unpin_profile_update', { p_update_id: updateId });
     if (error) throw error;
   },
 
@@ -160,12 +155,11 @@ export const profileUpdatesDb = {
    * the new liked state.
    */
   async toggleLike(updateId: string): Promise<boolean> {
-    const { data, error } = await supabase.rpc(
-      'toggle_profile_update_like',
-      { p_update_id: updateId } as never,
-    );
+    const { data, error } = await supabase.rpc('toggle_profile_update_like', {
+      p_update_id: updateId,
+    });
     if (error) throw error;
-    return data === true;
+    return Boolean(data);
   },
 
   /**
@@ -394,7 +388,7 @@ export const profileUpdatesDb = {
 
     const { data, error } = await supabase
       .from('profile_updates')
-      .update(updates)
+      .update(updates as Database['public']['Tables']['profile_updates']['Update'])
       .eq('id', updateId)
       .eq('user_id', userId)
       .select('*')

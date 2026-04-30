@@ -27,8 +27,8 @@ export const streaksService = {
     }
 
     return {
-      currentStreak: data.current_streak,
-      bestStreak: data.best_streak,
+      currentStreak: data.current_streak_days ?? data.current_streak ?? 0,
+      bestStreak: data.longest_streak_days ?? data.best_streak ?? 0,
       lastActiveDate: data.last_active_date,
       streakStartedAt: data.streak_started_at,
     };
@@ -46,8 +46,9 @@ export const streaksService = {
       );
 
     const { data } = await supabase.rpc('update_user_streak', { p_user_id: user.id });
+    const streakRow = data as { current_streak?: number; best_streak?: number } | null;
 
-    const newStreak = data?.current_streak ?? 0;
+    const newStreak = streakRow?.current_streak ?? 0;
     const milestoneThresholds = [7, 30, 100, 365];
     if (milestoneThresholds.includes(newStreak)) {
       socialNotificationsService.notifyStreakMilestone(user.id, newStreak).catch(() => {});
@@ -55,7 +56,7 @@ export const streaksService = {
 
     return {
       currentStreak: newStreak,
-      bestStreak: data?.best_streak ?? 0,
+      bestStreak: streakRow?.best_streak ?? 0,
       lastActiveDate: new Date().toISOString().split('T')[0],
       streakStartedAt: null,
     };

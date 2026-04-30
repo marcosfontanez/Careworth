@@ -1,0 +1,70 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "app/**"
+      - "components/**"
+      - "contexts/**"
+      - "hooks/**"
+      - "lib/**"
+      - "services/**"
+      - "utils/**"
+      - "types/**"
+      - "assets/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "app.json"
+      - "app.config.js"
+      - "eslint.config.js"
+      - "babel.config.js"
+      - "metro.config.js"
+      - "nativewind-env.d.ts"
+      - ".github/workflows/mobile-ci.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "contexts/**"
+      - "hooks/**"
+      - "lib/**"
+      - "services/**"
+      - "utils/**"
+      - "types/**"
+      - "assets/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "app.json"
+      - "app.config.js"
+      - "eslint.config.js"
+      - "babel.config.js"
+      - "metro.config.js"
+      - "nativewind-env.d.ts"
+      - ".github/workflows/mobile-ci.yml"
+  workflow_dispatch: {}
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint

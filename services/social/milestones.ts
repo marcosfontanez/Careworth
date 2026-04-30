@@ -35,7 +35,7 @@ export const milestonesService = {
       milestoneType: row.milestone_type,
       title: row.title,
       description: row.description ?? '',
-      earnedAt: row.earned_at,
+      earnedAt: row.earned_at ?? '',
     }));
   },
 

@@ -86,10 +86,10 @@ export const subscriptionService = {
 
       return {
         userId,
-        tier: data.tier,
+        tier: data.tier as SubscriptionTier,
         expiresAt: data.expires_at,
         isActive,
-        revenueCatCustomerId: data.revenuecat_customer_id,
+        revenueCatCustomerId: data.revenuecat_customer_id ?? undefined,
       };
     } catch {
       return { userId, tier: 'free', expiresAt: null, isActive: true };
@@ -119,9 +119,9 @@ export const subscriptionService = {
         .from('user_subscriptions')
         .upsert({
           user_id: userId,
-          tier,
+          tier: tier as string,
           expires_at: tier === 'free' ? null : expiresAt.toISOString(),
-          revenuecat_customer_id: revenueCatCustomerId,
+          revenuecat_customer_id: revenueCatCustomerId ?? null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 

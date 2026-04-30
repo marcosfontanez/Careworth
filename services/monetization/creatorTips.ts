@@ -90,7 +90,7 @@ export const creatorTipsService = {
         monthlyEarnings: data.monthly_earnings ?? 0,
         lifetimeEarnings: data.lifetime_earnings ?? 0,
         pendingPayout: data.pending_payout ?? 0,
-        lastPayoutAt: data.last_payout_at,
+        lastPayoutAt: data.last_payout_at ?? undefined,
       };
     } catch {
       return {

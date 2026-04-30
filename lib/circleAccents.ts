@@ -122,6 +122,26 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
     etiquette: 'We’re all in scrubs. Lift each other up.',
   },
 
+  /* Student Nurses — sky blue (distinct from royal Nurses, teal PCT, ICU cyan). */
+  'student-nurses': {
+    color: '#0369A1',
+    colorAlt: '#0C4A6E',
+    gradient: ['#0369A1', '#0C4A6E', '#082F4970'] as const,
+    vibe: 'welcoming',
+    composerPrompt: 'What are you learning this week?',
+    etiquette: 'We were all new once. Be encouraging.',
+  },
+
+  /* Gaming — deep red (distinct from meme orange / nurse card rose). */
+  'gaming': {
+    color: '#B91C1C',
+    colorAlt: '#7F1D1D',
+    gradient: ['#B91C1C', '#7F1D1D', '#450A0A70'] as const,
+    vibe: 'playful',
+    composerPrompt: 'What are you playing — or looking for teammates?',
+    etiquette: 'Respect differences in platforms, skill, and spare time.',
+  },
+
   /* Confessions — reflective, anonymous-friendly. Color matches DB seed
    *  `#6B21A8` so the room banner reads as the same identity as the
    *  landing card. */

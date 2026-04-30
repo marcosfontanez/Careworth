@@ -259,6 +259,13 @@ export default function FeedScreen() {
     }
   }, [user]);
 
+  const openCreatorVideoGrid = useCallback(
+    (creatorId: string, postId: string) => {
+      router.push(`/creator-videos/${creatorId}?fromPost=${encodeURIComponent(postId)}` as any);
+    },
+    [router],
+  );
+
   const handleToggleSave = useCallback(async (id: string) => {
     const wasSaved = savedPostIds.has(id);
     toggleSavePost(id);
@@ -364,9 +371,14 @@ export default function FeedScreen() {
         onReport={() => setReportTarget(item.id)}
         onLongPress={() => setLongPressTarget(item)}
         onHashtag={(tag) => router.push(`/hashtag/${encodeURIComponent(tag)}`)}
+        onOpenCreatorVideos={
+          item.type === 'video' && item.mediaUrl?.trim() && !item.isAnonymous
+            ? () => openCreatorVideoGrid(item.creatorId, item.id)
+            : undefined
+        }
       />
     ),
-    [likedPosts, savedPostIds, followedCreatorIds, router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight],
+    [likedPosts, savedPostIds, followedCreatorIds, router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);

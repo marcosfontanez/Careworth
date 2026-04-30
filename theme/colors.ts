@@ -104,6 +104,7 @@ export const colors = {
   },
   community: {
     nurses: '#1E4ED8',
+    studentNurses: '#0369A1',
     pctCna: '#14B8A6',
     doctors: '#0B1F3A',
     newGrads: '#6366F1',
@@ -113,5 +114,6 @@ export const colors = {
     medicalStudents: '#6366F1',
     study: '#3B82F6',
     pharmacists: '#10B981',
+    gaming: '#B91C1C',
   },
 } as const;

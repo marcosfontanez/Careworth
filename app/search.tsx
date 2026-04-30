@@ -22,7 +22,7 @@ import { getSearchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { UserProfile, Community, SoundLibraryRow, ViralSoundRow } from '@/types';
 
-const SEARCH_TABS = ['All', 'Creators', 'Communities', 'Hashtags', 'Sounds', 'Viral Songs'] as const;
+const SEARCH_TABS = ['All', 'Creators', 'Sounds', 'Viral Songs', 'Communities', 'Hashtags'] as const;
 type SearchTab = (typeof SEARCH_TABS)[number];
 
 type ListItem =
@@ -270,12 +270,6 @@ export default function SearchScreen() {
         <FilterChips options={[...SEARCH_TABS]} selected={tab} onSelect={(v) => setTab(v as SearchTab)} />
       </View>
 
-      {tab === 'Viral Songs' ? (
-        <Text style={styles.chartHint}>
-          Top sounds by new clips using them in the last 7 days (same idea as TikTok’s weekly velocity chart).
-        </Text>
-      ) : null}
-
       {showHistoryView ? (
         history.length > 0 ? (
           <View style={styles.historyWrap}>
@@ -317,7 +311,7 @@ export default function SearchScreen() {
           <View style={styles.emptyCenter}>
             <Ionicons name="search" size={48} color={colors.dark.textMuted} />
             <Text style={styles.emptyText}>
-              Search creators, circles, hashtags, or sounds — or open Viral Songs for this week’s chart.
+              Search creators, circles, hashtags, or sounds — or open Viral Songs for sounds gaining traction.
             </Text>
           </View>
         )
@@ -508,14 +502,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.dark.border,
-  },
-  chartHint: {
-    ...typography.bodySmall,
-    color: colors.dark.textMuted,
-    paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
-    lineHeight: 18,
   },
   list: { paddingHorizontal: layout.screenPadding, paddingBottom: 100 },
   emptyCenter: {

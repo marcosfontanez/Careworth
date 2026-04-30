@@ -44,6 +44,13 @@ const SLUG_SCHEMES: Record<string, FeaturedCardScheme> = {
     borderEmphasis: 1.75,
     onlineAccent: '#FDA4AF',
   },
+  'student-nurses': {
+    glow: '#0284C7',
+    gradient: ['rgba(2,132,199,0.32)', 'rgba(12,74,110,0.22)', '#0F1C30'],
+    bubble: ['rgba(56,189,248,0.58)', 'rgba(3,105,161,0.42)', 'rgba(15,28,48,0.5)'],
+    borderEmphasis: 1.75,
+    onlineAccent: '#38BDF8',
+  },
   'pct-cna': {
     glow: '#EA580C',
     gradient: ['rgba(234,88,12,0.3)', 'rgba(194,65,12,0.16)', '#0F1C30'],
@@ -71,6 +78,13 @@ const SLUG_SCHEMES: Record<string, FeaturedCardScheme> = {
     bubble: ['rgba(192,132,252,0.58)', 'rgba(124,58,237,0.4)', 'rgba(15,28,48,0.48)'],
     borderEmphasis: 1.75,
     onlineAccent: '#D8B4FE',
+  },
+  gaming: {
+    glow: '#DC2626',
+    gradient: ['rgba(220,38,38,0.3)', 'rgba(127,29,29,0.22)', '#0F1C30'],
+    bubble: ['rgba(248,113,113,0.58)', 'rgba(185,28,28,0.42)', 'rgba(15,28,48,0.5)'],
+    borderEmphasis: 1.75,
+    onlineAccent: '#FCA5A5',
   },
 };
 

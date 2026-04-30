@@ -339,10 +339,14 @@ export default function AdminPanel() {
   };
 
   const executeBan = async (targetId: string, reason: string) => {
+    if (!user?.id) {
+      toast.show('Sign in as admin to ban users', 'error');
+      return;
+    }
     try {
       await supabase.from('user_bans').insert({
         user_id: targetId,
-        banned_by: user?.id,
+        banned_by: user.id,
         reason,
       });
       toast.show('User banned', 'success');
@@ -604,7 +608,14 @@ export default function AdminPanel() {
           <Ionicons name="arrow-back" size={24} color={colors.dark.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Admin Panel</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity
+          onPress={() => router.push('/admin/sound-catalog')}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityLabel="Curated sounds"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="musical-notes" size={22} color={colors.dark.text} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.tabRow}>

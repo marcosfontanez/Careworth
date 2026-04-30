@@ -68,7 +68,7 @@ function rowToPost(row: any): Post {
     saveCount: row.save_count,
     createdAt: row.created_at,
     rankingScore: row.ranking_score,
-    feedTypeEligible: normalizeFeedTypeEligibleTags(row.feed_type_eligible ?? []),
+    feedTypeEligible: normalizeFeedTypeEligibleTags(row.feed_type_eligible ?? []) as FeedType[],
     roleContext: row.role_context,
     specialtyContext: row.specialty_context,
     locationContext: row.location_context,

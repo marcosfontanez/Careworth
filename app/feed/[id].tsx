@@ -147,6 +147,14 @@ export default function FeedPostScreen() {
         }
         onFollow={handleFollow}
         onProfile={() => router.push(`/profile/${post.creatorId}` as any)}
+        onOpenCreatorVideos={
+          post.type === 'video' && post.mediaUrl?.trim() && !post.isAnonymous
+            ? () =>
+                router.push(
+                  `/creator-videos/${post.creatorId}?fromPost=${encodeURIComponent(post.id)}` as any,
+                )
+            : undefined
+        }
         onHashtag={(tag) =>
           router.push(`/hashtag/${encodeURIComponent(tag)}` as any)
         }

@@ -69,7 +69,10 @@ export default function LiveScreen() {
   if (!isFeatureEnabled('liveStreaming')) {
     return <LivePrelaunchPlaceholder />;
   }
+  return <LiveScreenEnabled />;
+}
 
+function LiveScreenEnabled() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, isLoading, isError, refetch } = useLiveStreams();

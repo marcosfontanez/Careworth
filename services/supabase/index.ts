@@ -16,3 +16,4 @@ export { userCoinsService } from './userCoins';
 export { hostEarningsService } from './hostEarnings';
 export type { HostEarningsTotals, HostEarningsEntry } from './hostEarnings';
 export { pulseScoresService } from './pulseScores';
+export { soundCatalogService } from './soundCatalog';

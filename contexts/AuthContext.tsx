@@ -162,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       privacyMode: row.privacy_mode as any,
       interests: (interestRows ?? []).map((r: any) => r.interest),
       isVerified: row.is_verified,
+      roleAdmin: Boolean((row as { role_admin?: boolean }).role_admin),
       shiftPreference: row.shift_preference as any,
       profileSongTitle: title ?? null,
       profileSongArtist: artist ?? null,

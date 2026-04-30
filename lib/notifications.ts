@@ -76,7 +76,7 @@ export async function savePushToken(userId: string, token: string) {
     await supabase.from('profiles').update({
       push_token: token,
       push_token_updated_at: new Date().toISOString(),
-    } as any).eq('id', userId);
+    }).eq('id', userId);
   } catch {}
 }
 
@@ -84,7 +84,7 @@ export async function clearPushToken(userId: string) {
   try {
     await supabase.from('profiles').update({
       push_token: null,
-    } as any).eq('id', userId);
+    }).eq('id', userId);
   } catch {}
 }
 

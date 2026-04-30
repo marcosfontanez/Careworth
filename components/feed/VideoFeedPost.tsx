@@ -3,6 +3,8 @@ import {
   View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform,
   Pressable, ActivityIndicator, Linking,
 } from 'react-native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -49,12 +51,14 @@ interface Props {
   onHashtag?: (tag: string) => void;
   onReport?: () => void;
   onLongPress?: () => void;
+  /** Swipe left (TikTok-style) → open this creator’s video grid; video + non-anonymous only. */
+  onOpenCreatorVideos?: () => void;
 }
 
 function VideoFeedPostInner({
   post, viewportHeight, isActive, isLiked, isSaved, isFollowing,
   onLike, onComment, onSave, onShare, onFollow, onProfile,
-  onCommunity, onHashtag, onReport, onLongPress,
+  onCommunity, onHashtag, onReport, onLongPress, onOpenCreatorVideos,
 }: Props) {
   const insets = useSafeAreaInsets();
   const pageH = viewportHeight ?? SCREEN_H;
@@ -137,7 +141,29 @@ function VideoFeedPostInner({
     }
   };
 
-  return (
+  const fireOpenCreatorVideos = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onOpenCreatorVideos?.();
+  }, [onOpenCreatorVideos]);
+
+  const swipeOpenCreatorGrid = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(Boolean(onOpenCreatorVideos && hasVideo && !post.isAnonymous))
+        /** Prefer vertical feed scroll unless the user clearly drags left first. */
+        .failOffsetY([-22, 22])
+        .activeOffsetX(-36)
+        .onEnd((e) => {
+          'worklet';
+          const { translationX, translationY } = e;
+          if (translationX > -72) return;
+          if (Math.abs(translationY) > Math.abs(translationX) * 0.88) return;
+          runOnJS(fireOpenCreatorVideos)();
+        }),
+    [onOpenCreatorVideos, hasVideo, post.isAnonymous, fireOpenCreatorVideos],
+  );
+
+  const body = (
     <Pressable
       style={[styles.container, { height: pageH }]}
       onPress={handleTap}
@@ -350,6 +376,16 @@ function VideoFeedPostInner({
       )}
     </Pressable>
   );
+
+  if (onOpenCreatorVideos && hasVideo && !post.isAnonymous) {
+    return (
+      <GestureDetector gesture={swipeOpenCreatorGrid}>
+        {body}
+      </GestureDetector>
+    );
+  }
+
+  return body;
 }
 
 /** Ignore unstable callback identities; compare only fields that affect the cell UI. */
@@ -399,6 +435,8 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
   ) {
     return false;
   }
+
+  if (prev.onOpenCreatorVideos !== next.onOpenCreatorVideos) return false;
 
   const ph = p.hashtags.join('\u0001');
   const nh = n.hashtags.join('\u0001');

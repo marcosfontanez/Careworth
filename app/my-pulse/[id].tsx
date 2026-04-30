@@ -269,7 +269,7 @@ export default function MyPulseDetailScreen() {
       return profileUpdatesService.updateComment(commentId, viewerId, content);
     },
     onMutate: ({ commentId, content }) => {
-      const key = profileUpdateKeys.comments(id!) as const;
+      const key = profileUpdateKeys.comments(id!);
       const prev = queryClient.getQueryData<ProfileUpdateComment[]>(key);
       if (prev) {
         queryClient.setQueryData<ProfileUpdateComment[]>(
@@ -289,7 +289,7 @@ export default function MyPulseDetailScreen() {
       }
     },
     onSuccess: (updated) => {
-      const key = profileUpdateKeys.comments(id!) as const;
+      const key = profileUpdateKeys.comments(id!);
       const current = queryClient.getQueryData<ProfileUpdateComment[]>(key);
       if (current) {
         queryClient.setQueryData<ProfileUpdateComment[]>(
