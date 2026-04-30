@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, LayoutGrid } from "lucide-react";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
@@ -18,10 +17,10 @@ import {
 } from "@/lib/ui-classes";
 import { getFeaturesHubCopy } from "@/lib/marketing-copy/features-hub";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { ...m.features, alternates: canonical("/features") };
+export const generateMetadata = () => generateMarketingMetadata("features");
 
 export default async function FeaturesHubPage() {
   const locale = await getMarketingLocale();
@@ -123,7 +122,7 @@ export default async function FeaturesHubPage() {
         cellDash={copy.compareCellDash}
         includedAria={copy.compareIncludedAria}
       />
-      <HomeWhySix />
+      <HomeWhySix locale={locale} />
       <CtaSection
         title={copy.bottomCta.title}
         description={copy.bottomCta.description}

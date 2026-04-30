@@ -1,10 +1,8 @@
-import type { Metadata } from "next";
-
 import { AdvertisersLanding } from "@/components/marketing/advertisers-landing";
 import { CtaSection } from "@/components/marketing/cta-section";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = { ...m.advertisers, alternates: canonical("/advertisers") };
+export const generateMetadata = () => generateMarketingMetadata("advertisers");
 
 export default function AdvertisersPage() {
   return (

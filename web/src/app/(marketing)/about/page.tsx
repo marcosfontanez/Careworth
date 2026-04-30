@@ -1,12 +1,10 @@
-import type { Metadata } from "next";
-
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { marketingCardMuted } from "@/lib/ui-classes";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { ...m.about, alternates: canonical("/about") };
+export const generateMetadata = () => generateMarketingMetadata("about");
 
 const pillars = [
   {

@@ -1,19 +1,25 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { SectionHeader } from "@/components/marketing/section-header";
-import { homeFeatureSpotlights } from "@/mock/marketing";
 
-export function HomeSpotlightSection() {
+import { SectionHeader } from "@/components/marketing/section-header";
+import type { Locale } from "@/lib/i18n";
+import { getFeaturesHubCopy } from "@/lib/marketing-copy/features-hub";
+import { getHomeSpotlightSectionCopy } from "@/lib/marketing-copy/home";
+
+export function HomeSpotlightSection({ locale }: { locale: Locale }) {
+  const head = getHomeSpotlightSectionCopy(locale);
+  const { spotlights } = getFeaturesHubCopy(locale);
+
   return (
     <section className="py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeader
-          eyebrow="Feature spotlight"
-          title="Feed, Circles, Live, Pulse Page — where culture lives."
-          description="Discovery, premium topic rooms, real-time Live, and a creator-grade Pulse Page with My Pulse and Media Hub — without flattening you into a badge."
+          eyebrow={head.eyebrow}
+          title={head.title}
+          description={head.description}
         />
         <div className="mt-14 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-          {homeFeatureSpotlights.map((s) => (
+          {spotlights.map((s) => (
             <Link
               key={s.tag}
               href={s.href}
@@ -24,7 +30,7 @@ export function HomeSpotlightSection() {
               <h3 className="mt-3 text-xl font-semibold tracking-tight text-foreground">{s.title}</h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
               <span className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-primary">
-                Learn more
+                {head.learnMore}
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
               </span>
             </Link>

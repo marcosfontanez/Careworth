@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ContactSuccessTracker } from "@/components/marketing/contact-success-tracker";
@@ -8,9 +7,9 @@ import { SectionHeader } from "@/components/marketing/section-header";
 import { Button } from "@/components/ui/button";
 import { getContactPageCopy } from "@/lib/marketing-copy/contact";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = { ...m.contact, alternates: canonical("/contact") };
+export const generateMetadata = () => generateMarketingMetadata("contact");
 
 export default async function ContactPage({
   searchParams,

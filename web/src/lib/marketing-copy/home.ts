@@ -73,3 +73,31 @@ export function getHomeHeroCopy(locale: Locale): HomeHeroCopy {
 export function getHomeCtaCopy(locale: Locale): HomeCtaCopy {
   return bottomCta[locale];
 }
+
+export type HomeSpotlightSectionCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  learnMore: string;
+};
+
+const spotlightSection: Record<Locale, HomeSpotlightSectionCopy> = {
+  en: {
+    eyebrow: "Feature spotlight",
+    title: "Feed, Circles, Live, Pulse Page — where culture lives.",
+    description:
+      "Discovery, premium topic rooms, real-time Live, and a creator-grade Pulse Page with My Pulse and Media Hub — without flattening you into a badge.",
+    learnMore: "Learn more",
+  },
+  es: {
+    eyebrow: "Funciones destacadas",
+    title: "Feed, Circles, Live, Pulse Page — donde vive la cultura.",
+    description:
+      "Descubrimiento, salas temáticas premium, Live en tiempo real y una Pulse Page de nivel creador con My Pulse y Media Hub — sin reducirte a una insignia.",
+    learnMore: "Saber más",
+  },
+};
+
+export function getHomeSpotlightSectionCopy(locale: Locale): HomeSpotlightSectionCopy {
+  return spotlightSection[locale] ?? spotlightSection.en;
+}

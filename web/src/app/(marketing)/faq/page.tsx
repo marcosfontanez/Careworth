@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import { AppJsonLd } from "@/components/json-ld";
 import { FaqAccordion } from "@/components/marketing/faq-accordion";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
@@ -7,12 +5,12 @@ import { SectionHeader } from "@/components/marketing/section-header";
 import { getMarketingFaqItems } from "@/lib/marketing-copy/faq";
 import type { Locale } from "@/lib/i18n";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { marketingCardMuted } from "@/lib/ui-classes";
-import { canonical, m } from "@/lib/page-metadata";
 import { faqPageSchema } from "@/lib/structured-data";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { ...m.faq, alternates: canonical("/faq") };
+export const generateMetadata = () => generateMarketingMetadata("faq");
 
 const faqTitles: Record<Locale, { title: string; description: string }> = {
   en: { title: "FAQ", description: "Quick answers for professionals considering PulseVerse." },

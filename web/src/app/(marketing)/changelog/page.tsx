@@ -1,14 +1,12 @@
-import type { Metadata } from "next";
-
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { marketingChangelogEntries } from "@/content/marketing-changelog";
 import { marketingCardMuted } from "@/lib/ui-classes";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { legalDocumentsLastUpdatedDisplay } from "@/lib/site-constants";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { ...m.changelog, alternates: canonical("/changelog") };
+export const generateMetadata = () => generateMarketingMetadata("changelog");
 
 export default function ChangelogPage() {
   return (

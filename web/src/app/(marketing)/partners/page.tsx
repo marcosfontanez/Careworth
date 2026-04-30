@@ -1,14 +1,12 @@
-import type { Metadata } from "next";
-
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { CtaSection } from "@/components/marketing/cta-section";
 import { marketingCardMuted, marketingInlineLink } from "@/lib/ui-classes";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { ...m.partners, alternates: canonical("/partners") };
+export const generateMetadata = () => generateMarketingMetadata("partners");
 
 const offers = [
   {

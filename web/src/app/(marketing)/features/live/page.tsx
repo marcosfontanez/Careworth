@@ -1,11 +1,9 @@
-import type { Metadata } from "next";
-
 import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeatureLiveLanding } from "@/components/marketing/feature-live-landing";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = { ...m.featuresLive, alternates: canonical("/features/live") };
+export const generateMetadata = () => generateMarketingMetadata("featuresLive");
 
 export default function LiveFeaturePage() {
   return (

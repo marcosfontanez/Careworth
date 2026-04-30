@@ -41,7 +41,10 @@ Apply migrations in `../supabase/migrations` (including `064_web_marketing_leads
 3. Add **Auth redirect URLs** for your production domain in Supabase.
 4. Have **counsel review** Privacy Policy and Terms before public marketing push.
 5. Confirm at least one `profiles.role_admin` account can sign in at `/admin/login`.
+6. **Production DB:** from repo root, point Supabase CLI at the production project and run `supabase db push` (or apply SQL migrations in order through the dashboard) so production matches `../supabase/migrations` (including `065`–`068` if not yet applied).
+7. **Deploy:** push to `main` if the repo is connected to Vercel, or from `web/` run `npx vercel deploy --prod`.
 
+| Area | Path |
 |------|------|
 | Public routes | `src/app/(marketing)/*` |
 | Admin routes | `src/app/(admin)/admin/*` |

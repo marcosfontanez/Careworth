@@ -1,11 +1,10 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
 import { LegalDoc } from "@/components/marketing/legal-doc";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { legalDocumentsLastUpdatedDisplay } from "@/lib/site-constants";
 
-export const metadata: Metadata = { ...m.communityGuidelines, alternates: canonical("/community-guidelines") };
+export const generateMetadata = () => generateMarketingMetadata("communityGuidelines");
 
 const toc = [
   { id: "expectations", label: "Core expectations" },

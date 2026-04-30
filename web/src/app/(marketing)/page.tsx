@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
 import { CtaSection } from "@/components/marketing/cta-section";
@@ -7,7 +6,7 @@ import { HomeProductOverview } from "@/components/marketing/home-product-overvie
 import { HeroSection } from "@/components/marketing/hero-section";
 import { getHomeCtaCopy } from "@/lib/marketing-copy/home";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
 const HomeSpotlightSection = dynamic(() =>
   import("@/components/marketing/home-spotlight-section").then((mod) => mod.HomeSpotlightSection),
@@ -22,7 +21,7 @@ const HomeTestimonials = dynamic(() =>
   import("@/components/marketing/home-testimonials").then((mod) => mod.HomeTestimonials),
 );
 
-export const metadata: Metadata = { ...m.home, alternates: canonical("/") };
+export const generateMetadata = () => generateMarketingMetadata("home");
 
 export default async function HomePage() {
   const locale = await getMarketingLocale();
@@ -33,10 +32,10 @@ export default async function HomePage() {
       <HeroSection locale={locale} />
       <HomeFeatureShowcase locale={locale} />
       <HomeProductOverview />
-      <HomeSpotlightSection />
+      <HomeSpotlightSection locale={locale} />
       <HomePulseDuo />
       <HomeMyPulseSignature />
-      <HomeWhySix />
+      <HomeWhySix locale={locale} />
       <HomeStatsSplit />
       <HomeTestimonials />
       <CtaSection

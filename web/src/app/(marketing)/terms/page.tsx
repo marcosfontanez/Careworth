@@ -1,12 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
 import { LegalDoc } from "@/components/marketing/legal-doc";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { getLegalNotice, legalDocumentsLastUpdatedDisplay } from "@/lib/site-constants";
 import { marketingInlineLink } from "@/lib/ui-classes";
 
-export const metadata: Metadata = { ...m.terms, alternates: canonical("/terms") };
+export const generateMetadata = () => generateMarketingMetadata("terms");
 
 const toc = [
   { id: "intro", label: "Introduction" },

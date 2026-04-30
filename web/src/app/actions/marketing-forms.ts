@@ -1,12 +1,13 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { PV_LOCALE_COOKIE, localeCookieOptions } from "@/lib/locale-preference";
+import { getContactFormErrors, getNewsletterFormErrors, parseFormLocale } from "@/lib/marketing-copy/forms";
 import { checkRateLimitDistributed } from "@/lib/server/rate-limit-distributed";
 import { getClientIpFromHeaders } from "@/lib/server/rate-limit";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service";
-import { getContactFormErrors, getNewsletterFormErrors, parseFormLocale } from "@/lib/marketing-copy/forms";
 
 export type MarketingFormState = { ok?: boolean; error?: string };
 
@@ -59,6 +60,8 @@ export async function submitContactForm(
     return { error: errs.notConfigured };
   }
 
+  const jar = await cookies();
+  jar.set(PV_LOCALE_COOKIE, locale, localeCookieOptions());
   redirect("/contact?sent=1");
 }
 

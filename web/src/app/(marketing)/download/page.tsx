@@ -1,15 +1,14 @@
-import type { Metadata } from "next";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { Button } from "@/components/ui/button";
 import { getDownloadPageCopy } from "@/lib/marketing-copy/download";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
-import { canonical, m } from "@/lib/page-metadata";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { ...m.download, alternates: canonical("/download") };
+export const generateMetadata = () => generateMarketingMetadata("download");
 
 export default async function DownloadPage() {
   const locale = await getMarketingLocale();

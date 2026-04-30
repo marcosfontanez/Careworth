@@ -1,11 +1,9 @@
-import type { Metadata } from "next";
-
 import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
 import { CtaSection } from "@/components/marketing/cta-section";
 import { FeaturePulsePageLanding } from "@/components/marketing/feature-pulse-page-landing";
-import { canonical, m } from "@/lib/page-metadata";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = { ...m.featuresPulsePage, alternates: canonical("/features/pulse-page") };
+export const generateMetadata = () => generateMarketingMetadata("featuresPulsePage");
 
 export default function PulsePageFeaturePage() {
   return (
