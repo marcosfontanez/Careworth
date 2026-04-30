@@ -156,7 +156,7 @@ export const PULSE_SUBSCORES: readonly PulseSubScoreMeta[] = [
   {
     key: 'rhythm',
     label: 'Rhythm',
-    description: 'Your posting consistency and daily activity streak.',
+    description: 'Posting volume and daily activity streak this month (capped so consistency helps but cannot carry the whole score alone).',
     coachNudge:
       'Your Rhythm is low — open the app and post something small today to start a streak.',
   },
@@ -293,7 +293,7 @@ export function weakestSubScore(
  * teaching happens on the coaching nudge and sub-score bars.
  */
 export const PULSE_SCORE_EXPLAINER =
-  'Your Pulse Score blends five health axes: Reach, Resonance, Rhythm, Range, and Reciprocity. It resets on the 1st of every month, and your lifetime total carries forever.';
+  'Your Pulse Score blends five axes: Reach, Resonance, Rhythm, Range, and Reciprocity (each 0–100), then averages them. Curves are tuned so a perfect 100 is rare — strong Rhythm or Range alone won’t max you out. It resets on the 1st of every month UTC; lifetime total adds up finalized months for the all-time board.';
 
 // ────────────────────────────────────────────────────────────────────
 // Tier-progress helper — "Almost there" nudge
