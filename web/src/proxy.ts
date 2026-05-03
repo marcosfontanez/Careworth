@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { isLocale } from "@/lib/i18n";
 import { localeCookieOptions, localeFromAcceptLanguage, PV_LOCALE_COOKIE } from "@/lib/locale-preference";
+import { getSupabaseUrlAndAnon } from "@/lib/supabase/public-env";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 function withLocaleCookieIfNeeded(request: NextRequest, response: NextResponse): NextResponse {
@@ -28,10 +29,9 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isAdminUi = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAdminApi = pathname === "/api/admin" || pathname.startsWith("/api/admin/");
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const creds = getSupabaseUrlAndAnon();
 
-  if (url && anon) {
+  if (creds) {
     return withLocaleCookieIfNeeded(request, await updateSupabaseSession(request));
   }
 

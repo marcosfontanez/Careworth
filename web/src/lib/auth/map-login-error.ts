@@ -11,6 +11,13 @@ export function mapLoginErrorMessage(message: string, code?: string | null): str
     return "Confirm your email first (open the link Supabase sent when you signed up), then try again.";
   }
   if (
+    m.includes("invalid api key") ||
+    m.includes("invalid apikey") ||
+    c === "invalid_api_key"
+  ) {
+    return "Deployment misconfiguration: the Supabase anon key does not match this project. In Vercel → Project → Settings → Environment Variables, set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY from the same Supabase project (Dashboard → Project Settings → API → anon/public key, not the service_role key). Remove extra spaces, save for Production, then Redeploy.";
+  }
+  if (
     c === "invalid_credentials" ||
     c === "invalid_grant" ||
     m.includes("invalid login credentials") ||

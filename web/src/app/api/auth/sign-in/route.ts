@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { getSupabaseUrlAndAnon } from "@/lib/supabase/public-env";
 import { supabaseSsrCookieOptions } from "@/lib/supabase/ssr-cookie-options";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +11,11 @@ export const dynamic = "force-dynamic";
  * (avoids client-only cookie issues with SSR / hosting).
  */
 export async function POST(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
+  const creds = getSupabaseUrlAndAnon();
+  if (!creds) {
     return NextResponse.json({ error: "Supabase is not configured on this deployment." }, { status: 503 });
   }
+  const { url, anon } = creds;
 
   let body: unknown;
   try {

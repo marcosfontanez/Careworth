@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service";
+import { getSupabaseUrlAndAnon } from "@/lib/supabase/public-env";
 
 /**
  * Supabase client for admin dashboard / insights loaders.
@@ -9,8 +10,8 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/service";
  * Falls back to the user session when the service key is not set (local/dev).
  */
 export async function createAdminDataSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (url && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const creds = getSupabaseUrlAndAnon();
+  if (creds && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
     return createSupabaseServiceRoleClient();
   }
   if (!isSupabaseConfigured()) {

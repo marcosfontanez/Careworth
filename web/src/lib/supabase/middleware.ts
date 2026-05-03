@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getSupabaseUrlAndAnon } from "@/lib/supabase/public-env";
 import { supabaseSsrCookieOptions } from "@/lib/supabase/ssr-cookie-options";
 
 /**
@@ -9,15 +10,15 @@ import { supabaseSsrCookieOptions } from "@/lib/supabase/ssr-cookie-options";
  * same cookie jar — see `proxy.ts`.
  */
 export async function updateSupabaseSession(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const creds = getSupabaseUrlAndAnon();
 
   let response = NextResponse.next({ request });
 
-  if (!url || !anon) {
+  if (!creds) {
     return response;
   }
 
+  const { url, anon } = creds;
   const cookieOptions = supabaseSsrCookieOptions();
   const supabase = createServerClient(url, anon, {
     ...(cookieOptions ? { cookieOptions } : {}),
