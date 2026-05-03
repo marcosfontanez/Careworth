@@ -67,6 +67,20 @@ export type ContentInterest =
   | 'gear_tools'
   | 'certifications';
 
+/** Monthly Pulse top-5 prize; ring colors drive the live avatar border UI */
+export interface PulseAvatarFrame {
+  id: string;
+  slug: string;
+  label: string;
+  subtitle?: string | null;
+  /** Shown on a circular path in the band inside the neon ring (not over the photo). */
+  ringCaption?: string | null;
+  prizeTier: 'gold' | 'silver' | 'bronze' | 'exclusive' | 'legacy' | 'campaign';
+  monthStart: string;
+  ringColor: string;
+  glowColor: string;
+}
+
 export interface Badge {
   id: string;
   name: string;
@@ -362,6 +376,14 @@ export interface UserProfile {
    */
   pulseTier?: string;
   pulseScoreCurrent?: number;
+  /** Equipped exclusive border from monthly leaderboard prizes; omit/undefined = classic teal */
+  selectedPulseAvatarFrameId?: string | null;
+  pulseAvatarFrame?: PulseAvatarFrame | null;
+  /**
+   * When the user affirmed Terms + Privacy (and patient-privacy notice).
+   * Set on email sign-up from raw_user_meta_data; OAuth users complete via legal-ack.
+   */
+  termsPrivacyAcceptedAt?: string | null;
 }
 
 export interface CreatorSummary {
@@ -380,6 +402,8 @@ export interface CreatorSummary {
   /** Denormalized Pulse Score v2 tier (see migration 059). */
   pulseTier?: string;
   pulseScoreCurrent?: number;
+  selectedPulseAvatarFrameId?: string | null;
+  pulseAvatarFrame?: PulseAvatarFrame | null;
 }
 
 export interface Post {
@@ -429,6 +453,18 @@ export interface Post {
    * time so viewers can tell a caption has been revised.
    */
   editedAt?: string;
+  /** Multi-image carousels: extra image URLs after `mediaUrl` */
+  additionalMedia?: string[];
+  isEducation?: boolean;
+  educationCitations?: Array<{ label?: string; url?: string; doi?: string; lastReviewed?: string }>;
+  seriesId?: string;
+  seriesPart?: number;
+  seriesTotal?: number;
+  scheduledAt?: string;
+  /** `live` = visible in public feeds; `scheduled` = queued until dispatcher runs */
+  scheduledStatus?: string;
+  coverAltUrl?: string;
+  moodPreset?: string;
 }
 
 export interface SponsorInfo {
@@ -580,6 +616,8 @@ export interface NotificationItem {
   createdAt: string;
   read: boolean;
   targetId?: string;
+  /** Present for Circle-tagged engagement; used to suppress the bell when the room is locally muted. */
+  communityId?: string | null;
 }
 
 /** Original video post whose audio others can attach when filming (sound library). Curated entries in `sound_catalog` rank higher in `search_sound_library`. */

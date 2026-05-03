@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Menu } from "lucide-react";
+
+import { signOutUser } from "@/app/(marketing)/login/actions";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,12 @@ import type { Locale } from "@/lib/i18n";
 import { getMarketingCenterLinks, getMarketingNavStrings } from "@/lib/marketing-copy/nav";
 import { marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
+
+export type MarketingAccountChip = {
+  userId: string;
+  displayName: string | null;
+  username: string | null;
+} | null;
 
 function NavLink({
   href,
@@ -41,10 +49,14 @@ function NavLink({
   );
 }
 
-export function MarketingNav({ locale }: { locale: Locale }) {
+export function MarketingNav({ locale, account }: { locale: Locale; account: MarketingAccountChip }) {
   const pathname = usePathname() ?? "";
   const centerLinks = getMarketingCenterLinks(locale);
   const strings = getMarketingNavStrings(locale);
+  const meLabel =
+    account?.displayName?.trim() ||
+    (account?.username ? `@${account.username}` : null) ||
+    strings.myPulse;
 
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.85)] backdrop-blur-xl">
@@ -59,10 +71,32 @@ export function MarketingNav({ locale }: { locale: Locale }) {
             return <NavLink key={item.href} href={item.href} label={item.label} active={active} />;
           })}
         </nav>
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-          <Button variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex" asChild>
-            <Link href="/admin/login">{strings.logIn}</Link>
-          </Button>
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+          {account ? (
+            <Link
+              href="/me"
+              className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground hover:text-primary sm:inline"
+            >
+              {meLabel}
+            </Link>
+          ) : null}
+          {account ? (
+            <form action={signOutUser} className="hidden sm:block">
+              <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
+                {strings.signOut}
+              </Button>
+            </form>
+          ) : (
+            <Button variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex" asChild>
+              <Link href="/login">{strings.logIn}</Link>
+            </Button>
+          )}
+          <Link
+            href="/admin/login"
+            className="hidden text-xs text-muted-foreground hover:text-foreground sm:inline"
+          >
+            {strings.staffPortal}
+          </Link>
           <Button
             size="sm"
             className={cn(
@@ -73,9 +107,9 @@ export function MarketingNav({ locale }: { locale: Locale }) {
             asChild
           >
             <MarketingDestinationLink href="/download" analyticsSource="nav_desktop_join" className="inline-flex items-center gap-2">
-                  {strings.join}
-                  <ArrowRight className="h-4 w-4" aria-hidden />
-                </MarketingDestinationLink>
+              {strings.join}
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </MarketingDestinationLink>
           </Button>
           <div className="lg:hidden">
             <Sheet>
@@ -96,11 +130,33 @@ export function MarketingNav({ locale }: { locale: Locale }) {
                       {item.label}
                     </Link>
                   ))}
+                  {account ? (
+                    <>
+                      <Link href="/me" className="rounded-lg px-3 py-2.5 text-base font-medium text-foreground hover:bg-secondary">
+                        {strings.myPulse}
+                      </Link>
+                      <form action={signOutUser}>
+                        <button
+                          type="submit"
+                          className="w-full rounded-lg px-3 py-2.5 text-left text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        >
+                          {strings.signOut}
+                        </button>
+                      </form>
+                    </>
+                  ) : (
+                    <Link
+                      href="/login"
+                      className="rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    >
+                      {strings.logIn}
+                    </Link>
+                  )}
                   <Link
                     href="/admin/login"
                     className="rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
                   >
-                    {strings.logIn}
+                    {strings.staffPortal}
                   </Link>
                   <Button className="mt-4 w-full rounded-full bg-primary font-semibold" asChild>
                     <MarketingDestinationLink href="/download" analyticsSource="nav_mobile_join">

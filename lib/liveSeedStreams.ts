@@ -1,14 +1,9 @@
 import type { LiveStream, CreatorSummary, Role, Specialty, StreamCategory } from '@/types';
 
 /**
- * Seed live-stream fixtures used as fallback content for the Live tab when no
- * real streams are active in the database. These power the design preview so
- * the screen never looks empty during development / early product stages, and
- * mirror the spec's "Featured / Top Live Now / Rising Lives" examples.
- *
- * Stream IDs are prefixed with `seed-` so calling code can detect them and
- * route accordingly (e.g., to a "Demo content" notice instead of the live room
- * if a tap should be intercepted in the future).
+ * Curated example `LiveStream` fixtures for design tools or tests only.
+ * The main app no longer surfaces these in the Live tab; `seed-*` stream
+ * IDs redirect to the Live hub if opened directly.
  */
 
 const minutesAgo = (n: number): string =>

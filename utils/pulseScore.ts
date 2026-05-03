@@ -1,17 +1,16 @@
 /**
- * Pulse Score v2 — PulseVerse's signature "health" metric.
+ * Pulse Score v2 — PulseVerse's signature engagement metric.
  *
- * Five 0–100 sub-scores, averaged into a single 0–100 overall score that
- * maps to a named tier (Murmur → Pulse → Rhythm → Beat → Anthem). The
- * score resets monthly on the 1st at 00:00 UTC so virality from a single
- * post can't permanently dominate, and a Lifetime leaderboard tracks the
- * running sum of finalized monthly scores — longevity wins.
+ * Five 0–100 sub-scores, averaged into a single 0–100 overall. Internal
+ * tier ids still map score bands for colors/RPCs; user-facing copy focuses
+ * on the number, not tier names.
  *
- * All scoring math lives in Postgres (see migration
- * 058_pulse_score_v2.sql → `compute_pulse_subscores`). This file is the
- * **tier taxonomy + formatting helpers** the UI needs, plus a thin
- * service wrapper for reading scores via the RPCs. Keep tier ranges in
- * lock-step with `pulse_tier_from_score()` in the migration.
+ * The score resets monthly on the 1st at 00:00 UTC; lifetime total sums
+ * finalized months for the all-time board.
+ *
+ * Scoring math: Postgres migration 058_pulse_score_v2.sql →
+ * `compute_pulse_subscores`. Keep PULSE_TIERS bands in lock-step with
+ * `pulse_tier_from_score()` in that migration.
  */
 
 // ────────────────────────────────────────────────────────────────────
@@ -216,6 +215,21 @@ export interface PulseHistoryPayload {
   lifetime: PulseLifetimeSummary;
 }
 
+/** Prior month's finalized leaderboard position (from `get_pulse_month_celebration`). */
+export interface PulseMonthCelebrationPayload {
+  monthStart: string;
+  overall: number;
+  tier: PulseTier;
+  globalRank: number;
+  totalRanked: number;
+  isTop5: boolean;
+  prizeTier: 'gold' | 'silver' | 'bronze' | null;
+  frameLabel: string | null;
+  frameRingColor: string | null;
+  frameGlowColor: string | null;
+  frameRingCaption: string | null;
+}
+
 export interface PulseLeaderboardRow {
   userId: string;
   username: string | null;
@@ -293,7 +307,7 @@ export function weakestSubScore(
  * teaching happens on the coaching nudge and sub-score bars.
  */
 export const PULSE_SCORE_EXPLAINER =
-  'Your Pulse Score blends five axes: Reach, Resonance, Rhythm, Range, and Reciprocity (each 0–100), then averages them. A perfect 100 is possible but very rare — you need strong performance on every axis, not just posting often. It resets on the 1st of every month UTC; lifetime total adds up finalized months for the all-time board.';
+  'Your Pulse Score is one number from 0–100. We average five signals you can see below — Reach, Resonance, Rhythm, Range, and Reciprocity — each also 0–100. A very high score means you are strong across the board, not only one kind of activity. Scores refresh on the 1st of each month (UTC). Your lifetime total adds up each finalized month for long-term recognition.';
 
 // ────────────────────────────────────────────────────────────────────
 // Tier-progress helper — "Almost there" nudge

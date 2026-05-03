@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '@/theme';
+import { spacing } from '@/theme';
 
 /**
  * Gradient ring + breathing glow + tier chip — the same Pulse Score
@@ -27,6 +27,8 @@ export function PulseScorePill({
   /** Merges with root — e.g. `PulseStatsRow` passes its flex cell style. */
   style,
   accessibilityLabel = 'View Pulse Score history',
+  /** Default: uppercase tier chip. Set false for a caption like "Pulse Score". */
+  uppercaseTierChip = true,
 }: {
   value: string;
   tierLabel: string;
@@ -35,6 +37,7 @@ export function PulseScorePill({
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  uppercaseTierChip?: boolean;
 }) {
   const glow = useRef(new Animated.Value(0.55)).current;
 
@@ -109,8 +112,15 @@ export function PulseScorePill({
           { backgroundColor: `${tierAccent}1E`, borderColor: `${tierAccent}66` },
         ]}
       >
-        <Text style={[styles.tierChipText, { color: tierAccent }]} numberOfLines={1}>
-          {tierLabel.toUpperCase()}
+        <Text
+          style={[
+            styles.tierChipText,
+            !uppercaseTierChip && styles.tierChipCaption,
+            { color: tierAccent },
+          ]}
+          numberOfLines={1}
+        >
+          {uppercaseTierChip ? tierLabel.toUpperCase() : tierLabel}
         </Text>
         <Ionicons name="chevron-forward" size={9} color={tierAccent} />
       </View>
@@ -171,5 +181,9 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '900',
     letterSpacing: 0.6,
+  },
+  tierChipCaption: {
+    letterSpacing: 0.2,
+    fontWeight: '800',
   },
 });

@@ -7,6 +7,7 @@ interface Props {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
+  accessibilityLabel?: string;
   /**
    * Colour scheme. The dark variant is the default because the entire
    * app runs on a dark theme; the light variant is reserved for the
@@ -16,7 +17,13 @@ interface Props {
   variant?: 'light' | 'dark';
 }
 
-export function SearchBar({ value, onChangeText, placeholder = 'Search...', variant = 'dark' }: Props) {
+export function SearchBar({
+  value,
+  onChangeText,
+  placeholder = 'Search...',
+  variant = 'dark',
+  accessibilityLabel,
+}: Props) {
   const isDark = variant === 'dark';
   const iconColor = isDark ? colors.dark.textMuted : colors.neutral.midGray;
   return (
@@ -28,6 +35,7 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search...', vari
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={iconColor}
+        accessibilityLabel={accessibilityLabel}
       />
     </View>
   );

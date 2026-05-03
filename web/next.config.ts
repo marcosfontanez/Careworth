@@ -2,6 +2,7 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 import { marketingContentSecurityPolicy } from "./src/lib/content-security-policy";
+import { webAppEmbedPermissionsPolicy } from "./src/lib/web-app-embed-policy";
 
 const webRoot = path.join(__dirname);
 const webNodeModules = path.join(webRoot, "node_modules");
@@ -11,13 +12,18 @@ const moduleAliases: Record<string, string> = {
   "tw-animate-css": path.join(webNodeModules, "tw-animate-css"),
 };
 
-function securityHeaders(): { key: string; value: string }[] {
+function securityHeaders(mode: "default" | "webAppEmbed"): { key: string; value: string }[] {
+  const permissionsPolicy =
+    mode === "webAppEmbed"
+      ? webAppEmbedPermissionsPolicy()
+      : "camera=(), microphone=(), geolocation=()";
+
   const base = [
     { key: "X-DNS-Prefetch-Control", value: "on" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "X-Frame-Options", value: "DENY" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-    { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+    { key: "Permissions-Policy", value: permissionsPolicy },
   ];
   if (process.env.NODE_ENV === "production") {
     base.push({ key: "Content-Security-Policy", value: marketingContentSecurityPolicy() });
@@ -54,7 +60,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/(.*)",
-        headers: securityHeaders(),
+        headers: securityHeaders("default"),
+      },
+      {
+        source: "/web-app",
+        headers: securityHeaders("webAppEmbed"),
       },
     ];
   },

@@ -8,10 +8,17 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { useNotifications } from '@/hooks/useQueries';
+import { useAuth } from '@/contexts/AuthContext';
+import { useMessengerInbox } from '@/hooks/useMessengerInbox';
+import { MessengerInboxPanel } from '@/components/messenger/MessengerInboxPanel';
 import { notificationService } from '@/services';
 import { queryClient } from '@/lib/queryClient';
+import { primeCommunityDetailCache } from '@/lib/communityCache';
 import { colors, typography, spacing } from '@/theme';
 import type { NotificationItem } from '@/types';
+
+/** DB copy from migration 033 / 088 `notify_on_circle_reply`; `target_id` is thread UUID, not post id. */
+const CIRCLE_THREAD_REPLY_MESSAGE = 'New reply in your circle thread';
 
 function groupByTime(items: any[]) {
   const now = Date.now();
@@ -34,12 +41,21 @@ function groupByTime(items: any[]) {
   return groups;
 }
 
-const FILTERS = ['All', 'Activity', 'Communities'];
+const FILTERS = ['All', 'Activity', 'Communities', 'Messenger'];
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user: authUser } = useAuth();
   const { data: notifications, isLoading, refetch } = useNotifications();
+  const {
+    conversations: inboxConversations,
+    loading: inboxLoading,
+    refreshing: inboxRefreshing,
+    refresh: inboxRefresh,
+    presenceOnline,
+    removeConversationLocal,
+  } = useMessengerInbox(authUser?.id);
   const [filter, setFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -67,12 +83,23 @@ export default function NotificationsScreen() {
         ].includes(n.type),
       );
     }
-    if (filter === 'Communities') return items.filter((n) => n.type === 'community_invite');
+    if (filter === 'Communities') {
+      return items.filter(
+        (n) =>
+          n.type === 'community_invite' ||
+          Boolean(n.communityId) ||
+          (n.type === 'reply' && n.message === CIRCLE_THREAD_REPLY_MESSAGE),
+      );
+    }
     return items;
   }, [items, filter]);
 
   const sections = useMemo(() => groupByTime(filtered), [filtered]);
   const unreadCount = useMemo(() => items.filter((n) => !n.read).length, [items]);
+  const messageUnreadTotal = useMemo(
+    () => inboxConversations.reduce((acc, c) => acc + c.unreadCount, 0),
+    [inboxConversations],
+  );
 
   const handleNotificationPress = useCallback(async (notification: NotificationItem) => {
     if (!notification.read) {
@@ -82,8 +109,22 @@ export default function NotificationsScreen() {
 
     if (notification.targetId) {
       if (notification.type === 'comment' || notification.type === 'reply') {
-        /* Comments / replies open the thread so the creator can jump in. */
-        router.push(`/comments/${notification.targetId}`);
+        if (notification.targetId?.startsWith('profile_update:')) {
+          router.push('/(tabs)/my-pulse' as any);
+        } else if (
+          notification.type === 'reply' &&
+          notification.message === CIRCLE_THREAD_REPLY_MESSAGE
+        ) {
+          const { circleThreadsDb } = await import('@/services/supabase');
+          const thread = await circleThreadsDb.getById(notification.targetId);
+          if (thread?.circleSlug) {
+            router.push(`/communities/${thread.circleSlug}/thread/${thread.id}` as any);
+          } else {
+            router.push('/(tabs)/circles');
+          }
+        } else {
+          router.push(`/post/${notification.targetId}?focusComments=1` as any);
+        }
       } else if (
         notification.type === 'like' ||
         notification.type === 'save' ||
@@ -126,6 +167,7 @@ export default function NotificationsScreen() {
         const { communityService } = await import('@/services');
         const community = await communityService.getById(notification.targetId);
         if (community?.slug) {
+          primeCommunityDetailCache(queryClient, community);
           router.push(`/communities/${community.slug}`);
         }
       } else if (notification.type === 'tier_up') {
@@ -139,16 +181,17 @@ export default function NotificationsScreen() {
         );
       }
     }
-  }, [router]);
+  }, [router, queryClient]);
 
   const handleMarkAllRead = useCallback(async () => {
     await notificationService.markAllAsRead();
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
   }, []);
 
-  if (isLoading) return <LoadingState />;
+  if (filter !== 'Messenger' && isLoading) return <LoadingState />;
 
   const badgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
+  const msgBadgeLabel = messageUnreadTotal > 99 ? '99+' : String(messageUnreadTotal);
 
   return (
     <View style={styles.container}>
@@ -157,14 +200,20 @@ export default function NotificationsScreen() {
         title="Notifications"
         onPressLeft={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/feed'))}
         titleAccessory={
-          unreadCount > 0 ? (
+          filter === 'Messenger' ? (
+            messageUnreadTotal > 0 ? (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{msgBadgeLabel}</Text>
+              </View>
+            ) : undefined
+          ) : unreadCount > 0 ? (
             <View style={styles.unreadBadge}>
               <Text style={styles.unreadBadgeText}>{badgeLabel}</Text>
             </View>
           ) : undefined
         }
         right={
-          unreadCount > 0 ? (
+          filter === 'Messenger' ? undefined : unreadCount > 0 ? (
             <TouchableOpacity onPress={handleMarkAllRead} activeOpacity={0.7} hitSlop={12}>
               <Text style={styles.markAllText}>Mark all read</Text>
             </TouchableOpacity>
@@ -176,34 +225,61 @@ export default function NotificationsScreen() {
         <FilterChips options={FILTERS} selected={filter} onSelect={setFilter} />
       </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        renderSectionHeader={({ section: { title } }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{title}</Text>
-            {title === 'New' && <View style={styles.newDot} />}
-          </View>
-        )}
-        renderItem={({ item }) => (
-          <NotificationRow notification={item} onPress={() => handleNotificationPress(item)} />
-        )}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        stickySectionHeadersEnabled={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <EmptyState
-              icon="notifications-off-outline"
-              title="No notifications yet"
-              subtitle="You'll see likes, comments, and community activity here."
+      {filter === 'Messenger' ? (
+        authUser ? (
+          <View style={styles.messengerPane}>
+            <MessengerInboxPanel
+              conversations={inboxConversations}
+              loading={inboxLoading}
+              refreshing={inboxRefreshing}
+              onRefresh={inboxRefresh}
+              presenceOnline={presenceOnline}
+              onRemoved={removeConversationLocal}
             />
           </View>
-        }
-      />
+        ) : (
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              icon="chatbubbles-outline"
+              title="Sign in to view messages"
+              subtitle="Your conversations will appear here."
+            />
+          </View>
+        )
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          renderSectionHeader={({ section: { title } }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{title}</Text>
+              {title === 'New' && <View style={styles.newDot} />}
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <NotificationRow notification={item} onPress={() => handleNotificationPress(item)} />
+          )}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary.teal}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <EmptyState
+                icon="notifications-off-outline"
+                title="No notifications yet"
+                subtitle="You'll see likes, comments, and community activity here."
+              />
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -226,6 +302,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.dark.border,
   },
+  messengerPane: { flex: 1 },
   list: { paddingBottom: 100 },
   sectionHeader: {
     flexDirection: 'row',

@@ -16,9 +16,9 @@ export default async function AdvertisersPage() {
       <CtaSection
         title={c.bottomCta.title}
         description={c.bottomCta.description}
-        primaryHref="/contact"
+        primaryHref="/contact?topic=media-kit"
         primaryLabel={c.bottomCta.primaryLabel}
-        secondaryHref="/contact"
+        secondaryHref="/contact?topic=partnerships"
         secondaryLabel={c.bottomCta.secondaryLabel}
         analyticsScope="advertisers_bottom"
       />

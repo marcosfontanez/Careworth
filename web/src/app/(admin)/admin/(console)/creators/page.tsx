@@ -20,13 +20,14 @@ export default async function AdminCreatorsPage() {
   const creators = await loadCreators();
   const verified = creators.filter((c) => c.verified).length;
   const topScore = creators.length ? Math.max(...creators.map((c) => c.score)) : 0;
+  const expoBase = process.env.NEXT_PUBLIC_EXPO_WEB_APP_URL?.replace(/\/$/, "").trim() ?? "";
 
   return (
     <div className="space-y-8">
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Creators" }]}
         title="Creators"
-        description={`Top profiles by followers — ${creators.length} from Supabase.`}
+        description={`Top profiles by followers — ${creators.length} from Supabase. Handle column uses the profile username when present; otherwise a fallback from display name. Set NEXT_PUBLIC_EXPO_WEB_APP_URL to enable in-app profile links.`}
       />
       <AdminOpsStrip
         items={[
@@ -72,9 +73,23 @@ export default async function AdminCreatorsPage() {
                     </TableCell>
                     <TableCell className="tabular-nums">{c.score}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href="/admin/users">User directory</Link>
-                      </Button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {expoBase ? (
+                          <Button size="sm" variant="secondary" asChild>
+                            <Link
+                              href={`${expoBase}/profile/${encodeURIComponent(c.id)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Opens profile in the Expo web app (same-origin if deployed)"
+                            >
+                              App profile
+                            </Link>
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href="/admin/users">User directory</Link>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

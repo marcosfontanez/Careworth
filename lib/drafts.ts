@@ -5,6 +5,8 @@ const DRAFT_PREFIX = '@pulseverse_draft_';
 export interface DraftData {
   caption?: string;
   hashtags?: string;
+  headline?: string;
+  overlayLine?: string;
   /** Optional creator-set name for an original sound (video upload screen). */
   soundTitle?: string;
   mediaUris?: string[];

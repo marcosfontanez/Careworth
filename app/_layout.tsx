@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,14 +15,17 @@ import { realtime } from '@/lib/realtime';
 import { useThemeStore } from '@/lib/theme';
 import { setupDeepLinkHandler } from '@/lib/deepLink';
 import { postsService } from '@/services/supabase';
+import { feedKeys } from '@/lib/queryKeys';
 import { NetworkBanner } from '@/components/ui/NetworkBanner';
 import { ToastContainer } from '@/components/ui/Toast';
 import { MediaExportOverlay } from '@/components/export/MediaExportOverlay';
 import { trackAppOpen, promptReview } from '@/lib/appReview';
 import { useOfflineQueueProcessor } from '@/hooks/useOfflineQueueProcessor';
 import { pruneCache } from '@/lib/imageCache';
-import { initPushNotifications, clearPushToken } from '@/lib/notifications';
+import { initPushNotifications } from '@/lib/notifications';
 import { initMonitoring } from '@/lib/monitoring';
+import { PulseMonthCelebrationGate } from '@/components/mypage/PulseMonthCelebrationGate';
+import { BetaTesterBorderGate } from '@/components/mypage/BetaTesterBorderGate';
 
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();
@@ -30,6 +35,14 @@ function AppShell() {
   const router = useRouter();
   const segments = useSegments();
   const hasRedirected = useRef(false);
+
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) SplashScreen.hideAsync().catch(() => {});
+  }, [isLoading]);
 
   useEffect(() => {
     /**
@@ -60,16 +73,22 @@ function AppShell() {
 
     const inAuth = segments[0] === 'auth' || segments[0] === 'onboarding';
 
-    if (!isAuthenticated && !inAuth) {
-      hasRedirected.current = true;
-      queryClient.clear();
-      router.replace('/auth/login');
-    } else if (isAuthenticated && inAuth && !hasRedirected.current) {
-      router.replace('/(tabs)/feed');
+    if (!isAuthenticated) {
+      hasRedirected.current = false;
     }
 
-    if (isAuthenticated) {
-      hasRedirected.current = false;
+    if (!isAuthenticated && !inAuth) {
+      queryClient.clear();
+      router.replace('/auth/login');
+      return;
+    }
+
+    if (isAuthenticated && inAuth && !hasRedirected.current) {
+      const onLegalAck = segments[0] === 'auth' && segments.some((s) => s === 'legal-ack');
+      if (!onLegalAck) {
+        hasRedirected.current = true;
+        router.replace('/');
+      }
     }
   }, [isAuthenticated, isLoading, segments, router]);
 
@@ -82,52 +101,65 @@ function AppShell() {
   useOfflineQueueProcessor(user?.id ?? null);
 
   useEffect(() => {
-    if (user) {
-      analytics.setUser(user.id);
-      analytics.track('app_open');
-      trackAppOpen().then(() => promptReview());
-      pruneCache().catch(() => {});
-      const cleanupPush = initPushNotifications(user.id);
-      realtime.subscribeToNotifications(user.id, (notification) => {
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      });
-
-      /**
-       * Cold-boot speed: kick off the For You feed fetch the moment we
-       * have an auth session — *in parallel with* profile hydration in
-       * `AuthContext.fetchProfile`. The feed query in `app/(tabs)/feed.tsx`
-       * keys off `useFeedInfinite('forYou', user.id)`, so when the tab
-       * mounts a few hundred ms later it sees a hot cache entry and
-       * skips the network entirely.
-       *
-       * Saves ~300–800ms of "blank feed" on first launch, depending on
-       * RTT. `prefetchInfiniteQuery` is a no-op if the cache is already
-       * fresh, so re-mounts of AppShell don't re-fetch.
-       */
-      const FEED_INFINITE_VER = 1;
-      void queryClient.prefetchInfiniteQuery({
-        queryKey: ['feedInf', FEED_INFINITE_VER, 'forYou' as const, user.id],
-        initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
-        queryFn: async () => {
-          const posts = await postsService.getFeed('forYou', user.id);
-          const last = posts[posts.length - 1];
-          return {
-            posts,
-            nextCursor: posts.length ? last.createdAt : null,
-            seenIds: posts.map((p) => p.id),
-          };
-        },
-        staleTime: 30_000,
-      });
-    } else {
+    if (!user) {
       analytics.setUser(null);
       realtime.unsubscribeAll();
+      return () => {
+        analytics.flush();
+      };
     }
 
+    const uid = user.id;
+    analytics.setUser(uid);
+    analytics.track('app_open');
+    trackAppOpen().then(() => promptReview());
+    pruneCache().catch(() => {});
+
+    let cancelled = false;
+    let pushCleanup: (() => void) | undefined;
+    void initPushNotifications(uid).then((cleanup) => {
+      if (cancelled) cleanup();
+      else pushCleanup = cleanup;
+    });
+
+    realtime.subscribeToNotifications(uid, () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+    });
+
+    /**
+     * Cold-boot speed: kick off the For You feed fetch the moment we
+     * have an auth session — *in parallel with* profile hydration in
+     * `AuthContext.fetchProfile`. The feed query in `app/(tabs)/feed.tsx`
+     * keys off `useFeedInfinite('forYou', user.id)`, so when the tab
+     * mounts a few hundred ms later it sees a hot cache entry and
+     * skips the network entirely.
+     *
+     * Saves ~300–800ms of "blank feed" on first launch, depending on
+     * RTT. `prefetchInfiniteQuery` is a no-op if the cache is already
+     * fresh, so re-mounts of AppShell don't re-fetch.
+     */
+    void queryClient.prefetchInfiniteQuery({
+      queryKey: feedKeys.infinitePage('forYou', uid),
+      initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
+      queryFn: async () => {
+        const posts = await postsService.getFeed('forYou', uid);
+        const last = posts[posts.length - 1];
+        return {
+          posts,
+          nextCursor: posts.length ? last.createdAt : null,
+          seenIds: posts.map((p) => p.id),
+        };
+      },
+      staleTime: 30_000,
+    });
+
     return () => {
+      cancelled = true;
+      pushCleanup?.();
+      realtime.unsubscribe(`notifications:${uid}`);
       analytics.flush();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   return (
@@ -146,7 +178,7 @@ function AppShell() {
         <Stack.Screen name="auth" />
         <Stack.Screen name="notifications" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="search" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="comments/[postId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="comments/[postId]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
@@ -171,13 +203,35 @@ function AppShell() {
         <Stack.Screen name="design" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <MediaExportOverlay />
+      <BetaTesterBorderGate />
+      <PulseMonthCelebrationGate />
     </>
   );
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    const hide = () => SplashScreen.hideAsync().catch(() => {});
+    hide();
+    let innerRaf = 0;
+    const outerRaf = requestAnimationFrame(() => {
+      hide();
+      innerRaf = requestAnimationFrame(hide);
+    });
+    const t0 = setTimeout(hide, 0);
+    const t1 = setTimeout(hide, 120);
+    const task = InteractionManager.runAfterInteractions(hide);
+    return () => {
+      cancelAnimationFrame(outerRaf);
+      cancelAnimationFrame(innerRaf);
+      clearTimeout(t0);
+      clearTimeout(t1);
+      task.cancel?.();
+    };
+  }, []);
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.dark.bg }}>
       <ErrorBoundary>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>

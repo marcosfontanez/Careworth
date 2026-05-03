@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { colors, layout, spacing, typography } from '@/theme';
@@ -35,7 +35,7 @@ const SECTIONS: { id: string; title: string; body: string }[] = [
     id: 'mentor',
     title: 'Mentor clips',
     body:
-      'Short reaction videos from mentors (stub pipeline) can attach to parent posts so trainees see human context next to the original teaching moment.',
+      'Short reaction videos from mentors can attach to parent posts so trainees see human context next to the original teaching moment.',
   },
 ];
 
@@ -46,6 +46,10 @@ export default function InnovationHubScreen() {
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const tabKey = typeof tab === 'string' ? tab : Array.isArray(tab) ? tab[0] : undefined;
   const initial = SECTIONS.find((s) => s.id === tabKey);
+
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)/feed" />;
+  }
 
   return (
     <View style={styles.container}>

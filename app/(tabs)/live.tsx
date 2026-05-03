@@ -21,8 +21,6 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LiveNowCard } from '@/components/live/LiveNowCard';
 import { RisingLiveCard } from '@/components/live/RisingLiveCard';
 import { LiveTopicChip, LIVE_TOPICS, type LiveTopic } from '@/components/live/LiveTopicChip';
-import { LIVE_SEED_STREAMS, isSeedStream } from '@/lib/liveSeedStreams';
-import { useToast } from '@/components/ui/Toast';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import type { LiveStream } from '@/types';
@@ -87,13 +85,11 @@ function LiveScreenEnabled() {
   const realLive = data?.live ?? [];
 
   /**
-   * If no real streams are active, fall back to the seed catalog so the page
-   * always demonstrates its premium layout (per spec: "Seed realistic
-   * healthcare live examples"). Once real streams come online, seeds are
-   * dropped automatically.
+   * Production: show only real streams from the database. Empty state below
+   * when none are live (no seed / demo cards).
    */
-  const liveAll = realLive.length > 0 ? realLive : LIVE_SEED_STREAMS;
-  const usingSeedContent = realLive.length === 0;
+  const liveAll = realLive;
+  const hasLiveStreams = liveAll.length > 0;
 
   /**
    * Sections are derived from a single live list:
@@ -115,19 +111,11 @@ function LiveScreenEnabled() {
     return { featured: f, topLiveNow: t, risingLives: r };
   }, [liveAll]);
 
-  const showToast = useToast((s) => s.show);
   const handleStreamPress = useCallback(
     (stream: LiveStream) => {
-      if (isSeedStream(stream)) {
-        showToast(
-          'Demo preview — real streams will open here when creators go live.',
-          'info',
-        );
-        return;
-      }
       router.push(`/live/${stream.id}`);
     },
-    [router, showToast],
+    [router],
   );
   const handleTopicPress = useCallback(
     (topic: LiveTopic) =>
@@ -167,23 +155,21 @@ function LiveScreenEnabled() {
               { paddingBottom: insets.bottom + 120 },
             ]}
           >
-            {/* Demo-content notice — only shown when we're falling back to seed streams */}
-            {usingSeedContent ? (
-              <View style={styles.demoBanner}>
-                <Ionicons
-                  name="sparkles-outline"
-                  size={14}
-                  color={colors.primary.gold}
+            {!hasLiveStreams ? (
+              <View style={{ paddingHorizontal: layout.screenPadding, marginTop: spacing.md }}>
+                <EmptyState
+                  icon="radio-outline"
+                  title="No live streams right now"
+                  subtitle="When someone goes live, you’ll see them here. Pull to refresh, or browse the feed."
+                  accent={colors.status.live}
+                  ctaLabel="Back to Feed"
+                  onCtaPress={() => router.replace('/(tabs)/feed')}
                 />
-                <Text style={styles.demoBannerText}>
-                  Showing preview content — your live tab will fill with real streams as
-                  creators go live.
-                </Text>
               </View>
             ) : null}
 
             {/* SECTION 1 — Featured Live carousel */}
-            {featured.length > 0 ? (
+            {hasLiveStreams && featured.length > 0 ? (
               <View style={styles.section}>
                 <SectionHeader
                   title="Featured Live"
@@ -202,7 +188,7 @@ function LiveScreenEnabled() {
             ) : null}
 
             {/* SECTION 2 — Top Live Now */}
-            {topLiveNow.length > 0 ? (
+            {hasLiveStreams && topLiveNow.length > 0 ? (
               <View style={styles.section}>
                 <SectionHeader
                   title="Top Live Now"
@@ -228,7 +214,7 @@ function LiveScreenEnabled() {
             ) : null}
 
             {/* SECTION 3 — Rising Lives */}
-            {risingLives.length > 0 ? (
+            {hasLiveStreams && risingLives.length > 0 ? (
               <View style={styles.section}>
                 <SectionHeader
                   title="Rising Lives"
@@ -416,28 +402,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm + 2,
     paddingHorizontal: layout.screenPadding,
-  },
-
-  /* Demo-content banner (shown only while we're using seed streams) */
-  demoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    marginHorizontal: layout.screenPadding,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.button,
-    backgroundColor: colors.primary.gold + '12',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.primary.gold + '40',
-  },
-  demoBannerText: {
-    flex: 1,
-    ...typography.caption,
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: colors.primary.gold,
-    letterSpacing: 0.1,
   },
 });

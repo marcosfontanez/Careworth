@@ -1,4 +1,18 @@
 import type { CreatorSummary } from '@/types';
+import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
+
+/**
+ * Columns that satisfy {@link profileRowToCreatorSummary} (plus frame embed).
+ * Use inside `author:author_id(<this>)` and similar `profiles` FK selects.
+ */
+export const PROFILE_SELECT_CREATOR_SUMMARY_BASE =
+  'id, display_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current';
+
+/** Must match `profiles.selected_pulse_avatar_frame_id` FK hint. */
+export const PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED =
+  'selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption)';
+
+export const PROFILE_SELECT_CREATOR_WITH_FRAME = `${PROFILE_SELECT_CREATOR_SUMMARY_BASE}, ${PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED}`;
 
 /**
  * Canonical `profiles` row → `CreatorSummary` mapper.
@@ -19,24 +33,45 @@ import type { CreatorSummary } from '@/types';
  *              fields by falling back to sensible defaults.
  */
 export function profileRowToCreatorSummary(row: any): CreatorSummary {
+  const base = Array.isArray(row) ? row[0] : row;
+  if (base == null || typeof base !== 'object') {
+    return unknownCreatorSummary('');
+  }
+
+  let pulseRaw = base.pulse_avatar_frame;
+  if (Array.isArray(pulseRaw)) {
+    pulseRaw = pulseRaw.length > 0 ? pulseRaw[0] : null;
+  }
+  const pulseAvatarFrame =
+    pulseRaw === undefined
+      ? undefined
+      : mapPulseAvatarFrameEmbed(pulseRaw) ?? null;
+
   return {
-    id: row.id,
-    displayName: row.display_name ?? 'Unknown',
-    username: row.username?.trim() ? String(row.username).toLowerCase() : undefined,
-    firstName: row.first_name ?? undefined,
-    lastName: row.last_name ?? undefined,
-    avatarUrl: row.avatar_url ?? '',
-    role: row.role,
-    specialty: row.specialty,
-    city: row.city ?? '',
-    state: row.state ?? '',
-    isVerified: Boolean(row.is_verified),
+    id: base.id,
+    displayName: base.display_name ?? 'Unknown',
+    username: base.username?.trim() ? String(base.username).toLowerCase() : undefined,
+    firstName: base.first_name ?? undefined,
+    lastName: base.last_name ?? undefined,
+    avatarUrl: base.avatar_url ?? '',
+    role: base.role,
+    specialty: base.specialty,
+    city: base.city ?? '',
+    state: base.state ?? '',
+    isVerified: Boolean(base.is_verified),
     // Denormalized Pulse Score v2 fields (migration 059). Defaulting
     // to 'murmur' / 0 keeps every downstream consumer type-safe
     // without forcing callers to handle null tiers.
-    pulseTier: typeof row.pulse_tier === 'string' ? row.pulse_tier : 'murmur',
+    pulseTier: typeof base.pulse_tier === 'string' ? base.pulse_tier : 'murmur',
     pulseScoreCurrent:
-      typeof row.pulse_score_current === 'number' ? row.pulse_score_current : 0,
+      typeof base.pulse_score_current === 'number' ? base.pulse_score_current : 0,
+    selectedPulseAvatarFrameId:
+      base.selected_pulse_avatar_frame_id != null
+        ? String(base.selected_pulse_avatar_frame_id)
+        : base.selected_pulse_avatar_frame_id === null
+          ? null
+          : undefined,
+    pulseAvatarFrame,
   };
 }
 

@@ -9,7 +9,6 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -21,8 +20,8 @@ import {
   type TextInputSelectionChangeEventData,
   type ViewStyle,
 } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { profilesService } from '@/services/supabase/profiles';
 import { colors, borderRadius, shadows, spacing } from '@/theme';
 import type { UserProfile } from '@/types';
@@ -241,19 +240,14 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
                 />
               ) : null}
             </View>
-            <FlatList
-              data={suggestions}
-              keyboardShouldPersistTaps="handled"
-              keyExtractor={(u) => u.id}
-              renderItem={({ item }) => (
-                <SuggestionRow user={item} onPick={insertMention} />
-              )}
-              ListEmptyComponent={
-                !loading ? (
-                  <Text style={styles.emptyText}>No matches yet.</Text>
-                ) : null
-              }
-            />
+            <View style={styles.suggestionList} pointerEvents="box-none">
+              {suggestions.map((item) => (
+                <SuggestionRow key={item.id} user={item} onPick={insertMention} />
+              ))}
+              {!loading && suggestions.length === 0 ? (
+                <Text style={styles.emptyText}>No matches yet.</Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </View>
@@ -277,7 +271,13 @@ function SuggestionRow({
       accessibilityLabel={`Mention ${user.displayName}`}
     >
       {user.avatarUrl ? (
-        <ExpoImage source={{ uri: user.avatarUrl }} style={styles.avatar} contentFit="cover" />
+        <AvatarDisplay
+          size={32}
+          avatarUrl={user.avatarUrl}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+          pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
+        />
       ) : (
         <View style={[styles.avatar, styles.avatarPlaceholder]}>
           <Ionicons name="person" size={14} color={colors.dark.textMuted} />
@@ -381,6 +381,9 @@ const styles = StyleSheet.create({
   },
   popoverSpinner: {
     marginLeft: 'auto',
+  },
+  suggestionList: {
+    maxHeight: 220,
   },
   row: {
     flexDirection: 'row',

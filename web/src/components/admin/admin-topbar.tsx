@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, HelpCircle, Search, Shield } from "lucide-react";
+import { Bell, HelpCircle, Shield } from "lucide-react";
 
 import type { AdminNotificationDigest } from "@/types/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 function timeAgo(iso: string): string {
@@ -52,19 +51,32 @@ export function AdminTopbar({
           <Shield className="h-5 w-5" />
         </Link>
       </Button>
-      <div className="relative mx-auto flex w-full max-w-2xl min-w-0 flex-1">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search reports, users, circles… (navigation coming)"
-          className="h-10 border-white/10 bg-white/4 pl-9 pr-20 text-sm placeholder:text-muted-foreground"
-          readOnly
-          aria-readonly
-          tabIndex={-1}
-        />
-        <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-white/10 bg-white/6 px-2 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
-          ⌘K
-        </kbd>
-      </div>
+      <nav
+        className="mx-auto flex w-full max-w-2xl min-w-0 flex-1 flex-wrap items-center justify-center gap-1.5 sm:justify-start"
+        aria-label="Quick navigation"
+      >
+        {(
+          [
+            ["/admin/moderation", "Moderation"],
+            ["/admin/users", "Users"],
+            ["/admin/advertisers", "Partner metrics"],
+            ["/admin/insights", "Insights"],
+          ] as const
+        ).map(([href, label]) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "h-8 rounded-md px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </Link>
+        ))}
+        <span className="hidden px-1 text-[10px] text-muted-foreground/80 sm:inline">·</span>
+        <span className="hidden text-[10px] text-muted-foreground sm:inline">Search is on the roadmap</span>
+      </nav>
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         <div ref={panelRef} className="relative">
           <button

@@ -18,9 +18,10 @@ import { postsService, communitiesService } from '@/services/supabase';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
+import { communityKeys } from '@/lib/queryKeys';
 import { useToast } from '@/components/ui/Toast';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
-import { saveDraft, loadDraft, clearDraft } from '@/lib/drafts';
+import { clearDraft } from '@/lib/drafts';
 import { getCircleAccent } from '@/lib/circleAccents';
 import {
   CirclePostTypeChips,
@@ -32,8 +33,8 @@ import {
 } from '@/components/circles/CircleSettingsCard';
 import { CircleContextFooter } from '@/components/circles/CircleContextFooter';
 
-/** Draft slot reused by the circle composer (under @pulseverse_draft_circle). */
-const DRAFT_TYPE = 'circle';
+/** Legacy AsyncStorage key for circle drafts — purged on open/post so nothing lingers. */
+const LEGACY_CIRCLE_DRAFT = 'circle';
 
 export default function CommunityCreatePostScreen() {
   const router = useRouter();
@@ -77,22 +78,13 @@ export default function CommunityCreatePostScreen() {
     pinToHighlights: false,
   });
 
+  /** Remove any saved circle drafts — feature disabled; avoids stale keys and room-banner checks. */
   React.useEffect(() => {
-    /** Hydrate any in-progress draft from disk so a closed-app interruption
-     *  doesn't lose typing. Stored under DRAFT_TYPE='text' since the create
-     *  flow ultimately produces text-or-image posts (video is out-of-scope
-     *  for this composer). */
-    (async () => {
-      const draft = await loadDraft(DRAFT_TYPE);
-      if (draft?.content) setBody(draft.content);
+    void (async () => {
+      if (slug) await clearDraft(`circle:${slug}`);
+      await clearDraft(LEGACY_CIRCLE_DRAFT);
     })();
-  }, []);
-
-  React.useEffect(() => {
-    /* Persist body so re-opens restore the in-progress text. */
-    if (body.trim().length === 0) return;
-    saveDraft(DRAFT_TYPE, { content: body, caption: body });
-  }, [body]);
+  }, [slug]);
 
   const placeholder = postType === 'question'
     ? 'What do you want to ask the room?'
@@ -197,22 +189,17 @@ export default function CommunityCreatePostScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['communityPosts', params.communityId] }),
+        queryClient.invalidateQueries({ queryKey: communityKeys.postsAllViewers(params.communityId) }),
         invalidatePostRelatedQueries(queryClient, { creatorId: user.id }),
       ]);
-      await clearDraft(DRAFT_TYPE);
+      if (slug) await clearDraft(`circle:${slug}`);
+      await clearDraft(LEGACY_CIRCLE_DRAFT);
       setShowSuccess(true);
     } catch (err: any) {
       toast.show(err.message ?? 'Failed to post', 'error');
     } finally {
       setPosting(false);
     }
-  };
-
-  const handleSaveDraft = async () => {
-    await saveDraft(DRAFT_TYPE, { content: body, caption: body });
-    toast.show('Draft saved', 'success');
-    router.back();
   };
 
   const canPost = body.trim().length > 0 || !!mediaUri;
@@ -352,24 +339,6 @@ export default function CommunityCreatePostScreen() {
           </View>
         )}
 
-        {/* ====================== CONTENT TOOLS =====================
-            Roadmap chips. Every tool here is upcoming, so we surface
-            them as honest "Soon" pills rather than tappable buttons
-            that fire a toast. This reads as intentional roadmap, not
-            broken affordances — the screen feels finished even though
-            the tools are stubbed. When a tool ships, drop the `soon`
-            flag and wire `onPress`; the chip will start tapping. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.toolsRow}
-        >
-          <ToolChip icon="pricetag-outline" label="Tags" soon />
-          <ToolChip icon="happy-outline" label="Reactions" soon />
-          <ToolChip icon="stats-chart" label="Poll" soon />
-          <ToolChip icon="film-outline" label="GIF" soon />
-        </ScrollView>
-
         {/* ====================== POST SETTINGS =====================
             The Circle confirmation row that used to live here was a
             duplicate of the CircleContextFooter below — removed to keep
@@ -397,9 +366,7 @@ export default function CommunityCreatePostScreen() {
 
       {/* ======================= BOTTOM CTA BAR =======================
           A thin accent gradient line sits above the bar so the CTA reads
-          as part of the room's identity, not a generic system bar. The
-          Save Draft secondary stays small and quiet so the Post button
-          is unambiguously the hero. */}
+          as part of the room's identity, not a generic system bar. */}
       <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + 10 }]}>
         <LinearGradient
           colors={[`${accent.color}00`, `${accent.color}66`, `${accent.color}00`]}
@@ -409,15 +376,6 @@ export default function CommunityCreatePostScreen() {
           pointerEvents="none"
         />
         <View style={styles.ctaBar}>
-          <TouchableOpacity
-            style={styles.draftBtn}
-            onPress={handleSaveDraft}
-            activeOpacity={0.85}
-            disabled={posting}
-          >
-            <Ionicons name="bookmark-outline" size={15} color={colors.dark.textSecondary} />
-            <Text style={styles.draftText}>Draft</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.postWrap}
             onPress={handlePost}
@@ -443,39 +401,6 @@ export default function CommunityCreatePostScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
-  );
-}
-
-function ToolChip({
-  icon,
-  label,
-  onPress,
-  soon,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress?: () => void;
-  /** When true the chip renders as a passive "coming soon" indicator —
-   *  a small soft pill suffix keeps the chip honest without firing a
-   *  noisy toast on every tap. */
-  soon?: boolean;
-}) {
-  const inner = (
-    <View style={[styles.toolChip, soon && styles.toolChipSoon]}>
-      <Ionicons name={icon} size={14} color={soon ? colors.dark.textMuted : colors.dark.textSecondary} />
-      <Text style={[styles.toolText, soon && styles.toolTextSoon]}>{label}</Text>
-      {soon ? (
-        <View style={styles.toolSoonBadge}>
-          <Text style={styles.toolSoonText}>Soon</Text>
-        </View>
-      ) : null}
-    </View>
-  );
-  if (soon || !onPress) return inner;
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
-      {inner}
-    </TouchableOpacity>
   );
 }
 
@@ -630,48 +555,6 @@ const styles = StyleSheet.create({
   },
   mediaAddText: { fontSize: 12, fontWeight: '700', color: colors.dark.textMuted },
 
-  /* ---- Tools row ---- */
-  toolsRow: {
-    paddingHorizontal: 14,
-    gap: 8,
-  },
-  toolChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.dark.card,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-  },
-  /** "Soon" chips read quieter than active chips — slightly lower
-   *  background contrast and dashed-style edge so the eye doesn't
-   *  treat them as primary actions. */
-  toolChipSoon: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  toolText: { fontSize: 12.5, fontWeight: '700', color: colors.dark.textSecondary },
-  toolTextSoon: { color: colors.dark.textMuted },
-  toolSoonBadge: {
-    marginLeft: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  toolSoonText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: colors.dark.textMuted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-
   /* ---- Settings + footer ---- */
   settingsWrap: { paddingHorizontal: 14 },
   footerWrap: { paddingHorizontal: 14, paddingTop: 4 },
@@ -688,25 +571,9 @@ const styles = StyleSheet.create({
   },
   ctaBar: {
     flexDirection: 'row',
-    gap: 10,
     paddingHorizontal: 14,
     paddingTop: 12,
   },
-  /** Save Draft is a quieter secondary — icon-led pill so the eye lands
-   *  on the gradient Post button, not a competing button. */
-  draftBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: borderRadius.button ?? 24,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-  },
-  draftText: { fontSize: 13, fontWeight: '700', color: colors.dark.textSecondary },
   postWrap: {
     flex: 1,
     borderRadius: borderRadius.button ?? 24,

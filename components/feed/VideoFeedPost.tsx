@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo, memo } from 'react';
 import {
   View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform,
-  Pressable, ActivityIndicator, Linking,
+  Pressable, ActivityIndicator, Linking, ScrollView,
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -22,15 +22,18 @@ import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { profileHandleLineForCreator } from '@/utils/profileHandle';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import type { Post } from '@/types';
+import { getMoodPreset } from '@/lib/moodPresets';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
 import { trySignedUrlFromPostMediaPublicUrl, avatarThumb } from '@/lib/storage';
+import { pickAbCoverUrl } from '@/lib/coverAbPoster';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { usePostCoverAbImpression } from '@/hooks/usePostCoverAbImpression';
 import { usePost } from '@/hooks/useQueries';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { DuetParentPreview } from '@/components/feed/DuetParentPreview';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const PROGRESS_BAR_HEIGHT = 3;
 const SCRUB_HIT_SLOP = 24;
 
 interface Props {
@@ -60,7 +63,8 @@ function VideoFeedPostInner({
   onLike, onComment, onSave, onShare, onFollow, onProfile,
   onCommunity, onHashtag, onReport, onLongPress, onOpenCreatorVideos,
 }: Props) {
-  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  usePostCoverAbImpression(post, isActive);
   const pageH = viewportHeight ?? SCREEN_H;
   /** Tab feed cells are shorter than full window; smaller `bottom` insets keep chrome near the cell bottom. */
   const tabFeedEmbedded = viewportHeight != null;
@@ -76,6 +80,32 @@ function VideoFeedPostInner({
   const pauseTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const videoUri = post.mediaUrl?.trim() ?? '';
   const hasVideo = post.type === 'video' && videoUri.length > 0;
+  const posterUri = useMemo(() => pickAbCoverUrl(post), [post]);
+
+  const carouselUrls = useMemo(() => {
+    const main = post.mediaUrl?.trim();
+    const extras = (post.additionalMedia ?? [])
+      .map((u) => u?.trim())
+      .filter((u): u is string => Boolean(u));
+    if (post.type !== 'image') return [] as string[];
+    if (main) return [main, ...extras];
+    return extras;
+  }, [post.type, post.mediaUrl, post.additionalMedia]);
+
+  const showImageCarousel = carouselUrls.length > 1;
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  useEffect(() => {
+    setCarouselIndex(0);
+  }, [post.id]);
+
+  const moodPresetResolved = useMemo(() => getMoodPreset(post.moodPreset), [post.moodPreset]);
+  const seriesLabel = useMemo(() => {
+    const part = post.seriesPart;
+    const total = post.seriesTotal;
+    if (part != null && total != null && total > 0) return `Part ${part} of ${total}`;
+    if (part != null) return `Part ${part}`;
+    return null;
+  }, [post.seriesPart, post.seriesTotal]);
 
   const duetParentId = post.duetParentId?.trim() ?? '';
   const soundSourceId = post.soundSourcePostId?.trim() ?? '';
@@ -224,8 +254,38 @@ function VideoFeedPostInner({
             />
           ) : null}
         </>
-      ) : post.thumbnailUrl || (post.type === 'image' && post.mediaUrl) ? (
-        <Image source={{ uri: post.thumbnailUrl || post.mediaUrl }} style={styles.bg} contentFit="cover" />
+      ) : showImageCarousel ? (
+        <View style={styles.bg}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onMomentumScrollEnd={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              setCarouselIndex(Math.round(x / SCREEN_W));
+            }}
+          >
+            {carouselUrls.map((uri) => (
+              <Image
+                key={uri}
+                source={{ uri }}
+                style={{ width: SCREEN_W, height: pageH }}
+                contentFit="cover"
+              />
+            ))}
+          </ScrollView>
+          <View style={styles.carouselDots} pointerEvents="none">
+            {carouselUrls.map((_, i) => (
+              <View
+                key={`dot-${i}`}
+                style={[styles.carouselDot, i === carouselIndex && styles.carouselDotActive]}
+              />
+            ))}
+          </View>
+        </View>
+      ) : posterUri || (post.type === 'image' && post.mediaUrl) ? (
+        <Image source={{ uri: posterUri || post.mediaUrl }} style={styles.bg} contentFit="cover" />
       ) : (
         <View style={[styles.bg, styles.textBg]}>
           {post.type === 'video' && !videoUri ? (
@@ -266,7 +326,13 @@ function VideoFeedPostInner({
         {!isAnon && (
           <View style={styles.identityRow}>
             <TouchableOpacity onPress={onProfile} activeOpacity={0.85} style={styles.avatarTouch}>
-              <Image source={{ uri: avatarThumb(post.creator.avatarUrl, 36) }} style={styles.creatorAvatar} />
+              <AvatarDisplay
+                size={32}
+                avatarUrl={avatarThumb(post.creator.avatarUrl, 36)}
+                prioritizeRemoteAvatar
+                ringColor={colors.onVideo.borderAvatar}
+                pulseFrame={pulseFrameFromUser(post.creator.pulseAvatarFrame)}
+              />
             </TouchableOpacity>
             <View style={styles.identityText}>
               <View style={styles.nameLine}>
@@ -306,6 +372,61 @@ function VideoFeedPostInner({
             <Text style={styles.anonLabel}>Anonymous</Text>
           </View>
         )}
+
+        {(post.isEducation || seriesLabel || moodPresetResolved) ? (
+          <View style={styles.creatorMetaChips}>
+            {post.isEducation ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="school-outline" size={12} color={colors.onVideo.emphasis} />
+                <Text style={styles.metaChipText}>Educational</Text>
+              </View>
+            ) : null}
+            {seriesLabel ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="layers-outline" size={12} color={colors.onVideo.emphasis} />
+                <Text style={styles.metaChipText}>{seriesLabel}</Text>
+              </View>
+            ) : null}
+            {moodPresetResolved ? (
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipEmoji}>{moodPresetResolved.emoji}</Text>
+                <Text style={styles.metaChipText} numberOfLines={1}>
+                  {moodPresetResolved.label}
+                </Text>
+              </View>
+            ) : null}
+            {post.isEducation && post.educationCitations?.length ? (
+              <TouchableOpacity
+                style={styles.metaChip}
+                activeOpacity={0.85}
+                onPress={() => {
+                  const u = post.educationCitations?.find((c) => c.url?.trim())?.url?.trim();
+                  if (u) void Linking.openURL(u.startsWith('http') ? u : `https://${u}`);
+                }}
+                accessibilityRole="link"
+                accessibilityLabel="Open citation source"
+              >
+                <Ionicons name="link-outline" size={12} color={colors.onVideo.emphasis} />
+                <Text style={styles.metaChipText}>Sources</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!isAnon &&
+        post.seriesId &&
+        post.seriesPart != null &&
+        post.seriesTotal != null &&
+        post.seriesPart < post.seriesTotal ? (
+          <TouchableOpacity
+            style={styles.seriesNextRow}
+            onPress={() => router.push(`/creator-videos/${post.creatorId}` as never)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="play-forward-outline" size={14} color={colors.onVideo.emphasis} />
+            <Text style={styles.seriesNextText}>More parts — open this creator’s video grid</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <CaptionWithMentions
           text={post.caption}
@@ -421,6 +542,13 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.caption !== n.caption ||
     p.mediaUrl !== n.mediaUrl ||
     p.thumbnailUrl !== n.thumbnailUrl ||
+    p.coverAltUrl !== n.coverAltUrl ||
+    p.isEducation !== n.isEducation ||
+    p.seriesPart !== n.seriesPart ||
+    p.seriesTotal !== n.seriesTotal ||
+    p.seriesId !== n.seriesId ||
+    p.moodPreset !== n.moodPreset ||
+    (p.additionalMedia ?? []).join('\0') !== (n.additionalMedia ?? []).join('\0') ||
     p.audioReference !== n.audioReference ||
     p.soundTitle !== n.soundTitle ||
     p.soundSourcePostId !== n.soundSourcePostId ||
@@ -832,6 +960,76 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   confessionEmoji: { fontSize: 120, opacity: 0.1 },
+
+  carouselDots: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    zIndex: 4,
+  },
+  carouselDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  carouselDotActive: {
+    backgroundColor: colors.onVideo.primary,
+    width: 14,
+  },
+  creatorMetaChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.chip,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    maxWidth: SCREEN_W * 0.7,
+  },
+  metaChipEmoji: {
+    fontSize: 12,
+  },
+  metaChipText: {
+    color: colors.onVideo.emphasis,
+    fontSize: 11,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  seriesNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: borderRadius.chip,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  seriesNextText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.onVideo.emphasis,
+    maxWidth: SCREEN_W * 0.62,
+  },
 
   content: {
     position: 'absolute',

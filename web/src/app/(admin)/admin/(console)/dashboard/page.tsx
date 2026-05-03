@@ -191,6 +191,9 @@ export default async function AdminDashboardPage() {
               Charts aggregate local DB rows · analytics events power DAU
             </span>
             <DashboardExportButton snapshot={exportSnapshot} />
+            <Button size="sm" variant="outline" className="border-white/15" asChild>
+              <Link href="/admin/advertisers">Partner metrics</Link>
+            </Button>
             <Button size="sm" className="bg-primary text-primary-foreground shadow-[0_0_24px_-8px_rgba(45,127,249,0.8)]" asChild>
               <Link href="/admin/insights">Insights &amp; analytics</Link>
             </Button>

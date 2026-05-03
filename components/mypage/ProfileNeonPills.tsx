@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { borderRadius } from '@/theme';
 
@@ -12,15 +12,17 @@ const BORDER_PRESETS: [string, string][] = [
 
 interface Props {
   tags: string[];
+  /** Merges into the outer row — e.g. `{ marginTop: 4 }` in compact lists. */
+  style?: StyleProp<ViewStyle>;
 }
 
 /** Mock-style neon-lined ovals beside the avatar / name. */
-export function ProfileNeonPills({ tags }: Props) {
+export function ProfileNeonPills({ tags, style }: Props) {
   const list = tags.map((t) => t.trim()).filter(Boolean);
   if (!list.length) return null;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, style]}>
       {list.map((tag, i) => {
         const [a, b] = BORDER_PRESETS[i % BORDER_PRESETS.length];
         return (

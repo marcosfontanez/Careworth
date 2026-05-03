@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AdminFilterChip } from "@/components/admin/admin-filter-chip";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -16,7 +16,42 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { csvEscape } from "@/lib/admin/csv";
 import type { AdminUser } from "@/types/admin";
+
+const USER_CSV_HEADER = [
+  "id",
+  "display_name",
+  "profession",
+  "specialty",
+  "status",
+  "reports_count",
+  "strikes",
+  "joined_at",
+  "last_active",
+  "country",
+] as const;
+
+function usersToCsv(rows: AdminUser[]): string {
+  const lines = [USER_CSV_HEADER.join(",")];
+  for (const u of rows) {
+    lines.push(
+      [
+        csvEscape(u.id),
+        csvEscape(u.displayName),
+        csvEscape(u.profession),
+        csvEscape(u.specialty),
+        csvEscape(u.status),
+        String(u.reportsCount),
+        String(u.strikes),
+        csvEscape(u.joinedAt),
+        csvEscape(u.lastActive),
+        csvEscape(u.country),
+      ].join(","),
+    );
+  }
+  return lines.join("\n");
+}
 
 const STATUS_FILTERS: Array<{ key: "all" | AdminUser["status"]; label: string }> = [
   { key: "all", label: "All" },
@@ -39,6 +74,18 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
     });
   }, [users, status, q]);
 
+  const downloadCsv = useCallback(() => {
+    const csv = usersToCsv(filtered);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "");
+    a.href = url;
+    a.download = `pulseverse-users-${stamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -56,8 +103,15 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
             onChange={(e) => setQ(e.target.value)}
             className="w-full min-w-[12rem] bg-secondary/40 sm:w-64"
           />
-          <Button variant="secondary" className="shrink-0">
-            Export (soon)
+          <Button
+            variant="secondary"
+            className="shrink-0"
+            type="button"
+            onClick={downloadCsv}
+            disabled={filtered.length === 0}
+            title="Exports the currently filtered rows only"
+          >
+            Export CSV
           </Button>
         </div>
       </div>

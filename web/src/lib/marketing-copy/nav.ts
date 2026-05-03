@@ -14,6 +14,11 @@ const linkDefs = [
         !p.startsWith("/features/my-pulse")),
   },
   {
+    id: "webApp",
+    href: "/web-app",
+    match: (p: string) => p === "/web-app" || p.startsWith("/web-app/"),
+  },
+  {
     id: "circles",
     href: "/features/circles",
     match: (p: string) => p.startsWith("/features/circles"),
@@ -45,6 +50,7 @@ type LinkId = (typeof linkDefs)[number]["id"];
 const labels: Record<Locale, Record<LinkId, string>> = {
   en: {
     features: "Features",
+    webApp: "Web app",
     circles: "Circles",
     live: "Live",
     pulsePage: "Pulse Page",
@@ -53,6 +59,7 @@ const labels: Record<Locale, Record<LinkId, string>> = {
   },
   es: {
     features: "Funciones",
+    webApp: "App web",
     circles: "Circles",
     live: "Live",
     pulsePage: "Pulse Page",
@@ -79,11 +86,28 @@ export type MarketingNavStrings = {
   logIn: string;
   join: string;
   menuLabel: string;
+  myPulse: string;
+  staffPortal: string;
+  signOut: string;
 };
 
 const navStrings: Record<Locale, MarketingNavStrings> = {
-  en: { logIn: "Log in", join: "Join PulseVerse", menuLabel: "Menu" },
-  es: { logIn: "Iniciar sesión", join: "Unirte a PulseVerse", menuLabel: "Menú" },
+  en: {
+    logIn: "Log in",
+    join: "Join PulseVerse",
+    menuLabel: "Menu",
+    myPulse: "My Pulse",
+    staffPortal: "Staff",
+    signOut: "Sign out",
+  },
+  es: {
+    logIn: "Iniciar sesión",
+    join: "Unirte a PulseVerse",
+    menuLabel: "Menú",
+    myPulse: "My Pulse",
+    staffPortal: "Personal",
+    signOut: "Cerrar sesión",
+  },
 };
 
 export function getMarketingNavStrings(locale: Locale): MarketingNavStrings {

@@ -7,6 +7,7 @@ import { enqueueAction } from './offlineQueue';
 import { bumpPostCount } from './postCacheUpdates';
 import { profileUpdateKeys } from './queryKeys';
 import type { Post } from '@/types';
+import { LAUNCH_LINKS } from '@/constants/launch';
 
 /**
  * Canonical "where to get PulseVerse" landing page. Redirects to the
@@ -156,26 +157,23 @@ export async function sharePost(
 }
 
 /**
- * Share a Pulse tier promotion. Fired from the history sheet when the
- * user has just leveled up (tier-up notification deep-link). We build a
- * celebratory message that links to the user's profile so recipients
- * can see the live score + tap into PulseVerse. Works as a growth loop
- * because every tap opens the profile page to a non-installed viewer,
- * which redirects to the download CTA.
+ * Share a Pulse Score highlight (e.g. tier-up deep-link celebration).
+ * Links to the profile so recipients can see the live score.
  */
 export async function shareTierUp(opts: {
   userId: string;
   displayName: string;
-  tierLabel: string;
+  /** Optional legacy analytics / subtitle */
+  tierLabel?: string;
   score?: number | null;
 }) {
   try {
     const link = `https://pulseverse.app/profile/${opts.userId}`;
-    // Clean, boastable one-liner. We intentionally avoid including the
-    // numeric score in the headline — tiers are the emotional unit
-    // ("I hit RHYTHM") while the number is secondary context that the
-    // recipient can see by tapping through.
-    const headline = `My PulseVerse just hit ${opts.tierLabel.toUpperCase()}.`;
+    const scorePart =
+      typeof opts.score === 'number' && Number.isFinite(opts.score)
+        ? ` — ${Math.round(opts.score)}/100 this month`
+        : '';
+    const headline = `My Pulse Score on PulseVerse${scorePart}.`;
     const { message, url } = buildShareBody({
       headline,
       link,
@@ -185,7 +183,7 @@ export async function shareTierUp(opts: {
     const result = await Share.share({
       message,
       url,
-      title: `@${opts.displayName} reached ${opts.tierLabel} on PulseVerse`,
+      title: `@${opts.displayName} on PulseVerse`,
     });
 
     if (result.action === Share.sharedAction) {
@@ -193,7 +191,7 @@ export async function shareTierUp(opts: {
         result.activityType != null ? String(result.activityType) : undefined;
       analytics.track('tier_shared', {
         userId: opts.userId,
-        tier: opts.tierLabel,
+        ...(opts.tierLabel ? { tier: opts.tierLabel } : {}),
         score: typeof opts.score === 'number' ? opts.score : undefined,
         ...(activityType ? { shareChannel: activityType } : {}),
       });
@@ -363,7 +361,9 @@ export async function sharePostMenu(
 
 export async function shareCommunity(slug: string, name: string) {
   try {
-    const link = `https://pulseverse.app/community/${slug}`;
+    /** Canonical web URL: verified App / Universal Links host (`pulseverse.app` by default). */
+    const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+    const link = `${base}/communities/${slug}`;
     const { message, url } = buildShareBody({
       headline: `Join the ${name} community on PulseVerse.`,
       link,
@@ -374,6 +374,24 @@ export async function shareCommunity(slug: string, name: string) {
       message,
       url,
       title: `${name} - PulseVerse`,
+    });
+  } catch {}
+}
+
+/** Deep link into a Circle discussion (matches app route communities/[slug]/thread/[threadId]). */
+export async function shareCircleThread(slug: string, threadId: string, title: string) {
+  try {
+    const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+    const link = `${base}/communities/${slug}/thread/${threadId}`;
+    const { message, url } = buildShareBody({
+      headline: title.trim() || 'Circle discussion on PulseVerse',
+      link,
+      ctaVerb: 'Open discussion',
+    });
+    await Share.share({
+      message,
+      url,
+      title: 'PulseVerse · Circle',
     });
   } catch {}
 }

@@ -70,8 +70,8 @@ export default function ProfileByIdScreen() {
     try {
       const convId = await messagesService.getOrCreateConversation(authUser.id, user.id);
       router.push(`/messages/${convId}?name=${encodeURIComponent(user.displayName)}`);
-    } catch {
-      toast.show('Could not open messages', 'error');
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Could not open messages', 'error');
     }
   };
 

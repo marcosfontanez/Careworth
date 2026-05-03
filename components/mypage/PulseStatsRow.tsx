@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -8,64 +9,30 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { colors, spacing } from '@/theme';
+import { colors, spacing, borderRadius } from '@/theme';
 import { formatPulseStat } from '@/utils/pulseScore';
 import { hasSeenPulseTooltip, markPulseTooltipSeen } from '@/lib/pulseTooltipSeen';
 import { PulseHistorySheet } from './PulseHistorySheet';
-import { PulseScorePill } from './PulseScorePill';
 import { usePulseScorePillModel } from '@/hooks/usePulseScorePillModel';
 
 interface PulseStatsRowProps {
-  /** Profile owner id — score is always the owner's, never the viewer's. */
   userId: string | null;
-  /** Owner's display name for the history sheet header. */
   displayName?: string;
-  /** True when the viewer is looking at their own Pulse page. */
   isOwner?: boolean;
-
   followers: number;
   following: number;
-
-  /**
-   * Denormalized current-month score read directly off the profile row
-   * (populated by migration 059's sync trigger). Used as an instant
-   * first-paint value and as a safety net whenever the live RPC read is
-   * unavailable — loading, offline, erroring, or the RPC grant hasn't
-   * propagated yet. Live RPC still runs in the background to pick up
-   * engagement that happened since the last trigger fire.
-   */
   initialScore?: number | null;
   initialTier?: string | null;
-
-  /**
-   * Auto-open the history sheet on mount. Used by the tier-up
-   * notification deep-link (`/profile/:id?openPulseHistory=1`) so the
-   * celebratory moment is one tap, not three.
-   */
   initialHistoryOpen?: boolean;
-
-  /**
-   * When true, the auto-opened history sheet will show a prominent
-   * "Share my tier" card at the top. Fired only by the tier-up
-   * notification deep-link (`...&tierUp=1`) so the celebration feels
-   * earned — tapping the pill normally just opens the regular sheet.
-   */
   highlightShareTier?: boolean;
-
   onPressFollowers?: () => void;
   onPressFollowing?: () => void;
 }
 
 /**
- * Three-column stats strip on the Pulse Page:
- * Followers · Following · Pulse Score.
- *
- * The Pulse Score cell is live-fetched from the Pulse Score v2 engine
- * (migration 058) and shows the current month's overall 0–100 score with
- * a tier chip underneath. Tapping it opens `PulseHistorySheet` — the
- * tap-through identity surface with month-by-month breakdown, lifetime
- * totals, and a coaching nudge.
+ * Three boxed stat cards: Followers, Following, Pulse Score (crown + number + label).
  */
 export function PulseStatsRow({
   userId,
@@ -81,24 +48,15 @@ export function PulseStatsRow({
   onPressFollowing,
 }: PulseStatsRowProps) {
   const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen);
-  /**
-   * First-time tooltip pointing at the pill. Only shown to the profile
-   * owner (other people's pills don't need explaining to them) and only
-   * once ever — dismissal is persisted via AsyncStorage. Tooltip auto-
-   * dismisses after 7s or on any interaction (tapping the pill, or
-   * tapping the bubble itself).
-   */
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const tooltipOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!isOwner || !userId) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       const seen = await hasSeenPulseTooltip();
       if (cancelled || seen) return;
-      // Small delay so the stat strip finishes laying out before the
-      // tooltip floats in — prevents a jarring flash during route push.
       setTimeout(() => {
         if (cancelled) return;
         setTooltipVisible(true);
@@ -128,12 +86,11 @@ export function PulseStatsRow({
     if (!tooltipVisible) return;
     const t = setTimeout(dismissTooltip, 7000);
     return () => clearTimeout(t);
-    // `dismissTooltip` is stable enough for this — it only touches the
-    // animated value and the boolean.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tooltipVisible]);
 
   const { overall, tier } = usePulseScorePillModel(userId, initialScore, initialTier);
+  const scoreDisplayed = Math.min(100, Math.round(Number(overall) || 0));
 
   const handleOpenHistory = () => {
     Haptics.selectionAsync().catch(() => undefined);
@@ -144,23 +101,21 @@ export function PulseStatsRow({
   return (
     <>
       <View style={styles.row}>
-        <StatCell
+        <MiniStatCard
+          icon="people"
           value={formatPulseStat(followers)}
           label="Followers"
           onPress={onPressFollowers}
         />
-        <View style={styles.divider} />
-        <StatCell
+        <MiniStatCard
+          icon="person-outline"
           value={formatPulseStat(following)}
           label="Following"
           onPress={onPressFollowing}
         />
-        <View style={styles.divider} />
         <View style={styles.pulseCellWrap}>
-          <PulseScorePill
-            style={styles.cell}
-            value={String(overall)}
-            tierLabel={tier.label}
+          <PulseScoreCard
+            score={scoreDisplayed}
             tierAccent={tier.accent}
             tierGlow={tier.glow}
             onPress={handleOpenHistory}
@@ -187,13 +142,141 @@ export function PulseStatsRow({
   );
 }
 
-/**
- * First-time floating tooltip that points at the Pulse Score pill.
- * Appears once per user ever (persistence in AsyncStorage) and
- * auto-dismisses after 7s or on any pill interaction. Copy is
- * deliberately short — the history sheet is the real explainer, the
- * tooltip just teaches the affordance ("this thing is tappable").
- */
+function MiniStatCard({
+  icon,
+  value,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string;
+  label: string;
+  onPress?: () => void;
+}) {
+  const Body = (
+    <View style={styles.miniCard}>
+      <View style={styles.iconWell}>
+        <Ionicons name={icon} size={18} color={colors.primary.teal} />
+      </View>
+      <Text style={styles.miniValue} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={styles.miniLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={styles.miniCardOuter}
+        onPress={onPress}
+        activeOpacity={0.78}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value}`}
+      >
+        {Body}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={styles.miniCardOuter}>{Body}</View>;
+}
+
+function PulseScoreCard({
+  score,
+  tierAccent,
+  tierGlow,
+  onPress,
+}: {
+  score: number;
+  tierAccent: string;
+  tierGlow: string;
+  onPress: () => void;
+}) {
+  const glow = useRef(new Animated.Value(0.45)).current;
+  const crownShake = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseGlow = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glow, {
+          toValue: 0.45,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    pulseGlow.start();
+    const wobble = Animated.loop(
+      Animated.sequence([
+        Animated.timing(crownShake, { toValue: 1, duration: 260, useNativeDriver: true }),
+        Animated.timing(crownShake, { toValue: -1, duration: 260, useNativeDriver: true }),
+        Animated.timing(crownShake, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.delay(400),
+      ]),
+    );
+    wobble.start();
+    return () => {
+      pulseGlow.stop();
+      wobble.stop();
+    };
+  }, [glow, crownShake]);
+
+  const rotate = crownShake.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-7deg', '7deg'],
+  });
+
+  return (
+    <Pressable
+      style={[styles.pulseCardOuter, { borderColor: `${tierAccent}88`, shadowColor: tierAccent }]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="View Pulse Score history"
+    >
+      <LinearGradient
+        colors={['rgba(8,14,24,0.96)', 'rgba(12,22,38,0.98)']}
+        style={StyleSheet.absoluteFill}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.pulseCardHalo,
+          {
+            backgroundColor: tierGlow,
+            opacity: glow.interpolate({
+              inputRange: [0.45, 1],
+              outputRange: [0.25, 0.6],
+            }),
+          },
+        ]}
+      />
+      <View style={styles.pulseCardInner}>
+        <Animated.View style={[styles.crownRow, { transform: [{ rotate }] }]}>
+          <Text style={styles.crownEmoji}>👑</Text>
+          <View style={[styles.pulseTick, { borderColor: tierAccent }]}>
+            <Ionicons name="pulse" size={10} color={tierAccent} />
+          </View>
+        </Animated.View>
+        <Text style={styles.pulseScoreNum} numberOfLines={1}>
+          {score}
+        </Text>
+        <Text style={[styles.pulseLabel, { color: tierAccent }]} numberOfLines={1}>
+          Pulse Score
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function PulseFirstTimeTooltip({
   opacity,
   accent,
@@ -233,89 +316,136 @@ function PulseFirstTimeTooltip({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.tooltipTitle}>This is your Pulse</Text>
-          <Text style={styles.tooltipBody}>
-            Tap to see the five signals behind it.
-          </Text>
+          <Text style={styles.tooltipBody}>Tap to see the five signals behind it.</Text>
         </View>
         <Ionicons name="close" size={14} color={colors.dark.textMuted} />
       </Pressable>
-      {/** Downward-pointing arrow anchoring the bubble to the pill. */}
       <View style={[styles.tooltipArrow, { borderTopColor: colors.dark.cardAlt }]} />
     </Animated.View>
-  );
-}
-
-function StatCell({
-  value,
-  label,
-  onPress,
-}: {
-  value: string;
-  label: string;
-  onPress?: () => void;
-}) {
-  const Container = onPress ? TouchableOpacity : View;
-  return (
-    <Container
-      style={styles.cell}
-      onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
-      accessibilityRole={onPress ? 'button' : undefined}
-    >
-      <Text style={styles.value} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={styles.label} numberOfLines={1}>
-        {label}
-      </Text>
-    </Container>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    gap: 10,
     paddingVertical: spacing.sm,
   },
-  cell: {
+  miniCardOuter: {
     flex: 1,
+    minWidth: 0,
+  },
+  miniCard: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(13,21,36,0.92)',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    justifyContent: 'center',
+    minHeight: 118,
   },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: colors.dark.borderSubtle,
-    marginHorizontal: spacing.xs,
+  iconWell: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(20,184,166,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  value: {
-    fontSize: 20,
+  miniValue: {
+    fontSize: 17,
     fontWeight: '800',
     color: colors.dark.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
-  label: {
+  miniLabel: {
     marginTop: 6,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
     color: colors.dark.textMuted,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
 
-  // First-time tooltip
   pulseCellWrap: {
     flex: 1,
+    minWidth: 0,
+    position: 'relative',
+    justifyContent: 'flex-start',
+  },
+  pulseCardOuter: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    minHeight: 118,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  pulseCardHalo: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  pulseCardInner: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  crownRow: {
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  crownEmoji: {
+    fontSize: 26,
+    textShadowColor: colors.primary.teal,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  pulseTick: {
+    marginLeft: -4,
+    marginBottom: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: 'rgba(6,14,26,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseScoreNum: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.dark.text,
+    letterSpacing: -0.6,
+    fontVariant: ['tabular-nums'],
+  },
+  pulseLabel: {
+    marginTop: 6,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.55,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+
   tooltipAnchor: {
     position: 'absolute',
     bottom: '100%',
     alignItems: 'center',
     width: 210,
     marginBottom: 8,
+    alignSelf: 'center',
+    left: -40,
+    right: -40,
   },
   tooltipBubble: {
     flexDirection: 'row',

@@ -16,7 +16,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors, borderRadius, spacing } from '@/theme';
-import { searchITunesSongs, type ITunesSongHit } from '@/lib/music/itunesSearch';
+import {
+  searchITunesSongs,
+  searchITunesAlbums,
+  searchITunesArtists,
+  lookupITunesSongs,
+  type ITunesSongHit,
+  type ITunesAlbumHit,
+  type ITunesArtistHit,
+} from '@/lib/music/itunesSearch';
 import { audioPreview, type AudioPreviewState } from '@/lib/audioPreview';
 
 export interface PickedSong {
@@ -38,29 +46,44 @@ interface Props {
   initialQuery?: string;
 }
 
+/** Max per iTunes Search request (API allows up to 200; 50 is a practical page). */
+const PAGE_SIZE = 50;
+
+type BrowseTab = 'songs' | 'albums' | 'artists';
+
+type Drill =
+  | { kind: 'album'; collectionId: number; title: string }
+  | { kind: 'artist'; artistId: number; name: string };
+
+type ListRow =
+  | { kind: 'song'; song: ITunesSongHit }
+  | { kind: 'album'; album: ITunesAlbumHit }
+  | { kind: 'artist'; artist: ITunesArtistHit };
+
 /**
  * Current Vibe song picker.
  *
- * Opens as a full-screen modal with a debounced iTunes search, artwork-rich
- * result rows, and a one-tap 30-second preview so the owner hears the
- * track before committing. "Set as Current Vibe" returns the selected
- * track to the parent screen, which persists it onto the profile.
- *
- * Why iTunes Search (vs Spotify / Apple Music API)?
- *   - Free, no auth, global availability
- *   - Public `.m4a` preview URLs autoplay in our `FeaturedSoundCard`
- *     without needing SDK integration
- *   - Artwork, canonical track names, and Apple deep-links come for free
+ * Opens as a full-screen modal with debounced iTunes search, artwork-rich
+ * rows, and a one-tap 30-second preview. Modes: **Songs** (paginated),
+ * **Albums** and **Artists** (search → pick a row → previewable tracks).
  */
 export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Props) {
   const [query, setQuery] = useState(initialQuery ?? '');
-  const [results, setResults] = useState<ITunesSongHit[]>([]);
+  const [browseTab, setBrowseTab] = useState<BrowseTab>('songs');
+  const [drill, setDrill] = useState<Drill | null>(null);
+  const [songs, setSongs] = useState<ITunesSongHit[]>([]);
+  const [albums, setAlbums] = useState<ITunesAlbumHit[]>([]);
+  const [artists, setArtists] = useState<ITunesArtistHit[]>([]);
+  const [songNextOffset, setSongNextOffset] = useState(0);
+  const [songHasMore, setSongHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ITunesSongHit | null>(null);
   const [audioState, setAudioState] = useState<AudioPreviewState>(audioPreview.getState());
 
   const searchTokenRef = useRef(0);
+  const drillTokenRef = useRef(0);
   const inputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
@@ -71,37 +94,36 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
     };
   }, [visible]);
 
-  /**
-   * Reset state on every modal open so the user always starts from a
-   * clean slate. Also stop any preview that was still playing from a
-   * previous session — the search screen uses the same `audioPreview`
-   * singleton and we don't want to resume its track here.
-   */
   useEffect(() => {
     if (visible) {
       setQuery(initialQuery ?? '');
-      setResults([]);
+      setBrowseTab('songs');
+      setDrill(null);
+      setSongs([]);
+      setAlbums([]);
+      setArtists([]);
+      setSongNextOffset(0);
+      setSongHasMore(false);
       setError(null);
       setSelected(null);
       void audioPreview.stop();
       const t = setTimeout(() => inputRef.current?.focus(), 250);
       return () => clearTimeout(t);
-    } else {
-      void audioPreview.stop();
     }
+    void audioPreview.stop();
+    return undefined;
   }, [visible, initialQuery]);
 
-  /**
-   * Debounced search. We tag each request with a monotonic token and
-   * discard any response whose token no longer matches the most
-   * recent keystroke so fast typing can't clobber newer results with
-   * older ones.
-   */
+  /** Search / browse (disabled while drilling into an album or artist). */
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || drill) return;
     const q = query.trim();
     if (!q) {
-      setResults([]);
+      setSongs([]);
+      setAlbums([]);
+      setArtists([]);
+      setSongNextOffset(0);
+      setSongHasMore(false);
       setError(null);
       setLoading(false);
       return;
@@ -110,15 +132,102 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
     setLoading(true);
     const myToken = ++searchTokenRef.current;
     const timer = setTimeout(async () => {
-      const hits = await searchITunesSongs(q, 25);
-      if (myToken !== searchTokenRef.current) return;
-      setResults(hits);
-      setError(hits.length === 0 ? 'No songs found. Try a different title or artist.' : null);
+      if (browseTab === 'songs') {
+        const hits = await searchITunesSongs(q, { limit: PAGE_SIZE, offset: 0 });
+        if (myToken !== searchTokenRef.current) return;
+        setSongs(hits);
+        setSongNextOffset(PAGE_SIZE);
+        setSongHasMore(hits.length === PAGE_SIZE);
+        setError(
+          hits.length === 0 ? 'No songs with previews found. Try Albums / Artists or another query.' : null,
+        );
+      } else if (browseTab === 'albums') {
+        const hits = await searchITunesAlbums(q, { limit: PAGE_SIZE, offset: 0 });
+        if (myToken !== searchTokenRef.current) return;
+        setAlbums(hits);
+        setError(hits.length === 0 ? 'No albums found. Try another title.' : null);
+      } else {
+        const hits = await searchITunesArtists(q, { limit: PAGE_SIZE, offset: 0 });
+        if (myToken !== searchTokenRef.current) return;
+        setArtists(hits);
+        setError(hits.length === 0 ? 'No artists found. Try another name.' : null);
+      }
       setLoading(false);
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [query, visible]);
+  }, [query, visible, browseTab, drill]);
+
+  /** Load tracks after user picks an album or artist. */
+  useEffect(() => {
+    if (!visible || !drill) return;
+    const myToken = ++drillTokenRef.current;
+    setLoading(true);
+    setError(null);
+    setSelected(null);
+    void audioPreview.stop();
+    void (async () => {
+      const hits =
+        drill.kind === 'album'
+          ? await lookupITunesSongs({ collectionId: drill.collectionId, limit: 200 })
+          : await lookupITunesSongs({ artistId: drill.artistId, limit: 200 });
+      if (myToken !== drillTokenRef.current) return;
+      setSongs(hits);
+      setSongHasMore(false);
+      setError(
+        hits.length === 0
+          ? 'No tracks with previews for this selection. Try another album or artist.'
+          : null,
+      );
+      setLoading(false);
+    })();
+  }, [visible, drill]);
+
+  const listRows: ListRow[] = useMemo(() => {
+    if (drill || browseTab === 'songs') {
+      return songs.map((song) => ({ kind: 'song' as const, song }));
+    }
+    if (browseTab === 'albums') {
+      return albums.map((album) => ({ kind: 'album' as const, album }));
+    }
+    return artists.map((artist) => ({ kind: 'artist' as const, artist }));
+  }, [drill, browseTab, songs, albums, artists]);
+
+  const onLoadMoreSongs = useCallback(async () => {
+    if (!visible || drill || browseTab !== 'songs' || loading || loadingMore || !songHasMore) {
+      return;
+    }
+    const q = query.trim();
+    if (!q) return;
+    setLoadingMore(true);
+    const hits = await searchITunesSongs(q, { limit: PAGE_SIZE, offset: songNextOffset });
+    setSongs((prev) => [...prev, ...hits]);
+    setSongNextOffset((o) => o + PAGE_SIZE);
+    setSongHasMore(hits.length === PAGE_SIZE);
+    setLoadingMore(false);
+  }, [visible, drill, browseTab, loading, loadingMore, songHasMore, query, songNextOffset]);
+
+  const exitDrill = useCallback(() => {
+    Haptics.selectionAsync().catch(() => undefined);
+    void audioPreview.stop();
+    setSelected(null);
+    setDrill(null);
+    setSongs([]);
+  }, []);
+
+  const onPickTab = useCallback((tab: BrowseTab) => {
+    Haptics.selectionAsync().catch(() => undefined);
+    void audioPreview.stop();
+    setSelected(null);
+    setDrill(null);
+    setBrowseTab(tab);
+    setSongs([]);
+    setAlbums([]);
+    setArtists([]);
+    setSongNextOffset(0);
+    setSongHasMore(false);
+    setError(null);
+  }, []);
 
   const onRowTogglePreview = useCallback(async (hit: ITunesSongHit) => {
     Haptics.selectionAsync().catch(() => undefined);
@@ -129,9 +238,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
   const onConfirm = useCallback(() => {
     if (!selected) return;
     void audioPreview.stop();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-      () => undefined,
-    );
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     onSelect({
       title: selected.title,
       artist: selected.artist,
@@ -144,97 +251,238 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
 
   const canConfirm = Boolean(selected);
 
-  const renderItem = useCallback(
-    ({ item }: { item: ITunesSongHit }) => {
-      const isSelected = selected?.id === item.id;
-      const isActivePreview =
-        audioState.activeId === item.id && audioState.isPlaying;
-      const isLoadingPreview =
-        audioState.activeId === item.id && audioState.isLoading;
+  const renderRow = useCallback(
+    ({ item }: { item: ListRow }) => {
+      if (item.kind === 'song') {
+        const hit = item.song;
+        const isSelected = selected?.id === hit.id;
+        const isActivePreview = audioState.activeId === hit.id && audioState.isPlaying;
+        const isLoadingPreview = audioState.activeId === hit.id && audioState.isLoading;
 
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => onRowTogglePreview(hit)}
+            style={[styles.row, isSelected && styles.rowSelected]}
+          >
+            <View style={styles.rowArtworkWrap}>
+              {hit.artworkUrl ? (
+                <Image
+                  source={{ uri: hit.artworkUrl }}
+                  style={styles.rowArtwork}
+                  contentFit="cover"
+                  transition={120}
+                />
+              ) : (
+                <View style={[styles.rowArtwork, styles.rowArtworkPh]}>
+                  <Ionicons name="musical-notes" size={20} color="#FFF" />
+                </View>
+              )}
+              <View style={styles.rowArtworkOverlay}>
+                {isLoadingPreview ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Ionicons name={isActivePreview ? 'pause' : 'play'} size={18} color="#FFF" />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {hit.title || 'Untitled'}
+              </Text>
+              <Text style={styles.rowArtist} numberOfLines={1}>
+                {hit.artist || 'Unknown artist'}
+              </Text>
+            </View>
+
+            {isSelected ? (
+              <View style={styles.checkPill}>
+                <Ionicons name="checkmark" size={14} color={colors.primary.teal} />
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        );
+      }
+
+      if (item.kind === 'album') {
+        const a = item.album;
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.row}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => undefined);
+              void audioPreview.stop();
+              setSelected(null);
+              setDrill({ kind: 'album', collectionId: a.collectionId, title: a.title });
+            }}
+          >
+            <View style={styles.rowArtworkWrap}>
+              {a.artworkUrl ? (
+                <Image
+                  source={{ uri: a.artworkUrl }}
+                  style={styles.rowArtwork}
+                  contentFit="cover"
+                  transition={120}
+                />
+              ) : (
+                <View style={[styles.rowArtwork, styles.rowArtworkPh]}>
+                  <Ionicons name="albums-outline" size={20} color="#FFF" />
+                </View>
+              )}
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {a.title}
+              </Text>
+              <Text style={styles.rowArtist} numberOfLines={1}>
+                {a.artist || 'Album'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+          </TouchableOpacity>
+        );
+      }
+
+      const ar = item.artist;
       return (
         <TouchableOpacity
           activeOpacity={0.9}
-          onPress={() => onRowTogglePreview(item)}
-          style={[styles.row, isSelected && styles.rowSelected]}
+          style={styles.row}
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => undefined);
+            void audioPreview.stop();
+            setSelected(null);
+            setDrill({ kind: 'artist', artistId: ar.artistId, name: ar.name });
+          }}
         >
           <View style={styles.rowArtworkWrap}>
-            {item.artworkUrl ? (
+            {ar.artworkUrl ? (
               <Image
-                source={{ uri: item.artworkUrl }}
+                source={{ uri: ar.artworkUrl }}
                 style={styles.rowArtwork}
                 contentFit="cover"
                 transition={120}
               />
             ) : (
               <View style={[styles.rowArtwork, styles.rowArtworkPh]}>
-                <Ionicons name="musical-notes" size={20} color="#FFF" />
+                <Ionicons name="person-outline" size={20} color="#FFF" />
               </View>
             )}
-            <View style={styles.rowArtworkOverlay}>
-              {isLoadingPreview ? (
-                <ActivityIndicator color="#FFF" size="small" />
-              ) : (
-                <Ionicons
-                  name={isActivePreview ? 'pause' : 'play'}
-                  size={18}
-                  color="#FFF"
-                />
-              )}
-            </View>
           </View>
-
           <View style={styles.rowText}>
             <Text style={styles.rowTitle} numberOfLines={1}>
-              {item.title || 'Untitled'}
+              {ar.name}
             </Text>
             <Text style={styles.rowArtist} numberOfLines={1}>
-              {item.artist || 'Unknown artist'}
+              Artist
             </Text>
           </View>
-
-          {isSelected ? (
-            <View style={styles.checkPill}>
-              <Ionicons name="checkmark" size={14} color={colors.primary.teal} />
-            </View>
-          ) : null}
+          <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
         </TouchableOpacity>
       );
     },
     [audioState, onRowTogglePreview, selected],
   );
 
-  const keyExtractor = useCallback((item: ITunesSongHit) => item.id, []);
+  const keyExtractor = useCallback((item: ListRow) => {
+    if (item.kind === 'song') return `s-${item.song.id}`;
+    if (item.kind === 'album') return `a-${item.album.id}`;
+    return `r-${item.artist.id}`;
+  }, []);
 
   const listHeader = useMemo(
     () => (
       <View style={styles.searchWrap}>
+        {drill ? (
+          <TouchableOpacity style={styles.drillBack} onPress={exitDrill} activeOpacity={0.85}>
+            <Ionicons name="chevron-back" size={22} color={colors.primary.teal} />
+            <Text style={styles.drillBackText} numberOfLines={1}>
+              {drill.kind === 'album' ? drill.title : drill.name}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.modeRow}>
+            {(
+              [
+                { key: 'songs' as const, label: 'Songs' },
+                { key: 'albums' as const, label: 'Albums' },
+                { key: 'artists' as const, label: 'Artists' },
+              ] as const
+            ).map(({ key, label }) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.modeChip, browseTab === key && styles.modeChipOn]}
+                onPress={() => onPickTab(key)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modeChipText, browseTab === key && styles.modeChipTextOn]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <View style={styles.searchBox}>
           <Ionicons name="search" size={16} color={colors.dark.textMuted} />
           <TextInput
             ref={inputRef}
-            style={styles.searchInput}
+            style={[styles.searchInput, drill && styles.searchInputDisabled]}
             value={query}
             onChangeText={setQuery}
-            placeholder="Search for a song, artist, or album"
+            placeholder={drill ? 'Search disabled — go back to browse' : 'Search songs, albums, or artists'}
             placeholderTextColor={colors.dark.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
+            editable={!drill}
           />
-          {query.length > 0 ? (
+          {query.length > 0 && !drill ? (
             <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
               <Ionicons name="close-circle" size={16} color={colors.dark.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
         <Text style={styles.searchHint}>
-          Previews are 30 seconds. The full track will be what auto-plays when someone visits your Pulse Page.
+          {drill
+            ? 'Tracks below have 30s previews when available in your region.'
+            : browseTab === 'songs'
+              ? `Up to ${PAGE_SIZE} per page — load more at the bottom. Only songs with previews can be your vibe.`
+              : browseTab === 'albums'
+                ? 'Pick an album, then choose a track with a preview.'
+                : 'Pick an artist, then choose a track with a preview.'}
         </Text>
       </View>
     ),
-    [query],
+    [query, browseTab, drill, exitDrill, onPickTab],
   );
+
+  const listFooter = useMemo(() => {
+    if (drill || browseTab !== 'songs' || !songHasMore || !query.trim()) return null;
+    return (
+      <TouchableOpacity
+        style={styles.loadMoreBtn}
+        onPress={onLoadMoreSongs}
+        disabled={loadingMore}
+        activeOpacity={0.85}
+      >
+        {loadingMore ? (
+          <ActivityIndicator color={colors.primary.teal} />
+        ) : (
+          <Text style={styles.loadMoreText}>Load more songs</Text>
+        )}
+      </TouchableOpacity>
+    );
+  }, [drill, browseTab, songHasMore, query, loadingMore, onLoadMoreSongs]);
+
+  const emptyHintForTab = !drill
+    ? browseTab === 'songs'
+      ? 'Search for a song or artist, or switch to Albums / Artists.'
+      : browseTab === 'albums'
+        ? 'Search for an album name, then open it to see tracks.'
+        : 'Search for an artist, then open them to see tracks.'
+    : 'Try another album or artist — not every release has preview clips.';
 
   return (
     <Modal
@@ -248,11 +496,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <LinearGradient
-          colors={[
-            'rgba(20,184,166,0.14)',
-            'rgba(15,28,48,0.98)',
-            colors.dark.bg,
-          ]}
+          colors={['rgba(20,184,166,0.14)', 'rgba(15,28,48,0.98)', colors.dark.bg]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -276,18 +520,17 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
             hitSlop={12}
             style={[styles.headerBtn, styles.doneBtn, !canConfirm && styles.doneBtnDisabled]}
           >
-            <Text style={[styles.doneText, !canConfirm && styles.doneTextDisabled]}>
-              Set
-            </Text>
+            <Text style={[styles.doneText, !canConfirm && styles.doneTextDisabled]}>Set</Text>
           </TouchableOpacity>
         </View>
 
         <FlatList
-          data={results}
+          data={listRows}
           keyExtractor={keyExtractor}
-          renderItem={renderItem}
+          renderItem={renderRow}
           ListHeaderComponent={listHeader}
           ListHeaderComponentStyle={styles.headerSpacer}
+          ListFooterComponent={listFooter}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -306,11 +549,9 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
                 <>
                   <Ionicons name="musical-notes-outline" size={28} color={colors.dark.textMuted} />
                   <Text style={styles.emptyText}>
-                    Search for anything — an artist, a song, a lyric, a vibe.
+                    {query.trim() ? 'Nothing to show yet.' : 'Search for music to get started.'}
                   </Text>
-                  <Text style={styles.emptyHint}>
-                    Tap a song to hear a preview. Tap “Set” to make it your Current Vibe.
-                  </Text>
+                  <Text style={styles.emptyHint}>{emptyHintForTab}</Text>
                 </>
               )}
             </View>
@@ -319,11 +560,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
 
         {selected ? (
           <View style={styles.selectedBar}>
-            <Image
-              source={{ uri: selected.artworkUrl }}
-              style={styles.selectedArt}
-              contentFit="cover"
-            />
+            <Image source={{ uri: selected.artworkUrl }} style={styles.selectedArt} contentFit="cover" />
             <View style={styles.selectedText}>
               <Text style={styles.selectedTitle} numberOfLines={1}>
                 {selected.title}
@@ -332,11 +569,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
                 {selected.artist}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.selectedConfirm}
-              onPress={onConfirm}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={styles.selectedConfirm} onPress={onConfirm} activeOpacity={0.85}>
               <LinearGradient
                 colors={[colors.primary.teal, '#0EA39A']}
                 start={{ x: 0, y: 0 }}
@@ -422,6 +655,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 6,
   },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modeChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  modeChipOn: {
+    backgroundColor: 'rgba(20,184,166,0.14)',
+    borderColor: 'rgba(20,184,166,0.45)',
+  },
+  modeChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.dark.textMuted,
+  },
+  modeChipTextOn: {
+    color: colors.primary.teal,
+  },
+  drillBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  drillBackText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.dark.text,
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -440,6 +711,9 @@ const styles = StyleSheet.create({
     color: colors.dark.text,
     padding: 0,
   },
+  searchInputDisabled: {
+    opacity: 0.55,
+  },
   searchHint: {
     marginTop: 8,
     marginBottom: 10,
@@ -451,6 +725,18 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 140,
+  },
+
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    marginTop: 4,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary.teal,
   },
 
   row: {

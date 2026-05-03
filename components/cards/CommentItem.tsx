@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { colors } from '@/theme';
@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { COMMENT_DELETED_TOMBSTONE } from '@/constants';
 import { analytics } from '@/lib/analytics';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
+import { CommentRichText } from '@/components/ui/CommentRichText';
 import { commentKeys } from '@/lib/queryKeys';
 import { avatarThumb } from '@/lib/storage';
 import type { Comment } from '@/types';
@@ -40,10 +41,9 @@ export function CommentItem({
   const [liked, setLiked] = useState(false);
   const [showReplies, setShowReplies] = useState(depth === 0 && comment.replies.length > 0);
   /**
-   * When `editing` is true we swap the body text for the inline
-   * composer (CommentEditComposer). Keeping the state local per row
-   * avoids a full-tree re-render when another comment enters edit
-   * mode and keeps the menu/edit/reply logic self-contained here.
+   * When `editing` is true we show {@link CommentEditComposer} as a
+   * bottom-sheet modal (not inline — multiline fields inside scroll
+   * parents often collapse when the keyboard opens).
    */
   const [editing, setEditing] = useState(false);
   const queryClient = useQueryClient();
@@ -221,7 +221,13 @@ export function CommentItem({
           <Text style={styles.anonGlyph}>?</Text>
         </View>
       ) : (
-        <Image source={{ uri: avatarThumb(comment.author.avatarUrl, 36) }} style={styles.avatar} />
+        <AvatarDisplay
+          size={36}
+          avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+          pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
+        />
       )}
       <View style={styles.body}>
         <View style={styles.headerRow}>
@@ -279,9 +285,12 @@ export function CommentItem({
             onCancel={() => setEditing(false)}
           />
         ) : (
-          <Text style={[styles.content, isDeleted && styles.contentDeleted]}>
-            {comment.content}
-          </Text>
+          <CommentRichText
+            text={comment.content}
+            style={[styles.content, isDeleted && styles.contentDeleted]}
+            mentionsInteractive={!anonymousMode}
+            linksInteractive={!anonymousMode}
+          />
         )}
 
         {/* Suppress reaction / reply controls on tombstones — there's

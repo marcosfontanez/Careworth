@@ -26,10 +26,12 @@ export default function AdminLayout() {
         if (profile?.role_admin) {
           setAuthorized(true);
         } else {
-          router.back();
+          if (router.canGoBack()) router.back();
+          else router.replace('/(tabs)/feed');
         }
       } catch {
-        router.back();
+        if (router.canGoBack()) router.back();
+        else router.replace('/(tabs)/feed');
       } finally {
         setChecking(false);
       }

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PulseVerse",
-    "slug": "pulseverse",
+    "slug": "CareWorth",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/pulseverse-logo.png",
@@ -9,9 +9,9 @@
     "newArchEnabled": true,
     "scheme": "pulseverse",
     "splash": {
-      "image": "./assets/images/pulseverse-logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A1628"
+      "image": "./assets/images/auth-splash-background.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#020617"
     },
     "ios": {
       "supportsTablet": true,
@@ -38,6 +38,7 @@
         "backgroundColor": "#0A1628"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.pulseverse.app",
       "versionCode": 1,
       "permissions": [
@@ -136,7 +137,7 @@
         "projectId": "45474eb0-9910-4871-974d-9bd110a724e1"
       }
     },
-    "owner": "pulseverse",
+    "owner": "care-worth",
     "updates": {
       "url": "https://u.expo.dev/45474eb0-9910-4871-974d-9bd110a724e1"
     },

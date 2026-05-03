@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/theme';
-import { LIVE_GIFTS, getGiftsByTier } from '@/services/live/gifts';
+import { getGiftsByTier } from '@/services/live/gifts';
 import type { LiveGift, LiveGiftTier } from '@/types';
 
 interface Props {

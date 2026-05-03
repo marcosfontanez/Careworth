@@ -65,7 +65,7 @@ export default async function AdminCampaignsPage() {
                     <TableCell className="tabular-nums">{c.ctr.toFixed(2)}</TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" variant="outline" asChild>
-                        <Link href="/admin/insights">View insights</Link>
+                        <Link href="/admin/insights?tab=campaigns">View insights</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

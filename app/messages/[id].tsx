@@ -10,6 +10,7 @@ import { borderRadius, colors, iconSize, layout, spacing, touchTarget, typograph
 import { useAuth } from '@/contexts/AuthContext';
 import { messagesService, type Message } from '@/services/supabase/messages';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/components/ui/Toast';
 import { timeAgo } from '@/utils/format';
 import { LinkPreview, extractUrls } from '@/components/chat/LinkPreview';
 
@@ -54,6 +55,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const toast = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -66,65 +68,90 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!id || !user) return;
 
-    messagesService.getMessages(id).then((msgs) => {
+    let cancelled = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+    (async () => {
+      const { data: convo } = await supabase.from('conversations').select('id').eq('id', id).maybeSingle();
+      if (cancelled) return;
+      if (!convo) {
+        toast.show('This chat isn’t available. You may have blocked each other.', 'error');
+        setLoading(false);
+        if (router.canGoBack()) router.back();
+        else router.replace('/messages');
+        return;
+      }
+
+      const msgs = await messagesService.getMessages(id);
+      if (cancelled) return;
       setMessages(msgs);
       setLoading(false);
-    });
 
-    messagesService.markAsRead(id, user.id);
+      void messagesService.markAsRead(id, user.id);
 
-    const channel = supabase.channel(`chat:${id}`);
-    channelRef.current = channel;
+      if (cancelled) return;
+      const channel = supabase.channel(`chat:${id}`);
+      if (cancelled) {
+        supabase.removeChannel(channel);
+        return;
+      }
+      realtimeChannel = channel;
+      channelRef.current = channel;
 
-    channel
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` },
-        (payload) => {
-          const msg = payload.new as any;
-          setMessages((prev) => [
-            {
-              id: msg.id,
-              conversationId: msg.conversation_id,
-              senderId: msg.sender_id,
-              content: msg.content,
-              read: msg.read,
-              createdAt: msg.created_at,
-            },
-            ...prev,
-          ]);
-          if (msg.sender_id !== user.id) {
-            messagesService.markAsRead(id, user.id);
-            setOtherTyping(false);
+      channel
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` },
+          (payload) => {
+            const msg = payload.new as any;
+            setMessages((prev) => [
+              {
+                id: msg.id,
+                conversationId: msg.conversation_id,
+                senderId: msg.sender_id,
+                content: msg.content,
+                read: msg.read,
+                createdAt: msg.created_at,
+              },
+              ...prev,
+            ]);
+            if (msg.sender_id !== user.id) {
+              messagesService.markAsRead(id, user.id);
+              setOtherTyping(false);
+            }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` },
-        (payload) => {
-          const updated = payload.new as any;
-          setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, read: updated.read } : m)));
-        }
-      )
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const others = Object.values(state)
-          .flat()
-          .filter((p: any) => p.user_id !== user.id && p.typing);
-        setOtherTyping(others.length > 0);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id, typing: false });
-        }
-      });
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` },
+          (payload) => {
+            const updated = payload.new as any;
+            setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, read: updated.read } : m)));
+          }
+        )
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const others = Object.values(state)
+            .flat()
+            .filter((p: any) => p.user_id !== user.id && p.typing);
+          setOtherTyping(others.length > 0);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({ user_id: user.id, typing: false });
+          }
+        });
+    })();
 
     return () => {
+      cancelled = true;
       channelRef.current = null;
-      supabase.removeChannel(channel);
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
     };
-  }, [id, user]);
+  }, [id, user, router, toast]);
 
   const broadcastTyping = useCallback(() => {
     if (!id || !user || !channelRef.current) return;
@@ -145,7 +172,9 @@ export default function ChatScreen() {
     setSending(true);
     try {
       await messagesService.sendMessage(id, user.id, content);
-    } catch {}
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Could not send message', 'error');
+    }
     setSending(false);
   };
 
@@ -177,11 +206,11 @@ export default function ChatScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
     >
       <View style={[styles.headerBar, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/messages'))}
           activeOpacity={0.7}
           style={styles.headerHit}
           hitSlop={12}
@@ -202,6 +231,7 @@ export default function ChatScreen() {
       ) : (
         <FlatList
           ref={listRef}
+          style={styles.listFlex}
           data={messages}
           keyExtractor={(item) => item.id}
           inverted
@@ -240,6 +270,7 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
+  listFlex: { flex: 1 },
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',

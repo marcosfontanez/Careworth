@@ -16,4 +16,8 @@ export { userCoinsService } from './userCoins';
 export { hostEarningsService } from './hostEarnings';
 export type { HostEarningsTotals, HostEarningsEntry } from './hostEarnings';
 export { pulseScoresService } from './pulseScores';
+export { pulseAvatarFramesService } from './pulseAvatarFrames';
 export { soundCatalogService } from './soundCatalog';
+export { collabProjectsService } from './collabProjects';
+export { enqueueCreatorMediaJob, getCreatorMediaJob, listMyCreatorMediaJobs } from './creatorMediaJobs';
+export type { CreatorMediaJobKind, CreatorMediaJobRow } from './creatorMediaJobs';

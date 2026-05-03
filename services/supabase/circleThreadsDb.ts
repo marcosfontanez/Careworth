@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import type { Community, CircleReply, CircleThread, CircleThreadKind, CreatorSummary, TrendingTopic24h } from '@/types';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { communitiesService, rowToCommunity } from './communities';
-import { profileRowToCreatorSummary } from './profileRowMapper';
+import { profileRowToCreatorSummary, PROFILE_SELECT_CREATOR_WITH_FRAME } from './profileRowMapper';
 
 /**
  * Previously omitted `pulse_tier` / `pulse_score_current`, which is why
@@ -54,7 +54,7 @@ function rowToReply(row: any): CircleReply {
 const THREAD_SELECT = `
   *,
   communities(id, slug, name),
-  author:author_id(id, display_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current)
+  author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
 `;
 
 export const circleThreadsDb = {
@@ -83,7 +83,7 @@ export const circleThreadsDb = {
       .select(
         `
         *,
-        author:author_id(id, display_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current)
+        author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
       `,
       )
       .eq('thread_id', threadId)

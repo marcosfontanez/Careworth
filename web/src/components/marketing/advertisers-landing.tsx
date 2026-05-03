@@ -6,6 +6,7 @@ import {
   HeartHandshake,
   LayoutPanelTop,
   Megaphone,
+  Package,
   Radio,
   Shield,
   Users,
@@ -46,13 +47,17 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">{c.hero.body}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
-                <MarketingDestinationLink href="/contact" analyticsSource="advertisers_hero_media_kit" className="inline-flex items-center gap-2">
+                <MarketingDestinationLink
+                  href="/contact?topic=media-kit"
+                  analyticsSource="advertisers_hero_media_kit"
+                  className="inline-flex items-center gap-2"
+                >
                   {c.hero.ctaMediaKit}
                   <ArrowRight className="h-4 w-4" />
                 </MarketingDestinationLink>
               </Button>
               <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
-                <MarketingDestinationLink href="/contact" analyticsSource="advertisers_hero_partnerships">
+                <MarketingDestinationLink href="/contact?topic=partnerships" analyticsSource="advertisers_hero_partnerships">
                   {c.hero.ctaPartnerships}
                 </MarketingDestinationLink>
               </Button>
@@ -186,6 +191,41 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             <div className="flex h-40 w-40 items-center justify-center rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/10 shadow-[0_0_60px_-12px_rgba(0,210,255,0.45)]">
               <Shield className="h-20 w-20 text-[var(--accent)]" strokeWidth={1.25} />
             </div>
+          </div>
+        </div>
+
+        <div className="mt-16 grid gap-8 lg:grid-cols-2 lg:items-start">
+          <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
+            <p className={marketingEyebrow}>{c.partnerSheet.eyebrow}</p>
+            <h2 className="mt-3 text-2xl font-bold text-foreground">{c.partnerSheet.title}</h2>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{c.partnerSheet.intro}</p>
+            <ul className="mt-6 space-y-4">
+              {c.partnerSheet.deliverables.map((item) => (
+                <li key={item.title} className="flex gap-3 text-sm">
+                  <Package className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  <div>
+                    <p className="font-semibold text-foreground">{item.title}</p>
+                    <p className="mt-1 text-muted-foreground">{item.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-4">
+            <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
+              <h3 className="text-lg font-bold text-foreground">{c.partnerSheet.reportingTitle}</h3>
+              <ul className="mt-5 space-y-4">
+                {c.partnerSheet.reporting.map((item) => (
+                  <li key={item.title} className="border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
+                    <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{item.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 text-xs leading-relaxed text-muted-foreground">
+              {c.partnerSheet.disclaimer}
+            </p>
           </div>
         </div>
 

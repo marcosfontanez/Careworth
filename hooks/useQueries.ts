@@ -16,11 +16,13 @@ import { streamsService } from '@/services/streams';
 import type { FeedType } from '@/types';
 import { postsService } from '@/services/supabase';
 import {
+  circleContentKeys,
   commentKeys,
+  communityKeys,
+  feedKeys,
   likedPostKeys,
   postKeys,
   profileUpdateKeys,
-  savedPostKeys,
   userKeys,
 } from '@/lib/queryKeys';
 
@@ -48,12 +50,10 @@ export function useLikedPostIds(userId?: string) {
   });
 }
 
-const FEED_INFINITE_VER = 1;
-
 /** Paged feed: first page uses full ranked/chronological merge; later pages chronological tail. */
 export function useFeedInfinite(type: FeedType, userId?: string) {
   return useInfiniteQuery({
-    queryKey: ['feedInf', FEED_INFINITE_VER, type, userId ?? null],
+    queryKey: feedKeys.infinitePage(type, userId),
     initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
     queryFn: async ({ pageParam }) => {
       if (!pageParam) {
@@ -82,6 +82,8 @@ export function useFeedInfinite(type: FeedType, userId?: string) {
       last.nextCursor && last.posts.length ? { cursor: last.nextCursor, seenIds: last.seenIds } : undefined,
     staleTime: 30_000,
     gcTime: 1000 * 60 * 30,
+    /** Matches cold-boot `prefetchInfiniteQuery` in `app/_layout.tsx` — avoids duplicate network on tab mount. */
+    refetchOnMount: false,
   });
 }
 
@@ -210,9 +212,15 @@ export function useCommunityPosts(communityId: string) {
   const { user } = useAuth();
   const viewerId = user?.id ?? null;
   return useQuery({
-    queryKey: ['communityPosts', communityId, viewerId ?? ''],
+    queryKey: circleContentKeys.communityPosts(communityId, viewerId),
     queryFn: () => feedService.getCommunityPosts(communityId, viewerId),
     enabled: !!communityId,
+    /**
+     * When `user` hydrates after `community`, the query key adds `viewerId` and
+     * would otherwise remount with empty `data` until the second fetch completes
+     * — Circles room briefly showed "No posts". Keep prior fetch visible.
+     */
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -252,10 +260,11 @@ export function useCommunities() {
 }
 
 export function useCommunity(slug: string) {
+  const key = (slug ?? '').trim();
   return useQuery({
-    queryKey: ['community', slug],
-    queryFn: () => communityService.getBySlug(slug),
-    enabled: !!slug,
+    queryKey: ['community', key],
+    queryFn: () => communityService.getBySlug(key),
+    enabled: key.length > 0,
   });
 }
 
@@ -268,20 +277,22 @@ export function useFeaturedCommunities() {
 
 export function useCirclesHome() {
   return useQuery({
-    /** Bump version when featured/new-circles logic changes so clients don’t keep stale persisted data. */
-    queryKey: ['circles', 'home', 'v4'],
-    queryFn: async () => ({
-      featured: await circleContentService.getFeaturedCircles(),
-      trending: await circleContentService.getTrending24h(),
-      newCircles: await circleContentService.getNewCircles(),
-    }),
+    queryKey: communityKeys.circlesHome(),
+    queryFn: async () => {
+      const [featured, trending, newCircles] = await Promise.all([
+        circleContentService.getFeaturedCircles(),
+        circleContentService.getTrending24h(),
+        circleContentService.getNewCircles(),
+      ]);
+      return { featured, trending, newCircles };
+    },
     staleTime: 1000 * 60,
   });
 }
 
 export function useCircleThreads(slug: string | undefined) {
   return useQuery({
-    queryKey: ['circleThreads', slug],
+    queryKey: circleContentKeys.threadsBySlug(slug ?? '__disabled__'),
     queryFn: () => circleContentService.getThreadsByCircleSlug(slug!),
     enabled: !!slug,
   });
@@ -289,7 +300,7 @@ export function useCircleThreads(slug: string | undefined) {
 
 export function useCircleThread(threadId: string | undefined) {
   return useQuery({
-    queryKey: ['circleThread', threadId],
+    queryKey: circleContentKeys.thread(threadId ?? '__disabled__'),
     queryFn: () => circleContentService.getThreadById(threadId!),
     enabled: !!threadId,
   });
@@ -297,7 +308,7 @@ export function useCircleThread(threadId: string | undefined) {
 
 export function useCircleThreadReplies(threadId: string | undefined) {
   return useQuery({
-    queryKey: ['circleReplies', threadId],
+    queryKey: circleContentKeys.replies(threadId ?? '__disabled__'),
     queryFn: () => circleContentService.getRepliesForThread(threadId!),
     enabled: !!threadId,
   });

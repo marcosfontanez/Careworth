@@ -3,6 +3,7 @@ import {
   View, FlatList, StyleSheet, Dimensions, Platform,
   TouchableOpacity, Text, ViewToken, ScrollView, AppState,
   NativeSyntheticEvent, NativeScrollEvent, RefreshControl,
+  InteractionManager,
   useWindowDimensions, type LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -27,6 +28,7 @@ import { useToast } from '@/components/ui/Toast';
 import { sharePostMenu } from '@/lib/share';
 import { postsService, feedSignalsService, profilesService } from '@/services/supabase';
 import { queryClient } from '@/lib/queryClient';
+import { primeCommunityDetailCache } from '@/lib/communityCache';
 import { bumpPostCount } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { feedKeys, likedPostKeys, savedPostKeys, userKeys } from '@/lib/queryKeys';
@@ -111,12 +113,14 @@ export default function FeedScreen() {
   useEffect(() => {
     if (posts.length === 0) return;
     const upcoming = posts
-      .slice(0, 8)
+      .slice(0, 12)
       .map((p) => avatarThumb(p.creator.avatarUrl, 36))
       .filter((u) => !!u);
-    if (upcoming.length > 0) {
+    if (upcoming.length === 0) return;
+    const task = InteractionManager.runAfterInteractions(() => {
       void ExpoImage.prefetch(upcoming);
-    }
+    });
+    return () => task.cancel?.();
   }, [posts]);
   const { onViewStart, onViewEnd } = useViewTracker(user?.id);
   const flatListRef = useRef<FlatList>(null);
@@ -133,10 +137,21 @@ export default function FeedScreen() {
   }, []);
 
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [rowUiEpoch, setRowUiEpoch] = useState(0);
+  const bumpRowUi = useCallback(() => setRowUiEpoch((e) => e + 1), []);
   const likedServerSig = likedIdsArr.join('|');
   useEffect(() => {
     setLikedPosts(new Set(likedIdsArr));
-  }, [likedServerSig]);
+    bumpRowUi();
+  }, [likedServerSig, bumpRowUi]);
+
+  const likedPostsRef = useRef(likedPosts);
+  const savedPostIdsRef = useRef(savedPostIds);
+  const followedCreatorIdsRef = useRef(followedCreatorIds);
+  likedPostsRef.current = likedPosts;
+  savedPostIdsRef.current = savedPostIds;
+  followedCreatorIdsRef.current = followedCreatorIds;
+
   const [reportTarget, setReportTarget] = useState<string | null>(null);
   const [longPressTarget, setLongPressTarget] = useState<Post | null>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
@@ -225,6 +240,7 @@ export default function FeedScreen() {
       }
       return next;
     });
+    bumpRowUi();
     /**
      * Patch the cached post.likeCount in place so the number next to the heart
      * updates on tap. We deliberately avoid invalidating ['feed'] / ['feedInf']
@@ -257,7 +273,7 @@ export default function FeedScreen() {
         }).catch(() => {});
       }
     }
-  }, [user]);
+  }, [user, bumpRowUi]);
 
   const openCreatorVideoGrid = useCallback(
     (creatorId: string, postId: string) => {
@@ -267,8 +283,9 @@ export default function FeedScreen() {
   );
 
   const handleToggleSave = useCallback(async (id: string) => {
-    const wasSaved = savedPostIds.has(id);
+    const wasSaved = savedPostIdsRef.current.has(id);
     toggleSavePost(id);
+    bumpRowUi();
     /**
      * Patch the cached post.saveCount so the bookmark count ticks instantly
      * on tap. Without this, a freshly saved post sticks at "0" until the
@@ -296,13 +313,14 @@ export default function FeedScreen() {
         toast.show(msg.length > 100 ? `${msg.slice(0, 97)}…` : msg, 'error');
       }
     }
-  }, [user, savedPostIds, toggleSavePost, toast]);
+  }, [user, toggleSavePost, toast, bumpRowUi]);
 
   const handleToggleFollow = useCallback(async (creatorId: string) => {
     if (!creatorId || creatorId === user?.id) return;
     /** Optimistic flip — server call below confirms / queues on failure. */
-    const wasFollowing = followedCreatorIds.has(creatorId);
+    const wasFollowing = followedCreatorIdsRef.current.has(creatorId);
     setCreatorFollowed(creatorId, !wasFollowing);
+    bumpRowUi();
     if (!user) return;
     try {
       await profilesService.toggleFollow(user.id, creatorId);
@@ -315,7 +333,7 @@ export default function FeedScreen() {
       const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : 'Follow failed';
       toast.show(msg.length > 100 ? `${msg.slice(0, 97)}…` : msg, 'error');
     }
-  }, [user, followedCreatorIds, setCreatorFollowed, toast]);
+  }, [user, setCreatorFollowed, toast, bumpRowUi]);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -350,9 +368,9 @@ export default function FeedScreen() {
         post={item}
         viewportHeight={pageHeight}
         isActive={isFocused && appIsActive && item.id === activePostIdRef.current}
-        isLiked={likedPosts.has(item.id)}
-        isSaved={savedPostIds.has(item.id)}
-        isFollowing={followedCreatorIds.has(item.creatorId)}
+        isLiked={likedPostsRef.current.has(item.id)}
+        isSaved={savedPostIdsRef.current.has(item.id)}
+        isFollowing={followedCreatorIdsRef.current.has(item.creatorId)}
         onLike={() => toggleLike(item.id)}
         onComment={() => router.push(`/comments/${item.id}`)}
         onSave={() => handleToggleSave(item.id)}
@@ -363,7 +381,10 @@ export default function FeedScreen() {
           try {
             const { communitiesService } = await import('@/services/supabase');
             const c = await communitiesService.getById(cId);
-            if (c?.slug) router.push(`/communities/${c.slug}`);
+            if (c?.slug) {
+              primeCommunityDetailCache(queryClient, c);
+              router.push(`/communities/${c.slug}`);
+            }
           } catch {
             /* noop */
           }
@@ -378,23 +399,20 @@ export default function FeedScreen() {
         }
       />
     ),
-    [likedPosts, savedPostIds, followedCreatorIds, router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid],
+    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
 
   /**
-   * Bounded signature for FlatList `extraData` so paging (active id) and per-row chips update,
-   * without joining every liked/saved id in the app (which blew up VirtualizedList updates).
+   * Compact `extraData`: paging (`activePostId`) plus a generation tick bumped only when
+   * like/save/follow state or server liked-ids hydrate changes. Avoids O(n) strings over the
+   * whole feed on every scroll snapshot.
    */
-  const feedListExtraData = useMemo(() => {
-    const list = posts ?? [];
-    if (!list.length) return activePostId ?? '';
-    const likes = list.map((p) => (likedPosts.has(p.id) ? '1' : '0')).join('');
-    const saves = list.map((p) => (savedPostIds.has(p.id) ? '1' : '0')).join('');
-    const follows = list.map((p) => (followedCreatorIds.has(p.creatorId) ? '1' : '0')).join('');
-    return `${activePostId}|${likes}|${saves}|${follows}`;
-  }, [posts, activePostId, likedPosts, savedPostIds, followedCreatorIds]);
+  const feedListExtraData = useMemo(
+    () => `${activePostId ?? ''}|${rowUiEpoch}`,
+    [activePostId, rowUiEpoch],
+  );
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
@@ -445,6 +463,7 @@ export default function FeedScreen() {
         }
         pagingEnabled={Platform.OS !== 'web'}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={Platform.OS === 'ios' ? 16 : 32}
         snapToInterval={Platform.OS !== 'web' && pageHeight > 0 ? pageHeight : undefined}
         snapToAlignment="start"
         decelerationRate="fast"

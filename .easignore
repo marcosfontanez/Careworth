@@ -1,0 +1,16 @@
+# EAS uploads respect .gitignore, but large generated dirs can still slip into
+# tarballs depending on tooling; excluding them keeps uploads small and avoids
+# builder disk pressure (often reported as vague "Install dependencies" errors).
+
+# Next.js app — not part of the Expo native binary; .next alone can be 1GB+.
+web/
+
+# Fly worker — not bundled into the mobile app.
+export-worker/
+
+# Local web export scratch output.
+dist-web-test/
+
+.git/
+.cursor/
+**/*.log

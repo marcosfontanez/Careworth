@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Alert, Platform,
-  TextInput, KeyboardAvoidingView,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +24,8 @@ import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius } from '@/theme';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
+import { CommentRichText } from '@/components/ui/CommentRichText';
+import { MentionAutocomplete, type MentionRef } from '@/components/ui/MentionAutocomplete';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import { ReportModal } from '@/components/ui/ReportModal';
@@ -37,20 +40,36 @@ import { bumpPostCount } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
+import { pickCoverForSession } from '@/lib/coverAbRotation';
 import type { Comment } from '@/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
+function asParamString(v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined;
+  return Array.isArray(v) ? v[0] : v;
+}
+
 export default function PostDetailScreen() {
-  const { id, circle } = useLocalSearchParams<{ id: string; circle?: string }>();
+  const raw = useLocalSearchParams<{
+    id: string | string[];
+    circle?: string | string[];
+    focusComments?: string | string[];
+  }>();
+  const id = asParamString(raw.id);
+  const circle = asParamString(raw.circle);
+  const focusComments = asParamString(raw.focusComments);
+  const shouldFocusComments =
+    focusComments != null && ['1', 'true', 'yes'].includes(focusComments.toLowerCase());
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user: authUser } = useAuth();
 
-  const { data: post, isLoading, refetch } = usePost(id);
-  const { data: comments = [] } = useComments(id);
+  const { data: post, isPending, refetch } = usePost(id ?? '', { enabled: !!id });
+  const { data: comments = [] } = useComments(id ?? '');
   const { data: likedIdsArr = [] } = useLikedPostIds(authUser?.id);
 
   const savedPostIds = useAppStore((s) => s.savedPostIds);
@@ -227,7 +246,36 @@ export default function PostDetailScreen() {
     ]);
   }, [handleDelete]);
 
-  if (isLoading || !post) return <LoadingState />;
+  if (!id) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 24, paddingHorizontal: 20 }]}>
+        <Text style={{ color: colors.dark.text, fontSize: 16, fontWeight: '600' }}>
+          This post could not be opened.
+        </Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }} accessibilityRole="button">
+          <Text style={{ color: colors.primary.teal, fontWeight: '700' }}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (isPending) return <LoadingState />;
+
+  if (post == null) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 24, paddingHorizontal: 20 }]}>
+        <Text style={{ color: colors.dark.text, fontSize: 16, fontWeight: '600' }}>
+          {`This post isn't available`}
+        </Text>
+        <Text style={{ color: colors.dark.textMuted, marginTop: 8, fontSize: 14 }}>
+          {`It may have been removed, set to private, or you don't have access.`}
+        </Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }} accessibilityRole="button">
+          <Text style={{ color: colors.primary.teal, fontWeight: '700' }}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const maskIdentity = postShouldMaskIdentity(post, circle);
   const anonLabel = anonymousNameOnPost(post.creatorId, post.id);
@@ -237,6 +285,11 @@ export default function PostDetailScreen() {
   const commentQs = circle ? `?circle=${encodeURIComponent(String(circle))}` : '';
   const isSaved = savedPostIds.has(post.id);
   const isOwnPost = authUser?.id === post.creatorId;
+
+  const previewUri =
+    pickCoverForSession(post.id, post.thumbnailUrl, post.coverAltUrl) ||
+    post.thumbnailUrl ||
+    post.mediaUrl;
 
   const captionStrippedTitle = post.caption?.startsWith('**')
     ? post.caption.split('\n')[0].replace(/\*\*/g, '').trim()
@@ -320,6 +373,7 @@ export default function PostDetailScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={Platform.OS === 'android'}
         /** Swipe-down to dismiss the keyboard. We deliberately do NOT
          *  set `automaticallyAdjustKeyboardInsets` here — combined with
          *  the parent KeyboardAvoidingView's padding behavior it would
@@ -352,7 +406,13 @@ export default function PostDetailScreen() {
               onPress={() => router.push(`/profile/${post.creatorId}`)}
               activeOpacity={0.7}
             >
-              <Image source={{ uri: post.creator.avatarUrl }} style={styles.avatar} />
+              <AvatarDisplay
+                size={36}
+                avatarUrl={post.creator.avatarUrl}
+                prioritizeRemoteAvatar
+                ringColor={colors.dark.border}
+                pulseFrame={pulseFrameFromUser(post.creator.pulseAvatarFrame)}
+              />
               <View style={styles.authorBody}>
                 <View style={styles.authorNameRow}>
                   <Text style={styles.authorName}>{post.creator.displayName}</Text>
@@ -379,7 +439,7 @@ export default function PostDetailScreen() {
           ) : null}
 
           {/* Media */}
-          {(post.type === 'image' || post.type === 'video') && (post.thumbnailUrl || post.mediaUrl) && (
+          {(post.type === 'image' || post.type === 'video') && previewUri ? (
             <TouchableOpacity
               onPress={() => {
                 if (post.type === 'image' && post.mediaUrl) {
@@ -390,7 +450,7 @@ export default function PostDetailScreen() {
               style={styles.mediaWrap}
             >
               <Image
-                source={{ uri: post.thumbnailUrl || post.mediaUrl }}
+                source={{ uri: previewUri }}
                 style={styles.media}
                 contentFit="cover"
                 transition={120}
@@ -401,7 +461,7 @@ export default function PostDetailScreen() {
                 </View>
               )}
             </TouchableOpacity>
-          )}
+          ) : null}
 
           {/* Caption body */}
           {captionBody ? (
@@ -499,6 +559,7 @@ export default function PostDetailScreen() {
           authUserId={authUser?.id}
           authorIsAnonymous={maskIdentity}
           onComposerFocus={scrollComposerIntoView}
+          autoFocusComposer={shouldFocusComments}
         />
 
         {isOwnPost ? (
@@ -574,6 +635,7 @@ function CommentsCard({
   authUserId,
   authorIsAnonymous,
   onComposerFocus,
+  autoFocusComposer = false,
 }: {
   postId: string;
   comments: Comment[];
@@ -593,10 +655,12 @@ function CommentsCard({
    * keyboard since it lives INSIDE the ScrollView.
    */
   onComposerFocus?: () => void;
+  /** Opened from circle wall comment icon — scroll to composer and focus once. */
+  autoFocusComposer?: boolean;
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<MentionRef>(null);
 
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
@@ -616,6 +680,13 @@ function CommentsCard({
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
+  useEffect(() => {
+    if (!autoFocusComposer) return;
+    onComposerFocus?.();
+    const t = setTimeout(() => inputRef.current?.focus(), Platform.OS === 'ios' ? 520 : 580);
+    return () => clearTimeout(t);
+  }, [autoFocusComposer, onComposerFocus]);
+
   /**
    * Optimistic soft-delete: walk the cached comment tree, flip
    * `isDeleted=true` and replace the body with the tombstone copy. Then
@@ -625,7 +696,7 @@ function CommentsCard({
    */
   const handleDelete = useCallback(
     async (commentId: string) => {
-      const queryKey = ['comments', postId] as const;
+      const queryKey = commentKeys.byPost(postId);
       const prev = queryClient.getQueryData<Comment[]>(queryKey);
 
       const tombstoneTree = (nodes: Comment[]): Comment[] =>
@@ -657,7 +728,7 @@ function CommentsCard({
    */
   const handleEdit = useCallback(
     async (commentId: string, nextContent: string) => {
-      const queryKey = ['comments', postId] as const;
+      const queryKey = commentKeys.byPost(postId);
       const prev = queryClient.getQueryData<Comment[]>(queryKey);
 
       const patchTree = (nodes: Comment[], next: (c: Comment) => Comment): Comment[] =>
@@ -806,7 +877,7 @@ function CommentsCard({
 
       {/* Inline composer — taps directly to type, no modal navigation. */}
       <View style={styles.composerRow}>
-        <TextInput
+        <MentionAutocomplete
           ref={inputRef}
           style={styles.composerInput}
           value={text}
@@ -814,6 +885,8 @@ function CommentsCard({
           placeholder={replyTo ? `Reply to ${replyTo.name}…` : 'Add a comment…'}
           placeholderTextColor={colors.dark.textMuted}
           multiline
+          textAlignVertical="top"
+          scrollEnabled
           editable={!sending}
           maxLength={COMMENT_MAX_LENGTH}
           /** Bring the composer above the keyboard the moment it gets
@@ -907,7 +980,7 @@ function CommentNode({
   depth?: number;
 }) {
   const [showReplies, setShowReplies] = useState(false);
-  /** Local edit mode. Swaps the body Text for CommentEditComposer. */
+  /** Local edit mode. Comment body opens in CommentEditComposer modal. */
   const [editing, setEditing] = useState(false);
   const displayName = maskAuthors
     ? anonymousNameOnPost(comment.author.id, postId)
@@ -957,7 +1030,13 @@ function CommentNode({
           <Text style={styles.commentAnonGlyph}>?</Text>
         </View>
       ) : (
-        <Image source={{ uri: comment.author.avatarUrl }} style={styles.commentAvatar} />
+        <AvatarDisplay
+          size={32}
+          avatarUrl={comment.author.avatarUrl}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+          pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
+        />
       )}
       <View style={styles.commentBody}>
         <View style={styles.commentNameRow}>
@@ -1018,11 +1097,12 @@ function CommentNode({
             accent={accent}
           />
         ) : (
-          <Text
+          <CommentRichText
+            text={comment.content}
             style={[styles.commentText, isDeleted && styles.commentTextDeleted]}
-          >
-            {comment.content}
-          </Text>
+            mentionsInteractive={!maskAuthors}
+            linksInteractive={!maskAuthors}
+          />
         )}
 
         {/* Action row is suppressed for tombstones — there's nothing to
@@ -1366,8 +1446,9 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 14,
     color: colors.dark.text,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 120,
+    textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: colors.dark.border,
   },

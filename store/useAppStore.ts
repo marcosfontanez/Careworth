@@ -13,6 +13,10 @@ interface AppState {
   followedCreatorIds: Set<string>;
   joinedCommunityIds: Set<string>;
 
+  /** When true, the beta tester gift modal is visible — monthly celebration waits. */
+  betaTesterBorderBlocking: boolean;
+  setBetaTesterBorderBlocking: (val: boolean) => void;
+
   setCurrentUser: (user: UserProfile | null) => void;
   setAuthenticated: (val: boolean) => void;
   setOnboardingComplete: (val: boolean) => void;
@@ -41,36 +45,44 @@ export const useAppStore = create<AppState>((set, get) => ({
   followedCreatorIds: new Set(),
   joinedCommunityIds: new Set(),
 
+  betaTesterBorderBlocking: false,
+
   setCurrentUser: (user) => set({ currentUser: user }),
   setAuthenticated: (val) => set({ isAuthenticated: val }),
   setOnboardingComplete: (val) => set({ hasCompletedOnboarding: val }),
+  setBetaTesterBorderBlocking: (val) => set({ betaTesterBorderBlocking: val }),
+
   setFeedTab: (tab) => set({ feedTab: tab }),
 
   toggleSavePost: (id) =>
     set((state) => {
       const next = new Set(state.savedPostIds);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return { savedPostIds: next };
     }),
 
   toggleSaveJob: (id) =>
     set((state) => {
       const next = new Set(state.savedJobIds);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return { savedJobIds: next };
     }),
 
   toggleFollowCreator: (id) =>
     set((state) => {
       const next = new Set(state.followedCreatorIds);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return { followedCreatorIds: next };
     }),
 
   toggleJoinCommunity: (id) =>
     set((state) => {
       const next = new Set(state.joinedCommunityIds);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return { joinedCommunityIds: next };
     }),
 

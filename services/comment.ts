@@ -1,6 +1,7 @@
 import type { Comment } from '@/types';
 import { commentsService as supaComments } from '@/services/supabase/comments';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
+import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
 
 function buildTree(flat: any[]): Comment[] {
   const map = new Map<string, Comment>();
@@ -12,24 +13,9 @@ function buildTree(flat: any[]): Comment[] {
     const c: Comment = {
       id: raw.id,
       postId: raw.post_id,
-      author: {
-        id: raw.author?.id ?? raw.author_id,
-        displayName: raw.author?.display_name ?? 'User',
-        avatarUrl: raw.author?.avatar_url ?? '',
-        role: raw.author?.role ?? 'RN',
-        specialty: raw.author?.specialty ?? 'General',
-        city: '',
-        state: '',
-        isVerified: raw.author?.is_verified ?? false,
-        /**
-         * Denormalized Pulse tier + score (migration 059). Comment rows
-         * render a `PulseTierBadge` next to the author when present so
-         * every engagement surface carries identity. Nullable — brand
-         * new accounts haven't been computed yet and just hide the chip.
-         */
-        pulseTier: raw.author?.pulse_tier ?? null,
-        pulseScoreCurrent: raw.author?.pulse_score_current ?? null,
-      },
+      author: raw.author
+        ? profileRowToCreatorSummary(raw.author)
+        : unknownCreatorSummary(raw.author_id),
       /**
        * For deleted comments we replace the body at the source of truth
        * — every comment surface in the app reads `comment.content` and

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { colors, borderRadius, typography } from '@/theme';
+import { colors, borderRadius } from '@/theme';
 
 interface Props {
   tags: string[];

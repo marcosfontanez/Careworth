@@ -4,8 +4,10 @@
 node_modules/
 
 # Expo
+.eas-inspect-out/
 .expo/
 dist/
+dist-web-test/
 web-build/
 expo-env.d.ts
 

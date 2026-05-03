@@ -5,24 +5,32 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
   Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCircleThread, useCircleThreadReplies, useCommunity } from '@/hooks/useQueries';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { CircleReplyItem } from '@/components/circles/CircleReplyItem';
 import { ShareToMyPulseButton } from '@/components/circles/ShareToMyPulseButton';
+import { ReportModal } from '@/components/ui/ReportModal';
+import { useAuth } from '@/contexts/AuthContext';
 import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
-import type { CircleThreadKind, CreatorSummary } from '@/types';
+import type { CircleReply, CircleThreadKind, CreatorSummary } from '@/types';
 import { circleContentService } from '@/services/circleContent';
+import { shareCircleThread } from '@/lib/share';
+import { setThreadReadReplyCount } from '@/lib/circleExperience';
+import { enqueueAction } from '@/lib/offlineQueue';
+import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
+import { CommentRichText } from '@/components/ui/CommentRichText';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
 
 const KIND_LABEL: Record<CircleThreadKind, string> = {
@@ -39,11 +47,20 @@ export default function CircleThreadDetailScreen() {
   const threadId = Array.isArray(threadIdRaw) ? threadIdRaw[0] : threadIdRaw;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { data: thread, isLoading, refetch } = useCircleThread(threadId);
   const { data: community } = useCommunity(slug);
   const { data: replies = [], refetch: refetchReplies } = useCircleThreadReplies(threadId);
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!threadId || !thread) return;
+      void setThreadReadReplyCount(threadId, thread.replyCount);
+    }, [threadId, thread?.replyCount, thread?.id]),
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -99,7 +116,26 @@ export default function CircleThreadDetailScreen() {
             Thread · {formatCount(thread.replyCount)} replies
           </Text>
         </View>
-        <View style={styles.iconBtn} />
+        <View style={styles.headerActions}>
+          {!isAnonRoom ? (
+            <TouchableOpacity
+              onPress={() => shareCircleThread(slug, threadId, thread.title)}
+              style={styles.iconBtn}
+              hitSlop={8}
+              accessibilityLabel="Share discussion"
+            >
+              <Ionicons name="share-outline" size={22} color={colors.dark.text} />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            onPress={() => setReportOpen(true)}
+            style={styles.iconBtn}
+            hitSlop={8}
+            accessibilityLabel="Report discussion"
+          >
+            <Ionicons name="flag-outline" size={22} color={colors.dark.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -117,7 +153,13 @@ export default function CircleThreadDetailScreen() {
                 <Ionicons name="eye-off-outline" size={22} color={colors.dark.textMuted} />
               </View>
             ) : (
-              <Image source={{ uri: author.avatarUrl }} style={styles.avatar} />
+              <AvatarDisplay
+                size={40}
+                avatarUrl={author.avatarUrl}
+                prioritizeRemoteAvatar
+                ringColor={colors.dark.border}
+                pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+              />
             )}
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.nameRow}>
@@ -141,7 +183,12 @@ export default function CircleThreadDetailScreen() {
           </View>
 
           <Text style={styles.title}>{thread.title}</Text>
-          <Text style={styles.body}>{thread.body}</Text>
+          <CommentRichText
+            text={thread.body}
+            style={styles.body}
+            mentionsInteractive={!isAnonRoom}
+            linksInteractive={!isAnonRoom}
+          />
 
           {thread.mediaThumbUrl ? (
             <Image source={{ uri: thread.mediaThumbUrl }} style={styles.heroThumb} contentFit="cover" />
@@ -166,25 +213,32 @@ export default function CircleThreadDetailScreen() {
         </View>
 
         <Text style={styles.repliesHead}>Replies ({replies.length})</Text>
-        {replies.map((r) => (
-          <CircleReplyItem
-            key={r.id}
-            reply={r}
-            circleSlug={slug}
-            threadAuthorId={thread.authorId}
-            threadId={thread.id}
-          />
-        ))}
+        {replies
+          .filter(
+            (r): r is CircleReply =>
+              r != null && typeof r === 'object' && typeof r.id === 'string',
+          )
+          .map((r) => (
+            <CircleReplyItem
+              key={r.id}
+              reply={r}
+              circleSlug={slug}
+              threadAuthorId={thread.authorId}
+              threadId={thread.id}
+            />
+          ))}
       </ScrollView>
 
       <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
-        <TextInput
+        <MentionAutocomplete
           style={styles.input}
           placeholder="Add a reply…"
           placeholderTextColor={colors.dark.textMuted}
           value={draft}
           onChangeText={setDraft}
           multiline
+          textAlignVertical="top"
+          scrollEnabled
         />
         <TouchableOpacity
           style={[styles.sendBtn, !draft.trim() && styles.sendOff]}
@@ -192,18 +246,42 @@ export default function CircleThreadDetailScreen() {
           onPress={async () => {
             const text = draft.trim();
             if (!text) return;
+            if (!user) {
+              Alert.alert('Sign in required', 'Sign in to join this discussion.');
+              return;
+            }
             try {
               await circleContentService.addReply(thread.id, text);
               setDraft('');
               await Promise.all([refetchReplies(), refetch()]);
-            } catch {
-              Alert.alert('Reply failed', 'Sign in and try again.');
+              await setThreadReadReplyCount(thread.id, thread.replyCount + 1);
+            } catch (e: any) {
+              try {
+                await enqueueAction({
+                  type: 'circle_thread_reply',
+                  payload: { threadId: thread.id, userId: user.id, body: text },
+                });
+                setDraft('');
+                Alert.alert(
+                  'Reply queued',
+                  'Network hiccup — your reply will post automatically once you’re back online.',
+                );
+              } catch {
+                Alert.alert('Reply failed', e?.message ?? 'Could not send your reply.');
+              }
             }
           }}
         >
           <Ionicons name="send" size={18} color={draft.trim() ? '#FFF' : colors.dark.textMuted} />
         </TouchableOpacity>
       </View>
+
+      <ReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="circle_thread"
+        targetId={threadId}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -224,6 +302,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark.bg,
   },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerMid: { flex: 1, alignItems: 'center' },
   headerCircle: { fontSize: 13, fontWeight: '800', color: colors.primary.teal },
   headerSub: { fontSize: 11, color: colors.dark.textMuted, marginTop: 2 },
@@ -295,7 +374,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 120,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -304,6 +383,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: colors.dark.text,
     fontSize: 15,
+    textAlignVertical: 'top',
   },
   sendBtn: {
     width: 40,

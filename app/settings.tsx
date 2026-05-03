@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Switch, Alert, ActivityIndicator, Linking,
+  Switch, Alert, ActivityIndicator, Linking, Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,25 +12,39 @@ import { iconSize } from '@/theme/sizes';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { profilesService } from '@/services/supabase';
 import { clearImageCache } from '@/lib/imageCache';
 import { useToast } from '@/components/ui/Toast';
 import Constants from 'expo-constants';
 import { LAUNCH_LINKS } from '@/constants/launch';
 import { sendSentryTestEvent } from '@/lib/monitoring';
+import { useFeatureFlags } from '@/lib/featureFlags';
+import { userHasEmailPasswordIdentity } from '@/lib/authIdentity';
+/** After sign-out, jump to login. Avoid `router.dismiss(1)` loops — they dispatch POP and warn when no modal stack exists. */
+function replaceWithLogin(router: Router) {
+  router.replace('/auth/login');
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const toast = useToast();
+  const pulseversePro = useFeatureFlags((s) => s.pulseversePro);
+  const creatorTips = useFeatureFlags((s) => s.creatorTips);
+  const showChangePassword = userHasEmailPasswordIdentity(user);
 
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [emailNotifs, setEmailNotifs] = useState(true);
   const [privateProfile, setPrivateProfile] = useState(profile?.privacyMode === 'private');
+  const [privacySaving, setPrivacySaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    setPrivateProfile(profile?.privacyMode === 'private');
+  }, [profile?.id, profile?.privacyMode]);
 
   const handleSignOut = async () => {
     await signOut();
+    replaceWithLogin(router);
   };
 
   const handleClearCache = async () => {
@@ -81,6 +95,7 @@ export default function SettingsScreen() {
                 await supabase.from('profiles').delete().eq('id', user.id);
               }
               await signOut();
+              replaceWithLogin(router);
             } catch (err: any) {
               Alert.alert('Error', err.message ?? 'Failed to delete account. Please contact support.');
               setDeleting(false);
@@ -98,52 +113,46 @@ export default function SettingsScreen() {
         title="Settings"
         leftIcon="close"
         leftAccessibilityLabel="Close settings"
-        onPressLeft={() => router.back()}
+        onPressLeft={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/feed'))}
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* PulseVerse Pro Upsell */}
-        <TouchableOpacity
-          onPress={() => router.push('/pro')}
-          activeOpacity={0.88}
-          style={styles.proWrap}
-        >
-          <LinearGradient
-            colors={[colors.primary.gold + '22', colors.primary.gold + '0A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.proCard}
+        {pulseversePro ? (
+          <TouchableOpacity
+            onPress={() => router.push('/pro')}
+            activeOpacity={0.88}
+            style={styles.proWrap}
           >
-            <View style={styles.proLeft}>
-              <View style={styles.proIcon}>
-                <Ionicons name="diamond" size={20} color={colors.primary.gold} />
+            <LinearGradient
+              colors={[colors.primary.gold + '22', colors.primary.gold + '0A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.proCard}
+            >
+              <View style={styles.proLeft}>
+                <View style={styles.proIcon}>
+                  <Ionicons name="diamond" size={20} color={colors.primary.gold} />
+                </View>
+                <View>
+                  <Text style={styles.proTitle}>PulseVerse Pro</Text>
+                  <Text style={styles.proSub}>Analytics, priority support, and more</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.proTitle}>PulseVerse Pro</Text>
-                <Text style={styles.proSub}>Analytics, priority support, and more</Text>
+              <View style={styles.proArrow}>
+                <Ionicons name="chevron-forward" size={iconSize.sm} color={colors.primary.gold} />
               </View>
-            </View>
-            <View style={styles.proArrow}>
-              <Ionicons name="chevron-forward" size={iconSize.sm} color={colors.primary.gold} />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : null}
 
-        {/* Quick Links */}
-        <View style={styles.quickLinks}>
-          <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/earnings')} activeOpacity={0.7}>
-            <Ionicons name="wallet-outline" size={20} color={colors.primary.teal} />
-            <Text style={styles.quickLinkText}>Earnings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/saved')} activeOpacity={0.7}>
-            <Ionicons name="bookmark-outline" size={iconSize.sm} color={colors.primary.royal} />
-            <Text style={styles.quickLinkText}>Saved</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/(tabs)/jobs' as any)} activeOpacity={0.7}>
-            <Ionicons name="briefcase-outline" size={iconSize.sm} color={colors.primary.gold} />
-            <Text style={styles.quickLinkText}>Jobs</Text>
-          </TouchableOpacity>
-        </View>
+        {creatorTips ? (
+          <View style={styles.quickLinks}>
+            <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/earnings')} activeOpacity={0.7}>
+              <Ionicons name="wallet-outline" size={20} color={colors.primary.teal} />
+              <Text style={styles.quickLinkText}>Earnings</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {profile?.roleAdmin ? (
           <>
@@ -165,14 +174,16 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <SettingRow
             icon="notifications-outline"
-            label="Push Notifications"
-            right={<Switch value={pushEnabled} onValueChange={setPushEnabled} trackColor={{ true: colors.primary.teal }} />}
-          />
-          <View style={styles.divider} />
-          <SettingRow
-            icon="mail-outline"
-            label="Email Notifications"
-            right={<Switch value={emailNotifs} onValueChange={setEmailNotifs} trackColor={{ true: colors.primary.teal }} />}
+            label="Push notifications"
+            subtitle="On mobile, system settings control alert permission. PulseVerse registers for pushes after you allow notifications."
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                toast.show('Use your browser or device settings for notifications', 'info');
+                return;
+              }
+              void Linking.openSettings();
+            }}
+            right={<Ionicons name="open-outline" size={iconSize.sm} color={colors.dark.textMuted} />}
           />
         </View>
 
@@ -180,9 +191,35 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <SettingRow
             icon="lock-closed-outline"
-            label="Private Profile"
-            subtitle="Only approved followers can see your posts"
-            right={<Switch value={privateProfile} onValueChange={setPrivateProfile} trackColor={{ true: colors.primary.teal }} />}
+            label="Private profile"
+            subtitle="Visitors won’t see your posts, uploads, or favorites grid. Anyone can still see your public header (name, handle, banner)."
+            right={
+              privacySaving ? (
+                <ActivityIndicator size="small" color={colors.primary.teal} />
+              ) : (
+                <Switch
+                  value={privateProfile}
+                  onValueChange={async (on) => {
+                    if (!user) return;
+                    const prev = privateProfile;
+                    setPrivateProfile(on);
+                    setPrivacySaving(true);
+                    try {
+                      await profilesService.update(user.id, { privacy_mode: on ? 'private' : 'public' });
+                      await refreshProfile();
+                      toast.show(on ? 'Profile is now private' : 'Profile is now public', 'success');
+                    } catch (err: any) {
+                      setPrivateProfile(prev);
+                      toast.show(err?.message ?? 'Could not update privacy', 'error');
+                    } finally {
+                      setPrivacySaving(false);
+                    }
+                  }}
+                  disabled={privacySaving}
+                  trackColor={{ true: colors.primary.teal }}
+                />
+              )
+            }
           />
           <View style={styles.divider} />
           <SettingRow
@@ -202,13 +239,17 @@ export default function SettingsScreen() {
             onPress={() => router.push('/my-pulse-appearance')}
             right={<Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />}
           />
-          <View style={styles.divider} />
-          <SettingRow
-            icon="key-outline"
-            label="Change Password"
-            onPress={() => router.push('/change-password')}
-            right={<Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />}
-          />
+          {showChangePassword ? (
+            <>
+              <View style={styles.divider} />
+              <SettingRow
+                icon="key-outline"
+                label="Change Password"
+                onPress={() => router.push('/change-password')}
+                right={<Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />}
+              />
+            </>
+          ) : null}
         </View>
 
         <Text style={styles.sectionTitle}>Storage</Text>
@@ -272,7 +313,7 @@ export default function SettingsScreen() {
           )}
         </TouchableOpacity>
 
-        {__DEV__ ? (
+        {__DEV__ && profile?.roleAdmin ? (
           <View style={styles.devLinks}>
             <TouchableOpacity
               style={styles.devPreviewLink}

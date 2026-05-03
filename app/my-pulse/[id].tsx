@@ -41,6 +41,7 @@ import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import type { ProfileUpdateComment } from '@/types';
 import { MY_PULSE_VISUALS } from '@/components/mypage/cards/MyPulseCardShell';
 import { CirclesOrbitIcon } from '@/components/mypage/cards/icons/CirclesOrbitIcon';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -103,9 +104,11 @@ export default function MyPulseDetailScreen() {
     enabled: !!update?.linkedPostId,
   });
 
-  // Redirect back when the row doesn't exist (e.g. deleted since pin).
+  // Redirect when the row doesn't exist (e.g. deleted since pin). Never bare `router.back()` — deep links may have no history.
   useEffect(() => {
-    if (isSuccess && id && !update) router.back();
+    if (!isSuccess || !id || update) return;
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/my-pulse');
   }, [isSuccess, id, update, router]);
 
   const isOwner = !!viewerId && !!update && update.userId === viewerId;
@@ -153,7 +156,8 @@ export default function MyPulseDetailScreen() {
       }
       queryClient.removeQueries({ queryKey: profileUpdateKeys.byId(id!) });
       queryClient.removeQueries({ queryKey: profileUpdateKeys.comments(id!) });
-      router.back();
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/my-pulse');
     },
   });
 
@@ -163,6 +167,36 @@ export default function MyPulseDetailScreen() {
       { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate() },
     ]);
   }, [deleteMut]);
+
+  // ─── Pin / unpin (owner) ───────────────────────────────────────────
+  const togglePinMut = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Missing update id');
+      const row = queryClient.getQueryData<{ isPinned?: boolean } | undefined>(
+        profileUpdateKeys.detailForViewer(id, viewerId),
+      );
+      const pinned = row?.isPinned === true;
+      if (pinned) {
+        await profileUpdatesService.unpin(id);
+      } else {
+        await profileUpdatesService.pin(id);
+      }
+    },
+    onSuccess: () => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      queryClient.invalidateQueries({ queryKey: profileUpdateKeys.detailForViewer(id!, viewerId) });
+      if (update?.userId) {
+        queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(update.userId) });
+      }
+    },
+    onError: (e: any) => {
+      Alert.alert('Could not update pin', e?.message ?? 'Try again in a moment.');
+    },
+  });
+
+  const onTogglePinDetail = useCallback(() => {
+    void togglePinMut.mutate();
+  }, [togglePinMut]);
 
   // ─── Edit ─────────────────────────────────────────────────────────
   /**
@@ -406,7 +440,7 @@ export default function MyPulseDetailScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
     >
       <View style={{ paddingTop: insets.top + 6 }}>
         <Header
@@ -414,13 +448,18 @@ export default function MyPulseDetailScreen() {
           onShare={onShare}
           onDelete={isOwner ? confirmDelete : undefined}
           onEdit={canEditBody ? () => setEditOpen(true) : undefined}
+          onTogglePin={isOwner ? onTogglePinDetail : undefined}
+          isPinned={update.isPinned === true}
+          pinBusy={togglePinMut.isPending}
         />
       </View>
 
       <FlatList
+        style={styles.listFlex}
         data={comments}
         keyExtractor={(c) => c.id}
         keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={false}
         contentContainerStyle={{ paddingBottom: 16 }}
         ListHeaderComponent={
           <View style={styles.inner}>
@@ -432,7 +471,13 @@ export default function MyPulseDetailScreen() {
               style={styles.authorRow}
             >
               {author?.avatarUrl ? (
-                <RNImage source={{ uri: author.avatarUrl }} style={styles.avatar} />
+                <AvatarDisplay
+                  size={40}
+                  avatarUrl={author.avatarUrl}
+                  prioritizeRemoteAvatar
+                  ringColor={colors.dark.border}
+                  pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+                />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}>
                   <Ionicons name="person" size={18} color={colors.dark.textMuted} />
@@ -675,6 +720,9 @@ function Header({
   onShare,
   onDelete,
   onEdit,
+  onTogglePin,
+  isPinned,
+  pinBusy,
 }: {
   onBack: () => void;
   onShare?: () => void;
@@ -687,18 +735,28 @@ function Header({
    * (shared Circle discussions, etc.).
    */
   onEdit?: () => void;
+  /** Owner-only: featured pin at top of My Pulse (one at a time server-side). */
+  onTogglePin?: () => void;
+  isPinned?: boolean;
+  pinBusy?: boolean;
 }) {
   const openOwnerMenu = useCallback(() => {
     const buttons: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [];
+    if (onTogglePin) {
+      buttons.push({
+        text: isPinned ? 'Unpin from top' : 'Pin to top',
+        onPress: onTogglePin,
+      });
+    }
     if (onEdit) buttons.push({ text: 'Edit', onPress: onEdit });
     if (onDelete) {
       buttons.push({ text: 'Delete', style: 'destructive', onPress: onDelete });
     }
     buttons.push({ text: 'Cancel', style: 'cancel' });
     Alert.alert('Your update', undefined, buttons);
-  }, [onEdit, onDelete]);
+  }, [onEdit, onDelete, onTogglePin, isPinned]);
 
-  const showMenu = !!onEdit || !!onDelete;
+  const showMenu = !!onEdit || !!onDelete || !!onTogglePin;
 
   return (
     <View style={styles.topBar}>
@@ -710,6 +768,21 @@ function Header({
         {onShare ? (
           <TouchableOpacity onPress={onShare} hitSlop={10} style={styles.iconBtn}>
             <Ionicons name="share-outline" size={20} color={colors.dark.text} />
+          </TouchableOpacity>
+        ) : null}
+        {onTogglePin ? (
+          <TouchableOpacity
+            onPress={onTogglePin}
+            hitSlop={10}
+            style={styles.iconBtn}
+            disabled={pinBusy}
+            accessibilityLabel={isPinned ? 'Unpin from top of My Pulse' : 'Pin to top of My Pulse'}
+          >
+            <Ionicons
+              name={isPinned ? 'pin' : 'pin-outline'}
+              size={20}
+              color={isPinned ? colors.primary.teal : colors.dark.textMuted}
+            />
           </TouchableOpacity>
         ) : null}
         {showMenu ? (
@@ -1024,6 +1097,8 @@ const GRID_COL = Math.floor((SCREEN_W - spacing.md * 2 - GRID_GAP) / 2);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
+  /** Same as feed comments: bounded height inside KeyboardAvoidingView on iOS. */
+  listFlex: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   muted: { fontSize: 15, color: colors.dark.textMuted, textAlign: 'center', marginTop: 40 },
 

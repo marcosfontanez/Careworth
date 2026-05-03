@@ -45,6 +45,74 @@ function postToTrending24h(
   };
 }
 
+async function runGroupedSearch(query: string): Promise<{
+  directory: Community[];
+  fromDiscussions: Community[];
+}> {
+  const s = query.trim();
+  if (!s) return { directory: [], fromDiscussions: [] };
+  try {
+    const [byMeta, byThreads] = await Promise.all([
+      communitiesService.search(s),
+      circleThreadsDb.searchCommunitiesByThreadKeyword(s).catch(() => [] as Community[]),
+    ]);
+    const metaIds = new Set(byMeta.map((c) => c.id));
+    const fromDiscussions = byThreads.filter((c) => !metaIds.has(c.id));
+    return { directory: byMeta, fromDiscussions };
+  } catch {
+    return { directory: [], fromDiscussions: [] };
+  }
+}
+
+/**
+ * Grouped circle + discussion search. If the exact phrase matches nothing,
+ * tries token and light typo fallbacks and sets `didYouMean` when those hits
+ * are returned (for “did you mean” UI).
+ */
+async function searchCirclesAndTopicsGroupedFn(query: string): Promise<{
+  directory: Community[];
+  fromDiscussions: Community[];
+  didYouMean?: string;
+}> {
+  const raw = query.trim();
+  if (!raw) return { directory: [], fromDiscussions: [] };
+
+  const primary = await runGroupedSearch(raw);
+  if (primary.directory.length > 0 || primary.fromDiscussions.length > 0) {
+    return primary;
+  }
+
+  const tokens = raw
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-zA-Z0-9'-]/g, ''))
+    .filter((t) => t.length >= 3)
+    .sort((a, b) => b.length - a.length);
+
+  const seenToken = new Set<string>();
+  for (const token of tokens) {
+    const key = token.toLowerCase();
+    if (seenToken.has(key)) continue;
+    seenToken.add(key);
+    if (key === raw.toLowerCase()) continue;
+    const fb = await runGroupedSearch(token);
+    if (fb.directory.length > 0 || fb.fromDiscussions.length > 0) {
+      return { ...fb, didYouMean: token };
+    }
+  }
+
+  if (raw.length >= 4) {
+    const chopped = raw.slice(0, -1).trim();
+    if (chopped.length >= 2 && chopped.toLowerCase() !== raw.toLowerCase()) {
+      const fb = await runGroupedSearch(chopped);
+      if (fb.directory.length > 0 || fb.fromDiscussions.length > 0) {
+        return { ...fb, didYouMean: chopped };
+      }
+    }
+  }
+
+  return primary;
+}
+
 export const circleContentService = {
   async getFeaturedCircles(): Promise<Community[]> {
     const all = await communitiesService.getAll().catch(() => [] as Community[]);
@@ -184,23 +252,16 @@ export const circleContentService = {
   },
 
   async searchCirclesAndTopics(query: string): Promise<Community[]> {
-    const s = query.trim();
-    if (!s) return [];
-    try {
-      const [byMeta, byThreads] = await Promise.all([
-        communitiesService.search(s),
-        circleThreadsDb.searchCommunitiesByThreadKeyword(s).catch(() => [] as Community[]),
-      ]);
-      const seen = new Set<string>();
-      const out: Community[] = [];
-      for (const c of [...byMeta, ...byThreads]) {
-        if (seen.has(c.id)) continue;
-        seen.add(c.id);
-        out.push(c);
-      }
-      return out;
-    } catch {
-      return [];
+    const grouped = await searchCirclesAndTopicsGroupedFn(query);
+    const seen = new Set<string>();
+    const out: Community[] = [];
+    for (const c of [...grouped.directory, ...grouped.fromDiscussions]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c);
     }
+    return out;
   },
+
+  searchCirclesAndTopicsGrouped: searchCirclesAndTopicsGroupedFn,
 };

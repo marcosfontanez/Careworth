@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Flag,
+  Frame,
   LayoutDashboard,
   Layers,
   Megaphone,
@@ -13,12 +14,14 @@ import {
   Settings,
   Shield,
   Sparkles,
+  TrendingUp,
   Users,
 } from "lucide-react";
 
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { Badge } from "@/components/ui/badge";
+import type { AdminHealthStrip } from "@/types/admin-health";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; icon: LucideIcon; badge?: number };
@@ -36,6 +39,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { href: "/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/admin/platform", label: "Platform", icon: Layers },
+      { href: "/admin/avatar-borders", label: "Avatar borders", icon: Frame },
     ],
   },
   {
@@ -57,6 +61,7 @@ const groups: { title: string; items: Item[] }[] = [
   {
     title: "Engagement",
     items: [
+      { href: "/admin/advertisers", label: "Partner metrics", icon: TrendingUp },
       { href: "/admin/campaigns", label: "Campaigns", icon: Megaphone },
       { href: "/admin/creators", label: "Creators", icon: Sparkles },
     ],
@@ -70,9 +75,11 @@ const groups: { title: string; items: Item[] }[] = [
 export function AdminSidebar({
   currentPath,
   pendingAppealsCount = 0,
+  health,
 }: {
   currentPath: string;
   pendingAppealsCount?: number;
+  health: AdminHealthStrip;
 }) {
   return (
     <aside className="flex w-[16.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -118,10 +125,23 @@ export function AdminSidebar({
         ))}
       </nav>
       <div className="border-t border-sidebar-border p-3">
-        <div className="mb-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200/90">
-          <p className="font-semibold text-emerald-100">All systems operational</p>
-          <p className="mt-0.5 text-[10px] text-emerald-200/70">Web · API · Live</p>
-        </div>
+        <Link
+          href="/admin/dashboard"
+          className={cn(
+            "mb-2 block rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-sidebar-accent/50",
+            health.worst === "down" && "border-rose-500/35 bg-rose-500/10 text-rose-100",
+            health.worst === "degraded" && "border-amber-500/35 bg-amber-500/10 text-amber-100",
+            health.worst === "operational" && "border-emerald-500/25 bg-emerald-500/10 text-emerald-100/95",
+          )}
+        >
+          <p className="font-semibold text-foreground">Platform checks</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {health.operationalCount}/{health.total} services OK
+          </p>
+          {health.worst !== "operational" ? (
+            <p className="mt-1 text-[10px] opacity-90">Open dashboard → system health</p>
+          ) : null}
+        </Link>
         <form action={signOutAdmin}>
           <button
             type="submit"

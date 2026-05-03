@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, shadows, spacing } from '@/theme';
 import type { ProfileUpdateDisplayType } from '@/types';
-import { CirclesOrbitIcon } from './icons/CirclesOrbitIcon';
 import { withPulseVerseCta } from '@/lib/share';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 
@@ -80,31 +79,17 @@ export const MY_PULSE_VISUALS: Record<ProfileUpdateDisplayType, MyPulseTypeVisua
     icon: 'images',
   },
   /**
-   * `circle` = a Circles discussion the owner pinned to their Pulse. Distinct
-   * warm rose/pink accent so it reads as "community conversation" and can't
-   * be visually confused with the blue Clip accent (videos) or the gold Pics
-   * accent. Label is intentionally longer ("Circle Discussion") because this
-   * is a share-only type — not used in the composer — so the extra room on
-   * the pill is fine and the full phrase tells visitors exactly what they're
-   * looking at.
+   * Circle thread pinned to My Pulse — teal people icon + short "Circle" label
+   * (matches My Pulse mock; full card layout in {@link MyPulseCircleCard}).
    */
   circle: {
-    label: 'Circle Discussion',
-    accent: '#F472B6',
-    fill: 'rgba(244,114,182,0.16)',
-    ring: 'rgba(244,114,182,0.36)',
-    washStart: 'rgba(244,114,182,0.14)',
-    washEnd: 'rgba(244,114,182,0.00)',
-    // Fallback Ionicon if something bypasses `glyph` (e.g. very old callers
-    // or tests that still read `icon` directly).
-    icon: 'chatbubbles',
-    /**
-     * Custom orbit glyph mirroring the Circles wordmark. Inherits the rose
-     * accent at the pill badge (solid color so it never competes with the
-     * pill label) and falls back to the logo's blue→purple gradient when
-     * rendered ambient (no color override passed).
-     */
-    glyph: ({ size, color }) => <CirclesOrbitIcon size={size} color={color} />,
+    label: 'Circle',
+    accent: colors.primary.teal,
+    fill: 'rgba(20,184,166,0.14)',
+    ring: 'rgba(20,184,166,0.35)',
+    washStart: 'rgba(20,184,166,0.10)',
+    washEnd: 'rgba(20,184,166,0.00)',
+    icon: 'people',
   },
 };
 
@@ -316,6 +301,20 @@ export function MyPulseCardShell({
               {wasEdited ? <Text style={styles.editedTag}> · edited</Text> : null}
             </Text>
             <View style={{ flex: 1 }} />
+            {!readOnly && onTogglePin ? (
+              <TouchableOpacity
+                onPress={() => void onTogglePin()}
+                hitSlop={10}
+                accessibilityLabel={isPinned ? 'Unpin from top' : 'Pin to top'}
+                style={styles.menuBtn}
+              >
+                <Ionicons
+                  name={isPinned ? 'pin' : 'pin-outline'}
+                  size={14}
+                  color={isPinned ? colors.primary.teal : colors.dark.textMuted}
+                />
+              </TouchableOpacity>
+            ) : null}
             {!readOnly && (onDelete || onShare || shareMessage || onTogglePin || onEdit) ? (
               <TouchableOpacity
                 onPress={handleMenu}

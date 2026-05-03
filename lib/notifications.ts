@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import { supabase } from './supabase';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
+import { parseAndNavigate } from './deepLink';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -92,13 +93,33 @@ export async function initPushNotifications(userId: string) {
   const token = await registerForPushNotifications();
   if (token) {
     await savePushToken(userId, token);
+  } else if (__DEV__ && Device.isDevice) {
+    /** Permission denied, missing EAS projectId, or simulator — bell still works from DB. */
+    console.warn(
+      '[PulseVerse] No push token; in-app notifications only until you grant alerts on a device build. ' +
+        'For remote pushes, wire a Database Webhook on public.notifications INSERT → notify-expo-push (see supabase/functions/notify-expo-push/README.md).',
+    );
   }
 
   const cleanup = addNotificationListeners({
     onTapped: (response) => {
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data as
+        | {
+            postId?: string;
+            chatId?: string;
+            profileId?: string;
+            jobId?: string;
+            circleSlug?: string;
+            threadId?: string;
+            url?: string;
+          }
+        | undefined;
       if (data?.postId) {
         router.push(`/post/${data.postId}`);
+      } else if (data?.circleSlug && data?.threadId) {
+        router.push(`/communities/${data.circleSlug}/thread/${data.threadId}` as any);
+      } else if (typeof data?.url === 'string' && parseAndNavigate(data.url)) {
+        return;
       } else if (data?.chatId) {
         router.push(`/messages/${data.chatId}`);
       } else if (data?.profileId) {

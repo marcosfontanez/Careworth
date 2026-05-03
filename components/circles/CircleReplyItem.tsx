@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
 import { timeAgo } from '@/utils/format';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { CommentRichText } from '@/components/ui/CommentRichText';
 import type { CircleReply, CreatorSummary } from '@/types';
 
 type Props = {
-  reply: CircleReply;
+  reply?: CircleReply | null;
   /** When set with `threadId` + anonymous circle slug, hides real identity and highlights OP replies. */
   circleSlug?: string;
   threadAuthorId?: string;
@@ -19,8 +20,8 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
   const isAnonRoom = isAnonymousConfessionCircle(circleSlug);
   const author: CreatorSummary = useMemo(
     () =>
-      reply.author ?? {
-        id: reply.authorId,
+      reply?.author ?? {
+        id: reply?.authorId ?? '',
         displayName: 'Member',
         avatarUrl: '',
         role: 'RN',
@@ -29,17 +30,24 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
         state: '',
         isVerified: false,
       },
-    [reply.author, reply.authorId],
+    [reply?.author, reply?.authorId],
   );
 
   const displayName = useMemo(() => {
+    if (!reply) return 'Member';
     if (isAnonRoom && threadId) return anonymousDisplayName(reply.authorId, threadId);
     return author.displayName;
-  }, [isAnonRoom, threadId, reply.authorId, author.displayName]);
+  }, [isAnonRoom, threadId, reply, reply?.authorId, author.displayName]);
 
   const isOp = Boolean(
-    isAnonRoom && threadAuthorId && threadId && reply.authorId === threadAuthorId,
+    reply && isAnonRoom && threadAuthorId && threadId && reply.authorId === threadAuthorId,
   );
+
+  if (!reply) {
+    return null;
+  }
+
+  const bodyText = reply.body ?? '';
 
   return (
     <View style={styles.row}>
@@ -48,7 +56,13 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
           <Ionicons name="eye-off-outline" size={18} color={colors.dark.textMuted} />
         </View>
       ) : (
-        <Image source={{ uri: author.avatarUrl }} style={styles.avatar} />
+        <AvatarDisplay
+          size={32}
+          avatarUrl={author.avatarUrl}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+          pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+        />
       )}
       <View style={styles.main}>
         <View style={styles.head}>
@@ -60,7 +74,12 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
         <Text style={styles.role} numberOfLines={1}>
           {isAnonRoom ? (isOp ? 'Original poster' : 'Anonymous') : author.role}
         </Text>
-        <Text style={styles.body}>{reply.body}</Text>
+        <CommentRichText
+          text={bodyText}
+          style={styles.body}
+          mentionsInteractive={!isAnonRoom}
+          linksInteractive={!isAnonRoom}
+        />
       </View>
     </View>
   );

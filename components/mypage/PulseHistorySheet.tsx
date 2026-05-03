@@ -23,7 +23,6 @@ import {
   nextTierProgress,
   PULSE_SCORE_EXPLAINER,
   PULSE_SUBSCORES,
-  PULSE_TIERS,
   PulseMonthRecord,
   PulseScoreSnapshot,
   PulseSubScoreKey,
@@ -65,12 +64,11 @@ interface Props {
  * Full-screen-ish sheet shown when the user taps their Pulse Score pill.
  *
  * Stacked sections, top → bottom:
- *   1. Current-month hero — overall score, tier chip, 5 sub-score bars,
+ *   1. Current-month hero — overall score (0–100), five sub-score bars,
  *      coaching nudge on the weakest axis.
- *   2. Lifetime card — total points, best month, months active, anthem
- *      count.
- *   3. Monthly history — every finalized month with its tier badge, so
- *      the user can see their long-term arc.
+ *   2. Lifetime card — total points, best month, months active, peak-month
+ *      count (very high scores).
+ *   3. Monthly history — finalized months with scores for comparison.
  *
  * Owns its own data fetch (via `get_pulse_history` + `get_current_pulse_score`).
  * Cheap to render because neither RPC scans more than one user's rows.
@@ -246,11 +244,11 @@ function CurrentMonthCard({
               { backgroundColor: `${tier.accent}20`, borderColor: `${tier.accent}66` },
             ]}
           >
-            <Text style={[styles.tierChipText, { color: tier.accent }]}>
-              {tier.label.toUpperCase()}
-            </Text>
+            <Text style={[styles.tierChipText, { color: tier.accent }]}>Pulse Score</Text>
           </View>
-          <Text style={styles.tierBlurb}>{tier.blurb}</Text>
+          <Text style={styles.tierBlurb}>
+            One 0–100 number from five signals: Reach, Resonance, Rhythm, Range, and Reciprocity.
+          </Text>
         </View>
       </View>
 
@@ -272,9 +270,9 @@ function CurrentMonthCard({
         progress.isAlmostThere ? (
           <AlmostThereNudge
             pointsToNext={progress.pointsToNext}
-            nextTierLabel={progress.next!.label}
-            nextTierAccent={progress.next!.accent}
-            nextTierGlow={progress.next!.glow}
+            nextBandMin={progress.next!.min}
+            accent={progress.next!.accent}
+            glow={progress.next!.glow}
             actionLine={almostThereAction(score)}
           />
         ) : isEarlyMonth ? (
@@ -373,8 +371,8 @@ function ShareTierCard({
       await shareTierUp({
         userId,
         displayName,
-        tierLabel: meta.label,
         score,
+        tierLabel: meta.label,
       });
     } finally {
       setBusy(false);
@@ -402,11 +400,12 @@ function ShareTierCard({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.shareTierTitle}>
-            You reached{' '}
-            <Text style={{ color: meta.accent }}>{meta.label.toUpperCase()}</Text>
+            Pulse Score{' '}
+            <Text style={{ color: meta.accent }}>{score}</Text>
+            <Text style={{ color: colors.dark.text }}>/100</Text>
           </Text>
           <Text style={styles.shareTierBody}>
-            Show it off — every share lands someone new on your profile.
+            Share your momentum — every tap opens your profile on PulseVerse.
           </Text>
         </View>
       </View>
@@ -421,45 +420,42 @@ function ShareTierCard({
           },
         ]}
         accessibilityRole="button"
-        accessibilityLabel={`Share your ${meta.label} tier`}
+        accessibilityLabel="Share your Pulse Score"
       >
         <Ionicons name="share-social" size={15} color="#FFF" />
-        <Text style={styles.shareTierBtnText}>Share my tier</Text>
+        <Text style={styles.shareTierBtnText}>Share my Pulse Score</Text>
       </Pressable>
     </LinearGradient>
   );
 }
 
 /**
- * High-contrast "Almost there" banner — the celebratory moment when the
- * user is within 10 pts of the next tier. Deliberately louder than the
- * default coach card: gradient stroke, next-tier glow, next-tier accent
- * on the points pill. This is the single line we most want the user to
- * see, so it's big and explicit about exactly how to close the gap.
+ * High-contrast nudge when overall score is within a few points of the
+ * next internal score band (still shown as a numeric target, not a tier name).
  */
 function AlmostThereNudge({
   pointsToNext,
-  nextTierLabel,
-  nextTierAccent,
-  nextTierGlow,
+  nextBandMin,
+  accent,
+  glow,
   actionLine,
 }: {
   pointsToNext: number;
-  nextTierLabel: string;
-  nextTierAccent: string;
-  nextTierGlow: string;
+  nextBandMin: number;
+  accent: string;
+  glow: string;
   actionLine: string;
 }) {
   return (
     <LinearGradient
-      colors={[`${nextTierAccent}30`, `${nextTierAccent}10`]}
+      colors={[`${accent}30`, `${accent}10`]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[
         styles.almostThereCard,
         {
-          borderColor: `${nextTierAccent}66`,
-          shadowColor: nextTierGlow,
+          borderColor: `${accent}66`,
+          shadowColor: glow,
         },
       ]}
     >
@@ -467,19 +463,17 @@ function AlmostThereNudge({
         <View
           style={[
             styles.almostThereDeltaPill,
-            { backgroundColor: `${nextTierAccent}24`, borderColor: `${nextTierAccent}88` },
+            { backgroundColor: `${accent}24`, borderColor: `${accent}88` },
           ]}
         >
-          <Ionicons name="flash" size={11} color={nextTierAccent} />
-          <Text style={[styles.almostThereDeltaText, { color: nextTierAccent }]}>
-            {pointsToNext} PT{pointsToNext === 1 ? '' : 'S'} TO{' '}
-            {nextTierLabel.toUpperCase()}
+          <Ionicons name="flash" size={11} color={accent} />
+          <Text style={[styles.almostThereDeltaText, { color: accent }]}>
+            {pointsToNext} PT{pointsToNext === 1 ? '' : 'S'} · NEXT AT {nextBandMin}
           </Text>
         </View>
       </View>
       <Text style={styles.almostThereTitle}>
-        You're almost{' '}
-        <Text style={{ color: nextTierAccent }}>{nextTierLabel}</Text>.
+        You're <Text style={{ color: accent }}>almost to the next level</Text>.
       </Text>
       <Text style={styles.almostThereBody}>{actionLine}</Text>
     </LinearGradient>
@@ -541,7 +535,7 @@ function LifetimeCard({
         <LifetimeStat
           label="Best month"
           value={String(bestMonthScore)}
-          suffix={best.label}
+          suffix="/100"
           accent={best.accent}
         />
         <LifetimeStat
@@ -550,7 +544,7 @@ function LifetimeCard({
           accent={colors.primary.teal}
         />
         <LifetimeStat
-          label="Anthems"
+          label="Peak months"
           value={String(anthemMonths)}
           accent="#F59E0B"
         />
@@ -657,15 +651,6 @@ function MonthlyHistoryList({
           );
         })}
       </View>
-
-      <View style={styles.tierLadder}>
-        {PULSE_TIERS.map((t) => (
-          <View
-            key={t.id}
-            style={[styles.tierPip, { backgroundColor: t.accent }]}
-          />
-        ))}
-      </View>
     </View>
   );
 }
@@ -710,10 +695,9 @@ function MonthHistoryItem({
           ]}
         >
           <Text style={[styles.historyTierText, { color: t.accent }]}>
-            {t.label}
+            {month.overall}/100
           </Text>
         </View>
-        <Text style={styles.historyScore}>{month.overall}</Text>
         <Ionicons
           name={isOpen ? 'chevron-up' : 'chevron-down'}
           size={14}
@@ -976,8 +960,8 @@ const styles = StyleSheet.create({
   },
   tierChipText: {
     fontSize: 10.5,
-    fontWeight: '900',
-    letterSpacing: 0.7,
+    fontWeight: '800',
+    letterSpacing: 0.25,
   },
   tierBlurb: {
     fontSize: 12.5,
@@ -1210,15 +1194,7 @@ const styles = StyleSheet.create({
   historyTierText: {
     fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  historyScore: {
-    width: 36,
-    textAlign: 'right',
-    fontSize: 13,
-    fontWeight: '900',
-    color: colors.dark.text,
+    letterSpacing: 0.25,
     fontVariant: ['tabular-nums'],
   },
   historyEmptyWrap: {
@@ -1323,19 +1299,6 @@ const styles = StyleSheet.create({
   },
   deltaPillTextBigger: {
     fontSize: 12,
-  },
-
-  // Tier ladder
-  tierLadder: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 4,
-  },
-  tierPip: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    opacity: 0.6,
   },
 
   footerExplainer: {

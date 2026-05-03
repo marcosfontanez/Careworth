@@ -9,7 +9,6 @@ export type CommunityPostPinRow = { post_id: string; sort_order: number };
  */
 export function mergePinnedCommunityPosts(posts: Post[], pins: CommunityPostPinRow[]): Post[] {
   if (!pins.length) return posts;
-  const orderMap = new Map(pins.map((p) => [p.post_id, p.sort_order]));
   const byId = new Map(posts.map((p) => [p.id, p]));
   const pinned: Post[] = [];
   const seenPinIds = new Set<string>();

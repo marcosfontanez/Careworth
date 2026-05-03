@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/theme';
 import type { StreamPoll } from '@/types';
-
-const USE_NATIVE = Platform.OS !== 'web';
 
 interface Props {
   poll: StreamPoll | null;

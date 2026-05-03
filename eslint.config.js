@@ -9,6 +9,7 @@ module.exports = defineConfig([
     'export-worker/**',
     'supabase/functions/**',
     '**/dist/**',
+    'dist-web-test/**',
     'metro.config.js',
     'babel.config.js',
   ]),

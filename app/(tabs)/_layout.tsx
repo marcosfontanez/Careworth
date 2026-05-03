@@ -80,6 +80,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        /** Mount tab scenes on first visit — cuts cold-start work before the user leaves Feed. */
+        lazy: true,
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: colors.primary.teal,
@@ -137,7 +139,7 @@ const styles = StyleSheet.create({
   },
   createTabIconSlot: {
     marginTop: 0,
-    marginBottom: 2,
+    marginBottom: 0,
   },
   createOuter: {
     alignItems: 'center',
@@ -168,10 +170,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /** Larger than inner so cover crops evenly; flex centers the frame (no transform — avoids vertical drift). */
+  /** Fills the inner disc; `cover` + `center` keeps the crop symmetric so the mark stays centered. */
   createLogo: {
-    width: 62,
-    height: 62,
+    width: 48,
+    height: 48,
   },
   neonShell: {
     width: 40,

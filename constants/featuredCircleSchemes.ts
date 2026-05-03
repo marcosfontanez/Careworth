@@ -23,6 +23,13 @@ function hashSlug(slug: string): number {
 }
 
 const SLUG_SCHEMES: Record<string, FeaturedCardScheme> = {
+  'border-envy': {
+    glow: '#EAB308',
+    gradient: ['rgba(234,179,8,0.34)', 'rgba(202,138,4,0.22)', '#0F1C30'],
+    bubble: ['rgba(253,224,71,0.58)', 'rgba(217,119,6,0.45)', 'rgba(15,28,48,0.5)'],
+    borderEmphasis: 2,
+    onlineAccent: '#FDE047',
+  },
   memes: {
     glow: '#F59E0B',
     gradient: ['rgba(245,158,11,0.32)', 'rgba(249,115,22,0.18)', '#0F1C30'],
@@ -64,6 +71,13 @@ const SLUG_SCHEMES: Record<string, FeaturedCardScheme> = {
     bubble: ['rgba(129,140,248,0.55)', 'rgba(67,56,202,0.45)', 'rgba(15,28,48,0.52)'],
     borderEmphasis: 1.75,
     onlineAccent: '#A5B4FC',
+  },
+  'simple-medical-questions': {
+    glow: '#14B8A6',
+    gradient: ['rgba(13,148,136,0.3)', 'rgba(15,118,110,0.22)', '#0F1C30'],
+    bubble: ['rgba(45,212,191,0.55)', 'rgba(13,148,136,0.42)', 'rgba(15,28,48,0.5)'],
+    borderEmphasis: 1.75,
+    onlineAccent: '#5EEAD4',
   },
   pharmacists: {
     glow: '#84CC16',

@@ -3,6 +3,7 @@ import type {
   PulseHistoryPayload,
   PulseLeaderboardRow,
   PulseLifetimeLeaderboardRow,
+  PulseMonthCelebrationPayload,
   PulseMonthRecord,
   PulseScoreSnapshot,
   PulseTier,
@@ -29,6 +30,28 @@ function toTier(raw: unknown): PulseTier {
     return v;
   }
   return 'murmur';
+}
+
+function toPrizeTier(raw: unknown): PulseMonthCelebrationPayload['prizeTier'] {
+  const v = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (v === 'gold' || v === 'silver' || v === 'bronze') return v;
+  return null;
+}
+
+function rowToCelebration(row: any): PulseMonthCelebrationPayload {
+  return {
+    monthStart: typeof row.month_start === 'string' ? row.month_start : '',
+    overall: Number(row.overall) || 0,
+    tier: toTier(row.tier),
+    globalRank: Number(row.global_rank) || 0,
+    totalRanked: Number(row.total_ranked) || 0,
+    isTop5: !!row.is_top5,
+    prizeTier: toPrizeTier(row.prize_tier),
+    frameLabel: row.frame_label ?? null,
+    frameRingColor: row.frame_ring_color ?? null,
+    frameGlowColor: row.frame_glow_color ?? null,
+    frameRingCaption: row.frame_ring_caption ?? null,
+  };
 }
 
 function rowToSnapshot(row: any): PulseScoreSnapshot {
@@ -103,6 +126,17 @@ export const pulseScoresService = {
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     return row ? rowToSnapshot(row) : null;
+  },
+
+  /**
+   * Latest completed calendar month (UTC): finalized score, global rank, top-5 prize metadata.
+   * Empty when the previous month is not finalized yet or the user has no row for that month.
+   */
+  async getMonthCelebration(): Promise<PulseMonthCelebrationPayload | null> {
+    const { data, error } = await supabase.rpc('get_pulse_month_celebration');
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return row ? rowToCelebration(row) : null;
   },
 
   /**

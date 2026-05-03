@@ -9,7 +9,8 @@ import { colors, borderRadius, layout, typography } from '@/theme';
 import { PulseLeaderboards } from '@/components/leaderboards/PulseLeaderboards';
 import { useFeatureFlags } from '@/lib/featureFlags';
 
-const LOGO = require('../../assets/images/pulseverse-logo.png');
+/** PulseVerse Creator Hub — use a PNG with alpha so the gradient background shows through. */
+const CREATOR_HUB_BANNER = require('../../assets/images/pulseverse-creator-hub-banner.png');
 
 type CreateTile = {
   title: string;
@@ -20,6 +21,20 @@ type CreateTile = {
   href: string;
 };
 
+const CREATOR_HUB_LINKS: { title: string; subtitle: string; href: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  {
+    title: 'Record / upload video',
+    subtitle: 'PHI checks, thumbnails, optional alt cover (A/B), scheduling',
+    href: '/create/video?mode=upload',
+    icon: 'videocam-outline',
+  },
+  {
+    title: 'Photo carousel',
+    subtitle: 'Layouts, brand kit, carousels',
+    href: '/create/image',
+    icon: 'images-outline',
+  },
+];
 const GRID: CreateTile[] = [
   {
     title: 'Record Video',
@@ -27,7 +42,7 @@ const GRID: CreateTile[] = [
     icon: 'videocam',
     iconColor: '#A855F7',
     bg: '#A855F718',
-    href: '/create/video?mode=record',
+    href: '/create/video-camera',
   },
   {
     title: 'Upload Video',
@@ -39,35 +54,11 @@ const GRID: CreateTile[] = [
   },
   {
     title: 'Add Photo / Media',
-    subtitle: 'Images, GIFs, audio',
+    subtitle: 'Multi-photo carousels & layouts',
     icon: 'images',
     iconColor: '#3B82F6',
     bg: '#3B82F618',
     href: '/create/image',
-  },
-  {
-    title: 'Post a Thought',
-    subtitle: 'Text, idea, or quote',
-    icon: 'chatbubble-ellipses',
-    iconColor: '#EAB308',
-    bg: '#EAB30818',
-    href: '/create/text',
-  },
-  {
-    title: 'Share to My Pulse',
-    subtitle: 'Private by design',
-    icon: 'people',
-    iconColor: colors.primary.teal,
-    bg: colors.primary.teal + '1F',
-    href: '/create/my-pulse',
-  },
-  {
-    title: 'Start a Circle Discussion',
-    subtitle: 'Spark a conversation',
-    icon: 'chatbubbles',
-    iconColor: '#38BDF8',
-    bg: '#38BDF818',
-    href: '/create/text',
   },
 ];
 
@@ -84,16 +75,17 @@ export default function CreateScreen() {
       />
       <View style={{ paddingTop: insets.top + 10 }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        nestedScrollEnabled
+      >
         <View style={styles.hero}>
-          <Image source={LOGO} style={styles.heroLogo} contentFit="contain" />
-          <Text style={styles.heroTitle}>Create Your World</Text>
-          <Text style={styles.heroSub}>Inspire. Educate. Connect.</Text>
-          <LinearGradient
-            colors={['transparent', colors.primary.teal + '33', 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.heroArc}
+          <Image
+            source={CREATOR_HUB_BANNER}
+            style={styles.heroBanner}
+            contentFit="contain"
+            accessibilityLabel="PulseVerse Creator Hub"
           />
         </View>
 
@@ -111,6 +103,28 @@ export default function CreateScreen() {
               <View style={styles.tileText}>
                 <Text style={styles.tileTitle}>{tile.title}</Text>
                 <Text style={styles.tileSub}>{tile.subtitle}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.templatesKicker}>Creator toolkit</Text>
+        <Text style={styles.templatesLede}>Same tools live inside each composer — jump here if you know what you need.</Text>
+        <View style={styles.toolkitList}>
+          {CREATOR_HUB_LINKS.map((row) => (
+            <TouchableOpacity
+              key={row.title}
+              style={styles.toolkitRow}
+              onPress={() => router.push(row.href as any)}
+              activeOpacity={0.88}
+            >
+              <View style={styles.toolkitIcon}>
+                <Ionicons name={row.icon} size={20} color={colors.primary.teal} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toolkitTitle}>{row.title}</Text>
+                <Text style={styles.toolkitSub}>{row.subtitle}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
             </TouchableOpacity>
@@ -150,25 +164,18 @@ const LIVE_ACCENT = '#EC4899';
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
   scroll: { paddingHorizontal: layout.screenPadding, paddingBottom: 120 },
-  hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
-  heroLogo: { width: 72, height: 72, marginBottom: 16 },
-  heroTitle: {
-    ...typography.h2,
-    color: colors.dark.text,
-    letterSpacing: -0.5,
+  hero: {
+    alignItems: 'center',
+    paddingTop: 4,
+    paddingBottom: 20,
+    width: '100%',
   },
-  heroSub: {
-    ...typography.body,
-    fontWeight: '500',
-    color: colors.dark.textSecondary,
-    marginTop: 8,
-  },
-  heroArc: {
-    marginTop: 20,
-    height: 3,
-    width: '72%',
-    borderRadius: 2,
-    opacity: 0.9,
+  /** Wide horizontal art (~1024×341); transparent PNG blends with screen gradient. */
+  heroBanner: {
+    width: '100%',
+    maxWidth: 560,
+    aspectRatio: 1024 / 341,
+    maxHeight: 150,
   },
   grid: { gap: 10 },
   tile: {
@@ -241,5 +248,41 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     marginTop: 4,
   },
+  templatesKicker: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.dark.textMuted,
+    marginTop: 18,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  templatesLede: {
+    ...typography.caption,
+    color: colors.dark.textSecondary,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  toolkitList: { gap: 8, marginBottom: 8 },
+  toolkitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: layout.screenPadding,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.dark.card,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  toolkitIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary.teal + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolkitTitle: { fontSize: 14, fontWeight: '800', color: colors.dark.text },
+  toolkitSub: { fontSize: 12, color: colors.dark.textMuted, marginTop: 3 },
   leaderboardsWrap: { marginTop: 20 },
 });

@@ -17,7 +17,12 @@ import {
 } from "@/lib/admin/queries";
 import { loadAdvertiserEngagementPayload } from "@/lib/admin/advertiser-engagement-queries";
 
-export default async function AdminInsightsPage() {
+export default async function AdminInsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const q = await searchParams;
   const counts = await loadAdminCounts();
   const [
     growthSeries,
@@ -98,6 +103,7 @@ export default async function AdminInsightsPage() {
         liveKpis={liveKpis}
         campaignKpis={campaignKpis}
         myPulseKpis={myPulseKpis}
+        defaultTab={q.tab}
       />
     </div>
   );

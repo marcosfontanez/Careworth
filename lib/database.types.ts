@@ -37,6 +37,9 @@ export interface Database {
           profile_song_title: string | null;
           profile_song_artist: string | null;
           profile_song_url: string | null;
+          selected_pulse_avatar_frame_id: string | null;
+          brand_kit: Json;
+          terms_and_privacy_accepted_at: string | null;
         };
         Insert: {
           id: string;
@@ -69,8 +72,58 @@ export interface Database {
           profile_song_title?: string | null;
           profile_song_artist?: string | null;
           profile_song_url?: string | null;
+          selected_pulse_avatar_frame_id?: string | null;
+          brand_kit?: Json;
+          terms_and_privacy_accepted_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
+        Relationships: [];
+      };
+      pulse_avatar_frames: {
+        Row: {
+          id: string;
+          slug: string;
+          label: string;
+          subtitle: string | null;
+          prize_tier: string;
+          month_start: string;
+          ring_color: string;
+          glow_color: string;
+          sort_order: number;
+          created_at: string;
+          ring_caption: string | null;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          label: string;
+          subtitle?: string | null;
+          prize_tier: string;
+          month_start: string;
+          ring_color: string;
+          glow_color: string;
+          sort_order?: number;
+          ring_caption?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['pulse_avatar_frames']['Insert']>;
+        Relationships: [];
+      };
+      user_pulse_avatar_frames: {
+        Row: {
+          user_id: string;
+          frame_id: string;
+          leaderboard_rank: number;
+          granted_at: string;
+          grant_source: string;
+        };
+        Insert: {
+          user_id: string;
+          frame_id: string;
+          leaderboard_rank: number;
+          granted_at?: string;
+          grant_source?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_pulse_avatar_frames']['Insert']>;
         Relationships: [];
       };
       posts: {
@@ -104,6 +157,15 @@ export interface Database {
           created_at: string;
           sound_title: string | null;
           sound_source_post_id: string | null;
+          is_education: boolean;
+          education_citations: Json | null;
+          series_id: string | null;
+          series_part: number | null;
+          series_total: number | null;
+          scheduled_at: string | null;
+          scheduled_status: string;
+          cover_alt_url: string | null;
+          mood_preset: string | null;
         };
         Insert: {
           id?: string;
@@ -127,8 +189,109 @@ export interface Database {
           edited_at?: string | null;
           sound_title?: string | null;
           sound_source_post_id?: string | null;
+          is_education?: boolean;
+          education_citations?: Json | null;
+          series_id?: string | null;
+          series_part?: number | null;
+          series_total?: number | null;
+          scheduled_at?: string | null;
+          scheduled_status?: string;
+          cover_alt_url?: string | null;
+          mood_preset?: string | null;
         };
         Update: Partial<Database['public']['Tables']['posts']['Insert']>;
+        Relationships: [];
+      };
+      creator_media_jobs: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          status: string;
+          input: Json;
+          output: Json | null;
+          error: string | null;
+          idempotency_key: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: string;
+          status?: string;
+          input?: Json;
+          output?: Json | null;
+          error?: string | null;
+          idempotency_key?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['creator_media_jobs']['Insert']>;
+        Relationships: [];
+      };
+      post_cover_ab_events: {
+        Row: {
+          id: number;
+          post_id: string;
+          viewer_id: string;
+          variant: string;
+          event_type: string;
+          session_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          post_id: string;
+          viewer_id: string;
+          variant: string;
+          event_type: string;
+          session_id?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['post_cover_ab_events']['Insert']>;
+        Relationships: [];
+      };
+      collab_projects: {
+        Row: {
+          id: string;
+          host_creator_id: string;
+          title: string;
+          status: string;
+          result_storage_path: string | null;
+          published_post_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          host_creator_id: string;
+          title?: string;
+          status?: string;
+          result_storage_path?: string | null;
+          published_post_id?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['collab_projects']['Insert']>;
+        Relationships: [];
+      };
+      collab_slots: {
+        Row: {
+          id: string;
+          project_id: string;
+          slot_index: number;
+          max_duration_sec: number;
+          invite_id: string | null;
+          invitee_user_id: string | null;
+          submitted_storage_path: string | null;
+          status: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          slot_index: number;
+          max_duration_sec?: number;
+          invite_id?: string | null;
+          invitee_user_id?: string | null;
+          submitted_storage_path?: string | null;
+          status?: string;
+        };
+        Update: Partial<Database['public']['Tables']['collab_slots']['Insert']>;
         Relationships: [];
       };
       communities: {
@@ -383,6 +546,7 @@ export interface Database {
           actor_id: string;
           message: string;
           target_id: string | null;
+          community_id: string | null;
           read: boolean;
           created_at: string;
         };
@@ -394,6 +558,7 @@ export interface Database {
           actor_id?: string;
           message: string;
           target_id?: string | null;
+          community_id?: string | null;
           read?: boolean;
         };
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
@@ -1368,6 +1533,26 @@ export interface Database {
       get_pulse_history: {
         Args: { p_user_id?: string };
         Returns: Record<string, Json>[];
+      };
+      claim_pulse_beta_border: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      get_pulse_month_celebration: {
+        Args: Record<string, never>;
+        Returns: {
+          month_start: string;
+          overall: number;
+          tier: string;
+          global_rank: number;
+          total_ranked: number;
+          is_top5: boolean;
+          prize_tier: string | null;
+          frame_label: string | null;
+          frame_ring_color: string | null;
+          frame_glow_color: string | null;
+          frame_ring_caption: string | null;
+        }[];
       };
       get_top_current_pulse: {
         Args: { p_limit?: number; p_circle_id?: string | null };

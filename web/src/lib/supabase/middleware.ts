@@ -2,7 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Refreshes the Supabase session and protects /admin/* (except /admin/login).
+ * Refreshes Supabase session cookies on all routes when this middleware runs, and enforces
+ * staff access for /admin/* (except /admin/login). Consumer routes (/login, /me, …) share the
+ * same cookie jar — see `proxy.ts`.
  */
 export async function updateSupabaseSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -44,6 +46,11 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   const isAdminLogin = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
   const isAdminArea = pathname.startsWith("/admin");
+
+  // Marketing + account routes: session cookies refreshed above; no admin gate.
+  if (!isAdminArea) {
+    return response;
+  }
 
   if (isAdminArea && !isAdminLogin) {
     if (!user) {

@@ -21,7 +21,7 @@ export default function MyPulseTabScreen() {
     tierUp?: string;
   }>();
   const queryClient = useQueryClient();
-  const { profile: authProfile, user: authUser } = useAuth();
+  const { profile: authProfile, user: authUser, refreshProfile } = useAuth();
   const storeUser = useAppStore((s) => s.currentUser);
 
   const postsOwnerId = authUser?.id ?? '';
@@ -30,7 +30,9 @@ export default function MyPulseTabScreen() {
     useCallback(() => {
       if (!postsOwnerId) return;
       void queryClient.invalidateQueries({ queryKey: ['userPosts', postsOwnerId] });
-    }, [postsOwnerId, queryClient]),
+      /** Follower / following tallies on the stat strip come from `profiles`; refresh on tab focus. */
+      void refreshProfile();
+    }, [postsOwnerId, queryClient, refreshProfile]),
   );
 
   const { data: userPosts } = useUserPosts(postsOwnerId);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
-import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { formatCount } from '@/utils/format';
@@ -43,7 +43,13 @@ export function FeedActionRail({
         accessibilityRole="button"
         accessibilityLabel={`Open profile for ${post.creator.displayName}`}
       >
-        <Image source={{ uri: post.creator.avatarUrl }} style={styles.avatar} />
+        <AvatarDisplay
+          size={38}
+          avatarUrl={post.creator.avatarUrl}
+          prioritizeRemoteAvatar
+          ringColor="rgba(255,255,255,0.88)"
+          pulseFrame={pulseFrameFromUser(post.creator.pulseAvatarFrame)}
+        />
         {!isFollowing && (
           <TouchableOpacity
             style={styles.followBubble}
@@ -127,13 +133,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   avatarWrap: { alignItems: 'center', marginBottom: 2 },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.88)',
-  },
   followBubble: {
     width: 21,
     height: 21,

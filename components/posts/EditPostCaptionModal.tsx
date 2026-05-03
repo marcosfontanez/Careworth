@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -11,60 +12,27 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing } from '@/theme';
 
-/**
- * Most posts don't have a hard caption cap (some feed posts are just
- * media), but we want the editor to give the author a reasonable
- * horizon so they don't paste War & Peace into the caption field. 500
- * lines up with the composer used on the create flow.
- */
 const CAPTION_MAX_LENGTH = 500;
+
+const WIN = Dimensions.get('window');
+const CAPTION_FIELD_HEIGHT = Math.min(320, Math.max(220, Math.round(WIN.height * 0.34)));
 
 interface Props {
   visible: boolean;
-  /** Current caption the author is editing. Seeds the input on open. */
   initialCaption: string;
-  /**
-   * Accent colour used for the Save button ring. Passed in by the
-   * parent screen so we match whatever circle / feed theme it's using.
-   */
   accent?: string;
-  /**
-   * Saves the new caption. Parent owns the mutation + cache patch.
-   * Thrown errors surface as an inline retry hint inside the modal.
-   */
   onSave: (nextCaption: string) => Promise<void>;
   onClose: () => void;
-  /**
-   * Title shown at the top of the sheet. Defaults to "Edit caption"
-   * so the feed post screens don't have to pass anything; My Pulse
-   * surfaces override it to "Edit thought" / "Edit note" etc.
-   */
   title?: string;
-  /** Override the placeholder shown when the input is empty. */
   placeholder?: string;
-  /**
-   * Override the helper copy shown under the input. Useful when the
-   * surface isn't a feed "post" per se (e.g. editing a My Pulse row).
-   */
   hint?: string;
-  /**
-   * Allow posts without any body (feed media posts can have empty
-   * captions). My Pulse text posts set this to false to prevent the
-   * author from saving a blank thought.
-   */
   allowEmpty?: boolean;
 }
 
-/**
- * Full-screen modal used by the post detail screen's owner menu to
- * rewrite a post's caption. We keep the shape narrow on purpose —
- * swapping media, changing privacy, or re-tagging circles is better
- * served by delete + re-post so viewers aren't confused by a caption
- * that no longer matches the clip they're watching.
- */
 export function EditPostCaptionModal({
   visible,
   initialCaption,
@@ -76,22 +44,23 @@ export function EditPostCaptionModal({
   hint = 'Your caption is updated for everyone viewing this post. Viewers will see a small “edited” tag next to the time.',
   allowEmpty = true,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [text, setText] = useState(initialCaption);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
-  /**
-   * Re-seed the input whenever the modal is re-opened. Otherwise a
-   * cancelled edit on one post would leak its draft into the next
-   * post the owner opens — a cheap way to accidentally publish the
-   * wrong caption.
-   */
   useEffect(() => {
     if (visible) {
       setText(initialCaption);
       setError(null);
-      const t = setTimeout(() => inputRef.current?.focus(), 60);
+      const len = initialCaption.length;
+      const t = setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setNativeProps({
+          selection: { start: len, end: len },
+        });
+      }, 150);
       return () => clearTimeout(t);
     }
   }, [visible, initialCaption]);
@@ -99,14 +68,6 @@ export function EditPostCaptionModal({
   const trimmed = text.trim();
   const isUnchanged = trimmed === initialCaption.trim();
   const isEmpty = trimmed.length === 0;
-  /**
-   * Gating rules:
-   *   - Disabled while saving so the user can't double-submit.
-   *   - Disabled when the text hasn't drifted from the original — no
-   *     point writing a no-op edit that would still flip edited_at.
-   *   - When `allowEmpty` is false (My Pulse text posts) we also
-   *     block saving a blank body.
-   */
   const canSave = !isUnchanged && !saving && (allowEmpty || !isEmpty);
 
   const handleSave = useCallback(async () => {
@@ -123,27 +84,27 @@ export function EditPostCaptionModal({
     }
   }, [canSave, onSave, onClose, trimmed]);
 
+  const padBottom = Math.max(insets.bottom, 12) + spacing.sm;
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
-      /**
-       * statusBarTranslucent keeps the input scrollable under the
-       * Android status bar — without it the keyboard push-up leaves
-       * a visible ghost of the status bar over our save button.
-       */
+      onRequestClose={saving ? undefined : onClose}
       statusBarTranslucent
     >
-      <Pressable
-        style={styles.backdrop}
-        onPress={saving ? undefined : onClose}
+      <KeyboardAvoidingView
+        style={styles.kavRoot}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
+        <View style={styles.modalStack}>
+          <Pressable
+            style={styles.dimTap}
+            onPress={saving ? undefined : onClose}
+            accessibilityLabel="Dismiss"
+          />
+          <View style={[styles.sheet, { paddingBottom: padBottom }]}>
             <View style={styles.handleWrap}>
               <View style={styles.handle} />
             </View>
@@ -185,11 +146,20 @@ export function EditPostCaptionModal({
                 setError(null);
               }}
               multiline
+              scrollEnabled
               editable={!saving}
               placeholder={placeholder}
               placeholderTextColor={colors.dark.textMuted}
               maxLength={CAPTION_MAX_LENGTH}
-              style={styles.input}
+              textAlignVertical="top"
+              underlineColorAndroid="transparent"
+              selectionColor={accent}
+              style={[
+                styles.input,
+                {
+                  height: CAPTION_FIELD_HEIGHT,
+                },
+              ]}
             />
 
             <View style={styles.footer}>
@@ -203,26 +173,33 @@ export function EditPostCaptionModal({
                 {text.length}/{CAPTION_MAX_LENGTH}
               </Text>
             </View>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  kavRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  modalStack: {
+    flex: 1,
     justifyContent: 'flex-end',
   },
+  dimTap: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
   sheet: {
+    width: '100%',
+    maxHeight: WIN.height * 0.94,
+    paddingHorizontal: spacing.md,
+    paddingTop: 8,
     backgroundColor: colors.dark.card,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
-    paddingTop: 8,
     borderWidth: 1,
     borderColor: colors.dark.border,
     borderBottomWidth: 0,
@@ -273,13 +250,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.25,
   },
   input: {
-    minHeight: 140,
-    maxHeight: 240,
+    width: '100%',
     padding: 12,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.dark.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     color: colors.dark.text,
     fontSize: 15,
     lineHeight: 22,

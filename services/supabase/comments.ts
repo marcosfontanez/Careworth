@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { COMMENT_MAX_LENGTH } from '@/constants';
+import { PROFILE_SELECT_CREATOR_WITH_FRAME } from '@/services/supabase/profileRowMapper';
 
 export interface SupabaseComment {
   id: string;
@@ -26,9 +27,12 @@ export interface SupabaseComment {
   author: {
     id: string;
     display_name: string;
+    username?: string | null;
     avatar_url: string | null;
     role: string;
     specialty: string;
+    city?: string | null;
+    state?: string | null;
     is_verified: boolean;
     /**
      * Denormalized current-month Pulse state (migration 059). Ships
@@ -37,6 +41,8 @@ export interface SupabaseComment {
      */
     pulse_tier: string | null;
     pulse_score_current: number | null;
+    selected_pulse_avatar_frame_id?: string | null;
+    pulse_avatar_frame?: unknown;
   };
 }
 
@@ -44,10 +50,12 @@ export const commentsService = {
   async getByPostId(postId: string): Promise<SupabaseComment[]> {
     const { data, error } = await supabase
       .from('comments')
-      .select(`
+      .select(
+        `
         id, post_id, parent_id, author_id, content, like_count, created_at, deleted_at, edited_at,
-        author:author_id(id, display_name, avatar_url, role, specialty, is_verified, pulse_tier, pulse_score_current)
-      `)
+        author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
+      `,
+      )
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
@@ -136,10 +144,12 @@ export const commentsService = {
       .eq('id', commentId)
       .eq('author_id', user.id)
       .is('deleted_at', null)
-      .select(`
+      .select(
+        `
         id, post_id, parent_id, author_id, content, like_count, created_at, deleted_at, edited_at,
-        author:author_id(id, display_name, avatar_url, role, specialty, is_verified, pulse_tier, pulse_score_current)
-      `)
+        author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
+      `,
+      )
       .single();
 
     if (error) throw error;

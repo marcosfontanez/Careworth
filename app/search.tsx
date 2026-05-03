@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { FilterChips } from '@/components/ui/FilterChips';
@@ -19,7 +20,9 @@ import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
 import { profilesService, communitiesService, postsService } from '@/services/supabase';
 import { analytics } from '@/lib/analytics';
 import { getSearchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory } from '@/lib/searchHistory';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { primeCommunityDetailCache } from '@/lib/communityCache';
 import type { UserProfile, Community, SoundLibraryRow, ViralSoundRow } from '@/types';
 
 const SEARCH_TABS = ['All', 'Creators', 'Sounds', 'Viral Songs', 'Communities', 'Hashtags'] as const;
@@ -34,6 +37,7 @@ type ListItem =
 
 export default function SearchScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ q?: string }>();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState(params.q ?? '');
@@ -136,9 +140,17 @@ export default function SearchScreen() {
             if (!cancelled) setLiveSounds(sounds);
           } else if (!cancelled) setLiveSounds([]);
 
+          if (tab === 'Communities' || tab === 'All') {
+            const circles = await communitiesService.browseDirectory(28);
+            if (!cancelled) setLiveCommunities(circles);
+          } else if (!cancelled) setLiveCommunities([]);
+
+          if (tab === 'Hashtags' || tab === 'All') {
+            const tags = await postsService.getTrendingHashtagsFromPosts(28);
+            if (!cancelled) setLiveHashtags(tags);
+          } else if (!cancelled) setLiveHashtags([]);
+
           if (!cancelled) {
-            setLiveCommunities([]);
-            setLiveHashtags([]);
             setHasSearched(false);
           }
         } finally {
@@ -216,7 +228,14 @@ export default function SearchScreen() {
   const trimmed = query.trim();
   const showMinLengthHint = tab !== 'Viral Songs' && trimmed.length === 1;
   /** When browsing without a query, we still want to render the result list so the user sees the default content. */
-  const showHistoryView = !trimmed && tab !== 'Viral Songs' && tab !== 'Sounds' && tab !== 'Creators' && tab !== 'All';
+  const showHistoryView =
+    !trimmed &&
+    tab !== 'Viral Songs' &&
+    tab !== 'Sounds' &&
+    tab !== 'Creators' &&
+    tab !== 'Communities' &&
+    tab !== 'Hashtags' &&
+    tab !== 'All';
 
   const sortedCreators = useMemo(() => {
     const list = [...liveCreators];
@@ -340,7 +359,13 @@ export default function SearchScreen() {
                   onPress={() => router.push(`/profile/${user.id}`)}
                   activeOpacity={0.7}
                 >
-                  <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+                  <AvatarDisplay
+                    size={48}
+                    avatarUrl={user.avatarUrl}
+                    prioritizeRemoteAvatar
+                    ringColor={colors.dark.border}
+                    pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
+                  />
                   <View style={styles.creatorBody}>
                     <View style={styles.creatorNameRow}>
                       <Text style={styles.creatorName} numberOfLines={1}>
@@ -377,7 +402,13 @@ export default function SearchScreen() {
                 <View style={styles.cardWrap}>
                   <CommunityCard
                     community={{ ...community, isJoined: joinedIds.has(community.id) }}
-                    onPress={() => router.push(`/communities/${community.slug}`)}
+                    onPress={() => {
+                      primeCommunityDetailCache(queryClient, {
+                        ...community,
+                        isJoined: joinedIds.has(community.id),
+                      });
+                      router.push(`/communities/${community.slug}`);
+                    }}
                     onJoin={() => toggleJoinCommunity(community.id)}
                   />
                 </View>

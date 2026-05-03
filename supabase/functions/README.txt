@@ -1,3 +1,16 @@
+Push notifications (Edge Function: notify-expo-push)
+
+1) Deploy (no JWT verification — for Database Webhooks):
+   npx supabase functions deploy notify-expo-push --no-verify-jwt
+
+2) Set secrets: SUPABASE_SERVICE_ROLE_KEY, EXPO_ACCESS_TOKEN (recommended),
+   PUBLIC_SITE_URL (e.g. https://pulseverse.app), optional NOTIFY_PUSH_WEBHOOK_SECRET.
+
+3) Create a Database Webhook on public.notifications INSERT → invoke this function.
+   See supabase/functions/notify-expo-push/README.md for details.
+
+---
+
 Apple Music developer token (Edge Function: apple-music-developer-token)
 
 1) Link project (once):

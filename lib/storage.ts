@@ -171,6 +171,7 @@ async function uriToBlobNative(uri: string, mimeType: string): Promise<Blob> {
 export const STORAGE_BUCKETS = {
   avatars: 'avatars',
   postMedia: 'post-media',
+  collabClips: 'collab-clips',
   communityBanners: 'community-banners',
   employerLogos: 'employer-logos',
 } as const;
@@ -439,6 +440,29 @@ export const storageService = {
     const url = urlData.publicUrl?.trim();
     if (!url) throw new Error('Storage returned no public URL');
     return url;
+  },
+
+  /**
+   * Co-create slot clip — path segments must match migration 096 RLS:
+   * `{inviteeUserId}/{projectId}/{slotId}/{file}`.
+   * Returns the **object path** (not URL) for `collab_slots.submitted_storage_path`.
+   */
+  async uploadCollabSlotClip(args: {
+    inviteeUserId: string;
+    projectId: string;
+    slotId: string;
+    file: { uri: string; type?: string; name?: string };
+  }): Promise<string> {
+    const ext = fileExtForUpload(args.file);
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const path = `${args.inviteeUserId}/${args.projectId}/${args.slotId}/${fileName}`;
+    const data = await uploadFile(STORAGE_BUCKETS.collabClips, path, args.file, { upsert: false });
+    return data.path;
+  },
+
+  collabClipPublicUrl(storagePath: string) {
+    const { data } = supabase.storage.from(STORAGE_BUCKETS.collabClips).getPublicUrl(storagePath);
+    return data.publicUrl?.trim() ?? '';
   },
 
   getPublicUrl(bucket: string, path: string) {

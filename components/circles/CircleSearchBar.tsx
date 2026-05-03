@@ -15,6 +15,7 @@ export function CircleSearchBar({ value, onChangeText, placeholder }: Props) {
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder ?? 'Search circles, circle posts, topics, keywords…'}
+        accessibilityLabel="Search circles and topics"
       />
     </View>
   );

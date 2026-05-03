@@ -10,6 +10,15 @@ import { MyPulseLinkCard } from './cards/MyPulseLinkCard';
 import { MyPulsePicsCard } from './cards/MyPulsePicsCard';
 import { MyPulseCircleCard } from './cards/MyPulseCircleCard';
 
+function postMediaPreviewUri(post: Post | undefined): string | null {
+  if (!post) return null;
+  const t =
+    post.thumbnailUrl?.trim() ||
+    post.coverAltUrl?.trim() ||
+    (post.type === 'image' ? post.mediaUrl?.trim() : null);
+  return t || null;
+}
+
 type Props = {
   update: ProfileUpdate;
   /** Reserved for future themed accents. */
@@ -165,10 +174,12 @@ export function MyPulseItemCard({
   const wasEdited = !!u.editedAt;
 
   switch (displayType) {
-    case 'circle':
+    case 'circle': {
+      const linkedPost = u.linkedPostId ? resolveLinkedPost?.(u.linkedPostId) : undefined;
       return (
         <MyPulseCircleCard
           update={u}
+          linkedPostMediaUrl={postMediaPreviewUri(linkedPost)}
           onDelete={handleDelete}
           onTogglePin={onTogglePin ? handleTogglePin : undefined}
           onLike={handleLike}
@@ -177,6 +188,7 @@ export function MyPulseItemCard({
           onPress={openSource}
         />
       );
+    }
     case 'clip': {
       const linkedPost = u.linkedPostId ? resolveLinkedPost?.(u.linkedPostId) : undefined;
       const thumbnail = u.mediaThumb;

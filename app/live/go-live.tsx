@@ -26,7 +26,10 @@ export default function GoLiveScreen() {
   if (!isFeatureEnabled('liveStreaming')) {
     return <Redirect href="/(tabs)/feed" />;
   }
+  return <GoLiveScreenContent />;
+}
 
+function GoLiveScreenContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();

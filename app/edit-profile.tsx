@@ -16,6 +16,7 @@ import { pickImageFromGallery, type MediaAsset } from '@/lib/media';
 import { storageService } from '@/lib/storage';
 import { useProfileCustomization, getWidgetMeta, DEFAULT_WIDGETS } from '@/store/useProfileCustomization';
 import { AvatarDisplay } from '@/components/profile/AvatarBuilder';
+import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
 import { sanitizeUsername, isValidUsername } from '@/utils/profileHandle';
 import type { Role, Specialty, ShiftPreference, ProfileWidgetType } from '@/types';
 import {
@@ -63,7 +64,7 @@ export default function EditProfileScreen() {
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [username, setUsername] = useState(profile?.username ?? '');
   const [usernameStatus, setUsernameStatus] = useState<
-    'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'yours'
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'yours' | 'disallowed'
   >('idle');
   const [firstName, setFirstName] = useState(profile?.firstName ?? '');
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
@@ -119,6 +120,10 @@ export default function EditProfileScreen() {
       setUsernameStatus('invalid');
       return;
     }
+    if (!usernamePassesContentPolicy(raw)) {
+      setUsernameStatus('disallowed');
+      return;
+    }
     setUsernameStatus('checking');
     let cancelled = false;
     const t = setTimeout(async () => {
@@ -171,6 +176,14 @@ export default function EditProfileScreen() {
         Alert.alert(
           'Username',
           'Use 3–30 letters, numbers, underscores, or dots — no spaces. Example: lexi.rn',
+        );
+        setSaving(false);
+        return;
+      }
+      if (usernameStatus === 'disallowed') {
+        Alert.alert(
+          'Username not allowed',
+          'Reserved or staff-like names, impersonation, and prohibited language are not allowed in your @handle.',
         );
         setSaving(false);
         return;
@@ -735,7 +748,8 @@ function UsernameAvailabilityHint({
     | 'available'
     | 'taken'
     | 'invalid'
-    | 'yours';
+    | 'yours'
+    | 'disallowed';
 }) {
   const trimmed = username.trim();
   const preview = trimmed || 'handle';
@@ -754,6 +768,11 @@ function UsernameAvailabilityHint({
     icon = 'alert-circle';
     tint = colors.status.error;
     message = '3–30 chars, lowercase letters / numbers / dots / underscores. No leading or trailing dot.';
+  } else if (status === 'disallowed') {
+    icon = 'shield-outline';
+    tint = colors.status.error;
+    message =
+      'This @handle is not allowed — no PulseVerse/staff-style segments, impersonation, or abusive or hateful language.';
   } else if (status === 'taken') {
     icon = 'close-circle';
     tint = colors.status.error;

@@ -81,7 +81,9 @@ export default function BlockedUsersScreen() {
           <Ionicons name="shield-checkmark-outline" size={48} color={colors.dark.textMuted} />
           <Text style={styles.emptyTitle}>No blocked users</Text>
           <Text style={styles.emptySubtitle}>
-            Users you block won't be able to see your profile or send you messages
+            Accounts you add to this list are blocked by you. Unblock to restore contact. If someone
+            continues to harass you, use Report or contact support — we are hardening how blocks
+            apply across messaging and discovery.
           </Text>
         </View>
       ) : (

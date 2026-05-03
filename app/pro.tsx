@@ -48,8 +48,6 @@ export default function ProScreen() {
 
     setLoading(true);
     try {
-      // RevenueCat integration placeholder — in production this would
-      // call Purchases.purchasePackage() and then sync with our backend
       const success = await subscriptionService.activateSubscription(user.id, selected);
       if (success) {
         toast.show('Welcome to PulseVerse Pro!', 'success');

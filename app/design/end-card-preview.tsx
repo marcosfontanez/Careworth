@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { EXPORT_STING_MODULE } from '@/assets/audio/stingModule';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { EndCardPreview, PulseVerseEndCard, PulseVerseVideoEndCard } from '@/components/export-end-card';
@@ -116,6 +116,10 @@ export default function ExportEndCardPreviewScreen() {
       Alert.alert('Audio', msg);
     }
   };
+
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)/feed" />;
+  }
 
   return (
     <View style={styles.root}>

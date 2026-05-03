@@ -6,11 +6,15 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '@/theme';
+import { PulseAvatarRingCaption } from '@/components/profile/PulseAvatarRingCaption';
+import { GoldFireworksBurst } from '@/components/profile/GoldFireworksBurst';
 import {
   useProfileCustomization,
   DICEBEAR_STYLES, DICEBEAR_BG_COLORS, buildDiceBearUrl,
 } from '@/store/useProfileCustomization';
-import type { AvatarType, DiceBearStyle } from '@/types';
+import { rasterRingOuterBoxSide, resolvePulseRingRaster, PULSE_BETA_FRAME_SLUG } from '@/lib/pulseRingRasterAssets';
+import type { AvatarType, PulseAvatarFrame } from '@/types';
+import type { PrizeFireworksTier } from './GoldFireworksBurst';
 
 const AVATAR_TYPES: { key: AvatarType; label: string; icon: string }[] = [
   { key: 'illustrated', label: 'Illustrated', icon: 'sparkles' },
@@ -36,6 +40,43 @@ const SEED_PRESETS = [
   'PulseCheck', 'VitalSigns', 'ShiftLife', 'NursingSchool',
 ];
 
+type PulsePrizeTier = PulseAvatarFrame['prizeTier'];
+
+function prizeTierIsGoldLike(t: PulsePrizeTier | undefined): boolean {
+  return t === 'gold' || t === 'exclusive' || t === 'legacy' || t === 'campaign';
+}
+
+function prizeTierToFireworksTier(t: PulsePrizeTier | undefined): PrizeFireworksTier | null {
+  if (t === 'gold' || t === 'exclusive' || t === 'legacy' || t === 'campaign') return 'gold';
+  if (t === 'silver') return 'silver';
+  if (t === 'bronze') return 'bronze';
+  return null;
+}
+
+export type PulseAvatarRingStyle = {
+  ringColor: string;
+  glowColor: string;
+  borderWidth?: number;
+  /** Curved text in the ring band around the photo; omit when null/empty. */
+  ringCaption?: string | null;
+  prizeTier?: PulsePrizeTier;
+  /** When set, may select a bundled raster (e.g. beta-tester-border). */
+  slug?: string | null;
+};
+
+/** Maps equipped catalog frame → ring props for {@link AvatarDisplay}. */
+export function pulseFrameFromUser(frame: PulseAvatarFrame | null | undefined): PulseAvatarRingStyle | null {
+  if (!frame) return null;
+  return {
+    ringColor: frame.ringColor,
+    glowColor: frame.glowColor,
+    borderWidth: prizeTierIsGoldLike(frame.prizeTier) ? 4 : 3,
+    ringCaption: frame.ringCaption ?? null,
+    prizeTier: frame.prizeTier,
+    slug: frame.slug,
+  };
+}
+
 interface AvatarDisplayProps {
   size?: number;
   avatarUrl?: string;
@@ -43,6 +84,11 @@ interface AvatarDisplayProps {
   onPress?: () => void;
   /** When set, overrides profile accent for the outer ring (e.g. brand teal on My Pulse). */
   ringColor?: string;
+  /**
+   * Exclusive monthly leaderboard frame — neon border + glow.
+   * When set, overrides plain `ringColor` for the ring stroke.
+   */
+  pulseFrame?: PulseAvatarRingStyle | null;
   /** Small presence dot — e.g. “online” on own profile. */
   showOnlineDot?: boolean;
   /**
@@ -58,11 +104,49 @@ export function AvatarDisplay({
   showEdit,
   onPress,
   ringColor,
+  pulseFrame,
   showOnlineDot,
   prioritizeRemoteAvatar,
 }: AvatarDisplayProps) {
   const { avatarType, gradientAvatar, illustratedAvatar, accentColor } = useProfileCustomization();
   const ring = ringColor ?? accentColor;
+  const strokeColor = pulseFrame?.ringColor ?? ring;
+  const glowColor = pulseFrame?.glowColor;
+  const { source: rasterSource, innerOpeningFrac } = resolvePulseRingRaster(pulseFrame);
+  const useRasterRing = rasterSource != null;
+  const ringW = Math.min(
+    (pulseFrame?.borderWidth ?? 3) + (prizeTierIsGoldLike(pulseFrame?.prizeTier) ? 1 : 0),
+    5,
+  );
+  const effectiveBorderW = useRasterRing ? 0 : ringW;
+  const capRaw = pulseFrame?.ringCaption?.trim();
+  /** Curved band needs room — hide on tiny feed rails so text stays readable on profiles. Ornate PNG rings ship their own art. */
+  const showRingCaption = Boolean(capRaw && size >= 42 && !useRasterRing);
+  const cap = showRingCaption ? capRaw : undefined;
+  const hasCaption = Boolean(cap);
+  const outerPadLegacy = pulseFrame ? 8 : 6;
+  const captionBand = hasCaption
+    ? Math.max(36, Math.round(size * 0.38))
+    : 0;
+  const outerBox = useRasterRing
+    ? rasterRingOuterBoxSide(size, innerOpeningFrac) + captionBand
+    : size + outerPadLegacy + captionBand;
+  const captionFont = Math.max(5, Math.min(9, Math.round(size * 0.092)));
+  const burstTier: PrizeFireworksTier | null = prizeTierToFireworksTier(pulseFrame?.prizeTier);
+  const showRasterGoldFireworks = Boolean(
+    useRasterRing &&
+      size >= 22 &&
+      (pulseFrame?.prizeTier === 'gold' || pulseFrame?.slug === PULSE_BETA_FRAME_SLUG),
+  );
+  const showProceduralFireworks = Boolean(!useRasterRing && burstTier && size >= 22);
+  const fireworksPalette =
+    (showProceduralFireworks || showRasterGoldFireworks) && pulseFrame
+      ? burstTier === 'gold' || pulseFrame.prizeTier === 'gold'
+        ? [strokeColor, glowColor ?? '#FF9100', '#FFEA00', '#FFFEF0', '#FFD700', '#FFFFFF']
+        : burstTier === 'silver'
+          ? [strokeColor, glowColor ?? '#94A3B8', '#F1F5F9', '#E2E8F0', '#FFFFFF']
+          : [strokeColor, glowColor ?? '#EA580C', '#FDBA74', '#FDE68A', '#FFF7ED']
+      : undefined;
 
   const content = (() => {
     if (prioritizeRemoteAvatar && avatarUrl?.trim()) {
@@ -110,14 +194,87 @@ export function AvatarDisplay({
       disabled={!onPress}
       style={styles.avatarTap}
     >
-      <View style={[styles.avatarOuter, { width: size + 6, height: size + 6, borderRadius: (size + 6) / 2, borderColor: ring }]}>
-        {content}
+      <View
+        style={[
+          styles.avatarOuter,
+          {
+            width: outerBox,
+            height: outerBox,
+            borderRadius: outerBox / 2,
+            borderColor: strokeColor,
+            borderWidth: effectiveBorderW,
+            overflow: 'visible',
+            backgroundColor: useRasterRing ? 'transparent' : undefined,
+            ...(pulseFrame && !useRasterRing
+              ? {
+                  shadowColor: glowColor,
+                  shadowOpacity: prizeTierIsGoldLike(pulseFrame.prizeTier) ? 0.98 : 0.92,
+                  shadowRadius: prizeTierIsGoldLike(pulseFrame.prizeTier) ? 14 : 10,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: prizeTierIsGoldLike(pulseFrame.prizeTier) ? 11 : 8,
+                }
+              : null),
+          },
+        ]}
+      >
+        <View
+          style={{
+            width: outerBox,
+            height: outerBox,
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2,
+            backgroundColor: 'transparent',
+          }}
+        >
+          {hasCaption ? (
+            <PulseAvatarRingCaption
+              boxSize={outerBox}
+              ringWidth={ringW}
+              photoDiameter={size}
+              text={cap!}
+              textColor={strokeColor}
+              fontSize={captionFont}
+            />
+          ) : null}
+          {content}
+        </View>
+        {useRasterRing && rasterSource ? (
+          <Image
+            source={rasterSource}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: outerBox,
+              height: outerBox,
+              zIndex: 4,
+              backgroundColor: 'transparent',
+            }}
+            contentFit="contain"
+            pointerEvents="none"
+          />
+        ) : null}
+        {showRasterGoldFireworks && pulseFrame ? (
+          <GoldFireworksBurst
+            ringDiameter={outerBox}
+            tier="gold"
+            sparkColors={fireworksPalette}
+          />
+        ) : null}
+        {showProceduralFireworks && burstTier ? (
+          <GoldFireworksBurst
+            ringDiameter={outerBox}
+            tier={burstTier}
+            sparkColors={fireworksPalette}
+          />
+        ) : null}
       </View>
       {showOnlineDot ? (
         <View style={styles.onlineDot} />
       ) : null}
       {showEdit && (
-        <View style={[styles.editBadge, { backgroundColor: ring }]}>
+        <View style={[styles.editBadge, { backgroundColor: strokeColor }]}>
           <Ionicons name="camera" size={14} color="#FFF" />
         </View>
       )}

@@ -9,13 +9,16 @@ import { Image } from 'expo-image';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFeed, useFeaturedCommunities, useFeaturedJobs } from '@/hooks/useQueries';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, borderRadius, iconSize, layout, spacing, typography } from '@/theme';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { formatCount } from '@/utils/format';
 import { supabase } from '@/lib/supabase';
-import type { UserProfile } from '@/types';
+import { postsService } from '@/services/supabase';
+import { primeCommunityDetailCache } from '@/lib/communityCache';
+import type { UserProfile, Post } from '@/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W * 0.42;
@@ -47,6 +50,7 @@ const FALLBACK_TAGS = [
 
 export default function DiscoverScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { data: trendingPosts, refetch: refetchPosts } = useFeed('topToday');
   const { data: featuredCommunities } = useFeaturedCommunities();
@@ -56,8 +60,25 @@ export default function DiscoverScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [trendingTags, setTrendingTags] = useState(FALLBACK_TAGS);
   const [suggestedCreators, setSuggestedCreators] = useState<UserProfile[]>([]);
+  const [learnShelf, setLearnShelf] = useState<Post[]>([]);
+  const [nightShelf, setNightShelf] = useState<Post[]>([]);
+
+  const loadDiscoverShelves = useCallback(async () => {
+    try {
+      const [learn, night] = await Promise.all([
+        postsService.getDiscoverShelf('learn', 14),
+        postsService.getDiscoverShelf('night', 14),
+      ]);
+      setLearnShelf(learn);
+      setNightShelf(night);
+    } catch {
+      setLearnShelf([]);
+      setNightShelf([]);
+    }
+  }, []);
 
   useEffect(() => {
+    loadDiscoverShelves();
     (async () => {
       try {
         const { data: posts } = await supabase
@@ -119,13 +140,13 @@ export default function DiscoverScreen() {
         }
       } catch {}
     })();
-  }, []);
+  }, [loadDiscoverShelves]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetchPosts();
+    await Promise.all([refetchPosts(), loadDiscoverShelves()]);
     setRefreshing(false);
-  }, [refetchPosts]);
+  }, [refetchPosts, loadDiscoverShelves]);
 
   const topPosts = (trendingPosts ?? []).slice(0, 12);
   const topCommunities = (featuredCommunities ?? []).slice(0, 8);
@@ -218,6 +239,66 @@ export default function DiscoverScreen() {
           ))}
         </ScrollView>
 
+        {learnShelf.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Learn on Pulse</Text>
+            <Text style={styles.shelfSubtitle}>Education-tagged clips &amp; carousels</Text>
+            <FlatList
+              data={learnShelf}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.hScroll}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.postCard}
+                  onPress={() => router.push(`/post/${item.id}`)}
+                  activeOpacity={0.8}
+                >
+                  <RecentMediaThumb post={item} style={styles.postImage} />
+                  <View style={styles.postOverlay}>
+                    <Text style={styles.postCaption} numberOfLines={2}>{item.caption}</Text>
+                    <View style={styles.postStats}>
+                      <Ionicons name="heart" size={12} color={colors.dark.text} />
+                      <Text style={styles.postStatText}>{formatCount(item.likeCount)}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          </>
+        )}
+
+        {nightShelf.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Night shift</Text>
+            <Text style={styles.shelfSubtitle}>Stories from the late chart</Text>
+            <FlatList
+              data={nightShelf}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.hScroll}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.postCard}
+                  onPress={() => router.push(`/post/${item.id}`)}
+                  activeOpacity={0.8}
+                >
+                  <RecentMediaThumb post={item} style={styles.postImage} />
+                  <View style={styles.postOverlay}>
+                    <Text style={styles.postCaption} numberOfLines={2}>{item.caption}</Text>
+                    <View style={styles.postStats}>
+                      <Ionicons name="heart" size={12} color={colors.dark.text} />
+                      <Text style={styles.postStatText}>{formatCount(item.likeCount)}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          </>
+        )}
+
         <Text style={styles.sectionTitle}>Trending Today</Text>
         <FlatList
           data={topPosts}
@@ -257,7 +338,10 @@ export default function DiscoverScreen() {
                 return (
                   <TouchableOpacity
                     style={styles.communityCard}
-                    onPress={() => router.push(`/communities/${item.slug}`)}
+                    onPress={() => {
+                      primeCommunityDetailCache(queryClient, item);
+                      router.push(`/communities/${item.slug}`);
+                    }}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.communityIcon, { backgroundColor: (item.accentColor ?? colors.primary.teal) + '20' }]}>
@@ -320,6 +404,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPadding,
     marginTop: spacing.xl,
     marginBottom: spacing.md,
+  },
+  shelfSubtitle: {
+    ...typography.metadata,
+    color: colors.dark.textMuted,
+    paddingHorizontal: layout.screenPadding,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    fontSize: 12,
+    fontWeight: '600',
   },
   hScroll: { paddingHorizontal: layout.screenPadding, gap: spacing.sm + 2 },
 

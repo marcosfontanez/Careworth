@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius } from '@/theme';
 import { timeAgo } from '@/utils/format';
@@ -36,7 +36,13 @@ export function NotificationRow({ notification, onPress }: Props) {
       activeOpacity={0.7}
     >
       <View style={styles.avatarWrap}>
-        <Image source={{ uri: avatarThumb(notification.actor.avatarUrl, 48) }} style={styles.avatar} />
+        <AvatarDisplay
+          size={46}
+          avatarUrl={avatarThumb(notification.actor.avatarUrl, 48)}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+          pulseFrame={pulseFrameFromUser(notification.actor.pulseAvatarFrame)}
+        />
         <View style={[styles.typeBadge, { backgroundColor: cfg.color }]}>
           <Ionicons name={cfg.name as any} size={10} color={colors.dark.text} />
         </View>
@@ -73,7 +79,6 @@ const styles = StyleSheet.create({
   },
   unread: { backgroundColor: colors.primary.teal + '0A' },
   avatarWrap: { position: 'relative', marginTop: 2 },
-  avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: colors.dark.border },
   typeBadge: {
     position: 'absolute', bottom: -2, right: -2,
     width: 22, height: 22, borderRadius: 11,

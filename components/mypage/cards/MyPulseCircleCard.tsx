@@ -1,42 +1,46 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
-import { relativeMyPulse } from '@/utils/format';
-import type { ProfileUpdate } from '@/types';
+import { formatCount, relativeMyPulse } from '@/utils/format';
+import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
-import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
-import { CirclesOrbitIcon } from './icons/CirclesOrbitIcon';
+import { communitiesService } from '@/services/supabase';
+import { feedService } from '@/services/feed';
 
-/** Must match the `circle` entry in MY_PULSE_VISUALS. */
-const CIRCLE_ACCENT = '#F472B6';
+function thumbFromPost(post: Post | null | undefined): string | null {
+  if (!post) return null;
+  return (
+    post.thumbnailUrl?.trim() ||
+    post.coverAltUrl?.trim() ||
+    (post.type === 'image' ? post.mediaUrl?.trim() : null) ||
+    null
+  );
+}
+
+const ACCENT = colors.primary.teal;
 
 interface Props {
   update: ProfileUpdate;
+  /** Thumbnail from the linked feed post (when the pin references `linkedPostId`). */
+  linkedPostMediaUrl?: string | null;
   onDelete?: () => Promise<void> | void;
   readOnly?: boolean;
   onPress?: () => void;
   onLike?: () => void;
   onComment?: () => void;
-  /** Owner-only pin toggle forwarded to the shared shell menu. */
   onTogglePin?: () => Promise<void> | void;
 }
 
 /**
- * Circle Discussion = a Circles thread the owner pinned to their Pulse.
- *
- * Unlike Clip (which previews a feed VIDEO), a Circle discussion is
- * text-first: it has a title (the thread title), a preview of the body,
- * and a "from <circle>" source line so visitors know which Circle the
- * conversation came from. No video thumbnail, no play button — tapping
- * the card routes back into the original Circles thread where the
- * discussion lives.
- *
- * Visual identity (rose-pink accent, "Circle Discussion" pill, chatbubbles
- * glyph) lives in `MY_PULSE_VISUALS.circle` on the shared shell so the
- * color stays in sync with the composer / type-badge elsewhere in the app.
+ * Circles discussion pin — horizontal mock layout: round room preview,
+ * title, blurb, like + member counts, chevron into the thread.
  */
 export function MyPulseCircleCard({
   update: u,
+  linkedPostMediaUrl,
   onDelete,
   onTogglePin,
   readOnly,
@@ -49,16 +53,36 @@ export function MyPulseCircleCard({
     u.content.split('—')[0]?.trim() ||
     u.content.trim();
   const title = rawTitle.slice(0, 140) || 'Circle discussion';
-  const preview = (u.previewText?.trim() || '').slice(0, 260);
   const circleSlug = u.linkedCircleSlug?.trim();
-  // Human-friendly circle name: "night-shift-nurses" → "Night Shift Nurses".
-  const circleLabel = circleSlug
-    ? circleSlug
-        .split(/[-_]/g)
-        .filter(Boolean)
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ')
-    : '';
+  const preview = (u.previewText?.trim() || '').slice(0, 220);
+  const linkedPostId = u.linkedPostId?.trim();
+
+  const { data: circleMeta } = useQuery({
+    queryKey: ['community', 'preview', circleSlug],
+    queryFn: () => communitiesService.getBySlug(circleSlug!),
+    enabled: !!circleSlug,
+    staleTime: 300_000,
+  });
+
+  const needFetchedThumb =
+    !!linkedPostId && !u.mediaThumb?.trim() && !linkedPostMediaUrl?.trim();
+
+  const { data: fetchedPost } = useQuery({
+    queryKey: ['post', 'circlePinThumb', linkedPostId],
+    queryFn: () => feedService.getPostById(linkedPostId!, null),
+    enabled: !!linkedPostId && needFetchedThumb,
+    staleTime: 120_000,
+  });
+
+  const description =
+    (circleMeta?.description?.trim() && circleMeta.description.trim().slice(0, 160)) ||
+    preview ||
+    '';
+  const pinThumb =
+    u.mediaThumb?.trim() || linkedPostMediaUrl?.trim() || thumbFromPost(fetchedPost) || null;
+  const previewUri = pinThumb || circleMeta?.bannerUrl?.trim() || null;
+  const memberCount = circleMeta?.memberCount;
+  const showFeatured = circleMeta?.featuredOrder != null;
 
   return (
     <MyPulseCardShell
@@ -76,92 +100,134 @@ export function MyPulseCircleCard({
       isPinned={u.isPinned}
       onTogglePin={onTogglePin}
     >
-      {circleLabel ? (
-        <View style={styles.sourceRow}>
-          <CirclesOrbitIcon size={14} color={CIRCLE_ACCENT} />
-          <Text style={styles.sourceLabel} numberOfLines={1}>
-            from {circleLabel}
-          </Text>
+      <View style={styles.circleRow}>
+        <View style={styles.previewRing}>
+          {previewUri ? (
+            <Image source={{ uri: previewUri }} style={styles.previewImg} contentFit="cover" />
+          ) : (
+            <View style={styles.previewFallback}>
+              <Ionicons name="people" size={28} color={`${ACCENT}99`} />
+            </View>
+          )}
         </View>
-      ) : null}
 
-      <Text style={styles.title} numberOfLines={3}>
-        {title}
-      </Text>
-
-      {preview && preview !== title ? (
-        <View style={styles.quoteBlock}>
-          <View style={styles.quoteBar} />
-          <CaptionWithMentions
-            text={preview}
-            style={styles.quoteText}
-            numberOfLines={4}
-          />
+        <View style={styles.main}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            {showFeatured ? (
+              <Ionicons name="checkmark-circle" size={17} color={ACCENT} style={styles.verify} />
+            ) : null}
+          </View>
+          {description ? (
+            <Text style={styles.desc} numberOfLines={2}>
+              {description}
+            </Text>
+          ) : null}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="heart" size={13} color={ACCENT} />
+              <Text style={styles.statText}>{formatCount(u.likeCount ?? 0)}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="people-outline" size={14} color={colors.dark.textMuted} />
+              <Text style={styles.statText} numberOfLines={1}>
+                {typeof memberCount === 'number' && memberCount >= 0
+                  ? `${formatCount(memberCount)} members`
+                  : 'Circle'}
+              </Text>
+            </View>
+          </View>
         </View>
-      ) : null}
+
+        <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} style={styles.chevron} />
+      </View>
     </MyPulseCardShell>
   );
 }
 
+const PREVIEW = 56;
+
 const styles = StyleSheet.create({
-  sourceRow: {
+  circleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: 6,
+    gap: 12,
+    marginTop: 2,
   },
-  sourceLabel: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: CIRCLE_ACCENT,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+  previewRing: {
+    width: PREVIEW,
+    height: PREVIEW,
+    borderRadius: PREVIEW / 2,
+    borderWidth: 2,
+    borderColor: `${ACCENT}44`,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(20,184,166,0.08)',
+  },
+  previewImg: {
+    width: '100%',
+    height: '100%',
+  },
+  previewFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8,14,24,0.9)',
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   title: {
-    fontSize: 15.5,
-    lineHeight: 21,
+    flex: 1,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.dark.text,
     letterSpacing: -0.2,
   },
-  quoteBlock: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 10,
+  verify: {
+    marginTop: 1,
   },
-  quoteBar: {
-    width: 3,
-    alignSelf: 'stretch',
-    borderRadius: 2,
-    backgroundColor: 'rgba(244,114,182,0.55)',
-  },
-  quoteText: {
-    flex: 1,
-    fontSize: 13.5,
-    lineHeight: 19,
+  desc: {
+    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 17,
     fontWeight: '500',
     color: colors.dark.textSecondary,
-    fontStyle: 'italic',
-    letterSpacing: -0.1,
   },
-  emptyHint: {
-    marginTop: 10,
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.dark.textMuted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
   },
-  openRow: {
+  statItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 12,
   },
-  openLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: CIRCLE_ACCENT,
-    letterSpacing: 0.3,
+  statDivider: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.dark.textMuted,
+    opacity: 0.5,
+  },
+  statText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.dark.textMuted,
+    letterSpacing: 0.1,
+  },
+  chevron: {
+    alignSelf: 'center',
+    marginLeft: 2,
   },
 });

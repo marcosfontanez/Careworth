@@ -12,9 +12,6 @@ function normalizePostType(raw: unknown): PostType {
   return 'text';
 }
 
-/** @deprecated Use `profileRowToCreatorSummary` from `./profileRowMapper`. */
-const rowToCreator = profileRowToCreatorSummary;
-
 function normalizeMediaUrl(raw: unknown): string | undefined {
   if (raw == null) return undefined;
   let s = String(raw).trim();
@@ -38,15 +35,60 @@ function normalizeFeedTypeEligibleTags(raw: unknown): string[] {
   return [...new Set(mapped)];
 }
 
+/** Only `live` posts belong in public algorithmic feeds (scheduled / sending / failed stay off-feed). */
+function postIsLiveForPublicSurface(p: Post): boolean {
+  const s = (p.scheduledStatus ?? 'live').trim().toLowerCase();
+  return s === 'live';
+}
+
 /** Posts tagged only for circles must not appear in For You, Following, Friends, or Top Today (incl. author prepended slice). */
 function postAppearsInMainFeeds(p: Post): boolean {
+  if (!postIsLiveForPublicSurface(p)) return false;
   const tags = p.feedTypeEligible ?? [];
   return tags.some((x) => x === 'forYou' || x === 'following' || x === 'friends' || x === 'topToday');
 }
 
+function normalizeEducationCitations(
+  raw: unknown,
+): Array<{ label?: string; url?: string; doi?: string; lastReviewed?: string }> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: Array<{ label?: string; url?: string; doi?: string; lastReviewed?: string }> = [];
+  for (const item of raw) {
+    if (item && typeof item === 'object') {
+      const o = item as Record<string, unknown>;
+      const label = o.label != null ? String(o.label).trim() : undefined;
+      const url = o.url != null ? String(o.url).trim() : undefined;
+      const doi = o.doi != null ? String(o.doi).trim() : undefined;
+      const lastReviewed =
+        o.lastReviewed != null
+          ? String(o.lastReviewed).trim()
+          : o.last_reviewed != null
+            ? String(o.last_reviewed).trim()
+            : undefined;
+      if (label || url) {
+        out.push({
+          label,
+          url,
+          ...(doi ? { doi } : {}),
+          ...(lastReviewed ? { lastReviewed } : {}),
+        });
+      }
+    }
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeAdditionalMedia(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const urls = raw
+    .map((x) => normalizeMediaUrl(x))
+    .filter((u): u is string => Boolean(u?.trim()));
+  return urls.length ? urls : undefined;
+}
+
 function rowToPost(row: any): Post {
   const creator = row.profiles
-    ? rowToCreator(row.profiles)
+    ? profileRowToCreatorSummary(row.profiles)
     : unknownCreatorSummary(row.creator_id);
 
   return {
@@ -86,6 +128,16 @@ function rowToPost(row: any): Post {
      * so viewers know the caption has changed.
      */
     editedAt: row.edited_at ?? undefined,
+    additionalMedia: normalizeAdditionalMedia(row.additional_media),
+    isEducation: Boolean(row.is_education),
+    educationCitations: normalizeEducationCitations(row.education_citations),
+    seriesId: row.series_id ? String(row.series_id) : undefined,
+    seriesPart: row.series_part != null ? Number(row.series_part) : undefined,
+    seriesTotal: row.series_total != null ? Number(row.series_total) : undefined,
+    scheduledAt: row.scheduled_at ?? undefined,
+    scheduledStatus: row.scheduled_status != null ? String(row.scheduled_status) : undefined,
+    coverAltUrl: normalizeMediaUrl(row.cover_alt_url),
+    moodPreset: row.mood_preset?.trim() || undefined,
   };
 }
 
@@ -126,6 +178,7 @@ const POST_SELECT = [
   // Media
   'media_url',
   'thumbnail_url',
+  'additional_media',
   // Taxonomy / discovery
   'hashtags',
   'communities',
@@ -153,9 +206,19 @@ const POST_SELECT = [
   'evidence_url',
   'evidence_label',
   'shift_context',
+  // Creator tools (education, series, schedule, mood, cover A/B)
+  'is_education',
+  'education_citations',
+  'series_id',
+  'series_part',
+  'series_total',
+  'scheduled_at',
+  'scheduled_status',
+  'cover_alt_url',
+  'mood_preset',
   // Joined creator profile — explicit columns to avoid shipping email,
   // push tokens, role_admin flag, identity_tags, etc. to the client.
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current)',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */
@@ -181,7 +244,8 @@ async function fetchForYouPostsChronological(viewerId: string, limit: number): P
 
   if (!rpcErr && idRows != null && (idRows as { id: string }[]).length > 0) {
     const ids = (idRows as { id: string }[]).map((r) => r.id);
-    return fetchPostsByIdsOrdered(ids);
+    const ordered = await fetchPostsByIdsOrdered(ids);
+    return ordered.filter(postAppearsInMainFeeds);
   }
 
   if (__DEV__ && rpcErr) {
@@ -192,7 +256,7 @@ async function fetchForYouPostsChronological(viewerId: string, limit: number): P
   q = withFeedPrivacy(q, viewerId);
   const { data, error } = await q.order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
-  return (data ?? []).map(rowToPost);
+  return (data ?? []).map(rowToPost).filter(postAppearsInMainFeeds);
 }
 
 /**
@@ -400,6 +464,7 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
         const scoreMap = new Map(rankedRpc.map((r) => [r.post_id, r.score]));
         rankedPosts = data
           .map(rowToPost)
+          .filter(postAppearsInMainFeeds)
           .sort((a, b) => ((scoreMap.get(b.id) ?? 0) as number) - ((scoreMap.get(a.id) ?? 0) as number));
       }
     } catch (e: any) {
@@ -608,7 +673,9 @@ export const postsService = {
       .limit(180);
     if (error) throw error;
     const rows = (data ?? []).map(rowToPost);
-    const filtered = rows.filter((p) => (p.hashtags ?? []).some((h) => String(h).toLowerCase() === raw));
+    const filtered = rows.filter(
+      (p) => postIsLiveForPublicSurface(p) && (p.hashtags ?? []).some((h) => String(h).toLowerCase() === raw),
+    );
     return finalizePostsForViewer(filtered.slice(0, limit), viewerId);
   },
 
@@ -620,7 +687,10 @@ export const postsService = {
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) throw error;
-    return finalizePostsForViewer((data ?? []).map(rowToPost), viewerId);
+    return finalizePostsForViewer(
+      (data ?? []).map(rowToPost).filter(postIsLiveForPublicSurface),
+      viewerId,
+    );
   },
 
   getRankedFeed: runRankedForYouFeed,
@@ -656,7 +726,10 @@ export const postsService = {
     const { data, error } = await query;
     if (error) throw error;
 
-    const posts = finalizePostsForViewer((data ?? []).map(rowToPost), viewerId);
+    const posts = finalizePostsForViewer(
+      (data ?? []).map(rowToPost).filter(postIsLiveForPublicSurface),
+      viewerId,
+    );
     const nextCursor = posts.length === limit ? posts[posts.length - 1].createdAt : null;
     return { posts, nextCursor };
   },
@@ -669,7 +742,9 @@ export const postsService = {
       .single();
 
     if (error || !data) return null;
-    return finalizePostsForViewer([rowToPost(data)], viewerId)[0] ?? null;
+    const mapped = rowToPost(data);
+    if (!postIsLiveForPublicSurface(mapped) && viewerId !== mapped.creatorId) return null;
+    return finalizePostsForViewer([mapped], viewerId)[0] ?? null;
   },
 
   /**
@@ -707,7 +782,7 @@ export const postsService = {
     if (error) throw error;
     let posts = (data ?? []).map(rowToPost);
     if (viewerId && viewerId !== profileUserId) {
-      posts = posts.filter((p) => !p.isAnonymous);
+      posts = posts.filter((p) => !p.isAnonymous && postIsLiveForPublicSurface(p));
     }
     return finalizePostsForViewer(posts, viewerId);
   },
@@ -734,7 +809,10 @@ export const postsService = {
       console.warn('[postsService.getByCommunity] community_post_pins:', pinsResult.error.message);
     }
 
-    let posts = finalizePostsForViewer((data ?? []).map(rowToPost), viewerId);
+    let posts = finalizePostsForViewer(
+      (data ?? []).map(rowToPost).filter(postIsLiveForPublicSurface),
+      viewerId,
+    );
     posts = mergePinnedCommunityPosts(posts, pins);
     return posts;
   },
@@ -768,7 +846,9 @@ export const postsService = {
 
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []).map(rowToPost).filter((p) => (p.communities ?? []).length > 0);
+    return (data ?? [])
+      .map(rowToPost)
+      .filter((p) => (p.communities ?? []).length > 0 && postIsLiveForPublicSurface(p));
   },
 
   /**
@@ -897,6 +977,17 @@ export const postsService = {
     evidence_url?: string | null;
     evidence_label?: string | null;
     shift_context?: string | null;
+    /** Creator-tools (require migration 090). All optional and stripped on retry if the columns aren't present. */
+    is_education?: boolean;
+    education_citations?: Array<{ label?: string; url: string }> | null;
+    series_id?: string | null;
+    series_part?: number | null;
+    series_total?: number | null;
+    scheduled_at?: string | null;
+    scheduled_status?: 'live' | 'scheduled' | 'sending' | 'failed' | null;
+    cover_alt_url?: string | null;
+    mood_preset?: string | null;
+    additional_media?: string[] | null;
   }): Promise<Post> {
     let roleCtx = post.role_context;
     let specCtx = post.specialty_context;
@@ -925,6 +1016,16 @@ export const postsService = {
       evidence_url: evidenceUrlIn,
       evidence_label: evidenceLabelIn,
       shift_context: shiftCtxIn,
+      is_education: isEducationIn,
+      education_citations: educationCitationsIn,
+      series_id: seriesIdIn,
+      series_part: seriesPartIn,
+      series_total: seriesTotalIn,
+      scheduled_at: scheduledAtIn,
+      scheduled_status: scheduledStatusIn,
+      cover_alt_url: coverAltUrlIn,
+      mood_preset: moodPresetIn,
+      additional_media: additionalMediaIn,
       ...postRest
     } = post;
 
@@ -960,14 +1061,78 @@ export const postsService = {
     const sh = shiftCtxIn != null ? String(shiftCtxIn).trim().toLowerCase() : '';
     if (sh && ['day', 'night', 'weekend', 'any'].includes(sh)) insertPayload.shift_context = sh;
 
-    const { data, error } = await supabase
+    /**
+     * Creator-tools fields (migration 090). We collect the new keys into a
+     * separate map so we can retry without them if the columns aren't present.
+     */
+    const extensionPayload: Record<string, unknown> = {};
+    if (isEducationIn === true) extensionPayload.is_education = true;
+    if (educationCitationsIn != null) {
+      const safe = (Array.isArray(educationCitationsIn) ? educationCitationsIn : [])
+        .map((c) => ({
+          label: typeof c.label === 'string' ? c.label.slice(0, 80) : null,
+          url: typeof c.url === 'string' ? c.url.trim().slice(0, 500) : '',
+        }))
+        .filter((c) => c.url);
+      if (safe.length) extensionPayload.education_citations = safe;
+    }
+    const sid2 = typeof seriesIdIn === 'string' ? seriesIdIn.trim() : '';
+    if (sid2) extensionPayload.series_id = sid2;
+    if (typeof seriesPartIn === 'number' && Number.isFinite(seriesPartIn)) {
+      extensionPayload.series_part = Math.max(1, Math.min(99, Math.floor(seriesPartIn)));
+    }
+    if (typeof seriesTotalIn === 'number' && Number.isFinite(seriesTotalIn)) {
+      extensionPayload.series_total = Math.max(1, Math.min(99, Math.floor(seriesTotalIn)));
+    }
+    const schAt = typeof scheduledAtIn === 'string' ? scheduledAtIn.trim() : '';
+    if (schAt) extensionPayload.scheduled_at = schAt;
+    if (scheduledStatusIn && ['live', 'scheduled', 'sending', 'failed'].includes(scheduledStatusIn)) {
+      extensionPayload.scheduled_status = scheduledStatusIn;
+    }
+    const cau = typeof coverAltUrlIn === 'string' ? coverAltUrlIn.trim() : '';
+    if (cau) extensionPayload.cover_alt_url = cau;
+    const mp = typeof moodPresetIn === 'string' ? moodPresetIn.trim() : '';
+    if (mp) extensionPayload.mood_preset = mp;
+    if (Array.isArray(additionalMediaIn) && additionalMediaIn.length) {
+      insertPayload.additional_media = additionalMediaIn;
+    }
+
+    const fullPayload = { ...insertPayload, ...extensionPayload };
+
+    let inserted: { data: unknown; error: unknown } = await supabase
       .from('posts')
-      .insert(insertPayload as any)
+      .insert(fullPayload as any)
       .select(POST_SELECT)
       .single();
 
-    if (error) throw error;
-    return finalizePostsForViewer([rowToPost(data)], post.creator_id)[0]!;
+    /**
+     * If the migration adding creator-tools columns hasn't been run yet, the
+     * insert will fail with a "column ... does not exist" Postgres error.
+     * We strip the extension fields and retry once so the post still goes
+     * through.
+     */
+    const errAny = inserted.error as { code?: string; message?: string } | null;
+    const isUnknownColumn =
+      errAny &&
+      (errAny.code === '42703' ||
+        /column .* does not exist|could not find .* column/i.test(errAny.message ?? ''));
+
+    if (isUnknownColumn && Object.keys(extensionPayload).length > 0) {
+      if (__DEV__) {
+        console.warn(
+          '[postsService.create] creator-tools columns missing; retrying without them.',
+          errAny?.message,
+        );
+      }
+      inserted = await supabase
+        .from('posts')
+        .insert(insertPayload as any)
+        .select(POST_SELECT)
+        .single();
+    }
+
+    if (inserted.error) throw inserted.error;
+    return finalizePostsForViewer([rowToPost(inserted.data as never)], post.creator_id)[0]!;
   },
 
   async toggleLike(userId: string, postId: string): Promise<boolean> {
@@ -1123,5 +1288,52 @@ export const postsService = {
       .single();
     if (error || !data) throw error ?? new Error('Update failed');
     return rowToPost(data);
+  },
+
+  /** Top hashtags from recent public posts (Discover + Search empty-query browse). */
+  async getTrendingHashtagsFromPosts(limit = 24): Promise<string[]> {
+    const { data } = await supabase
+      .from('posts')
+      .select('hashtags')
+      .eq('privacy_mode', 'public')
+      .not('hashtags', 'eq', '{}')
+      .order('created_at', { ascending: false })
+      .limit(280);
+    const tagCounts = new Map<string, number>();
+    for (const row of data ?? []) {
+      for (const tag of (row as { hashtags: string[] }).hashtags ?? []) {
+        const k = String(tag).trim();
+        if (!k) continue;
+        tagCounts.set(k, (tagCounts.get(k) ?? 0) + 1);
+      }
+    }
+    return [...tagCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, Math.max(1, Math.min(limit, 48)))
+      .map(([t]) => t);
+  },
+
+  /**
+   * Vertical shelves for Discover: clinician-native surfaces competitors won't copy.
+   * `learn` = education-flagged posts; `night` = night shift context.
+   */
+  async getDiscoverShelf(kind: 'learn' | 'night', limit = 14): Promise<Post[]> {
+    let q = supabase
+      .from('posts')
+      .select(POST_SELECT)
+      .eq('privacy_mode', 'public')
+      .contains('feed_type_eligible', ['forYou'])
+      .order('created_at', { ascending: false })
+      .limit(48);
+
+    if (kind === 'learn') q = q.eq('is_education', true);
+    if (kind === 'night') q = q.eq('shift_context', 'night');
+
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? [])
+      .map(rowToPost)
+      .filter((p) => postIsLiveForPublicSurface(p) && postAppearsInMainFeeds(p))
+      .slice(0, Math.max(1, Math.min(limit, 24)));
   },
 };

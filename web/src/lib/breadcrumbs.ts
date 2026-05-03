@@ -6,6 +6,7 @@ export const MARKETING_SEGMENT_LABELS: Record<string, string> = {
   advertisers: "Advertisers",
   changelog: "Changelog",
   contact: "Contact",
+  communities: "Circles",
   "community-guidelines": "Community guidelines",
   download: "Download",
   faq: "FAQ",
@@ -34,9 +35,15 @@ export function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {
   const segments = normalized.split("/").filter(Boolean);
   const items: BreadcrumbItem[] = [{ name: "Home", href: "/" }];
   let acc = "";
-  for (const seg of segments) {
+  const isCircleThreadPath =
+    segments.length >= 4 && segments[0] === "communities" && segments[2] === "thread";
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
     acc += `/${seg}`;
-    const label = MARKETING_SEGMENT_LABELS[seg] ?? seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const label = isCircleThreadPath && i === segments.length - 1
+      ? "Discussion"
+      : MARKETING_SEGMENT_LABELS[seg] ?? seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     items.push({ name: label, href: acc });
   }
   return items;

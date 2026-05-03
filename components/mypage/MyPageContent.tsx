@@ -3,8 +3,8 @@
  *
  * Layout (top → bottom, per premium Pulse Page overhaul):
  *   1. Banner + floating back/more
- *   2. Profile Header (avatar, name, handle, identity pills, bio)
- *   3. PulseStatsRow (Followers · Following · Pulse Score)
+ *   2. Profile Header (avatar, name, handle, neon tags, one-line intro)
+ *   3. PulseStatsRow — three boxed cards (Followers · Following · Pulse Score)
  *   4. Visitor actions (Follow / Message / Share) — visitors only
  *   5. Current Vibe music player
  *   6. My Pulse (composer chips + rolling 5 cards)
@@ -333,6 +333,17 @@ export function MyPageContent({
                 prioritizeRemoteAvatar
                 showEdit={false}
                 ringColor={colors.primary.teal}
+                pulseFrame={
+                  user.pulseAvatarFrame
+                    ? {
+                        ringColor: user.pulseAvatarFrame.ringColor,
+                        glowColor: user.pulseAvatarFrame.glowColor,
+                        borderWidth: 3,
+                        ringCaption: user.pulseAvatarFrame.ringCaption ?? null,
+                        prizeTier: user.pulseAvatarFrame.prizeTier,
+                      }
+                    : null
+                }
                 showOnlineDot={isOwner}
               />
               {isOwner ? (
@@ -383,6 +394,23 @@ export function MyPageContent({
               {profileHandleDisplay(user)}
             </Text>
             <ProfileNeonPills tags={neonPillTags} />
+            {(user.bio?.trim() || isOwner) ? (
+              <View style={styles.pageIntroWrap}>
+                <Text
+                  style={[
+                    styles.pageIntro,
+                    !user.bio?.trim() && isOwner ? styles.pageIntroPlaceholder : null,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {user.bio?.trim()
+                    ? user.bio.trim()
+                    : isOwner
+                      ? 'Add a short intro in Customize My Pulse (below your neon tags).'
+                      : '\u00A0'}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -700,6 +728,22 @@ const styles = StyleSheet.create({
     color: colors.primary.teal,
     marginTop: 2,
     letterSpacing: 0.2,
+  },
+  pageIntroWrap: {
+    marginTop: 10,
+    paddingVertical: 2,
+  },
+  pageIntro: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+    letterSpacing: -0.1,
+  },
+  pageIntroPlaceholder: {
+    color: colors.dark.textMuted,
+    fontStyle: 'italic',
+    fontWeight: '500',
   },
   visitorActions: {
     flexDirection: 'row',

@@ -29,7 +29,6 @@ import { CoinShopModal } from '@/components/live/CoinShopModal';
 import { RoleBadge } from '@/components/ui/RoleBadge';
 import { SpecialtyBadge } from '@/components/ui/SpecialtyBadge';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
-import { LIVE_GIFTS } from '@/services/live/gifts';
 import {
   streamMessagesService,
   streamGiftsService,
@@ -59,23 +58,7 @@ const { height: SCREEN_H } = Dimensions.get('window');
 const CHAT_MAX_H = SCREEN_H * 0.38;
 const CHAT_LIST_H = CHAT_MAX_H - 54;
 
-/* -------------------------------------------------------------------------- */
-/*  Simulation — used only for seed streams (so demo never hits a broken DB). */
-/* -------------------------------------------------------------------------- */
-const SIMULATED_NAMES = [
-  'NurseLife22', 'StudentRN_', 'ICU_Warrior', 'NightShiftNinja',
-  'TravelNurseKai', 'MedSurgMama', 'PedsProPriya', 'ERDaveCharge',
-  'CNA_Marcus', 'NewGradNina', 'ORNurseAlex', 'TeleNurse_Sam',
-];
-const SIMULATED_MSGS = [
-  'Love this stream!', 'So informative!', 'Needed to hear this',
-  'Can you repeat that?', 'Dropping a follow!', '❤️❤️❤️',
-  'Same thing happened on my unit', 'Preach!', 'This is gold',
-  'Thanks for sharing!', 'Learned something new today', 'Great content!',
-];
-const SIMULATED_ROLES = ['RN', 'CNA', 'LPN', 'Student Nurse', 'Travel Nurse', 'Charge Nurse'];
-
-const SEED_WELCOME: StreamMessage[] = [
+const DEFAULT_CHAT: StreamMessage[] = [
   {
     id: 'm0',
     streamId: '',
@@ -96,7 +79,19 @@ export default function StreamViewerScreen() {
   if (!isFeatureEnabled('liveStreaming')) {
     return <Redirect href="/(tabs)/feed" />;
   }
+  return <StreamViewerEntry />;
+}
 
+function StreamViewerEntry() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const streamId = id ?? '';
+  if (streamId && isSeedStream({ id: streamId })) {
+    return <Redirect href="/(tabs)/live" />;
+  }
+  return <StreamViewerScreenContent />;
+}
+
+function StreamViewerScreenContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const streamId = id ?? '';
   const router = useRouter();
@@ -107,8 +102,6 @@ export default function StreamViewerScreen() {
 
   const coinWallet = isFeatureEnabled('coinWallet');
 
-  /** Seed streams lack real DB rows — we keep the nice simulation for those. */
-  const isSeed = useMemo(() => isSeedStream({ id: streamId }), [streamId]);
   const streamIsLive = stream?.status === 'live';
 
   /** True when the signed-in user is the stream host — unlocks host controls. */
@@ -130,7 +123,7 @@ export default function StreamViewerScreen() {
   const isFollowing = stream ? followedCreatorIds.has(stream.host.id) : false;
 
   /* ---------------- Messages (real or simulated) ------------------------- */
-  const [messages, setMessages] = useState<StreamMessage[]>(SEED_WELCOME);
+  const [messages, setMessages] = useState<StreamMessage[]>(DEFAULT_CHAT);
   const [inputText, setInputText] = useState('');
   const [showChat, setShowChat] = useState(true);
 
@@ -161,7 +154,7 @@ export default function StreamViewerScreen() {
    *  REAL — load + subscribe to real chat messages on DB-backed streams.
    * ==========================================================================*/
   useEffect(() => {
-    if (!streamId || isSeed) return;
+    if (!streamId) return;
 
     let cancelled = false;
     (async () => {
@@ -181,13 +174,13 @@ export default function StreamViewerScreen() {
       cancelled = true;
       unsubscribe();
     };
-  }, [streamId, isSeed]);
+  }, [streamId]);
 
   /* ==========================================================================
    *  REAL — gift firehose for DB-backed streams.
    * ==========================================================================*/
   useEffect(() => {
-    if (!streamId || isSeed) return;
+    if (!streamId) return;
 
     const unsubscribe = streamGiftsService.subscribe(streamId, (event) => {
       const giftMsg: StreamMessage = {
@@ -234,7 +227,7 @@ export default function StreamViewerScreen() {
     });
 
     return unsubscribe;
-  }, [streamId, isSeed]);
+  }, [streamId]);
 
   /* ==========================================================================
    *  REAL — load the caller's coin wallet.
@@ -257,7 +250,7 @@ export default function StreamViewerScreen() {
    *  Presence is in-memory (no DB writes) — ideal for transient viewership.
    * ==========================================================================*/
   useEffect(() => {
-    if (!streamId || isSeed || !user?.id) return;
+    if (!streamId || !user?.id) return;
 
     const channel = supabase.channel(`live_presence:${streamId}`, {
       config: { presence: { key: user.id } },
@@ -282,84 +275,7 @@ export default function StreamViewerScreen() {
       supabase.removeChannel(channel);
       presenceChannelRef.current = null;
     };
-  }, [streamId, isSeed, user?.id, profile?.role]);
-
-  /* ==========================================================================
-   *  SEED — keep the friendly simulated chatter for demo streams.
-   * ==========================================================================*/
-  useEffect(() => {
-    if (!isSeed) return;
-
-    const interval = setInterval(() => {
-      const name = SIMULATED_NAMES[Math.floor(Math.random() * SIMULATED_NAMES.length)];
-      const content = SIMULATED_MSGS[Math.floor(Math.random() * SIMULATED_MSGS.length)];
-      const role = SIMULATED_ROLES[Math.floor(Math.random() * SIMULATED_ROLES.length)];
-
-      const msg: StreamMessage = {
-        id: `auto-${Date.now()}-${Math.random()}`,
-        streamId,
-        userId: `bot-${Math.random()}`,
-        displayName: name,
-        content,
-        role: role as any,
-        isHost: false,
-        isModerator: Math.random() < 0.05,
-        isSubscriber: Math.random() < 0.15,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev.slice(-80), msg]);
-    }, 2800 + Math.random() * 2200);
-
-    return () => clearInterval(interval);
-  }, [isSeed, streamId]);
-
-  useEffect(() => {
-    if (!isSeed) return;
-    const interval = setInterval(() => {
-      setViewerCount((v) => Math.max(1, v + Math.floor(Math.random() * 8 - 3)));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isSeed]);
-
-  /* ==========================================================================
-   *  SEED — simulated poll + pinned (demo streams only).
-   * ==========================================================================*/
-  useEffect(() => {
-    if (!isSeed) return;
-
-    const pollTimer = setTimeout(() => {
-      setActivePoll({
-        id: 'poll-1',
-        streamId,
-        question: 'What topic should we cover next?',
-        options: [
-          { id: 'p1', text: 'Night Shift Tips', votes: 45, percentage: 45 },
-          { id: 'p2', text: 'Charge Nurse Duties', votes: 32, percentage: 32 },
-          { id: 'p3', text: 'Travel Nursing Pay', votes: 23, percentage: 23 },
-        ],
-        totalVotes: 100,
-        endsAt: new Date(Date.now() + 60000).toISOString(),
-        isActive: true,
-        createdBy: 'host',
-      });
-    }, 15000);
-
-    const pinTimer = setTimeout(() => {
-      setPinnedMessage({
-        id: 'pin-1',
-        streamId,
-        content: 'New video dropping tomorrow — follow to get notified!',
-        pinnedBy: 'host',
-        pinnedByName: stream?.host.displayName ?? 'Host',
-        createdAt: new Date().toISOString(),
-      });
-    }, 8000);
-
-    return () => {
-      clearTimeout(pollTimer);
-      clearTimeout(pinTimer);
-    };
-  }, [isSeed, streamId, stream]);
+  }, [streamId, user?.id, profile?.role]);
 
   /* ==========================================================================
    *  REAL — load active poll + subscribe to vote / lifecycle updates.
@@ -367,7 +283,7 @@ export default function StreamViewerScreen() {
    *  shows results immediately for users who already voted in a past session.
    * ==========================================================================*/
   useEffect(() => {
-    if (!streamId || isSeed) return;
+    if (!streamId) return;
 
     let cancelled = false;
 
@@ -397,13 +313,13 @@ export default function StreamViewerScreen() {
       cancelled = true;
       unsubscribe();
     };
-  }, [streamId, isSeed, user?.id]);
+  }, [streamId, user?.id]);
 
   /* ==========================================================================
    *  REAL — load active pinned message + subscribe to pin/unpin events.
    * ==========================================================================*/
   useEffect(() => {
-    if (!streamId || isSeed) return;
+    if (!streamId) return;
 
     let cancelled = false;
     (async () => {
@@ -419,7 +335,7 @@ export default function StreamViewerScreen() {
       cancelled = true;
       unsubscribe();
     };
-  }, [streamId, isSeed]);
+  }, [streamId]);
 
   /* ==========================================================================
    *  Handlers
@@ -446,8 +362,7 @@ export default function StreamViewerScreen() {
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    // Seed streams don't have a DB row — simulation-only path.
-    if (isSeed || !user?.id) return;
+    if (!user?.id) return;
 
     try {
       const persisted = await streamMessagesService.send({
@@ -480,7 +395,6 @@ export default function StreamViewerScreen() {
     profile?.avatarUrl,
     profile?.role,
     stream?.host.id,
-    isSeed,
     showToast,
   ]);
 
@@ -493,43 +407,6 @@ export default function StreamViewerScreen() {
 
       setGiftSending(true);
 
-      // ---- Seed stream path (fully local) -----------------------------------
-      if (isSeed) {
-        const event: LiveGiftEvent = {
-          id: `mygift-${Date.now()}`,
-          streamId,
-          gift,
-          senderId: user.id,
-          senderName: profile?.displayName ?? 'You',
-          quantity,
-          comboCount: 1,
-          createdAt: new Date().toISOString(),
-        };
-        if (gift.coinCost > 0) {
-          setCoinBalance((b) => Math.max(0, b - gift.coinCost * quantity));
-        }
-        const giftMsg: StreamMessage = {
-          id: `mygiftmsg-${Date.now()}`,
-          streamId,
-          userId: user.id,
-          displayName: profile?.displayName ?? 'You',
-          content: '',
-          isHost: false,
-          isModerator: false,
-          createdAt: new Date().toISOString(),
-          messageType: 'gift',
-          giftData: event,
-        };
-        setMessages((prev) => [...prev, giftMsg]);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setTimeout(() => {
-          setGiftSending(false);
-          setShowGiftPicker(false);
-        }, 500);
-        return;
-      }
-
-      // ---- Real stream path -------------------------------------------------
       // Optimistic: debit balance immediately. Rollback if the RPC throws.
       const totalCost = gift.coinCost * quantity;
       if (totalCost > 0) {
@@ -560,7 +437,7 @@ export default function StreamViewerScreen() {
         }, 400);
       }
     },
-    [isSeed, streamId, user?.id, profile?.displayName, showToast],
+    [streamId, user?.id, profile?.displayName, showToast],
   );
 
   const handleToggleFollow = useCallback(async () => {
@@ -573,9 +450,6 @@ export default function StreamViewerScreen() {
     const nextFollowing = !isFollowing;
     setCreatorFollowed(stream.host.id, nextFollowing);
 
-    // Seed streams are demo-only — don't persist.
-    if (isSeed) return;
-
     try {
       const confirmed = await profilesService.toggleFollow(user.id, stream.host.id);
       if (confirmed !== nextFollowing) {
@@ -586,7 +460,7 @@ export default function StreamViewerScreen() {
       setCreatorFollowed(stream.host.id, !nextFollowing);
       showToast('Couldn\u2019t update follow. Try again.', 'error');
     }
-  }, [user?.id, stream?.host.id, isFollowing, isSeed, setCreatorFollowed, showToast]);
+  }, [user?.id, stream?.host.id, isFollowing, setCreatorFollowed, showToast]);
 
   const handlePollVote = useCallback(
     async (optionId: string) => {
@@ -613,8 +487,7 @@ export default function StreamViewerScreen() {
       });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // Seed streams don't have a DB row — optimistic-only.
-      if (isSeed || !user?.id) return;
+      if (!user?.id) return;
 
       try {
         const accepted = await streamPollsService.vote(activePoll.id, optionId, user.id);
@@ -647,7 +520,7 @@ export default function StreamViewerScreen() {
         showToast('Couldn\u2019t record vote. Try again.', 'error');
       }
     },
-    [activePoll, isSeed, user?.id, showToast],
+    [activePoll, user?.id, showToast],
   );
 
   const handleUnpin = useCallback(async () => {
@@ -657,16 +530,13 @@ export default function StreamViewerScreen() {
     const previous = pinnedMessage;
     setPinnedMessage(null);
 
-    // Seed streams are local-only.
-    if (isSeed) return;
-
     const ok = await streamPinsService.unpin(previous.id);
     if (!ok) {
       // Restore on failure.
       setPinnedMessage(previous);
       showToast('Couldn\u2019t unpin. Try again.', 'error');
     }
-  }, [pinnedMessage, isSeed, showToast]);
+  }, [pinnedMessage, showToast]);
 
   /* ────────────────────── Host controls ────────────────────── */
 
@@ -678,30 +548,6 @@ export default function StreamViewerScreen() {
       durationSec: number;
     }) => {
       if (!isHost) return;
-
-      // Seed streams skip the DB and just surface the poll locally so the
-      // host can preview the widget shape in demo mode.
-      if (isSeed) {
-        setActivePoll({
-          id: `local-poll-${Date.now()}`,
-          streamId,
-          question: input.question,
-          options: input.options.map((o) => ({
-            id: o.id,
-            text: o.text,
-            votes: 0,
-            percentage: 0,
-          })),
-          totalVotes: 0,
-          endsAt: new Date(Date.now() + input.durationSec * 1000).toISOString(),
-          isActive: true,
-          createdBy: user?.id ?? 'host',
-        });
-        setHasVotedPoll(false);
-        setVotedOptionId(undefined);
-        showToast('Poll launched (preview mode).', 'success');
-        return;
-      }
 
       const poll = await streamPollsService.create({
         streamId,
@@ -719,7 +565,7 @@ export default function StreamViewerScreen() {
         showToast('Couldn\u2019t launch poll. Try again.', 'error');
       }
     },
-    [isHost, isSeed, streamId, user?.id, showToast],
+    [isHost, streamId, user?.id, showToast],
   );
 
   /** Host-only: manually end the active poll early. */
@@ -731,15 +577,13 @@ export default function StreamViewerScreen() {
     setHasVotedPoll(false);
     setVotedOptionId(undefined);
 
-    if (isSeed) return;
-
     const ok = await streamPollsService.end(previous.id);
     if (!ok) {
       // Restore on failure.
       setActivePoll(previous);
       showToast('Couldn\u2019t end poll. Try again.', 'error');
     }
-  }, [isHost, activePoll, isSeed, showToast]);
+  }, [isHost, activePoll, showToast]);
 
   /** Host-only: long-press a chat message to pin it. */
   const handleMessageLongPress = useCallback(
@@ -772,8 +616,6 @@ export default function StreamViewerScreen() {
               const previous = pinnedMessage;
               setPinnedMessage(optimisticPin);
 
-              if (isSeed) return;
-
               const persisted = await streamPinsService.pin({
                 streamId,
                 content: msg.content,
@@ -789,7 +631,7 @@ export default function StreamViewerScreen() {
         ],
       );
     },
-    [isHost, user?.id, profile?.displayName, pinnedMessage, isSeed, streamId, showToast],
+    [isHost, user?.id, profile?.displayName, pinnedMessage, streamId, showToast],
   );
 
   /** Host-only: end the stream and return to the Live tab. */
@@ -807,13 +649,11 @@ export default function StreamViewerScreen() {
           onPress: async () => {
             setEndingStream(true);
             try {
-              if (!isSeed) {
-                const ok = await streamsLiveService.endStream(streamId);
-                if (!ok) {
-                  showToast('Couldn\u2019t end stream. Try again.', 'error');
-                  setEndingStream(false);
-                  return;
-                }
+              const ok = await streamsLiveService.endStream(streamId);
+              if (!ok) {
+                showToast('Couldn\u2019t end stream. Try again.', 'error');
+                setEndingStream(false);
+                return;
               }
               showToast('Stream ended. Great work.', 'success');
               router.replace('/(tabs)/live');
@@ -825,7 +665,7 @@ export default function StreamViewerScreen() {
         },
       ],
     );
-  }, [isHost, endingStream, isSeed, streamId, router, showToast]);
+  }, [isHost, endingStream, streamId, router, showToast]);
 
   if (isLoading || !stream) return <LoadingState />;
 

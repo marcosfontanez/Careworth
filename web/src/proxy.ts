@@ -21,35 +21,34 @@ function localeOnlyResponse(request: NextRequest): NextResponse {
 
 /**
  * Next.js 16+ network boundary (replaces deprecated `middleware`).
- * Refreshes Supabase session for admin UI + `/api/admin/*`.
- * Sets `pv_locale` for other paths from `Accept-Language` when the cookie is absent.
+ * Refreshes Supabase auth cookies on **every** request when configured (consumer + staff),
+ * protects `/admin/*`, and sets `pv_locale` when missing.
  */
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-
   const isAdminUi = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAdminApi = pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (url && anon) {
+    return withLocaleCookieIfNeeded(request, await updateSupabaseSession(request));
+  }
 
   if (!isAdminUi && !isAdminApi) {
     return localeOnlyResponse(request);
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    if (pathname.startsWith("/admin/login")) {
-      return NextResponse.next();
-    }
-    if (isAdminApi) {
-      return NextResponse.next();
-    }
-    const u = request.nextUrl.clone();
-    u.pathname = "/admin/login";
-    u.searchParams.set("error", "config");
-    return NextResponse.redirect(u);
+  if (pathname.startsWith("/admin/login")) {
+    return NextResponse.next();
   }
-
-  return withLocaleCookieIfNeeded(request, await updateSupabaseSession(request));
+  if (isAdminApi) {
+    return NextResponse.next();
+  }
+  const u = request.nextUrl.clone();
+  u.pathname = "/admin/login";
+  u.searchParams.set("error", "config");
+  return NextResponse.redirect(u);
 }
 
 export const config = {

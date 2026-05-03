@@ -53,6 +53,9 @@ export function useOfflineQueueProcessor(userId: string | null | undefined) {
             // comments" invalidation is defensible — a flush can
             // replay comments across multiple posts.
             queryClient.invalidateQueries({ queryKey: commentKeys.root() });
+            queryClient.invalidateQueries({ queryKey: ['circleReplies'] });
+            queryClient.invalidateQueries({ queryKey: ['circleThread'] });
+            queryClient.invalidateQueries({ queryKey: ['circleThreads'] });
           }
         })
         .catch((err) => {

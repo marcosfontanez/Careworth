@@ -5,6 +5,8 @@ export type AdvertisersAudience = { title: string; count: string; body: string; 
 export type AdvertisersPlacement = { title: string; body: string };
 export type AdvertisersDrive = { title: string; body: string };
 export type AdvertisersSolution = { title: string };
+export type AdvertisersDeliverable = { title: string; body: string };
+export type AdvertisersReportingPillar = { title: string; body: string };
 
 export type AdvertisersLandingCopy = {
   hero: {
@@ -39,6 +41,15 @@ export type AdvertisersLandingCopy = {
   safetyChecks: readonly string[];
   solutionsTitle: string;
   solutions: readonly AdvertisersSolution[];
+  partnerSheet: {
+    eyebrow: string;
+    title: string;
+    intro: string;
+    deliverables: readonly AdvertisersDeliverable[];
+    reportingTitle: string;
+    reporting: readonly AdvertisersReportingPillar[];
+    disclaimer: string;
+  };
   bottomCta: {
     title: string;
     description: string;
@@ -152,6 +163,51 @@ const en: AdvertisersLandingCopy = {
     { title: "Live partnerships" },
     { title: "Campaign reporting" },
   ],
+  partnerSheet: {
+    eyebrow: "For your RFP or leadership review",
+    title: "Partner deliverables & reporting",
+    intro:
+      "We can package materials for procurement, legal, and brand safety teams. Final metrics, segment definitions, and pricing are aligned with your objectives and privacy requirements — ask partnerships for the latest partner data posture.",
+    deliverables: [
+      {
+        title: "Positioning & placement one-pager",
+        body: "Audiences, surfaces (Feed, Live, Circles, Pulse Page), and how sponsored units are labeled.",
+      },
+      {
+        title: "Moderation & escalation overview",
+        body: "How professional content is reviewed, live escalation, and paths for brand concerns.",
+      },
+      {
+        title: "Illustrative flight structure",
+        body: "Example pacing, creative specs, and preview workflow — customized per campaign.",
+      },
+      {
+        title: "Post-campaign summary",
+        body: "Directional reach, engagement, and context narrative as available for your flight.",
+      },
+    ],
+    reportingTitle: "What we aim to report",
+    reporting: [
+      {
+        title: "Exposure & attention",
+        body: "Reach-style and frequency signals where policy and instrumentation allow — not vanity bot traffic.",
+      },
+      {
+        title: "Engagement quality",
+        body: "Saves, shares, dwell, and other signals that reflect clinician interest rather than accidental taps.",
+      },
+      {
+        title: "Contextual sponsorships",
+        body: "Live and Circles alignment with specialty and education topics you care about.",
+      },
+      {
+        title: "Professional segmentation",
+        body: "Role- and specialty-oriented language — never patient-level targeting.",
+      },
+    ],
+    disclaimer:
+      "Figures on this page are directional and rounded for storytelling. Verified audience metrics, segment definitions, geo splits, and rate cards are provided under NDA by partnerships and may differ by market, format, and inventory.",
+  },
   bottomCta: {
     title: "Let's build something meaningful together.",
     description: "Media kits, partnership pilots, and brand-safe placements — start with a conversation.",
@@ -243,6 +299,51 @@ const es: AdvertisersLandingCopy = {
     { title: "Alianzas en Live" },
     { title: "Informes de campaña" },
   ],
+  partnerSheet: {
+    eyebrow: "Para tu RFP o revisión interna",
+    title: "Entregables para socios e informes",
+    intro:
+      "Podemos empaquetar materiales para compras, legal y brand safety. Las métricas finales, definiciones de segmentos y precios se alinean con tus objetivos y requisitos de privacidad — pide a alianzas la postura de datos más reciente.",
+    deliverables: [
+      {
+        title: "One-pager de posicionamiento y ubicaciones",
+        body: "Audiencias, superficies (Feed, Live, Circles, Pulse Page) y cómo se etiquetan las unidades patrocinadas.",
+      },
+      {
+        title: "Resumen de moderación y escalado",
+        body: "Cómo se revisa el contenido profesional, escalado en vivo y vías para dudas de marca.",
+      },
+      {
+        title: "Estructura de vuelo ilustrativa",
+        body: "Ejemplo de pacing, especificaciones creativas y flujo de preview — personalizado por campaña.",
+      },
+      {
+        title: "Informe post-campaña",
+        body: "Alcance direccional, engagement y narrativa de contexto según disponibilidad para tu vuelo.",
+      },
+    ],
+    reportingTitle: "Qué aspiramos a informar",
+    reporting: [
+      {
+        title: "Exposición y atención",
+        body: "Señales estilo alcance y frecuencia donde la política y la instrumentación lo permitan — no tráfico bot vanidoso.",
+      },
+      {
+        title: "Calidad de engagement",
+        body: "Guardados, compartidos, tiempo de permanencia y otras señales de interés clínico.",
+      },
+      {
+        title: "Patrocinios contextuales",
+        body: "Alineación en Live y Circles con especialidad y temas educativos que te importan.",
+      },
+      {
+        title: "Segmentación profesional",
+        body: "Lenguaje por rol y especialidad — nunca orientación a nivel de paciente.",
+      },
+    ],
+    disclaimer:
+      "Las cifras de esta página son direccionales y redondeadas para la narrativa. Métricas de audiencia verificadas, definiciones de segmento, splits geográficos y tarifas se proporcionan bajo NDA por alianzas y pueden variar según mercado, formato e inventario.",
+  },
   bottomCta: {
     title: "Construyamos algo con sentido juntos.",
     description: "Media kits, pilotos de alianza y ubicaciones seguras para marca — empieza con una conversación.",

@@ -24,6 +24,26 @@ export interface Message {
 }
 
 export const messagesService = {
+  /** True if either user has blocked the other (requires RLS allowing both to read the row — see migration 100). */
+  async usersAreBlockedPair(userId: string, otherUserId: string): Promise<boolean> {
+    if (!userId?.trim() || !otherUserId?.trim() || userId === otherUserId) return false;
+    const { data: rows } = await supabase
+      .from('blocked_users')
+      .select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+    return (rows ?? []).some(
+      (r: { blocker_id: string; blocked_id: string }) =>
+        (r.blocker_id === userId && r.blocked_id === otherUserId) ||
+        (r.blocker_id === otherUserId && r.blocked_id === userId),
+    );
+  },
+
+  async assertMessagingAllowed(userId: string, otherUserId: string): Promise<void> {
+    if (await this.usersAreBlockedPair(userId, otherUserId)) {
+      throw new Error('Messaging isn’t available with this account right now.');
+    }
+  },
+
   async getConversations(userId: string): Promise<Conversation[]> {
     const { data, error } = await supabase
       .from('conversations')
@@ -48,7 +68,7 @@ export const messagesService = {
         .eq('conversation_id', row.id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const { count } = await supabase
         .from('messages')
@@ -113,6 +133,7 @@ export const messagesService = {
   },
 
   async getOrCreateConversation(userId: string, otherUserId: string): Promise<string> {
+    await this.assertMessagingAllowed(userId, otherUserId);
     const [p1, p2] = [userId, otherUserId].sort();
 
     const { data: existing } = await supabase
@@ -141,5 +162,46 @@ export const messagesService = {
       .eq('conversation_id', conversationId)
       .neq('sender_id', userId)
       .eq('read', false);
+  },
+
+  /**
+   * Remove the thread for both participants. Messages are removed via ON DELETE CASCADE.
+   * RLS: migration 104 — delete allowed when auth user is a participant.
+   */
+  async deleteConversation(conversationId: string): Promise<void> {
+    const { error } = await supabase.from('conversations').delete().eq('id', conversationId);
+    if (error) throw error;
+  },
+
+  /**
+   * Block someone from messaging you (symmetric: neither can message while blocked).
+   * Optionally delete the existing thread so history does not reappear after unblock.
+   */
+  async blockUserAndOptionalDeleteConversation(
+    blockerId: string,
+    blockedUserId: string,
+    opts?: { conversationId?: string | null },
+  ): Promise<void> {
+    if (blockerId === blockedUserId) return;
+    const { data: existing } = await supabase
+      .from('blocked_users')
+      .select('id')
+      .eq('blocker_id', blockerId)
+      .eq('blocked_id', blockedUserId)
+      .maybeSingle();
+    if (!existing) {
+      const { error: blockErr } = await supabase.from('blocked_users').insert({
+        blocker_id: blockerId,
+        blocked_id: blockedUserId,
+      } as never);
+      if (blockErr) throw blockErr;
+    }
+    if (opts?.conversationId) {
+      try {
+        await this.deleteConversation(opts.conversationId);
+      } catch {
+        /* Conversation may already be hidden by RLS; block is the source of truth. */
+      }
+    }
   },
 };

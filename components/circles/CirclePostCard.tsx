@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Pressable } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import { anonymousDisplayName } from '@/lib/anonymousCircle';
+import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
 import type { CircleAccent } from '@/lib/circleAccents';
 import type { Post } from '@/types';
@@ -26,6 +29,9 @@ type Props = {
   onReply: () => void;
   onReact: () => void;
   onShare: () => void;
+  /** When set with `isOwner`, the ⋯ menu opens owner actions (edit / delete) from the parent. */
+  isOwner?: boolean;
+  onOwnerMenu?: () => void;
 };
 
 /**
@@ -35,8 +41,7 @@ type Props = {
  *  - Avatar + name + role + (optional) specialty pill in a clean top row,
  *    so the card reads like a social post, not a forum row.
  *  - Caption / media / hashtags flow under the header.
- *  - Bottom action row: React / Reply / Share (Save lives on the main feed;
- *    circle flow uses Share → My Pulse / system share instead).
+ *  - Bottom action row: Like / Reply / (Download when photo or video) / Share.
  *
  * The cell stays on the room's accent color via thin tinted borders + a
  * left-edge stripe so different rooms still feel visually distinct without
@@ -51,6 +56,8 @@ export const CirclePostCard = React.memo(function CirclePostCard({
   onReply,
   onReact,
   onShare,
+  isOwner = false,
+  onOwnerMenu,
 }: Props) {
   const displayName = isAnonymousRoom
     ? anonymousDisplayName(post.creatorId, post.id)
@@ -61,110 +68,133 @@ export const CirclePostCard = React.memo(function CirclePostCard({
   const isTitled = caption.startsWith('**');
   const titleLine = isTitled ? caption.split('\n')[0].replace(/\*\*/g, '').trim() : '';
   const bodyLine = isTitled ? caption.split('\n\n').slice(1).join('\n\n').trim() : caption;
+  const canDownloadMedia = postHasDownloadableMedia(post);
+
+  const onDownloadPress = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void shareDownloadedPostMedia(post);
+  };
 
   return (
-    <TouchableOpacity
-      style={[styles.card, { borderLeftColor: accent.color }]}
-      onPress={onPress}
-      activeOpacity={0.92}
-    >
+    <View style={[styles.card, { borderLeftColor: accent.color }]}>
       {/**
-       * The header (avatar + name + role + meta) is intentionally a plain
-       * View — NOT a TouchableOpacity. Tapping anywhere up here used to
-       * route to the creator's profile, which made entering the post feel
-       * fragile (a thumb landing near the top would teleport you to a
-       * stranger's Pulse Page). Now every tap on the card opens the post,
-       * and profile navigation lives only inside the post detail screen.
+       * Main story (header + body + media) is its own press target. The
+       * action row is a sibling — not nested inside a parent Touchable —
+       * so Reply / Like / Share never fight the "open post" gesture (which
+       * caused missed taps and confusing navigation on some devices).
        */}
-      <View style={styles.header}>
-        <View style={styles.creatorRow}>
-          {isAnonymousRoom ? (
-            <View style={[styles.avatar, styles.anonAvatar, { borderColor: `${accent.color}88` }]}>
-              <Text style={styles.anonGlyph}>?</Text>
-            </View>
-          ) : (
-            <Image source={{ uri: post.creator?.avatarUrl }} style={styles.avatar} />
-          )}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-              {!isAnonymousRoom && post.creator?.isVerified && (
-                <Ionicons name="checkmark-circle" size={13} color={colors.primary.teal} />
-              )}
-              {role && (
-                <View style={[styles.rolePill, { backgroundColor: `${accent.color}20`, borderColor: `${accent.color}55` }]}>
-                  <Text style={[styles.rolePillText, { color: accent.color }]}>{role}</Text>
-                </View>
-              )}
-              {/*
+      <Pressable style={styles.cardMainPress} onPress={onPress}>
+        {/**
+         * The header (avatar + name + role + meta) is intentionally a plain
+         * View — NOT a TouchableOpacity. Tapping anywhere up here used to
+         * route to the creator's profile, which made entering the post feel
+         * fragile (a thumb landing near the top would teleport you to a
+         * stranger's Pulse Page). Now every tap on the card opens the post,
+         * and profile navigation lives only inside the post detail screen.
+         */}
+        <View style={styles.header}>
+          <View style={styles.creatorRow}>
+            {isAnonymousRoom ? (
+              <View style={[styles.avatar, styles.anonAvatar, { borderColor: `${accent.color}88` }]}>
+                <Text style={styles.anonGlyph}>?</Text>
+              </View>
+            ) : (
+              <AvatarDisplay
+                size={32}
+                avatarUrl={post.creator?.avatarUrl}
+                prioritizeRemoteAvatar
+                ringColor={colors.dark.border}
+                pulseFrame={pulseFrameFromUser(post.creator?.pulseAvatarFrame)}
+              />
+            )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+                {!isAnonymousRoom && post.creator?.isVerified && (
+                  <Ionicons name="checkmark-circle" size={13} color={colors.primary.teal} />
+                )}
+                {role && (
+                  <View style={[styles.rolePill, { backgroundColor: `${accent.color}20`, borderColor: `${accent.color}55` }]}>
+                    <Text style={[styles.rolePillText, { color: accent.color }]}>{role}</Text>
+                  </View>
+                )}
+                {/*
                 Pulse tier chip next to role. Suppressed in anonymous
                 rooms (would partially deanonymise high-tier creators)
                 and for Murmur (new accounts get no visual penalty).
               */}
-              {!isAnonymousRoom ? (
-                <PulseTierBadge
-                  tier={post.creator?.pulseTier ?? null}
-                  size="xs"
-                  hideMurmur
-                  showIcon={false}
-                />
-              ) : null}
+                {!isAnonymousRoom ? (
+                  <PulseTierBadge
+                    tier={post.creator?.pulseTier ?? null}
+                    size="xs"
+                    hideMurmur
+                    showIcon={false}
+                  />
+                ) : null}
+              </View>
+              <Text style={styles.metaLine} numberOfLines={1}>
+                {timeAgo(post.createdAt)}
+                {specialty ? ` · ${specialty}` : ''}
+              </Text>
             </View>
-            <Text style={styles.metaLine} numberOfLines={1}>
-              {timeAgo(post.createdAt)}
-              {specialty ? ` · ${specialty}` : ''}
-            </Text>
           </View>
-        </View>
-        <TouchableOpacity hitSlop={8} style={styles.moreBtn}>
-          <Ionicons name="ellipsis-horizontal" size={18} color={colors.dark.textMuted} />
-        </TouchableOpacity>
-      </View>
-
-      {(isTitled || bodyLine) && (
-        <View style={styles.body}>
-          {isTitled && titleLine ? (
-            <Text style={styles.title} numberOfLines={2}>{titleLine}</Text>
-          ) : null}
-          {bodyLine ? (
-            /** Stay tight when there's media (1 line) so the card height
-             *  stays predictable; allow 3 lines for pure-text posts so
-             *  they still carry meaningful content. */
-            <Text
-              style={styles.caption}
-              numberOfLines={post.mediaUrl ? 1 : isTitled ? 2 : 3}
+          {isOwner && onOwnerMenu ? (
+            <TouchableOpacity
+              hitSlop={8}
+              style={styles.moreBtn}
+              onPress={onOwnerMenu}
+              accessibilityLabel="Post options"
             >
-              {bodyLine}
-            </Text>
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.dark.textMuted} />
+            </TouchableOpacity>
           ) : null}
         </View>
-      )}
 
-      {post.mediaUrl ? (
-        <View style={styles.mediaWrap}>
-          <Image
-            source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
-            style={styles.media}
-            contentFit="cover"
-            transition={120}
-          />
-          {post.type === 'video' && (
-            <View style={styles.playOverlay}>
-              <Ionicons name="play-circle" size={38} color="#FFFFFFE6" />
-            </View>
-          )}
-        </View>
-      ) : null}
+        {(isTitled || bodyLine) && (
+          <View style={styles.body}>
+            {isTitled && titleLine ? (
+              <Text style={styles.title} numberOfLines={2}>{titleLine}</Text>
+            ) : null}
+            {bodyLine ? (
+              /** Stay tight when there's media (1 line) so the card height
+               *  stays predictable; allow 3 lines for pure-text posts so
+               *  they still carry meaningful content. */
+              <Text
+                style={styles.caption}
+                numberOfLines={post.mediaUrl ? 1 : isTitled ? 2 : 3}
+              >
+                {bodyLine}
+              </Text>
+            ) : null}
+          </View>
+        )}
 
-      {post.hashtags?.length ? (
-        <View style={styles.tagRow}>
-          {post.hashtags.slice(0, 3).map((tag) => (
-            <View key={tag} style={[styles.tagChip, { backgroundColor: `${accent.color}18` }]}>
-              <Text style={[styles.tagText, { color: accent.color }]}>#{tag}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+        {post.mediaUrl ? (
+          <View style={styles.mediaWrap}>
+            <Image
+              source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
+              style={styles.media}
+              contentFit="cover"
+              transition={120}
+            />
+            {post.type === 'video' && (
+              <View style={styles.playOverlay}>
+                <Ionicons name="play-circle" size={38} color="#FFFFFFE6" />
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {post.hashtags?.length ? (
+          <View style={styles.tagRow}>
+            {post.hashtags.slice(0, 3).map((tag) => (
+              <View key={tag} style={[styles.tagChip, { backgroundColor: `${accent.color}18` }]}>
+                <Text style={[styles.tagText, { color: accent.color }]}>#{tag}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </Pressable>
 
       {/**
        * Action row — Like / Comment / Share. The previous Views
@@ -186,6 +216,14 @@ export const CirclePostCard = React.memo(function CirclePostCard({
           count={post.commentCount}
           onPress={onReply}
         />
+        {canDownloadMedia ? (
+          <ActionButton
+            icon="download-outline"
+            tint={colors.dark.textMuted}
+            onPress={onDownloadPress}
+            accessibilityLabel={post.type === 'video' ? 'Download video' : 'Download photo'}
+          />
+        ) : null}
         <ActionButton
           icon="paper-plane-outline"
           tint={colors.dark.textMuted}
@@ -194,7 +232,7 @@ export const CirclePostCard = React.memo(function CirclePostCard({
           disabled={isAnonymousRoom}
         />
       </View>
-    </TouchableOpacity>
+    </View>
   );
 });
 
@@ -205,6 +243,7 @@ function ActionButton({
   label,
   onPress,
   disabled,
+  accessibilityLabel: accessibilityLabelProp,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   tint: string;
@@ -212,10 +251,13 @@ function ActionButton({
   label?: string;
   onPress?: () => void;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }) {
   const text =
     label ??
     (typeof count === 'number' && count > 0 ? formatCount(count) : '');
+  const accessibilityLabel =
+    accessibilityLabelProp ?? (typeof label === 'string' ? label : undefined);
   const inner = (
     <View style={[styles.actionBtn, disabled && { opacity: 0.35 }]}>
       <Ionicons name={icon} size={16} color={tint} />
@@ -224,7 +266,13 @@ function ActionButton({
   );
   if (!onPress || disabled) return inner;
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{ flex: 1 }}>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={{ flex: 1 }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
       {inner}
     </TouchableOpacity>
   );
@@ -257,6 +305,8 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  /** Tappable post body — sibling to `actions`, not wrapping it. */
+  cardMainPress: { borderRadius: (borderRadius.card ?? 16) - 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   creatorRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.dark.cardAlt },

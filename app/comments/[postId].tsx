@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
+  View, Text, FlatList, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, RefreshControl, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,15 +22,23 @@ import { bumpPostCount } from '@/lib/postCacheUpdates';
 import { borderRadius, colors, iconSize, layout, spacing, typography } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { postShouldMaskIdentity } from '@/lib/anonymousCircle';
+import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { COMMENT_MAX_LENGTH } from '@/constants';
 
+function asParamString(v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined;
+  return Array.isArray(v) ? v[0] : v;
+}
+
 export default function CommentsScreen() {
-  const { postId, circle } = useLocalSearchParams<{ postId: string; circle?: string }>();
+  const raw = useLocalSearchParams<{ postId: string | string[]; circle?: string | string[] }>();
+  const postId = asParamString(raw.postId);
+  const circle = asParamString(raw.circle);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { data: comments, isLoading, refetch } = useComments(postId);
-  const { data: post } = usePost(postId);
+  const { data: comments = [], isPending, refetch } = useComments(postId ?? '');
+  const { data: post } = usePost(postId ?? '', { enabled: !!postId });
   const maskAuthors = postShouldMaskIdentity({ isAnonymous: post?.isAnonymous === true }, circle);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
@@ -45,6 +53,7 @@ export default function CommentsScreen() {
   }, [refetch]);
 
   const handleSend = async () => {
+    if (!postId) return;
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     if (!user) {
@@ -113,11 +122,30 @@ export default function CommentsScreen() {
 
   const title = post ? `Comments (${post.commentCount})` : 'Comments';
 
+  if (!postId) {
+    return (
+      <View style={styles.container}>
+        <StackScreenHeader
+          insetTop={insets.top}
+          title="Comments"
+          onPressLeft={() => router.back()}
+          leftIcon="close"
+          leftAccessibilityLabel="Close"
+        />
+        <EmptyState
+          icon="⚠️"
+          title="Missing post"
+          subtitle="This comment link is invalid. Go back and try again."
+        />
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
     >
       <StackScreenHeader
         insetTop={insets.top}
@@ -127,14 +155,15 @@ export default function CommentsScreen() {
         leftAccessibilityLabel="Close"
       />
 
-      {isLoading ? (
+      {isPending ? (
         <LoadingState />
       ) : (
         <FlatList
+          style={styles.listFlex}
           data={comments}
           keyExtractor={(item) => item.id}
-          /** Long threads benefit from Android view recycling. */
-          removeClippedSubviews={Platform.OS === 'android'}
+          /** Clipping + virtualization hides multiline edit fields mid-edit on Android. */
+          removeClippedSubviews={false}
           renderItem={({ item }) => (
             <CommentItem
               comment={item}
@@ -167,13 +196,15 @@ export default function CommentsScreen() {
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
         <View style={{ flex: 1 }}>
-          <TextInput
+          <MentionAutocomplete
             style={styles.input}
             value={text}
             onChangeText={setText}
             placeholder={replyTo ? `Reply to ${replyTo.name}...` : 'Add a comment...'}
             placeholderTextColor={colors.dark.textMuted}
             multiline
+            textAlignVertical="top"
+            scrollEnabled
             maxLength={COMMENT_MAX_LENGTH}
           />
           {/* Char counter — hidden until the user starts typing so the bar
@@ -216,6 +247,8 @@ export default function CommentsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
+  /** Required so FlatList gets a bounded height inside KeyboardAvoidingView; without it some Android builds virtualize poorly and the UI can feel frozen. */
+  listFlex: { flex: 1 },
   list: { paddingHorizontal: layout.screenPadding, paddingBottom: spacing.lg },
   replyBar: {
     flexDirection: 'row',
@@ -246,7 +279,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
     color: colors.dark.text,
+    minHeight: 44,
     maxHeight: 100,
+    textAlignVertical: 'top',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.dark.border,
   },

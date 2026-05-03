@@ -1,6 +1,10 @@
+import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
 import { supabase } from '@/lib/supabase';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
+import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
 import type { UserProfile } from '@/types';
+export const PROFILE_SELECT_WITH_AVATAR_FRAME =
+  '*, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption)';
 
 function rowToProfile(row: any): UserProfile {
   return {
@@ -44,6 +48,22 @@ function rowToProfile(row: any): UserProfile {
     pulseTier: typeof row.pulse_tier === 'string' ? row.pulse_tier : 'murmur',
     pulseScoreCurrent:
       typeof row.pulse_score_current === 'number' ? row.pulse_score_current : 0,
+    selectedPulseAvatarFrameId:
+      row.selected_pulse_avatar_frame_id != null
+        ? String(row.selected_pulse_avatar_frame_id)
+        : row.selected_pulse_avatar_frame_id === null
+          ? null
+          : undefined,
+    pulseAvatarFrame:
+      row.pulse_avatar_frame === undefined
+        ? undefined
+        : mapPulseAvatarFrameEmbed(row.pulse_avatar_frame) ?? null,
+    termsPrivacyAcceptedAt:
+      row.terms_and_privacy_accepted_at != null
+        ? String(row.terms_and_privacy_accepted_at)
+        : row.terms_and_privacy_accepted_at === null
+          ? null
+          : undefined,
   };
 }
 
@@ -51,7 +71,11 @@ export const profilesService = {
   async getByUsername(handle: string): Promise<UserProfile | null> {
     const h = handle.replace(/^@/, '').trim().toLowerCase();
     if (!h) return null;
-    const { data, error } = await supabase.from('profiles').select('*').eq('username', h).maybeSingle();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
+      .eq('username', h)
+      .maybeSingle();
     if (error || !data) return null;
     return rowToProfile(data);
   },
@@ -59,7 +83,7 @@ export const profilesService = {
   async getById(id: string): Promise<UserProfile | null> {
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
       .eq('id', id)
       .single();
 
@@ -89,6 +113,7 @@ export const profilesService = {
     profile_song_artwork_url: string | null;
     identity_tags?: string[] | null;
     hide_recent_posts_on_my_page?: boolean;
+    terms_and_privacy_accepted_at?: string | null;
   }>) {
     const qb = supabase.from('profiles') as any;
     const { data, error } = await qb
@@ -107,7 +132,7 @@ export const profilesService = {
     const s = escapePostgrestIlike(raw);
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
       .or(`display_name.ilike.%${s}%,first_name.ilike.%${s}%,specialty.ilike.%${s}%,username.ilike.%${s}%`)
       .limit(20);
 
@@ -126,7 +151,7 @@ export const profilesService = {
     const s = escapePostgrestIlike(raw);
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
       .ilike('username', `${s}%`)
       .order('follower_count', { ascending: false })
       .limit(Math.max(1, Math.min(limit, 20)));
@@ -145,6 +170,7 @@ export const profilesService = {
   async isUsernameAvailable(candidate: string): Promise<boolean> {
     const c = candidate.replace(/^@+/, '').trim().toLowerCase();
     if (!c) return false;
+    if (!usernamePassesContentPolicy(c)) return false;
     // Cast to `any` — the generated Supabase types in lib/database.types.ts
     // don't yet include RPCs from migration 048. Regen will erase the cast.
     const { data, error } = await (supabase.rpc as any)(
@@ -162,7 +188,7 @@ export const profilesService = {
   async getPopularCreators(limit = 20): Promise<UserProfile[]> {
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
       .order('follower_count', { ascending: false })
       .limit(Math.max(1, Math.min(limit, 100)));
     if (error) {

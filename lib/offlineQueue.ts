@@ -20,7 +20,8 @@ export interface QueuedAction {
     | 'unfollow_user'
     | 'join_community'
     | 'create_comment'
-    | 'share_post';
+    | 'share_post'
+    | 'circle_thread_reply';
   payload: Record<string, any>;
   createdAt: string;
   retries: number;
@@ -205,6 +206,16 @@ export function createOfflineExecutor() {
           user_id: action.payload.userId,
           post_id: action.payload.postId,
           channel: action.payload.channel ?? null,
+        });
+        return !error;
+      }
+      case 'circle_thread_reply': {
+        const body = String(action.payload.body ?? '').trim().slice(0, 2000);
+        if (!body) return false;
+        const { error } = await supabase.from('circle_replies').insert({
+          thread_id: action.payload.threadId,
+          author_id: action.payload.userId,
+          body,
         });
         return !error;
       }

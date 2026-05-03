@@ -21,6 +21,8 @@ type Props = {
   onToggleJoin: () => void;
   /** Softer “discovery” row for New Circles. */
   discovery?: boolean;
+  /** Optional second line under member count (e.g. post count / online). */
+  activityHint?: string | null;
 };
 
 export function CircleCardCompact({
@@ -30,6 +32,7 @@ export function CircleCardCompact({
   onPress,
   onToggleJoin,
   discovery,
+  activityHint,
 }: Props) {
   const blurb = useMemo(() => oneLine(community.description), [community.description]);
 
@@ -62,8 +65,15 @@ export function CircleCardCompact({
           </Text>
           <Text style={styles.meta}>
             {formatCount(community.memberCount)} members
+            {typeof community.postCount === 'number' && community.postCount > 0
+              ? ` · ${formatCount(community.postCount)} posts`
+              : ''}
+            {typeof community.onlineCount === 'number' && community.onlineCount > 0
+              ? ` · ${community.onlineCount} online`
+              : ''}
             {discovery ? ' · explore' : ''}
           </Text>
+          {activityHint ? <Text style={styles.activityHint}>{activityHint}</Text> : null}
         </View>
       </TouchableOpacity>
       <JoinButton joined={joined} onToggle={onToggleJoin} compact />
@@ -150,4 +160,11 @@ const styles = StyleSheet.create({
   name: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.dark.text, minWidth: 0 },
   desc: { fontSize: 12, color: colors.dark.textSecondary, marginTop: 3, lineHeight: 16 },
   meta: { fontSize: 10, fontWeight: '700', color: colors.dark.textMuted, marginTop: 5, letterSpacing: 0.2 },
+  activityHint: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.dark.textQuiet,
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
 });

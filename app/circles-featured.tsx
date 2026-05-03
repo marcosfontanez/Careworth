@@ -2,26 +2,31 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { CircleCardCompact } from '@/components/circles/CircleCardCompact';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAppStore } from '@/store/useAppStore';
 import { circleContentService } from '@/services/circleContent';
+import { communityKeys } from '@/lib/queryKeys';
 import { colors, layout, spacing, typography } from '@/theme';
 import { getCircleAccent } from '@/lib/circleAccents';
+import { hrefCommunity } from '@/lib/communityRoutes';
+import { primeCommunityDetailCache } from '@/lib/communityCache';
 import type { Community } from '@/types';
 
 export default function CirclesFeaturedFullScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const toggleJoin = useAppStore((s) => s.toggleJoinCommunity);
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: list = [], isPending, refetch } = useQuery({
-    queryKey: ['circles', 'featured', 'full-grid'],
+    queryKey: communityKeys.circlesFeaturedFull(),
     queryFn: () => circleContentService.getFeaturedCircles(),
+    staleTime: 60_000,
   });
 
   const onRefresh = useCallback(async () => {
@@ -43,7 +48,10 @@ export default function CirclesFeaturedFullScreen() {
           community={c}
           accent={accent}
           joined={isJoined}
-          onPress={() => router.push(`/communities/${c.slug}`)}
+          onPress={() => {
+            primeCommunityDetailCache(queryClient, c);
+            router.push(hrefCommunity(c.slug));
+          }}
           onToggleJoin={() => toggleJoin(c.id)}
         />
       </View>

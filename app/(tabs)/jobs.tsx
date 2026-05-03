@@ -11,7 +11,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { useJobs } from '@/hooks/useQueries';
 import { useAppStore } from '@/store/useAppStore';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { colors, spacing, borderRadius, typography, shadows, layout, iconSize } from '@/theme';
+import { colors, spacing, borderRadius, typography, shadows, layout } from '@/theme';
 import type { Job } from '@/types';
 
 const SPECIALTY_FILTERS = ['All Jobs', 'ICU', 'ED', 'Med Surg', 'OR', 'Travel'];

@@ -1,6 +1,5 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, roleColor } from '@/theme';
 import type { StreamMessage, StreamPinnedMessage, Role } from '@/types';

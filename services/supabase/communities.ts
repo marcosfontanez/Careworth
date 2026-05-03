@@ -31,6 +31,18 @@ export const communitiesService = {
     return (data ?? []).map(rowToCommunity);
   },
 
+  /** Search / Discover empty-query browse — capped for payload size. */
+  async browseDirectory(limit = 30): Promise<Community[]> {
+    const { data, error } = await supabase
+      .from('communities')
+      .select('*')
+      .order('member_count', { ascending: false })
+      .limit(Math.max(1, Math.min(limit, 60)));
+
+    if (error) throw error;
+    return (data ?? []).map(rowToCommunity);
+  },
+
   /** Most recently added rooms (by `created_at`). */
   async getRecentlyAdded(limit = 3): Promise<Community[]> {
     const { data, error } = await supabase

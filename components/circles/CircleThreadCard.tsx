@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
@@ -24,6 +25,8 @@ type Props = {
   showShareToMyPulse?: boolean;
   /** When true, hides real name/photo and blocks Share to My Pulse. */
   isAnonymousRoom?: boolean;
+  /** Reply count grew since user last opened thread (local). */
+  hasNewActivity?: boolean;
 };
 
 export function CircleThreadCard({
@@ -33,6 +36,7 @@ export function CircleThreadCard({
   onPress,
   showShareToMyPulse = true,
   isAnonymousRoom: isAnonymousRoomProp,
+  hasNewActivity,
 }: Props) {
   const isAnonymousRoom = isAnonymousRoomProp ?? isAnonymousConfessionCircle(thread.circleSlug);
 
@@ -68,9 +72,14 @@ export function CircleThreadCard({
       : { elevation: 3 };
 
   return (
-    <View style={[styles.wrap, cardShadow]}>
+    <View style={[styles.wrap, cardShadow, hasNewActivity ? { borderLeftWidth: 3, borderLeftColor: accent } : null]}>
       <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
         <View style={[styles.accentHair, { backgroundColor: accent }]} />
+
+        <View style={styles.discussionStripe}>
+          <Ionicons name="chatbubbles-outline" size={12} color={accent} />
+          <Text style={[styles.discussionStripeText, { color: accent }]}>Discussion</Text>
+        </View>
 
         <View style={styles.top}>
           {isAnonymousRoom ? (
@@ -78,7 +87,13 @@ export function CircleThreadCard({
               <Text style={styles.anonGlyph}>?</Text>
             </View>
           ) : (
-            <Image source={{ uri: author.avatarUrl }} style={styles.avatar} />
+            <AvatarDisplay
+              size={34}
+              avatarUrl={author.avatarUrl}
+              prioritizeRemoteAvatar
+              ringColor={colors.dark.border}
+              pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+            />
           )}
           <View style={styles.topMid}>
             <View style={styles.nameRow}>
@@ -143,7 +158,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.07)',
     overflow: 'hidden',
   },
-  card: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12 },
+  card: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 12 },
+  discussionStripe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  discussionStripeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
   accentHair: {
     position: 'absolute',
     top: 0,

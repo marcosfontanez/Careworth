@@ -48,6 +48,34 @@ const DEFAULTS: CircleAccent = {
  * Keys are lower-cased Circle slugs. Add new entries as rooms get curated.
  */
 const ACCENT_TABLE: Record<string, CircleAccent> = {
+  /* Bug reports — warm amber; matches DB seed #D97706. */
+  'bug-reports': {
+    color: '#D97706',
+    colorAlt: '#B45309',
+    gradient: ['#D97706', '#B45309', '#451A0330'] as const,
+    vibe: 'focused',
+    composerPrompt:
+      'What broke? Share a screenshot if you can, or describe the crash — what you tapped, what you expected, device (iPhone / Android / web).',
+    etiquette: 'Be specific. No shaming — we’re here to squash bugs.',
+    description:
+      'Report glitches and crashes: screenshots plus steps to reproduce help us fix things faster.',
+    motif: ['⚙', '·', '✓', '·'] as const,
+  },
+
+  /* Border Envy — flex rare avatar rings; gold + cyan polish (matches DB #CA8A04). */
+  'border-envy': {
+    color: '#CA8A04',
+    colorAlt: '#A16207',
+    gradient: ['#EAB308', '#A16207', '#42200640'] as const,
+    vibe: 'playful',
+    composerPrompt:
+      'Got a fire border equipped? Post a screenshot of your profile (with your border visible) and tell us where it came from — monthly top 5, beta gift, campaign, or classic ring.',
+    etiquette: 'Celebrate the glow-up. No shaming someone else’s frame — this room is hype, not hierarchy.',
+    description:
+      'Show off your Pulse profile snapshot with the avatar border you’re wearing — rare unlocks, seasonal prizes, or clean classics.',
+    motif: ['◇', '✦', '◇', '·'] as const,
+  },
+
   /* Funny Medical Memes — warm amber/orange/gold (matches mockup). */
   'funny-medical-memes': {
     color: '#F97316',
@@ -130,6 +158,20 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
     vibe: 'welcoming',
     composerPrompt: 'What are you learning this week?',
     etiquette: 'We were all new once. Be encouraging.',
+  },
+
+  /* Simple Medical Questions — clinical teal; matches DB seed #0D9488. */
+  'simple-medical-questions': {
+    color: '#0D9488',
+    colorAlt: '#0F766E',
+    gradient: ['#0D9488', '#0F766E', '#134E4A70'] as const,
+    vibe: 'clinical',
+    composerPrompt: 'What simple question can peers help clarify?',
+    etiquette:
+      'Not a substitute for in-person care or your own clinician. No PHI—keep it general. Share experience, not directives.',
+    description:
+      'Quick, general questions for healthcare peers—not medical advice and not a replacement for seeing a professional.',
+    motif: ['?', '·', '💬', '·'] as const,
   },
 
   /* Gaming — deep red (distinct from meme orange / nurse card rose). */

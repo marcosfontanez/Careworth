@@ -486,7 +486,7 @@ export async function loadCreators(): Promise<CreatorRow[]> {
     const supabase = await createAdminDataSupabaseClient();
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, display_name, role, follower_count, is_verified, post_count")
+      .select("id, username, display_name, role, follower_count, is_verified, post_count")
       .order("follower_count", { ascending: false })
       .limit(80);
 
@@ -495,15 +495,20 @@ export async function loadCreators(): Promise<CreatorRow[]> {
       return [];
     }
 
-    return data.map((p) => ({
-      id: p.id,
-      handle: "@" + (p.display_name || "user").toLowerCase().replace(/\s+/g, ""),
-      profession_display: p.role,
-      followers: p.follower_count ?? 0,
-      liveHours: 0,
-      verified: p.is_verified ?? false,
-      score: Math.min(100, Math.round(Math.log10((p.follower_count ?? 0) + 10) * 28)),
-    }));
+    return data.map((p) => {
+      const uname = typeof p.username === "string" ? p.username.trim() : "";
+      const dn = String(p.display_name || "user").trim();
+      const handle = uname ? `@${uname}` : `@${dn.toLowerCase().replace(/\s+/g, "")}`;
+      return {
+        id: p.id,
+        handle,
+        profession_display: p.role,
+        followers: p.follower_count ?? 0,
+        liveHours: 0,
+        verified: p.is_verified ?? false,
+        score: Math.min(100, Math.round(Math.log10((p.follower_count ?? 0) + 10) * 28)),
+      };
+    });
   } catch (e) {
     console.error("loadCreators exception:", e);
     return [];

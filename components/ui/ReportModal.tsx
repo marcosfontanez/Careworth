@@ -20,7 +20,7 @@ const REASONS = [
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  targetType: 'post' | 'comment' | 'profile';
+  targetType: 'post' | 'comment' | 'profile' | 'circle_thread';
   targetId: string;
 }
 
@@ -65,7 +65,10 @@ export function ReportModal({ visible, onClose, targetType, targetId }: ReportMo
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Report {targetType}</Text>
+            <Text style={styles.title}>
+              Report{' '}
+              {targetType === 'circle_thread' ? 'discussion' : targetType}
+            </Text>
             <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={10}>
               <Ionicons name="close" size={22} color={colors.dark.textMuted} />
             </TouchableOpacity>

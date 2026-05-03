@@ -96,16 +96,8 @@ export function FeedOriginalSound({ post, isSoundCellActive = true }: Props) {
     const filmLabel = 'Film with this sound';
     const soundPageId = post.soundSourcePostId?.trim() || post.id;
 
-    const runOpenSound = () => {
-      router.push(`/sound/${encodeURIComponent(soundPageId)}`);
-    };
-
     const runFilm = () => {
       router.push(`/create/video?soundPostId=${encodeURIComponent(soundPageId)}`);
-    };
-
-    const runDuet = () => {
-      router.push(`/create/video?mode=record&duetPostId=${encodeURIComponent(post.id)}`);
     };
 
     const runDownload = async () => {

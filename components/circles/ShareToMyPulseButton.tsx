@@ -1,11 +1,11 @@
 import React, { useCallback } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { profileUpdatesService } from '@/services/profileUpdates';
-import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
 import type { CircleThread } from '@/types';
@@ -19,8 +19,8 @@ type Props = {
 };
 
 export function ShareToMyPulseButton({ circleSlug, thread, layout = 'full', label }: Props) {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const showToast = useToast((s) => s.show);
   const { profile } = useAuth();
   const storeUser = useAppStore((s) => s.currentUser);
   const user = profile ?? storeUser;
@@ -39,7 +39,10 @@ export function ShareToMyPulseButton({ circleSlug, thread, layout = 'full', labe
     },
     onSuccess: async () => {
       if (user?.id) await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
-      showToast('Pinned to My Pulse', 'success');
+      Alert.alert('Pinned to My Pulse', 'Visitors can open this discussion from your profile.', [
+        { text: 'Done', style: 'cancel' },
+        { text: 'View My Pulse', onPress: () => router.push('/(tabs)/my-pulse' as any) },
+      ]);
     },
     onError: () => {
       Alert.alert('Couldn’t pin', 'Try again in a moment.');

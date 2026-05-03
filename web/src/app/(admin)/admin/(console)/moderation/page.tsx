@@ -1,4 +1,4 @@
-import { Download, SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
 
 import { ModerationConsole } from "@/components/admin/moderation-console";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
@@ -73,13 +73,11 @@ export default async function AdminModerationPage({
         description="Open queue (pending & in review). Reject = no violation; Uphold = agree with report and close. Full history: Reports in the sidebar."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="border-white/15 bg-transparent">
-              <Download className="mr-1.5 h-4 w-4" />
-              Export report
+            <Button variant="outline" size="sm" className="border-white/15 bg-transparent" asChild>
+              <Link href="/admin/reports">Full report history</Link>
             </Button>
-            <Button size="sm" className="bg-primary text-primary-foreground shadow-[0_0_24px_-8px_rgba(45,127,249,0.8)]">
-              <SlidersHorizontal className="mr-1.5 h-4 w-4" />
-              Filters
+            <Button variant="outline" size="sm" className="border-white/15 bg-transparent" asChild>
+              <Link href="/admin/insights?tab=trust">Trust analytics</Link>
             </Button>
           </div>
         }

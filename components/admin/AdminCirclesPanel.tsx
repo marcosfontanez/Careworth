@@ -108,6 +108,7 @@ export function AdminCirclesPanel() {
   const invalidateAfterCuration = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: communityKeys.listAll() });
     queryClient.invalidateQueries({ queryKey: communityKeys.circlesHome() });
+    queryClient.invalidateQueries({ queryKey: communityKeys.circlesFeaturedFull() });
   }, [queryClient]);
 
   const onRefresh = async () => {
@@ -282,6 +283,10 @@ export function AdminCirclesPanel() {
 
       <Text style={[styles.sectionTitle, styles.sectionSpaced]}>Featured carousel order</Text>
       <Text style={styles.hint}>Integer rank: lower first. Leave blank to remove from curated featured strip.</Text>
+      <Text style={styles.hint}>
+        After saving, the Circles tab and Featured full-screen grid refresh on the next fetch (about a minute of
+        cache, or immediately if someone pulls to refresh there).
+      </Text>
       <TouchableOpacity
         style={[styles.secondaryBtn, savingFeatured && styles.btnDisabled]}
         onPress={saveFeatured}
