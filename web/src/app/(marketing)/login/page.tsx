@@ -1,13 +1,8 @@
 import Image from "next/image";
-import Link from "next/link";
 
-import { signInUser } from "@/app/(marketing)/login/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { MarketingLoginForm } from "@/components/auth/marketing-login-form";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { getLoginPageCopy } from "@/lib/marketing-copy/login-page";
-import { marketingInlineLink } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 function errorMessage(code: string | undefined) {
@@ -69,49 +64,7 @@ export default async function UserLoginPage({
             {err}
           </p>
         )}
-        <form action={signInUser} className="space-y-4">
-          {next ? <input type="hidden" name="next" value={next} /> : null}
-          <div className="space-y-2">
-            <Label htmlFor="email">{c.emailLabel}</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="username"
-              placeholder={c.emailPlaceholder}
-              className="border-white/10 bg-white/[0.04]"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">{c.passwordLabel}</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="border-white/10 bg-white/[0.04]"
-            />
-          </div>
-          <Button
-            type="submit"
-            className="w-full bg-primary font-semibold text-primary-foreground shadow-[0_0_24px_-8px_rgba(45,127,249,0.8)]"
-          >
-            {c.submit}
-          </Button>
-        </form>
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          {c.newUser}{" "}
-          <Link href="/download" className={marketingInlineLink}>
-            {c.getTheApp}
-          </Link>
-        </p>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          <Link href="/admin/login" className={marketingInlineLink}>
-            {c.staffLink}
-          </Link>
-        </p>
+        <MarketingLoginForm locale={locale} c={c} nextPath={next || "/me"} />
       </div>
     </div>
   );

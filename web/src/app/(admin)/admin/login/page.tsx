@@ -1,11 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 
-import { signInAdmin } from "@/app/(admin)/admin/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { adminPanelSurface, marketingInlineLink } from "@/lib/ui-classes";
+import { AdminLoginForm } from "@/components/auth/admin-login-form";
+import { adminPanelSurface } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 function errorMessage(code: string | undefined) {
@@ -34,6 +30,13 @@ export default async function AdminLoginPage({
 }) {
   const q = await searchParams;
   const err = errorMessage(q.error);
+  const adminNext =
+    q.next &&
+    q.next.startsWith("/admin") &&
+    !q.next.startsWith("//") &&
+    q.next !== "/admin/login"
+      ? q.next
+      : "";
 
   return (
     <main
@@ -62,56 +65,14 @@ export default async function AdminLoginPage({
             />
           </div>
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-foreground">Staff admin</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your profile must have <span className="text-foreground/90">role_admin</span> in Supabase. For dashboard
-            and insights totals, set server-only{" "}
-            <span className="text-foreground/90">SUPABASE_SERVICE_ROLE_KEY</span> in{" "}
-            <code className="rounded bg-white/5 px-1 py-px">.env.local</code> or Vercel (Project Settings → API →
-            service_role).
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">For PulseVerse staff accounts only.</p>
         </div>
         {err && (
           <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-red-200">
             {err}
           </p>
         )}
-        <form action={signInAdmin} className="space-y-4">
-          <input type="hidden" name="next" value={q.next && q.next.startsWith("/admin") ? q.next : ""} />
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="username"
-              placeholder="you@organization.org"
-              className="border-white/10 bg-white/[0.04]"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="border-white/10 bg-white/[0.04]"
-            />
-          </div>
-          <Button
-            type="submit"
-            className="w-full bg-primary font-semibold text-primary-foreground shadow-[0_0_24px_-8px_rgba(45,127,249,0.8)]"
-          >
-            Sign in
-          </Button>
-        </form>
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          <Link href="/" className={marketingInlineLink}>
-            ← Back to marketing site
-          </Link>
-        </p>
+        <AdminLoginForm nextPath={adminNext} />
       </div>
     </main>
   );
