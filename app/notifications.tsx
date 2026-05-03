@@ -257,7 +257,13 @@ export default function NotificationsScreen() {
             </View>
           )}
           renderItem={({ item }) => (
-            <NotificationRow notification={item} onPress={() => handleNotificationPress(item)} />
+            <NotificationRow
+              notification={item}
+              onPress={() => handleNotificationPress(item)}
+              onAvatarPress={
+                item.actor?.id ? () => router.push(`/profile/${item.actor.id}` as never) : undefined
+              }
+            />
           )}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}

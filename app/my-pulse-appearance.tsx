@@ -22,7 +22,7 @@ import { colors, borderRadius } from '@/theme';
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { pickImageFromGallery } from '@/lib/media';
+import { pickAvatarImageFromGallery, pickBannerImageFromGallery } from '@/lib/media';
 import { storageService } from '@/lib/storage';
 import { profilesService, pulseAvatarFramesService } from '@/services/supabase';
 import { supabaseMessage } from '@/utils/supabaseErrors';
@@ -136,7 +136,7 @@ export default function MyPageAppearanceScreen() {
   const pickBanner = async () => {
     try {
       setUploading('banner');
-      const asset = await pickImageFromGallery();
+      const asset = await pickBannerImageFromGallery();
       if (!asset) return;
 
       let url: string;
@@ -170,7 +170,7 @@ export default function MyPageAppearanceScreen() {
   const pickAvatar = async () => {
     try {
       setUploading('avatar');
-      const asset = await pickImageFromGallery();
+      const asset = await pickAvatarImageFromGallery();
       if (!asset) return;
       const url = await storageService.uploadAvatar(uid, {
         uri: asset.uri,

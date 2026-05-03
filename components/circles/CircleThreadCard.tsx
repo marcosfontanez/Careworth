@@ -21,6 +21,8 @@ type Props = {
   thread: CircleThread;
   circleName: string;
   accent: string;
+  /** When set, avatar opens this (e.g. creator Pulse page) without opening the thread. */
+  onProfile?: () => void;
   onPress: () => void;
   showShareToMyPulse?: boolean;
   /** When true, hides real name/photo and blocks Share to My Pulse. */
@@ -34,6 +36,7 @@ export function CircleThreadCard({
   circleName,
   accent,
   onPress,
+  onProfile,
   showShareToMyPulse = true,
   isAnonymousRoom: isAnonymousRoomProp,
   hasNewActivity,
@@ -86,6 +89,16 @@ export function CircleThreadCard({
             <View style={[styles.avatar, styles.anonAvatar, { borderColor: accent + '99' }]}>
               <Text style={styles.anonGlyph}>?</Text>
             </View>
+          ) : onProfile ? (
+            <TouchableOpacity onPress={onProfile} activeOpacity={0.85} accessibilityLabel="Open profile">
+              <AvatarDisplay
+                size={34}
+                avatarUrl={author.avatarUrl}
+                prioritizeRemoteAvatar
+                ringColor={colors.dark.border}
+                pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+              />
+            </TouchableOpacity>
           ) : (
             <AvatarDisplay
               size={34}

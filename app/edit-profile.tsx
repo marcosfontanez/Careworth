@@ -12,7 +12,7 @@ import { colors } from '@/theme';
 import { ROLES, SPECIALTIES, US_STATES, SHIFT_PREFERENCES } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { profilesService } from '@/services/supabase';
-import { pickImageFromGallery, type MediaAsset } from '@/lib/media';
+import { pickAvatarImageFromGallery, type MediaAsset } from '@/lib/media';
 import { storageService } from '@/lib/storage';
 import { useProfileCustomization, getWidgetMeta, DEFAULT_WIDGETS } from '@/store/useProfileCustomization';
 import { AvatarDisplay } from '@/components/profile/AvatarBuilder';
@@ -142,7 +142,7 @@ export default function EditProfileScreen() {
 
   const handlePickAvatar = async () => {
     try {
-      const asset = await pickImageFromGallery();
+      const asset = await pickAvatarImageFromGallery();
       if (asset) setAvatarAsset(asset);
     } catch {
       Alert.alert('Error', 'Could not open photo picker.');

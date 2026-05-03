@@ -26,6 +26,7 @@ import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
 import { sanitizeUsername, isValidUsername } from '@/utils/profileHandle';
 import { PatientPrivacyHipaaPanel } from '@/components/auth/PatientPrivacyHipaaPanel';
 import { TERMS_PRIVACY_CHECKBOX_LABEL } from '@/constants/authLegal';
+import { mapAuthErrorForAlert } from '@/utils/authUserMessages';
 
 const CYAN = '#22d3ee';
 
@@ -194,7 +195,7 @@ export default function LoginScreen() {
     setLoading(true);
     const { error } = await signInWithEmail(email.trim(), password);
     setLoading(false);
-    if (error) Alert.alert('Login failed', error.message);
+    if (error) Alert.alert('Login failed', mapAuthErrorForAlert(error.message));
     else router.replace('/');
   };
 
@@ -241,7 +242,7 @@ export default function LoginScreen() {
       preferred,
     );
     setLoading(false);
-    if (error) Alert.alert('Sign up failed', error.message);
+    if (error) Alert.alert('Sign up failed', mapAuthErrorForAlert(error.message));
     else {
       Alert.alert('Check your email', 'We sent a confirmation link to verify your account.');
     }

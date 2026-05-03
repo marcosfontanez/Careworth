@@ -474,6 +474,7 @@ export default function CommunityDetailScreen() {
               onPress={() =>
                 router.push(hrefCommunityThread(community.slug, (item as CircleThread).id))
               }
+              onProfile={() => router.push(`/profile/${(item as CircleThread).authorId}` as never)}
             />
           ) : (
             <CirclePostCard

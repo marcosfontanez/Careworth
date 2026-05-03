@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
@@ -18,6 +19,7 @@ type Props = {
 
 export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }: Props) {
   const isAnonRoom = isAnonymousConfessionCircle(circleSlug);
+  const router = useRouter();
   const author: CreatorSummary = useMemo(
     () =>
       reply?.author ?? {
@@ -55,6 +57,21 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
         <View style={[styles.avatar, isOp && styles.opNeonRing]}>
           <Ionicons name="eye-off-outline" size={18} color={colors.dark.textMuted} />
         </View>
+      ) : author.id ? (
+        <TouchableOpacity
+          onPress={() => router.push(`/profile/${author.id}` as never)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+        >
+          <AvatarDisplay
+            size={32}
+            avatarUrl={author.avatarUrl}
+            prioritizeRemoteAvatar
+            ringColor={colors.dark.border}
+            pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+          />
+        </TouchableOpacity>
       ) : (
         <AvatarDisplay
           size={32}

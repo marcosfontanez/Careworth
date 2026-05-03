@@ -24,46 +24,61 @@ const typeConfig: Record<string, { name: string; color: string; bg: string; acti
 interface Props {
   notification: NotificationItem;
   onPress: () => void;
+  /** Opens the actor's Pulse page; tap targets stay separate from the row's notification action. */
+  onAvatarPress?: () => void;
 }
 
-export function NotificationRow({ notification, onPress }: Props) {
+export function NotificationRow({ notification, onPress, onAvatarPress }: Props) {
   const cfg = typeConfig[notification.type] ?? { name: 'notifications', color: colors.dark.textMuted, bg: colors.dark.card };
 
+  const avatarBlock = (
+    <View style={styles.avatarWrap}>
+      <AvatarDisplay
+        size={46}
+        avatarUrl={avatarThumb(notification.actor.avatarUrl, 48)}
+        prioritizeRemoteAvatar
+        ringColor={colors.dark.border}
+        pulseFrame={pulseFrameFromUser(notification.actor.pulseAvatarFrame)}
+      />
+      <View style={[styles.typeBadge, { backgroundColor: cfg.color }]}>
+        <Ionicons name={cfg.name as any} size={10} color={colors.dark.text} />
+      </View>
+    </View>
+  );
+
   return (
-    <TouchableOpacity
-      style={[styles.row, !notification.read && styles.unread]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.avatarWrap}>
-        <AvatarDisplay
-          size={46}
-          avatarUrl={avatarThumb(notification.actor.avatarUrl, 48)}
-          prioritizeRemoteAvatar
-          ringColor={colors.dark.border}
-          pulseFrame={pulseFrameFromUser(notification.actor.pulseAvatarFrame)}
-        />
-        <View style={[styles.typeBadge, { backgroundColor: cfg.color }]}>
-          <Ionicons name={cfg.name as any} size={10} color={colors.dark.text} />
+    <View style={[styles.row, !notification.read && styles.unread]}>
+      {onAvatarPress ? (
+        <TouchableOpacity
+          onPress={onAvatarPress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+        >
+          {avatarBlock}
+        </TouchableOpacity>
+      ) : (
+        avatarBlock
+      )}
+      <TouchableOpacity style={styles.bodyTouchable} onPress={onPress} activeOpacity={0.7}>
+        <View style={styles.body}>
+          <Text style={styles.message} numberOfLines={2}>{notification.message}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.time}>{timeAgo(notification.createdAt)}</Text>
+            {cfg.action && (
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: cfg.bg, borderColor: cfg.color + '38' }]}
+                onPress={onPress}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.actionText, { color: cfg.color }]}>{cfg.action}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
-      <View style={styles.body}>
-        <Text style={styles.message} numberOfLines={2}>{notification.message}</Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.time}>{timeAgo(notification.createdAt)}</Text>
-          {cfg.action && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: cfg.bg, borderColor: cfg.color + '38' }]}
-              onPress={onPress}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.actionText, { color: cfg.color }]}>{cfg.action}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-      {!notification.read && <View style={styles.dot} />}
-    </TouchableOpacity>
+        {!notification.read ? <View style={styles.dot} /> : null}
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -79,6 +94,7 @@ const styles = StyleSheet.create({
   },
   unread: { backgroundColor: colors.primary.teal + '0A' },
   avatarWrap: { position: 'relative', marginTop: 2 },
+  bodyTouchable: { flex: 1, flexDirection: 'row', alignItems: 'flex-start' },
   typeBadge: {
     position: 'absolute', bottom: -2, right: -2,
     width: 22, height: 22, borderRadius: 11,

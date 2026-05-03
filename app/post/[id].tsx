@@ -979,6 +979,7 @@ function CommentNode({
   onReport?: (commentId: string) => void;
   depth?: number;
 }) {
+  const router = useRouter();
   const [showReplies, setShowReplies] = useState(false);
   /** Local edit mode. Comment body opens in CommentEditComposer modal. */
   const [editing, setEditing] = useState(false);
@@ -1029,6 +1030,21 @@ function CommentNode({
         <View style={[styles.commentAvatar, styles.commentAnonAvatar, { borderColor: `${accent}55` }]}>
           <Text style={styles.commentAnonGlyph}>?</Text>
         </View>
+      ) : !isDeleted && comment.author.id ? (
+        <TouchableOpacity
+          onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${displayName} profile`}
+        >
+          <AvatarDisplay
+            size={32}
+            avatarUrl={comment.author.avatarUrl}
+            prioritizeRemoteAvatar
+            ringColor={colors.dark.border}
+            pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
+          />
+        </TouchableOpacity>
       ) : (
         <AvatarDisplay
           size={32}

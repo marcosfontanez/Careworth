@@ -10,6 +10,7 @@ import { timeAgo, formatCount } from '@/utils/format';
 import { commentService } from '@/services/comment';
 import { anonymousNameOnPost } from '@/lib/anonymousCircle';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 import { COMMENT_DELETED_TOMBSTONE } from '@/constants';
 import { analytics } from '@/lib/analytics';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
@@ -48,6 +49,7 @@ export function CommentItem({
   const [editing, setEditing] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const router = useRouter();
 
   const displayName =
     anonymousMode && saltPostId
@@ -220,6 +222,21 @@ export function CommentItem({
         <View style={styles.anonAvatar}>
           <Text style={styles.anonGlyph}>?</Text>
         </View>
+      ) : !isDeleted && comment.author.id ? (
+        <TouchableOpacity
+          onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${displayName} profile`}
+        >
+          <AvatarDisplay
+            size={36}
+            avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
+            prioritizeRemoteAvatar
+            ringColor={colors.dark.border}
+            pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
+          />
+        </TouchableOpacity>
       ) : (
         <AvatarDisplay
           size={36}

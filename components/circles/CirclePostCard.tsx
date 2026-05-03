@@ -18,13 +18,7 @@ type Props = {
   isAnonymousRoom: boolean;
   isLiked: boolean;
   onPress: () => void;
-  /**
-   * Kept for API compatibility, but the card no longer routes to the
-   * creator profile from the header — taps anywhere outside the explicit
-   * action row open the post detail. Profile navigation now lives only
-   * *inside* the post detail screen so users don't accidentally land on
-   * a stranger's Pulse Page when trying to read a post.
-   */
+  /** Avatar-only: open creator Pulse page without changing the main card open gesture. */
   onProfile?: () => void;
   onReply: () => void;
   onReact: () => void;
@@ -53,6 +47,7 @@ export const CirclePostCard = React.memo(function CirclePostCard({
   isAnonymousRoom,
   isLiked,
   onPress,
+  onProfile,
   onReply,
   onReact,
   onShare,
@@ -85,12 +80,10 @@ export const CirclePostCard = React.memo(function CirclePostCard({
        */}
       <Pressable style={styles.cardMainPress} onPress={onPress}>
         {/**
-         * The header (avatar + name + role + meta) is intentionally a plain
-         * View — NOT a TouchableOpacity. Tapping anywhere up here used to
-         * route to the creator's profile, which made entering the post feel
-         * fragile (a thumb landing near the top would teleport you to a
-         * stranger's Pulse Page). Now every tap on the card opens the post,
-         * and profile navigation lives only inside the post detail screen.
+         * The header (avatar + name + role + meta): tapping the body still
+         * opens the post via the outer Pressable; the avatar is a nested
+         * press target that opens the creator's Pulse page when `onProfile`
+         * is provided (non-anonymous rooms).
          */}
         <View style={styles.header}>
           <View style={styles.creatorRow}>
@@ -98,6 +91,21 @@ export const CirclePostCard = React.memo(function CirclePostCard({
               <View style={[styles.avatar, styles.anonAvatar, { borderColor: `${accent.color}88` }]}>
                 <Text style={styles.anonGlyph}>?</Text>
               </View>
+            ) : onProfile ? (
+              <Pressable
+                onPress={() => onProfile()}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel="Open profile"
+              >
+                <AvatarDisplay
+                  size={32}
+                  avatarUrl={post.creator?.avatarUrl}
+                  prioritizeRemoteAvatar
+                  ringColor={colors.dark.border}
+                  pulseFrame={pulseFrameFromUser(post.creator?.pulseAvatarFrame)}
+                />
+              </Pressable>
             ) : (
               <AvatarDisplay
                 size={32}

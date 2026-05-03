@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Alert, Platform } from 'react-native';
 
 export const VIDEO_MIN_SECONDS = 0;
@@ -99,6 +100,85 @@ export async function pickImageFromGallery(): Promise<MediaAsset | null> {
   });
 
   return assetFromResult(result);
+}
+
+/** Max long edge after resize — keeps uploads small and avoids odd HEIC/PNG paths on Storage. */
+const PROFILE_AVATAR_MAX_EDGE = 1536;
+const PROFILE_BANNER_MAX_EDGE = 2560;
+
+/**
+ * Re-encode to JPEG and downscale if huge so Storage + RLS always see a normal raster payload.
+ */
+export async function normalizeRasterForUpload(asset: MediaAsset, kind: 'avatar' | 'banner'): Promise<MediaAsset> {
+  if (asset.type !== 'image') return asset;
+
+  const maxPrimary = kind === 'avatar' ? PROFILE_AVATAR_MAX_EDGE : PROFILE_BANNER_MAX_EDGE;
+  const w = asset.width ?? 0;
+  const h = asset.height ?? 0;
+
+  const actions: ImageManipulator.Action[] = [];
+  if (w > 0 && h > 0) {
+    const long = Math.max(w, h);
+    if (long > maxPrimary) {
+      const ratio = maxPrimary / long;
+      actions.push({
+        resize: {
+          width: Math.max(1, Math.round(w * ratio)),
+          height: Math.max(1, Math.round(h * ratio)),
+        },
+      });
+    }
+  } else {
+    actions.push({ resize: { width: maxPrimary } });
+  }
+
+  const result = await ImageManipulator.manipulateAsync(asset.uri, actions, {
+    compress: kind === 'avatar' ? 0.9 : 0.85,
+    format: ImageManipulator.SaveFormat.JPEG,
+  });
+
+  return {
+    ...asset,
+    uri: result.uri,
+    mimeType: 'image/jpeg',
+    fileName: `${Date.now()}.jpg`,
+    width: result.width,
+    height: result.height,
+  };
+}
+
+/** Square crop UI (where supported) + JPEG + size cap — My Pulse / onboarding / edit profile. */
+export async function pickAvatarImageFromGallery(): Promise<MediaAsset | null> {
+  const ok = await ensurePermission('library');
+  if (!ok) return null;
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 1,
+  });
+
+  const asset = assetFromResult(result);
+  if (!asset || asset.type !== 'image') return null;
+  return normalizeRasterForUpload(asset, 'avatar');
+}
+
+/** Wide crop (~3:1) + JPEG + cap — My Pulse banner. */
+export async function pickBannerImageFromGallery(): Promise<MediaAsset | null> {
+  const ok = await ensurePermission('library');
+  if (!ok) return null;
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    ...(Platform.OS === 'android' ? { aspect: [3, 1] as [number, number] } : {}),
+    quality: 1,
+  });
+
+  const asset = assetFromResult(result);
+  if (!asset || asset.type !== 'image') return null;
+  return normalizeRasterForUpload(asset, 'banner');
 }
 
 export async function pickVideoFromGallery(): Promise<MediaAsset | null> {

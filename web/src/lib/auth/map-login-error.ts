@@ -26,6 +26,13 @@ export function mapLoginErrorMessage(message: string, code?: string | null): str
   ) {
     return "Wrong email or password. If you usually sign in with Google or Apple in the app, use “Forgot password” in the app (or Supabase) to set an email password for the web.";
   }
+  if (
+    m.includes("email rate limit exceeded") ||
+    (m.includes("rate limit") && m.includes("email")) ||
+    m.includes("over_email_send_rate_limit")
+  ) {
+    return "Too many confirmation emails were sent recently. Wait about an hour and try again, or sign in with Apple or Google if you already have an account.";
+  }
   if (m.includes("too many requests") || m.includes("rate limit") || c.includes("over_request_rate")) {
     return "Too many sign-in attempts. Wait a few minutes and try again.";
   }

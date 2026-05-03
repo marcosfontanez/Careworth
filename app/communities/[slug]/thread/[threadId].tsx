@@ -153,13 +153,30 @@ export default function CircleThreadDetailScreen() {
                 <Ionicons name="eye-off-outline" size={22} color={colors.dark.textMuted} />
               </View>
             ) : (
-              <AvatarDisplay
-                size={40}
-                avatarUrl={author.avatarUrl}
-                prioritizeRemoteAvatar
-                ringColor={colors.dark.border}
-                pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
-              />
+              author.id ? (
+                <TouchableOpacity
+                  onPress={() => router.push(`/profile/${author.id}` as never)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                >
+                  <AvatarDisplay
+                    size={40}
+                    avatarUrl={author.avatarUrl}
+                    prioritizeRemoteAvatar
+                    ringColor={colors.dark.border}
+                    pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+                  />
+                </TouchableOpacity>
+              ) : (
+                <AvatarDisplay
+                  size={40}
+                  avatarUrl={author.avatarUrl}
+                  prioritizeRemoteAvatar
+                  ringColor={colors.dark.border}
+                  pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+                />
+              )
             )}
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.nameRow}>
