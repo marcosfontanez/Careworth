@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -22,6 +23,11 @@ export async function signInAdmin(formData: FormData) {
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
+    console.error("[signInAdmin] Supabase:", error.message);
+    const em = error.message.toLowerCase();
+    if (em.includes("email not confirmed") || em.includes("confirm your email")) {
+      redirect("/admin/login?error=confirm");
+    }
     redirect("/admin/login?error=auth");
   }
 
@@ -32,6 +38,7 @@ export async function signInAdmin(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
+    console.error("[signInAdmin] No session after signInWithPassword — check cookie errors in Vercel logs.");
     redirect("/admin/login?error=auth");
   }
 
@@ -45,6 +52,9 @@ export async function signInAdmin(formData: FormData) {
     await supabase.auth.signOut();
     redirect("/admin/login?error=forbidden");
   }
+
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
 
   if (next.startsWith("/admin") && next !== "/admin/login") {
     redirect(next);

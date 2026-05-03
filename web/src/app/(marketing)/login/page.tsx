@@ -16,6 +16,8 @@ function errorMessage(code: string | undefined) {
       return "Enter both email and password.";
     case "auth":
       return "Sign-in failed. Check your email and password.";
+    case "confirm":
+      return "Confirm your email first (check your inbox for the Supabase link), then try again.";
     case "config":
       return "This site is not connected to PulseVerse yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to the deployment, then redeploy.";
     default:

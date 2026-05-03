@@ -14,6 +14,8 @@ function errorMessage(code: string | undefined) {
       return "Enter both email and password.";
     case "auth":
       return "Sign-in failed. Check your email and password.";
+    case "confirm":
+      return "Confirm your email first — Supabase sent a link when you signed up. Or use “Forgot password” in the mobile app / Supabase dashboard to resend.";
     case "forbidden":
       return "This account is not authorized for the admin console.";
     case "config":

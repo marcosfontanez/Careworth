@@ -24,8 +24,9 @@ export async function createSupabaseServerClient() {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, options);
           });
-        } catch {
-          /* ignore when called from a Server Component that cannot set cookies */
+        } catch (e) {
+          /* Server Components can't set cookies; Server Actions / Route Handlers should. */
+          console.error("[supabase] cookie setAll failed — session may not persist:", e);
         }
       },
     },

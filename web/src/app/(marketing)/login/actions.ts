@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -35,6 +36,11 @@ export async function signInUser(formData: FormData) {
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
+    console.error("[signInUser] Supabase:", error.message);
+    const em = error.message.toLowerCase();
+    if (em.includes("email not confirmed") || em.includes("confirm your email")) {
+      redirect("/login?error=confirm");
+    }
     redirect("/login?error=auth");
   }
 
@@ -44,9 +50,11 @@ export async function signInUser(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
+    console.error("[signInUser] No session after signInWithPassword — check cookie errors in Vercel logs.");
     redirect("/login?error=auth");
   }
 
+  revalidatePath("/", "layout");
   redirect(next);
 }
 
