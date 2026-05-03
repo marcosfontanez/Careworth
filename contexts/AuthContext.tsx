@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
 import { signInWithOAuthNative } from '@/lib/oauthNative';
 import { signInWithAppleAdaptive } from '@/lib/appleAuthNative';
 import { normalizePhoneE164 } from '@/lib/phoneE164';
 import { analytics } from '@/lib/analytics';
+import { LAUNCH_LINKS } from '@/constants/launch';
 import type { Session, User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { useProfileCustomization } from '@/store/useProfileCustomization';
@@ -326,8 +326,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [firstName, ...rest] = fullName.trim().split(' ');
     const lastName = rest.join(' ') || null;
 
-    /** Must be listed in Supabase → Auth → URL Configuration → Redirect URLs (e.g. `pulseverse://auth/callback`). */
-    const emailRedirectTo = makeRedirectUri({ scheme: 'pulseverse', path: 'auth/callback' });
+    /**
+     * Must be an https URL so the inbox “verify” link opens in a real browser.
+     * Add this exact URL under Supabase → Auth → URL Configuration → Redirect URLs.
+     * @see web/src/app/(marketing)/auth/confirm/page.tsx
+     */
+    const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+    const emailRedirectTo = `${base}/auth/confirm`;
 
     const { error } = await supabase.auth.signUp({
       email,
