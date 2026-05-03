@@ -38,7 +38,7 @@ import {
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { profileHandleDisplay } from '@/utils/profileHandle';
 import { shareProfile } from '@/lib/share';
-import { AvatarDisplay } from '@/components/profile/AvatarBuilder';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { FeaturedSoundCard } from '@/components/mypage/FeaturedSoundCard';
 import { useUnreadCount, useLinkedPostsMap } from '@/hooks/useQueries';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
@@ -333,17 +333,7 @@ export function MyPageContent({
                 prioritizeRemoteAvatar
                 showEdit={false}
                 ringColor={colors.primary.teal}
-                pulseFrame={
-                  user.pulseAvatarFrame
-                    ? {
-                        ringColor: user.pulseAvatarFrame.ringColor,
-                        glowColor: user.pulseAvatarFrame.glowColor,
-                        borderWidth: 3,
-                        ringCaption: user.pulseAvatarFrame.ringCaption ?? null,
-                        prizeTier: user.pulseAvatarFrame.prizeTier,
-                      }
-                    : null
-                }
+                pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
                 showOnlineDot={isOwner}
               />
               {isOwner ? (

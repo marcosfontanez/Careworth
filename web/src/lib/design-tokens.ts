@@ -17,3 +17,10 @@ export const site = {
   tagline: "Healthcare culture, all in one place.",
   description: "The social platform for the global healthcare community.",
 } as const;
+
+/** Full-color 3D lockup; background removed (transparent PNG). */
+export const pulseverseLogoLockup = {
+  src: "/brand/pulseverse-logo-lockup.png" as const,
+  width: 1024,
+  height: 682,
+} as const;

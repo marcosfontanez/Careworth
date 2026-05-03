@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { AdminLoginForm } from "@/components/auth/admin-login-form";
+import { pulseverseLogoLockup } from "@/lib/design-tokens";
 import { adminPanelSurface } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -54,12 +55,11 @@ export default async function AdminLoginPage({
         <div className="mb-8 text-center">
           <div className="mx-auto flex justify-center">
             <Image
-              src="/brand/pulseverse-logo.svg"
+              src={pulseverseLogoLockup.src}
               alt=""
-              width={280}
-              height={300}
+              width={pulseverseLogoLockup.width}
+              height={pulseverseLogoLockup.height}
               priority
-              unoptimized
               sizes="(max-width: 640px) 92vw, 360px"
               className="h-32 w-auto max-w-[min(92vw,360px)] object-contain sm:h-36"
             />

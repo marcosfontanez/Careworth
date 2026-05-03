@@ -1,9 +1,7 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import type { WebAppFrameCopy } from "@/lib/marketing-copy/web-app";
 import { cn } from "@/lib/utils";
 
@@ -113,17 +111,6 @@ export function PulseverseWebDeviceFrame({
           </div>
         </div>
       </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <Button variant="outline" size="sm" className="rounded-full border-white/15 bg-white/[0.02]" asChild>
-          <a href={appUrl} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="mr-2 size-4" aria-hidden />
-            {copy.openNewTab}
-          </a>
-        </Button>
-      </div>
-
-      <p className="max-w-lg px-4 text-center text-xs leading-relaxed text-muted-foreground">{copy.hint}</p>
     </div>
   );
 }

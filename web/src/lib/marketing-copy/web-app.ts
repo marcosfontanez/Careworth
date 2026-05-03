@@ -2,8 +2,6 @@ import type { Locale } from "@/lib/i18n";
 
 export type WebAppFrameCopy = {
   iframeTitle: string;
-  openNewTab: string;
-  hint: string;
   noUrlTitle: string;
   noUrlBody: string;
 };
@@ -35,8 +33,6 @@ const copy: Record<Locale, WebAppPageCopy> = {
       " with your PulseVerse email to open your web profile (My Pulse). Use the frame below for the full mobile web app.",
     frame: {
       iframeTitle: "PulseVerse web app",
-      openNewTab: "Open full tab",
-      hint: "Tip: if something feels tight, use Open full tab for the whole window. Camera and mic work best when the app matches your PulseVerse web domain in Supabase settings.",
       noUrlTitle: "Web app URL not configured",
       noUrlBody:
         "In Vercel: open your PulseVerse web project → Settings → Environment Variables. Add NEXT_PUBLIC_EXPO_WEB_APP_URL with your hosted Expo web URL (no trailing slash), e.g. https://app.pulseverse.app, for Production. Save, then Deployments → Redeploy. Auth inside the iframe may also need this domain in Supabase URL configuration.",
@@ -55,8 +51,6 @@ const copy: Record<Locale, WebAppPageCopy> = {
     accountCtaAfter: " con tu correo de PulseVerse para ver tu perfil web (My Pulse). Usa el marco de abajo para la app web.",
     frame: {
       iframeTitle: "PulseVerse (web)",
-      openNewTab: "Abrir en pestaña",
-      hint: "Si algo se ve justo, usa Abrir en pestaña. Cámara y micrófono funcionan mejor con el dominio web correcto en Supabase.",
       noUrlTitle: "URL de la app web no configurada",
       noUrlBody:
         "En Vercel: Settings → Environment Variables. Añade NEXT_PUBLIC_EXPO_WEB_APP_URL (URL del build web de Expo, sin barra final) para Production. Guarda y vuelve a desplegar.",

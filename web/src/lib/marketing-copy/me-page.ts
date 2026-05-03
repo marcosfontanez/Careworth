@@ -8,8 +8,6 @@ export type MePageCopy = {
   pulseScore: string;
   followers: string;
   following: string;
-  openInBrowserApp: string;
-  openProfileInApp: string;
   browseWebApp: string;
   signInDifferent: string;
 };
@@ -23,8 +21,6 @@ const copy: Record<Locale, MePageCopy> = {
     pulseScore: "Pulse Score",
     followers: "Followers",
     following: "Following",
-    openInBrowserApp: "Open mobile web app",
-    openProfileInApp: "Open my profile in app",
     browseWebApp: "Browse in phone view",
     signInDifferent: "Sign in as someone else",
   },
@@ -36,8 +32,6 @@ const copy: Record<Locale, MePageCopy> = {
     pulseScore: "Pulse Score",
     followers: "Seguidores",
     following: "Siguiendo",
-    openInBrowserApp: "Abrir app web móvil",
-    openProfileInApp: "Abrir mi perfil en la app",
     browseWebApp: "Ver en vista móvil",
     signInDifferent: "Iniciar sesión con otra cuenta",
   },

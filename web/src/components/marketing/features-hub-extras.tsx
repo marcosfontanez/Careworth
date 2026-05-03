@@ -1,30 +1,14 @@
-import { Check, Globe, Orbit, Radio, Users } from "lucide-react";
-
-import type { FeaturesComparisonRow, FeaturesHubStatsItem } from "@/lib/marketing-copy/features-hub";
+import type { FeaturesComparisonRow } from "@/lib/marketing-copy/features-hub";
+import { Check } from "lucide-react";
 import { marketingGutterX, marketingEyebrow, marketingCardMuted, marketingSectionTitle } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
-const statIcons = [Users, Globe, Orbit, Radio] as const;
-
-export function FeaturesHubStatsBar({ stats }: { stats: readonly FeaturesHubStatsItem[] }) {
+export function FeaturesHubBanner({ message }: { message: string }) {
   return (
     <div className={cn(marketingGutterX, "py-10")}>
-      <div className="grid gap-6 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 ring-1 ring-white/[0.05] sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s, i) => {
-          const Icon = statIcons[i] ?? Users;
-          return (
-            <div key={s.label} className="flex items-center gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10">
-                <Icon className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{s.value}</p>
-                <p className="text-sm text-muted-foreground">{s.label}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center text-base font-medium leading-relaxed text-foreground ring-1 ring-white/[0.05] sm:text-lg">
+        {message}
+      </p>
     </div>
   );
 }

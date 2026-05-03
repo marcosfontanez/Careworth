@@ -11,8 +11,6 @@ export type FeatureSpotlight = {
 
 export type FeatureGridItem = { href: string; title: string; desc: string };
 
-export type FeaturesHubStatsItem = { value: string; label: string };
-
 export type ComparisonVariant = "full" | "partial" | "no" | "limited";
 
 export type FeaturesComparisonRow = { label: string; us: ComparisonVariant; them: ComparisonVariant };
@@ -30,7 +28,7 @@ export type FeaturesHubCopy = {
   allSurfacesBody: string;
   spotlights: FeatureSpotlight[];
   grid: FeatureGridItem[];
-  stats: FeaturesHubStatsItem[];
+  hubBanner: string;
   compareEyebrow: string;
   compareTitle: string;
   compareBody: string;
@@ -128,12 +126,7 @@ const en: FeaturesHubCopy = {
       desc: "Rolling five-item update feed on your Pulse Page — Thought, Clip, Link, Pics — always current.",
     },
   ],
-  stats: [
-    { value: "850K+", label: "Healthcare professionals" },
-    { value: "190+", label: "Countries" },
-    { value: "25K+", label: "Active Circles" },
-    { value: "3.7K+", label: "Live sessions hosted" },
-  ],
+  hubBanner: "Beta Phase starting soon. Download the app now to take part.",
   compareEyebrow: "Compare",
   compareTitle: "More than a platform. A better way to connect.",
   compareBody:
@@ -221,12 +214,7 @@ const es: FeaturesHubCopy = {
       desc: "Cinco novedades en tu Pulse Page — Thought, Clip, Link, Pics — siempre al día.",
     },
   ],
-  stats: [
-    { value: "850K+", label: "Profesionales de la salud" },
-    { value: "190+", label: "Países" },
-    { value: "25K+", label: "Circles activos" },
-    { value: "3.7K+", label: "Sesiones Live alojadas" },
-  ],
+  hubBanner: "La fase beta empieza pronto. Descarga la app ahora para participar.",
   compareEyebrow: "Comparar",
   compareTitle: "Más que una plataforma. Una mejor forma de conectar.",
   compareBody:

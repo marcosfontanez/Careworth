@@ -12,7 +12,7 @@ import {
   useProfileCustomization,
   DICEBEAR_STYLES, DICEBEAR_BG_COLORS, buildDiceBearUrl,
 } from '@/store/useProfileCustomization';
-import { rasterRingOuterBoxSide, resolvePulseRingRaster, PULSE_BETA_FRAME_SLUG } from '@/lib/pulseRingRasterAssets';
+import { rasterRingOuterBoxSide, resolvePulseRingRaster } from '@/lib/pulseRingRasterAssets';
 import type { AvatarType, PulseAvatarFrame } from '@/types';
 import type { PrizeFireworksTier } from './GoldFireworksBurst';
 
@@ -134,9 +134,7 @@ export function AvatarDisplay({
   const captionFont = Math.max(5, Math.min(9, Math.round(size * 0.092)));
   const burstTier: PrizeFireworksTier | null = prizeTierToFireworksTier(pulseFrame?.prizeTier);
   const showRasterGoldFireworks = Boolean(
-    useRasterRing &&
-      size >= 22 &&
-      (pulseFrame?.prizeTier === 'gold' || pulseFrame?.slug === PULSE_BETA_FRAME_SLUG),
+    useRasterRing && size >= 22 && pulseFrame?.prizeTier === 'gold',
   );
   const showProceduralFireworks = Boolean(!useRasterRing && burstTier && size >= 22);
   const fireworksPalette =

@@ -3,6 +3,7 @@ import Image from "next/image";
 import { MarketingLoginForm } from "@/components/auth/marketing-login-form";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { getLoginPageCopy } from "@/lib/marketing-copy/login-page";
+import { pulseverseLogoLockup } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
 function errorMessage(code: string | undefined) {
@@ -46,12 +47,11 @@ export default async function UserLoginPage({
         <div className="mb-8 text-center">
           <div className="mx-auto flex justify-center">
             <Image
-              src="/brand/pulseverse-logo.svg"
+              src={pulseverseLogoLockup.src}
               alt=""
-              width={280}
-              height={300}
+              width={pulseverseLogoLockup.width}
+              height={pulseverseLogoLockup.height}
               priority
-              unoptimized
               sizes="(max-width: 640px) 92vw, 360px"
               className="h-28 w-auto max-w-[min(92vw,320px)] object-contain sm:h-32"
             />

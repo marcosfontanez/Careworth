@@ -28,7 +28,7 @@ import { profilesService, pulseAvatarFramesService } from '@/services/supabase';
 import { supabaseMessage } from '@/utils/supabaseErrors';
 import { userKeys } from '@/lib/queryKeys';
 import { SongPickerModal, type PickedSong } from '@/components/mypage/SongPickerModal';
-import { AvatarDisplay } from '@/components/profile/AvatarBuilder';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 
 const DEFAULT_BANNER =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1200&q=80';
@@ -315,17 +315,7 @@ export default function MyPageAppearanceScreen() {
             avatarUrl={avatarPreview ?? profile.avatarUrl}
             prioritizeRemoteAvatar
             ringColor={colors.primary.teal}
-            pulseFrame={
-              profile.pulseAvatarFrame
-                ? {
-                    ringColor: profile.pulseAvatarFrame.ringColor,
-                    glowColor: profile.pulseAvatarFrame.glowColor,
-                    borderWidth: 3,
-                    ringCaption: profile.pulseAvatarFrame.ringCaption ?? null,
-                    prizeTier: profile.pulseAvatarFrame.prizeTier,
-                  }
-                : null
-            }
+            pulseFrame={pulseFrameFromUser(profile.pulseAvatarFrame)}
           />
           <View style={styles.borderPickerMeta}>
             <Text style={styles.borderPickerTitle}>
@@ -534,13 +524,7 @@ export default function MyPageAppearanceScreen() {
                     avatarUrl={avatarPreview ?? profile.avatarUrl}
                     prioritizeRemoteAvatar
                     ringColor={colors.primary.teal}
-                    pulseFrame={{
-                      ringColor: frame.ringColor,
-                      glowColor: frame.glowColor,
-                      borderWidth: 3,
-                      ringCaption: frame.ringCaption ?? null,
-                      prizeTier: frame.prizeTier,
-                    }}
+                    pulseFrame={pulseFrameFromUser(frame)}
                   />
                   <View style={styles.borderOptionText}>
                     <Text style={styles.borderOptionTitle}>{frame.label}</Text>

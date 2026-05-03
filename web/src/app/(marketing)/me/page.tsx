@@ -49,8 +49,6 @@ export default async function MePage() {
   const handle = profile?.username?.trim();
   const bio = profile?.bio?.trim();
   const avatarUrl = profile?.avatar_url?.trim();
-  const expoBase = process.env.NEXT_PUBLIC_EXPO_WEB_APP_URL?.replace(/\/$/, "") ?? "";
-  const profileInApp = expoBase ? `${expoBase}/profile/${user.id}` : "";
   const pulseScore =
     typeof profile?.pulse_score_current === "number" ? Math.round(profile.pulse_score_current) : null;
 
@@ -108,24 +106,10 @@ export default async function MePage() {
           </div>
         </dl>
 
-        <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          {profileInApp ? (
-            <Button className="rounded-full font-semibold" asChild>
-              <a href={profileInApp} target="_blank" rel="noopener noreferrer">
-                {c.openProfileInApp}
-              </a>
-            </Button>
-          ) : null}
+        <div className="mt-10">
           <Button variant="outline" className="rounded-full border-white/15 bg-transparent" asChild>
             <Link href="/web-app">{c.browseWebApp}</Link>
           </Button>
-          {expoBase ? (
-            <Button variant="outline" className="rounded-full border-white/15 bg-transparent" asChild>
-              <a href={expoBase} target="_blank" rel="noopener noreferrer">
-                {c.openInBrowserApp}
-              </a>
-            </Button>
-          ) : null}
         </div>
 
         <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/10 pt-8 text-sm">

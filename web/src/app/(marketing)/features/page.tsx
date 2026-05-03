@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, LayoutGrid } from "lucide-react";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { CtaSection } from "@/components/marketing/cta-section";
-import { FeaturesComparisonSection, FeaturesHubStatsBar } from "@/components/marketing/features-hub-extras";
+import { FeaturesComparisonSection, FeaturesHubBanner } from "@/components/marketing/features-hub-extras";
 import { HomeWhySix } from "@/components/marketing/home-why-six";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
@@ -53,7 +53,7 @@ export default async function FeaturesHubPage() {
         </div>
       </MarketingPageShell>
 
-      <FeaturesHubStatsBar stats={copy.stats} />
+      <FeaturesHubBanner message={copy.hubBanner} />
 
       <MarketingPageShell className="!pt-0">
         <div className="mt-4">
