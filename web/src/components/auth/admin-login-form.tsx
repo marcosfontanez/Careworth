@@ -3,22 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { getSupabaseBrowserClient } from "@/components/auth/supabase-browser-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { mapLoginErrorMessage } from "@/lib/auth/map-login-error";
 import { marketingInlineLink } from "@/lib/ui-classes";
-
-function mapAuthError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("email not confirmed") || m.includes("confirm your email")) {
-    return "Confirm your email first, then try again.";
-  }
-  if (m.includes("invalid login") || m.includes("invalid credentials")) {
-    return "Wrong email or password.";
-  }
-  return "Sign-in failed. Check your email and password.";
-}
 
 export function AdminLoginForm({ nextPath }: { nextPath: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +25,28 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
     }
     setLoading(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
-      if (signErr) {
-        setError(mapAuthError(signErr.message));
+      const res = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+      let data: { ok?: boolean; error?: string } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        /* ignore */
+      }
+      if (!res.ok) {
+        if (res.status === 503) {
+          setError(
+            process.env.NODE_ENV === "production"
+              ? "Supabase is not configured on this deployment. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel, then redeploy."
+              : "Supabase is not configured locally. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in web/.env.local.",
+          );
+        } else {
+          setError(mapLoginErrorMessage(typeof data.error === "string" ? data.error : ""));
+        }
         setLoading(false);
         return;
       }
