@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
 import { signInWithOAuthNative } from '@/lib/oauthNative';
 import { signInWithAppleAdaptive } from '@/lib/appleAuthNative';
@@ -325,10 +326,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [firstName, ...rest] = fullName.trim().split(' ');
     const lastName = rest.join(' ') || null;
 
+    /** Must be listed in Supabase → Auth → URL Configuration → Redirect URLs (e.g. `pulseverse://auth/callback`). */
+    const emailRedirectTo = makeRedirectUri({ scheme: 'pulseverse', path: 'auth/callback' });
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo,
         data: {
           full_name: fullName,
           first_name: firstName,
@@ -345,7 +350,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithPhone = async (phone: string) => {
     const e164 = normalizePhoneE164(phone);
-    const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
+    if (!e164 || e164.length < 8) {
+      return { error: new Error('Enter a full number with country code (e.g. +1 for US).') };
+    }
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: e164,
+      options: { channel: 'sms' },
+    });
     return { error: error ? new Error(error.message) : null };
   };
 

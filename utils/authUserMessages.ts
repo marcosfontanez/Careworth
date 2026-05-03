@@ -11,5 +11,11 @@ export function mapAuthErrorForAlert(rawMessage: string): string {
   if (m.includes('too many requests') || m.includes('rate limit') || m.includes('over_request_rate')) {
     return 'Too many attempts. Wait a few minutes and try again.';
   }
+  if (m.includes('sms') && (m.includes('failed') || m.includes('error') || m.includes('twilio'))) {
+    return 'SMS could not be sent. If you are on a Twilio trial, verify this number in Twilio first. Otherwise check Supabase Phone provider and Twilio geo permissions.';
+  }
+  if (m.includes('invalid to number') || m.includes('invalid phone') || m.includes('is invalid')) {
+    return 'That phone number could not be used. Include country code (e.g. +1 5551234567).';
+  }
   return rawMessage;
 }

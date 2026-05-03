@@ -244,7 +244,17 @@ export default function LoginScreen() {
     setLoading(false);
     if (error) Alert.alert('Sign up failed', mapAuthErrorForAlert(error.message));
     else {
-      Alert.alert('Check your email', 'We sent a confirmation link to verify your account.');
+      setFullName('');
+      setHandle('');
+      setConfirmPassword('');
+      setPassword('');
+      setAcceptedTerms(false);
+      setHandleStatus('idle');
+      setAuthTab('login');
+      Alert.alert(
+        'Check your email',
+        'We sent a confirmation link to verify your account. After you verify, sign in below with your email and password.',
+      );
     }
   };
 
@@ -610,7 +620,7 @@ function PhoneLoginForm({ phoneBusy, onBack }: { phoneBusy: boolean; onBack: () 
     setLoading(true);
     const { error } = await signInWithPhone(phone.trim());
     setLoading(false);
-    if (error) Alert.alert('Error', error.message);
+    if (error) Alert.alert('Error', mapAuthErrorForAlert(error.message));
     else setOtpSent(true);
   };
 
@@ -619,7 +629,7 @@ function PhoneLoginForm({ phoneBusy, onBack }: { phoneBusy: boolean; onBack: () 
     setLoading(true);
     const { error } = await verifyOtp(phone.trim(), otp.trim());
     setLoading(false);
-    if (error) Alert.alert('Verification failed', error.message);
+    if (error) Alert.alert('Verification failed', mapAuthErrorForAlert(error.message));
     else router.replace('/');
   };
 
