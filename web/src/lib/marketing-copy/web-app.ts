@@ -39,7 +39,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       hint: "Tip: if something feels tight, use Open full tab for the whole window. Camera and mic work best when the app matches your PulseVerse web domain in Supabase settings.",
       noUrlTitle: "Web app URL not configured",
       noUrlBody:
-        "Set NEXT_PUBLIC_EXPO_WEB_APP_URL in your deployment to the hosted Expo web build (for example https://app.pulseverse.app). Then redeploy this site.",
+        "In Vercel: open your PulseVerse web project → Settings → Environment Variables. Add NEXT_PUBLIC_EXPO_WEB_APP_URL with your hosted Expo web URL (no trailing slash), e.g. https://app.pulseverse.app, for Production. Save, then Deployments → Redeploy. Auth inside the iframe may also need this domain in Supabase URL configuration.",
     },
   },
   es: {
@@ -59,7 +59,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       hint: "Si algo se ve justo, usa Abrir en pestaña. Cámara y micrófono funcionan mejor con el dominio web correcto en Supabase.",
       noUrlTitle: "URL de la app web no configurada",
       noUrlBody:
-        "Configura NEXT_PUBLIC_EXPO_WEB_APP_URL en el despliegue con la URL del build web de Expo y vuelve a publicar.",
+        "En Vercel: Settings → Environment Variables. Añade NEXT_PUBLIC_EXPO_WEB_APP_URL (URL del build web de Expo, sin barra final) para Production. Guarda y vuelve a desplegar.",
     },
   },
 };

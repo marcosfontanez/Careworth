@@ -33,7 +33,7 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "relative px-1 py-2 text-sm font-medium transition-colors",
+        "relative shrink-0 whitespace-nowrap px-1.5 py-2 text-sm font-medium transition-colors",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -59,41 +59,49 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
     strings.myPulse;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.85)] backdrop-blur-xl">
-      <div className={cn("relative flex min-h-[5.5rem] items-center justify-between gap-4 py-2 sm:min-h-[6rem] sm:gap-6", marketingGutterX)}>
-        <MarketingLogo className="shrink-0" />
+    <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.92)] backdrop-blur-xl">
+      <div
+        className={cn(
+          "flex min-h-[5.5rem] items-center gap-3 py-2 sm:min-h-[6rem] sm:gap-4 lg:gap-5",
+          marketingGutterX,
+        )}
+      >
+        <MarketingLogo className="relative z-10 shrink-0" />
         <nav
-          className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-7 lg:flex"
+          className="relative z-0 hidden min-h-0 min-w-0 flex-1 basis-0 items-center justify-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden"
           aria-label="Primary"
         >
-          {centerLinks.map((item) => {
-            const active = item.match(pathname);
-            return <NavLink key={item.href} href={item.href} label={item.label} active={active} />;
-          })}
+          <div className="flex items-center gap-x-2 px-1 sm:gap-x-3 xl:gap-x-5 2xl:gap-x-6">
+            {centerLinks.map((item) => {
+              const active = item.match(pathname);
+              return <NavLink key={item.href} href={item.href} label={item.label} active={active} />;
+            })}
+          </div>
         </nav>
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="relative z-10 ml-auto flex min-w-0 shrink-0 items-center gap-2 border-l border-white/[0.08] pl-3 sm:gap-3 sm:pl-4 lg:ml-0">
           {account ? (
             <Link
               href="/me"
-              className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground hover:text-primary sm:inline"
+              className="hidden max-w-[6.5rem] truncate text-sm font-semibold text-foreground hover:text-primary md:inline md:max-w-[9rem] xl:max-w-[11rem]"
+              title={meLabel}
             >
               {meLabel}
             </Link>
           ) : null}
           {account ? (
-            <form action={signOutUser} className="hidden sm:block">
-              <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
+            <form action={signOutUser} className="hidden shrink-0 sm:block">
+              <Button type="submit" variant="ghost" size="sm" className="px-2 text-muted-foreground hover:text-foreground">
                 {strings.signOut}
               </Button>
             </form>
           ) : (
-            <Button variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex" asChild>
+            <Button variant="ghost" size="sm" className="hidden shrink-0 px-2 text-muted-foreground sm:inline-flex" asChild>
               <Link href="/login">{strings.logIn}</Link>
             </Button>
           )}
           <Link
             href="/admin/login"
-            className="hidden text-xs text-muted-foreground hover:text-foreground sm:inline"
+            className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground hover:text-foreground sm:inline"
           >
             {strings.staffPortal}
           </Link>
