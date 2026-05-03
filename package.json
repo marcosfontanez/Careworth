@@ -83,11 +83,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.39.4",
     "eslint-config-expo": "^10.0.0",
-    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
-  },
-  "optionalDependencies": {
-    "supabase": "^2.93.1"
   },
   "private": true
 }
