@@ -33,7 +33,7 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });
-      let data: { ok?: boolean; error?: string } = {};
+      let data: { ok?: boolean; error?: string; code?: string | null } = {};
       try {
         data = (await res.json()) as typeof data;
       } catch {
@@ -45,7 +45,12 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
             "This site is not connected to PulseVerse yet. Check deployment environment variables, then redeploy.",
           );
         } else {
-          setError(mapLoginErrorMessage(typeof data.error === "string" ? data.error : ""));
+          setError(
+            mapLoginErrorMessage(
+              typeof data.error === "string" ? data.error : "",
+              typeof data.code === "string" ? data.code : data.code ?? undefined,
+            ),
+          );
         }
         setLoading(false);
         return;

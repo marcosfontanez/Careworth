@@ -57,7 +57,15 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 401 });
+    console.warn("[api/auth/sign-in] auth failed", {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    });
+    return NextResponse.json(
+      { error: error.message, code: error.code ?? null },
+      { status: 401 },
+    );
   }
 
   return jsonResponse;

@@ -1,11 +1,32 @@
-/** Map Supabase Auth API messages to short, user-facing copy. */
-export function mapLoginErrorMessage(message: string): string {
+/** Map Supabase Auth API messages/codes to short, user-facing copy. */
+export function mapLoginErrorMessage(message: string, code?: string | null): string {
   const m = message.toLowerCase();
-  if (m.includes("email not confirmed") || m.includes("confirm your email")) {
-    return "Confirm your email first (check your inbox for the link from PulseVerse).";
+  const c = (code ?? "").toLowerCase().replace(/-/g, "_");
+
+  if (
+    c === "email_not_confirmed" ||
+    m.includes("email not confirmed") ||
+    m.includes("confirm your email")
+  ) {
+    return "Confirm your email first (open the link Supabase sent when you signed up), then try again.";
   }
-  if (m.includes("invalid login") || m.includes("invalid credentials")) {
-    return "Wrong email or password.";
+  if (
+    c === "invalid_credentials" ||
+    c === "invalid_grant" ||
+    m.includes("invalid login credentials") ||
+    m.includes("invalid credentials") ||
+    m.includes("invalid login")
+  ) {
+    return "Wrong email or password. If you usually sign in with Google or Apple in the app, use “Forgot password” in the app (or Supabase) to set an email password for the web.";
+  }
+  if (m.includes("too many requests") || m.includes("rate limit") || c.includes("over_request_rate")) {
+    return "Too many sign-in attempts. Wait a few minutes and try again.";
+  }
+  if (m.includes("user_banned") || m.includes("banned")) {
+    return "This account cannot sign in. Contact support if you think this is a mistake.";
+  }
+  if (message.trim().length > 0) {
+    return message;
   }
   return "Sign-in failed. Check your email and password.";
 }

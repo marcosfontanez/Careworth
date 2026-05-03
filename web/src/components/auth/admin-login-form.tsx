@@ -31,7 +31,7 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });
-      let data: { ok?: boolean; error?: string } = {};
+      let data: { ok?: boolean; error?: string; code?: string | null } = {};
       try {
         data = (await res.json()) as typeof data;
       } catch {
@@ -45,7 +45,12 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
               : "Supabase is not configured locally. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in web/.env.local.",
           );
         } else {
-          setError(mapLoginErrorMessage(typeof data.error === "string" ? data.error : ""));
+          setError(
+            mapLoginErrorMessage(
+              typeof data.error === "string" ? data.error : "",
+              typeof data.code === "string" ? data.code : data.code ?? undefined,
+            ),
+          );
         }
         setLoading(false);
         return;
