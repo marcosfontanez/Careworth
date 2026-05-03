@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { supabaseSsrCookieOptions } from "@/lib/supabase/ssr-cookie-options";
+
 /**
  * Refreshes Supabase session cookies on all routes when this middleware runs, and enforces
  * staff access for /admin/* (except /admin/login). Consumer routes (/login, /me, …) share the
@@ -16,7 +18,9 @@ export async function updateSupabaseSession(request: NextRequest) {
     return response;
   }
 
+  const cookieOptions = supabaseSsrCookieOptions();
   const supabase = createServerClient(url, anon, {
+    ...(cookieOptions ? { cookieOptions } : {}),
     cookies: {
       getAll() {
         return request.cookies.getAll();

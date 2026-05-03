@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { getSupabaseBrowserClient } from "@/components/auth/supabase-browser-client";
@@ -22,7 +21,6 @@ function mapAuthError(message: string): string {
 }
 
 export function AdminLoginForm({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -46,12 +44,9 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
         return;
       }
 
-      router.refresh();
-      if (nextPath.startsWith("/admin") && nextPath !== "/admin/login") {
-        router.push(nextPath);
-      } else {
-        router.push("/admin/dashboard");
-      }
+      const dest =
+        nextPath.startsWith("/admin") && nextPath !== "/admin/login" ? nextPath : "/admin/dashboard";
+      window.location.assign(dest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setLoading(false);

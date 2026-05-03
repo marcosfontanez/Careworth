@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { getSupabaseBrowserClient } from "@/components/auth/supabase-browser-client";
@@ -24,7 +23,6 @@ function mapAuthError(message: string): string {
 }
 
 export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: Locale; c: LoginPageCopy; nextPath: string }) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -47,8 +45,8 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
         setLoading(false);
         return;
       }
-      router.refresh();
-      router.push(nextPath || "/me");
+      const dest = nextPath && nextPath.startsWith("/") ? nextPath : "/me";
+      window.location.assign(dest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setLoading(false);

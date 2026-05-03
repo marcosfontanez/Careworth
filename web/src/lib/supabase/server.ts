@@ -3,6 +3,8 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+import { supabaseSsrCookieOptions } from "@/lib/supabase/ssr-cookie-options";
+
 export function isSupabaseConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
@@ -14,7 +16,9 @@ export async function createSupabaseServerClient() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
   const cookieStore = await cookies();
+  const cookieOptions = supabaseSsrCookieOptions();
   return createServerClient(url, anon, {
+    ...(cookieOptions ? { cookieOptions } : {}),
     cookies: {
       getAll() {
         return cookieStore.getAll();
