@@ -93,7 +93,6 @@ export default function AdminPanel() {
   const [topEvents, setTopEvents] = useState<{ name: string; count: number }[]>([]);
 
   // Revenue state
-  const featureFlags = useFeatureFlags();
   const [revenueData, setRevenueData] = useState({
     adCampaigns: 0, adImpressions: 0, adRevenue: 0,
     subscribers: 0, subRevenue: 0,
@@ -262,7 +261,7 @@ export default function AdminPanel() {
           uniqueTippers: tipStats.uniqueTippers,
         });
       }
-    } catch (e: any) {
+    } catch {
       toast.show('Failed to load data', 'error');
     }
     setLoading(false);
@@ -311,31 +310,49 @@ export default function AdminPanel() {
     ]);
   };
 
-  const handleBanFromReport = async (report: Report) => {
-    if (!report.reporter) return;
+  const handleBanFromReport = (report: Report) => {
     const targetUserId = report.target_type === 'profile' ? report.target_id : null;
     if (!targetUserId) {
-      toast.show('Can only ban profile reports directly. Use User tab to ban.', 'info');
+      toast.show('Can only ban profile reports this way. Use the Users tab for other cases.', 'info');
       return;
     }
-    handleBanUser({ id: targetUserId } as any, 'Banned due to reported content');
+    const displayName =
+      (report.target_content as { display_name?: string } | null)?.display_name?.trim() || 'User';
+    handleBanUser(
+      {
+        id: targetUserId,
+        display_name: displayName,
+        avatar_url: null,
+        role: '',
+        is_verified: false,
+        role_admin: false,
+        created_at: '',
+        post_count: 0,
+        follower_count: 0,
+      },
+      'Banned due to reported content',
+    );
   };
 
   // ─── User Actions ───
   const handleBanUser = (userRow: UserRow, defaultReason?: string) => {
-    Alert.prompt
-      ? Alert.prompt('Ban User', 'Enter ban reason:', async (reason) => {
-          if (!reason?.trim()) return;
-          await executeBan(userRow.id, reason);
-        })
-      : Alert.alert('Ban User', `Ban ${userRow.display_name}?`, [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Ban', style: 'destructive', onPress: async () => {
-              await executeBan(userRow.id, defaultReason ?? 'Violated community guidelines');
-            },
-          },
-        ]);
+    if (typeof Alert.prompt === 'function') {
+      Alert.prompt('Ban User', 'Enter ban reason:', async (reason) => {
+        if (!reason?.trim()) return;
+        await executeBan(userRow.id, reason);
+      });
+      return;
+    }
+    Alert.alert('Ban User', `Ban ${userRow.display_name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Ban',
+        style: 'destructive',
+        onPress: async () => {
+          await executeBan(userRow.id, defaultReason ?? 'Violated community guidelines');
+        },
+      },
+    ]);
   };
 
   const executeBan = async (targetId: string, reason: string) => {
@@ -353,14 +370,6 @@ export default function AdminPanel() {
       setSelectedUser(null);
       loadData();
     } catch { toast.show('Failed to ban user', 'error'); }
-  };
-
-  const handleUnbanUser = async (targetId: string) => {
-    try {
-      await supabase.from('user_bans').delete().eq('user_id', targetId);
-      toast.show('User unbanned', 'success');
-      loadData();
-    } catch { toast.show('Failed to unban', 'error'); }
   };
 
   const handleToggleAdmin = async (userRow: UserRow) => {
@@ -498,6 +507,17 @@ export default function AdminPanel() {
 
             {r.status === 'pending' && (
               <View style={styles.modalActions}>
+                {r.target_type === 'profile' ? (
+                  <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: colors.status.error }]}
+                    onPress={() => {
+                      void handleBanFromReport(r);
+                    }}
+                  >
+                    <Ionicons name="ban-outline" size={16} color={colors.dark.text} />
+                    <Text style={styles.modalBtnText}>Ban reported profile</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   style={[styles.modalBtn, { backgroundColor: colors.status.error }]}
                   onPress={() => handleDeleteContent(r)}

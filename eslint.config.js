@@ -5,11 +5,15 @@ module.exports = defineConfig([
   globalIgnores([
     '**/node_modules/**',
     '.expo/**',
+    '.eas-inspect-out/**',
+    '.eas-inspect-pre/**',
     'web/**',
     'export-worker/**',
     'supabase/functions/**',
     '**/dist/**',
     'dist-web-test/**',
+    /** Optional sharp dependency — local-only script; not installed on EAS / minimal CI images. */
+    'scripts/remove-white-png.mjs',
     'metro.config.js',
     'babel.config.js',
   ]),
