@@ -22,6 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const row = await loadPostSharePublic(id);
   if (!row) {
+    const fallbackImage = `${base.replace(/\/$/, "")}/opengraph-image`;
     return {
       title: "Clip · PulseVerse",
       description: "Watch this clip in the PulseVerse app.",
@@ -32,16 +33,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         type: "website",
         title: "Clip · PulseVerse",
         description: "Watch this clip in the PulseVerse app.",
+        images: [{ url: fallbackImage, width: 1200, height: 630, alt: "PulseVerse" }],
       },
       twitter: {
         card: "summary_large_image",
         title: "Clip · PulseVerse",
         description: "Watch this clip in the PulseVerse app.",
+        images: [fallbackImage],
       },
     };
   }
 
-  const { title, description } = buildPostShareOg(row, base);
+  const { title, description, imageUrl } = buildPostShareOg(row, base);
 
   return {
     title,
@@ -53,11 +56,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       url: canonical,
       type: "website",
       siteName: "PulseVerse",
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [imageUrl],
     },
   };
 }

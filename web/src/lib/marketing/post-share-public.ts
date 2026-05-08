@@ -23,6 +23,20 @@ function absoluteOrHttps(url: string, siteBase: string): string {
   return `${siteBase.replace(/\/$/, "")}/${u.replace(/^\//, "")}`;
 }
 
+/**
+ * Absolute image URL for link previews (thumbnail, or image media). Videos should
+ * rely on `thumbnail_url` for a real frame — crawlers don’t treat MP4 as og:image.
+ */
+export function postShareVisualPreviewUrl(post: PostSharePublic, siteBase: string): string | null {
+  if (post.is_anonymous) return null;
+  const type = post.postType.toLowerCase();
+  const thumb = (post.thumbnail_url ?? "").trim();
+  const media = (post.media_url ?? "").trim();
+  if (thumb) return absoluteOrHttps(thumb, siteBase);
+  if (type === "image" && media) return absoluteOrHttps(media, siteBase);
+  return null;
+}
+
 export type PostSharePublic = {
   caption: string;
   thumbnail_url: string | null;
@@ -46,7 +60,6 @@ export function buildPostShareOg(post: PostSharePublic, siteBase: string): {
   const likeStr = likes.toLocaleString("en-US");
   const commentStr = comments.toLocaleString("en-US");
   const cap = post.caption.trim();
-  const type = post.postType.toLowerCase();
 
   let title: string;
   let description: string;
@@ -61,13 +74,8 @@ export function buildPostShareOg(post: PostSharePublic, siteBase: string): {
     description = `${likeStr} likes, ${commentStr} comments.${quote}${byline}`;
   }
 
-  let imageUrl = `${base}/opengraph-image`;
-  if (!post.is_anonymous) {
-    const thumb = (post.thumbnail_url ?? "").trim();
-    const media = (post.media_url ?? "").trim();
-    if (thumb) imageUrl = absoluteOrHttps(thumb, base);
-    else if (type === "image" && media) imageUrl = absoluteOrHttps(media, base);
-  }
+  const visual = postShareVisualPreviewUrl(post, siteBase);
+  const imageUrl = visual ?? `${base}/opengraph-image`;
 
   return { title, description, imageUrl };
 }
