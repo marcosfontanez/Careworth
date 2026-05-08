@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Post, ProfileUpdate } from '@/types';
+import { hrefCommunityWallPost } from '@/lib/communityRoutes';
 import { getMyPulseDisplayType } from '@/utils/myPulseDisplayType';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { MyPulseThoughtCard } from './cards/MyPulseThoughtCard';
@@ -109,24 +110,19 @@ export function MyPulseItemCard({
   const openSource = useCallback(() => {
     if (u.linkedPostId) {
       /**
-       * Pinning a feed clip (or a Circle post) to My Pulse MUST feel
-       * like bookmarking, not reposting. Tapping the pin on a profile
-       * should land the viewer on the ORIGINAL post in the feed-style
-       * fullscreen viewer (`/feed/[id]`) — which plays the video,
-       * exposes the real like/comment/share/follow rail, and writes
-       * through to the same backend tables the main feed uses. This
-       * is the "redirect me to the original video" experience users
-       * expect when they tap a clip card on a Pulse page.
+       * Circle pins: open that room’s wall scrolled to the original post
+       * so context matches “I saved this from a Circle” — not the isolated
+       * fullscreen `/feed/[id]` viewer.
        *
-       * Pass the Circle slug through as a query param when the pin
-       * came from a room post so the viewer keeps the Circle
-       * attribution (accent color, anonymous masking) once they
-       * share back out from the fullscreen shell.
+       * Feed-only pins (no `linkedCircleSlug`): keep the fullscreen feed
+       * shell for the main For You / Following experience.
        */
-      const qs = u.linkedCircleSlug?.trim()
-        ? `?circle=${encodeURIComponent(u.linkedCircleSlug.trim())}`
-        : '';
-      router.push(`/feed/${u.linkedPostId}${qs}` as any);
+      const circle = u.linkedCircleSlug?.trim();
+      if (circle) {
+        router.push(hrefCommunityWallPost(circle, u.linkedPostId));
+        return;
+      }
+      router.push(`/feed/${u.linkedPostId}` as any);
       return;
     }
     /**

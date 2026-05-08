@@ -1,5 +1,14 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,50 +19,71 @@ import { anonymousDisplayName } from '@/lib/anonymousCircle';
 import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
 import type { CircleAccent } from '@/lib/circleAccents';
-import type { Post } from '@/types';
+import type { Post, PostReactionKind } from '@/types';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { POST_REACTION_EMOJI, POST_REACTION_ORDER, emptyPostReactionCounts } from '@/lib/postReactions';
 
 type Props = {
   post: Post;
   accent: CircleAccent;
   isAnonymousRoom: boolean;
-  isLiked: boolean;
+  /** Viewer’s current reaction for this post, if any. */
+  viewerReaction: PostReactionKind | null;
   onPress: () => void;
   /** Avatar-only: open creator Pulse page without changing the main card open gesture. */
   onProfile?: () => void;
   onReply: () => void;
-  onReact: () => void;
+  /** Tap again on the active emoji clears the reaction (handled in parent). */
+  onPickReaction: (kind: PostReactionKind) => void;
   onShare: () => void;
   /** When set with `isOwner`, the ⋯ menu opens owner actions (edit / delete) from the parent. */
   isOwner?: boolean;
   onOwnerMenu?: () => void;
+  /** Brief ring when user deep-links onto this card (e.g. from a My Pulse pin). */
+  jumpHighlight?: boolean;
 };
 
 /**
- * Replacement for the previous Reddit-style RedditPostCard. Differences:
- *
- *  - No left vote rail (removed per redesign brief).
- *  - Avatar + name + role + (optional) specialty pill in a clean top row,
- *    so the card reads like a social post, not a forum row.
- *  - Caption / media / hashtags flow under the header.
- *  - Bottom action row: Like / Reply / (Download when photo or video) / Share.
- *
- * The cell stays on the room's accent color via thin tinted borders + a
- * left-edge stripe so different rooms still feel visually distinct without
- * leaning on a colored side rail with arrows.
+ * Circle wall card: header, body, media, then a horizontal reaction strip
+ * (heart / laugh / wow / sad / angry / clap) with per-type counts — one pick
+ * per viewer, same row as `post_likes` + migration 115 counters.
  */
 export const CirclePostCard = React.memo(function CirclePostCard({
   post,
   accent,
   isAnonymousRoom,
-  isLiked,
+  viewerReaction,
   onPress,
   onProfile,
   onReply,
-  onReact,
+  onPickReaction,
   onShare,
   isOwner = false,
   onOwnerMenu,
+  jumpHighlight = false,
 }: Props) {
+  const { width: winW, height: winH } = useWindowDimensions();
+  const maxImagePreviewH = Math.min(560, winH * 0.58);
+  const [photoLayoutW, setPhotoLayoutW] = useState(0);
+  const [photoIntrinsic, setPhotoIntrinsic] = useState<{ w: number; h: number } | null>(null);
+
+  const isVideoPost = post.type === 'video';
+  const showFullPhoto = !!post.mediaUrl && !isVideoPost;
+
+  useEffect(() => {
+    setPhotoIntrinsic(null);
+  }, [post.id, post.mediaUrl]);
+
+  const photoPreviewHeight = useMemo(() => {
+    if (!showFullPhoto) return 150;
+    const contentW =
+      photoLayoutW > 0 ? photoLayoutW : Math.max(200, winW - 48);
+    if (!photoIntrinsic || photoIntrinsic.w <= 0 || photoIntrinsic.h <= 0) {
+      return Math.min(240, maxImagePreviewH);
+    }
+    return Math.min((contentW * photoIntrinsic.h) / photoIntrinsic.w, maxImagePreviewH);
+  }, [showFullPhoto, photoLayoutW, photoIntrinsic, winW, maxImagePreviewH]);
+
   const displayName = isAnonymousRoom
     ? anonymousDisplayName(post.creatorId, post.id)
     : post.creator?.displayName ?? 'Member';
@@ -64,27 +94,27 @@ export const CirclePostCard = React.memo(function CirclePostCard({
   const titleLine = isTitled ? caption.split('\n')[0].replace(/\*\*/g, '').trim() : '';
   const bodyLine = isTitled ? caption.split('\n\n').slice(1).join('\n\n').trim() : caption;
   const canDownloadMedia = postHasDownloadableMedia(post);
+  const counts = post.reactionCounts ?? emptyPostReactionCounts();
 
   const onDownloadPress = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     void shareDownloadedPostMedia(post);
   };
 
+  const onReactionPress = (kind: PostReactionKind) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPickReaction(kind);
+  };
+
   return (
-    <View style={[styles.card, { borderLeftColor: accent.color }]}>
-      {/**
-       * Main story (header + body + media) is its own press target. The
-       * action row is a sibling — not nested inside a parent Touchable —
-       * so Reply / Like / Share never fight the "open post" gesture (which
-       * caused missed taps and confusing navigation on some devices).
-       */}
+    <View
+      style={[
+        styles.card,
+        { borderLeftColor: accent.color },
+        jumpHighlight ? [styles.cardJumpRing, { borderColor: accent.color, shadowColor: accent.color }] : null,
+      ]}
+    >
       <Pressable style={styles.cardMainPress} onPress={onPress}>
-        {/**
-         * The header (avatar + name + role + meta): tapping the body still
-         * opens the post via the outer Pressable; the avatar is a nested
-         * press target that opens the creator's Pulse page when `onProfile`
-         * is provided (non-anonymous rooms).
-         */}
         <View style={styles.header}>
           <View style={styles.creatorRow}>
             {isAnonymousRoom ? (
@@ -117,20 +147,22 @@ export const CirclePostCard = React.memo(function CirclePostCard({
             )}
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.nameRow}>
-                <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+                <Text style={styles.name} numberOfLines={1}>
+                  {displayName}
+                </Text>
                 {!isAnonymousRoom && post.creator?.isVerified && (
                   <Ionicons name="checkmark-circle" size={13} color={colors.primary.teal} />
                 )}
                 {role && (
-                  <View style={[styles.rolePill, { backgroundColor: `${accent.color}20`, borderColor: `${accent.color}55` }]}>
+                  <View
+                    style={[
+                      styles.rolePill,
+                      { backgroundColor: `${accent.color}20`, borderColor: `${accent.color}55` },
+                    ]}
+                  >
                     <Text style={[styles.rolePillText, { color: accent.color }]}>{role}</Text>
                   </View>
                 )}
-                {/*
-                Pulse tier chip next to role. Suppressed in anonymous
-                rooms (would partially deanonymise high-tier creators)
-                and for Murmur (new accounts get no visual penalty).
-              */}
                 {!isAnonymousRoom ? (
                   <PulseTierBadge
                     tier={post.creator?.pulseTier ?? null}
@@ -161,15 +193,16 @@ export const CirclePostCard = React.memo(function CirclePostCard({
         {(isTitled || bodyLine) && (
           <View style={styles.body}>
             {isTitled && titleLine ? (
-              <Text style={styles.title} numberOfLines={2}>{titleLine}</Text>
+              <Text style={styles.title} numberOfLines={2}>
+                {titleLine}
+              </Text>
             ) : null}
             {bodyLine ? (
-              /** Stay tight when there's media (1 line) so the card height
-               *  stays predictable; allow 3 lines for pure-text posts so
-               *  they still carry meaningful content. */
               <Text
                 style={styles.caption}
-                numberOfLines={post.mediaUrl ? 1 : isTitled ? 2 : 3}
+                numberOfLines={
+                  post.mediaUrl ? (isVideoPost ? 1 : 2) : isTitled ? 2 : 3
+                }
               >
                 {bodyLine}
               </Text>
@@ -178,19 +211,49 @@ export const CirclePostCard = React.memo(function CirclePostCard({
         )}
 
         {post.mediaUrl ? (
-          <View style={styles.mediaWrap}>
-            <Image
-              source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
-              style={styles.media}
-              contentFit="cover"
-              transition={120}
-            />
-            {post.type === 'video' && (
+          isVideoPost ? (
+            <View style={styles.mediaWrapVideo}>
+              <Image
+                source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
+                style={styles.media}
+                contentFit="cover"
+                transition={120}
+                {...pulseImageListThumbProps}
+              />
               <View style={styles.playOverlay}>
                 <Ionicons name="play-circle" size={38} color="#FFFFFFE6" />
               </View>
-            )}
-          </View>
+            </View>
+          ) : (
+            <View
+              style={[styles.mediaWrapPhoto, { height: photoPreviewHeight }]}
+              onLayout={
+                showFullPhoto
+                  ? (e) => setPhotoLayoutW(e.nativeEvent.layout.width)
+                  : undefined
+              }
+            >
+              <Image
+                source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
+                style={styles.mediaPhotoContain}
+                contentFit="contain"
+                transition={120}
+                {...pulseImageListThumbProps}
+                onLoad={
+                  showFullPhoto
+                    ? (e) => {
+                        const src = (e as { source?: { width?: number; height?: number } }).source;
+                        const w = src?.width;
+                        const h = src?.height;
+                        if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) {
+                          setPhotoIntrinsic({ w, h });
+                        }
+                      }
+                    : undefined
+                }
+              />
+            </View>
+          )
         ) : null}
 
         {post.hashtags?.length ? (
@@ -204,20 +267,36 @@ export const CirclePostCard = React.memo(function CirclePostCard({
         ) : null}
       </Pressable>
 
-      {/**
-       * Action row — Like / Comment / Share. The previous Views
-       * (eye) button was removed: it had no interaction, it duplicated
-       * a counter that doesn't matter at the card level, and it crowded
-       * the row. View counts still live inside the post detail / creator
-       * analytics where they're actually actionable.
-       */}
+      <View style={styles.reactionsSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.reactionsScroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {POST_REACTION_ORDER.map((kind) => {
+            const n = counts[kind] ?? 0;
+            const active = viewerReaction === kind;
+            return (
+              <TouchableOpacity
+                key={kind}
+                onPress={() => onReactionPress(kind)}
+                activeOpacity={0.75}
+                style={[styles.reactionChip, active && { borderColor: accent.color, backgroundColor: `${accent.color}22` }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${POST_REACTION_EMOJI[kind]} reaction${n > 0 ? `, ${n}` : ''}`}
+              >
+                <Text style={styles.reactionEmoji}>{POST_REACTION_EMOJI[kind]}</Text>
+                {n > 0 ? (
+                  <Text style={[styles.reactionCount, active && { color: accent.color }]}>{formatCount(n)}</Text>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       <View style={styles.actions}>
-        <ActionButton
-          icon={isLiked ? 'heart' : 'heart-outline'}
-          tint={isLiked ? '#EF4444' : colors.dark.textMuted}
-          count={post.likeCount}
-          onPress={onReact}
-        />
         <ActionButton
           icon="chatbubble-outline"
           tint={colors.dark.textMuted}
@@ -262,8 +341,7 @@ function ActionButton({
   accessibilityLabel?: string;
 }) {
   const text =
-    label ??
-    (typeof count === 'number' && count > 0 ? formatCount(count) : '');
+    label ?? (typeof count === 'number' && count > 0 ? formatCount(count) : '');
   const accessibilityLabel =
     accessibilityLabelProp ?? (typeof label === 'string' ? label : undefined);
   const inner = (
@@ -297,11 +375,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
     borderWidth: 1,
     borderColor: colors.dark.border,
-    /** Accent stripe on the leading edge — slightly thicker (3 → 3.5)
-     *  so the room identity reads more confidently without reintroducing
-     *  a Reddit-style vote rail. */
     borderLeftWidth: 3.5,
-    /** Premium elevation so cards feel lifted off the dark background. */
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -313,7 +387,14 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  /** Tappable post body — sibling to `actions`, not wrapping it. */
+  cardJumpRing: {
+    borderWidth: 2,
+    ...Platform.select({
+      ios: { shadowOpacity: 0.55, shadowRadius: 14 },
+      android: { elevation: 6 },
+      default: {},
+    }),
+  },
   cardMainPress: { borderRadius: (borderRadius.card ?? 16) - 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   creatorRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
@@ -341,18 +422,22 @@ const styles = StyleSheet.create({
   title: { fontSize: 14.5, fontWeight: '800', color: colors.dark.text, lineHeight: 19 },
   caption: { fontSize: 13, color: colors.dark.textSecondary, lineHeight: 18 },
 
-  mediaWrap: {
+  mediaWrapVideo: {
     marginTop: 7,
     borderRadius: borderRadius.md ?? 10,
     overflow: 'hidden',
-    /** Slimmer fixed height for feed scannability — the previous 200pt
-     *  fixed height was the biggest contributor to "tall" cards; 150pt
-     *  still gives memes room to read but lets two cards fit comfortably
-     *  in a typical viewport. */
-    height: 150,
+    height: 168,
+    backgroundColor: colors.dark.cardAlt,
+  },
+  mediaWrapPhoto: {
+    marginTop: 7,
+    borderRadius: borderRadius.md ?? 10,
+    overflow: 'hidden',
+    width: '100%',
     backgroundColor: colors.dark.cardAlt,
   },
   media: { width: '100%', height: '100%' },
+  mediaPhotoContain: { width: '100%', height: '100%' },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -364,15 +449,40 @@ const styles = StyleSheet.create({
   tagChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
   tagText: { fontSize: 11, fontWeight: '700' },
 
-  /** Social action row — Like / Comment / Share. Spread evenly
-   *  with `space-between` so the card feels like a balanced social UI
-   *  bar rather than a forum control strip. */
+  reactionsSection: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.dark.border,
+  },
+  reactionsScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 2,
+    paddingRight: 4,
+  },
+  reactionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+    backgroundColor: colors.dark.cardAlt,
+  },
+  reactionEmoji: { fontSize: 16, lineHeight: 20 },
+  reactionCount: { fontSize: 12, fontWeight: '800', color: colors.dark.textMuted },
+
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 4,
     paddingTop: 6,
+    paddingBottom: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
   },

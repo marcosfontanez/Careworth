@@ -19,3 +19,8 @@ export function hrefPost(postId: string, circleSlug?: string): Href {
   if (circleSlug) return `/post/${postId}?circle=${encodeURIComponent(circleSlug)}`;
   return `/post/${postId}`;
 }
+
+/** Circle wall scrolled to a specific post (e.g. opening a pin from My Pulse). */
+export function hrefCommunityWallPost(slug: string, postId: string): Href {
+  return `/communities/${slug}?focusPost=${encodeURIComponent(postId)}`;
+}

@@ -1,15 +1,23 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert,
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  Alert,
   InteractionManager,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { useCommunity, useCommunityPosts, useCircleThreads, useLikedPostIds } from '@/hooks/useQueries';
+import { useCommunity, useCommunityPosts, useCircleThreads, useLikedPostIds, useCircleViewerPostReactions } from '@/hooks/useQueries';
 import { CircleThreadCard } from '@/components/circles/CircleThreadCard';
 import { CircleRoomHeader } from '@/components/circles/CircleRoomHeader';
 import { CircleHighlightsRow } from '@/components/circles/CircleHighlightsRow';
@@ -25,9 +33,9 @@ import { shareCommunity, sharePostMenu } from '@/lib/share';
 import { useToast } from '@/components/ui/Toast';
 import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
 import { getCircleAccent } from '@/lib/circleAccents';
-import { bumpPostCount } from '@/lib/postCacheUpdates';
+import { patchPostReactionCounts } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
-import { circleContentKeys, communityKeys } from '@/lib/queryKeys';
+import { circleContentKeys, communityKeys, likedPostKeys } from '@/lib/queryKeys';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { hrefCommunityThread, hrefPost, hrefTabCircles } from '@/lib/communityRoutes';
 import {
@@ -37,7 +45,18 @@ import {
   isCommunityMuted,
   setCommunityMuted,
 } from '@/lib/circleExperience';
-import type { CircleThread, Post } from '@/types';
+import type { CircleThread, Post, PostReactionKind } from '@/types';
+import { feedPerfEnabled, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
+
+function prettySlugLabel(raw: string) {
+  const s = raw.trim();
+  if (!s) return 'Circle';
+  return s
+    .split('-')
+    .filter(Boolean)
+    .map((w) => (w.length ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
+    .join(' ');
+}
 
 /** Hot score used to rank "Top" — same shape we used in the previous version. */
 function hotScore(post: Post): number {
@@ -46,12 +65,17 @@ function hotScore(post: Post): number {
 }
 
 export default function CommunityDetailScreen() {
-  const params = useLocalSearchParams<{ slug?: string | string[] }>();
+  const params = useLocalSearchParams<{ slug?: string | string[]; focusPost?: string | string[] }>();
   const slug = useMemo(() => {
     const raw = params.slug;
     const s = Array.isArray(raw) ? raw[0] : raw;
     return (s ?? '').trim();
   }, [params.slug]);
+  const focusPostId = useMemo(() => {
+    const raw = params.focusPost;
+    const s = Array.isArray(raw) ? raw[0] : raw;
+    return (s ?? '').trim() || undefined;
+  }, [params.focusPost]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -64,6 +88,27 @@ export default function CommunityDetailScreen() {
   const [mode, setMode] = useState<CircleMode>('top');
   const [refreshing, setRefreshing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const popularityBumpKeyRef = useRef<string | null>(null);
+  const perfRoomT0Ref = useRef<number | null>(null);
+  const perfPostsLoggedRef = useRef<string | null>(null);
+  const perfListLaidOutRef = useRef<string | null>(null);
+  const wallListRef = useRef<FlatList<Post | CircleThread>>(null);
+  const focusScrollDoneRef = useRef<string | null>(null);
+  const [jumpHighlightPostId, setJumpHighlightPostId] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const cid = community?.id;
+      if (!cid || !user?.id) return;
+      const sig = cid;
+      if (popularityBumpKeyRef.current === sig) return;
+      popularityBumpKeyRef.current = sig;
+      void communitiesService.bumpProfileOpen(cid);
+      return () => {
+        popularityBumpKeyRef.current = null;
+      };
+    }, [community?.id, user?.id]),
+  );
 
   /** Local liked-set hydrated from the server query (mirrors feed.tsx so a
    *  user's existing likes show as filled hearts the moment the room opens). */
@@ -74,8 +119,45 @@ export default function CommunityDetailScreen() {
     setLikedPosts(new Set(likedIdsArr));
   }, [likedSig, likedIdsArr]);
 
-  const { data: allPosts, refetch: refetchPosts } = useCommunityPosts(community?.id ?? '');
-  const { data: circleThreads = [], refetch: refetchThreads } = useCircleThreads(slug);
+  const {
+    data: allPosts,
+    refetch: refetchPosts,
+    isPending: postsPending,
+    isError: postsError,
+  } = useCommunityPosts(community?.id ?? '');
+  const postsStillLoading = postsPending && allPosts === undefined;
+  const {
+    data: circleThreadsRaw,
+    refetch: refetchThreads,
+    isPending: threadsPending,
+  } = useCircleThreads(slug, community?.id);
+  const circleThreads = circleThreadsRaw ?? [];
+
+  useEffect(() => {
+    perfRoomT0Ref.current = feedPerfNow();
+    perfPostsLoggedRef.current = null;
+    perfListLaidOutRef.current = null;
+  }, [slug]);
+
+  useEffect(() => {
+    if (!feedPerfEnabled || !community?.id || perfRoomT0Ref.current == null) return;
+    feedPerfLog('circleRoom:community', perfRoomT0Ref.current, slug);
+  }, [community?.id, slug]);
+
+  useEffect(() => {
+    if (
+      !feedPerfEnabled ||
+      !community?.id ||
+      allPosts === undefined ||
+      perfRoomT0Ref.current == null
+    ) {
+      return;
+    }
+    const sig = `${community.id}:${allPosts.length}`;
+    if (perfPostsLoggedRef.current === sig) return;
+    perfPostsLoggedRef.current = sig;
+    feedPerfLog('circleRoom:wallPosts', perfRoomT0Ref.current, `${allPosts.length} posts`);
+  }, [allPosts, community?.id]);
 
   const { data: liveStats } = useQuery({
     queryKey: ['communityCardStats', community?.id],
@@ -110,6 +192,66 @@ export default function CommunityDetailScreen() {
     return raw;
   }, [allPosts, mode]);
 
+  const wallPostIds = useMemo(() => postsList.map((p) => p.id), [postsList]);
+  const postIdsSig = useMemo(() => [...wallPostIds].sort().join(','), [wallPostIds]);
+
+  useEffect(() => {
+    focusScrollDoneRef.current = null;
+  }, [slug, focusPostId]);
+
+  useEffect(() => {
+    if (!focusPostId || !allPosts?.length) return;
+    if (!allPosts.some((p) => p.id === focusPostId)) return;
+    if (mode === 'questions') {
+      setMode('top');
+      return;
+    }
+    if (!postsList.some((p) => p.id === focusPostId)) {
+      setMode('top');
+    }
+  }, [focusPostId, allPosts, postsList, mode]);
+
+  useEffect(() => {
+    if (!focusPostId || mode === 'questions' || postsStillLoading) return;
+    if (!postsList.length) return;
+    const idx = postsList.findIndex((p) => p.id === focusPostId);
+    if (idx < 0) return;
+    const sig = `${slug}:${focusPostId}`;
+    if (focusScrollDoneRef.current === sig) return;
+
+    let highlightClear: ReturnType<typeof setTimeout> | undefined;
+    const scrollTimer = setTimeout(() => {
+      try {
+        wallListRef.current?.scrollToIndex({
+          index: idx,
+          viewPosition: 0.1,
+          animated: true,
+        });
+        focusScrollDoneRef.current = sig;
+        setJumpHighlightPostId(focusPostId);
+        highlightClear = setTimeout(() => setJumpHighlightPostId(null), 2200);
+      } catch {
+        /* FlatList may call onScrollToIndexFailed */
+      }
+    }, 200);
+    return () => {
+      clearTimeout(scrollTimer);
+      if (highlightClear) clearTimeout(highlightClear);
+    };
+  }, [focusPostId, mode, postsList, slug, postsStillLoading]);
+
+  const { data: viewerReactionsMap = {} } = useCircleViewerPostReactions(community?.id ?? '', wallPostIds);
+
+  const viewerReactionForPost = useCallback(
+    (postId: string): PostReactionKind | null => {
+      const v = viewerReactionsMap[postId];
+      if (v) return v;
+      if (likedPosts.has(postId)) return 'heart';
+      return null;
+    },
+    [viewerReactionsMap, likedPosts],
+  );
+
   const videoPostCount = useMemo(
     () => (allPosts ?? []).filter((p) => p.type === 'video' || p.type === 'image').length,
     [allPosts],
@@ -142,14 +284,42 @@ export default function CommunityDetailScreen() {
     setShowCirclesNavHint(false);
     if (!cid) return;
     void (async () => {
-      const [hint, muted] = await Promise.all([
+      const [hint, mutedLocal] = await Promise.all([
         hasSeenCircleQuestionsHint(),
         isCommunityMuted(cid),
       ]);
+      let muted = mutedLocal;
+      if (user?.id && joinedIds.has(cid)) {
+        try {
+          const alertsOn = await communityService.getCirclePostAlerts(cid);
+          if (alertsOn === false) muted = true;
+        } catch {
+          /* local mute only */
+        }
+      }
       setShowQuestionsHint(!hint);
       setRoomMuted(muted);
     })();
-  }, [community?.id]);
+  }, [community?.id, user?.id, joinedIds]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!community?.id) return;
+      void refetchPosts();
+      void refetchThreads();
+    }, [community?.id, refetchPosts, refetchThreads]),
+  );
+
+  /**
+   * Web + first paint: `useFocusEffect` can run before `community?.id` exists and never
+   * re-fire when the id hydrates (screen already focused). Kick wall + threads once the
+   * room identity is known so the list does not sit on “Loading…” until a manual back/re-enter.
+   */
+  useEffect(() => {
+    if (!slug || !community?.id) return;
+    void refetchPosts();
+    void refetchThreads();
+  }, [slug, community?.id, refetchPosts, refetchThreads]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -165,21 +335,51 @@ export default function CommunityDetailScreen() {
     const cid = community?.id;
     if (!cid) return;
     const wasJoined = joinedIds.has(cid);
-    try {
-      const joined = await communityService.toggleJoin(cid);
-      setCommunityJoined(cid, joined);
+
+    const afterJoinInvalidate = async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['community', slug] }),
         queryClient.invalidateQueries({ queryKey: communityKeys.circlesHome() }),
         queryClient.invalidateQueries({ queryKey: ['communityCardStats', cid] }),
         queryClient.invalidateQueries({ queryKey: ['communities'] }),
       ]);
-      if (joined && !wasJoined) {
-        toast.show(`You're in ${community?.name ?? 'this circle'}!`, 'success');
-        setShowCirclesNavHint(true);
-      } else {
-        setShowCirclesNavHint(false);
+    };
+
+    const finishJoin = async (notifyNewPosts: boolean) => {
+      try {
+        const joined = await communityService.toggleJoin(cid, { notifyNewPosts });
+        setCommunityJoined(cid, joined);
+        if (notifyNewPosts) await setCommunityMuted(cid, false);
+        else await setCommunityMuted(cid, true);
+        await afterJoinInvalidate();
+        if (joined && !wasJoined) {
+          toast.show(`You're in ${community?.name ?? 'this circle'}!`, 'success');
+          setShowCirclesNavHint(true);
+        }
+      } catch {
+        /* keep optimistic UI */
       }
+    };
+
+    if (!wasJoined) {
+      Alert.alert(
+        'Stay in the loop?',
+        'Get notified when someone posts in this circle. You can change this anytime under About this circle.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Join without alerts', onPress: () => void finishJoin(false) },
+          { text: 'Join & notify me', onPress: () => void finishJoin(true) },
+        ],
+      );
+      return;
+    }
+
+    try {
+      const joined = await communityService.toggleJoin(cid);
+      setCommunityJoined(cid, joined);
+      await setCommunityMuted(cid, false);
+      await afterJoinInvalidate();
+      if (!joined) setShowCirclesNavHint(false);
     } catch {
       /* keep optimistic UI */
     }
@@ -211,27 +411,56 @@ export default function CommunityDetailScreen() {
 
   /* ---------- Per-card actions (reuse the same patterns as feed.tsx) ---------- */
 
-  const handleReact = useCallback(
-    async (post: Post) => {
-      if (!user) return;
-      const wasLiked = likedPosts.has(post.id);
+  const handleCircleWallReaction = useCallback(
+    async (post: Post, kind: PostReactionKind) => {
+      if (!user?.id || !community?.id) return;
+      const cur = viewerReactionForPost(post.id);
+      const next = cur === kind ? null : kind;
+
+      patchPostReactionCounts(post.id, cur, next);
+      queryClient.setQueryData(
+        circleContentKeys.viewerPostReactions(community.id, user.id, postIdsSig),
+        (old: Partial<Record<string, PostReactionKind>> | undefined) => {
+          const o = { ...(old ?? {}) };
+          if (next == null) delete o[post.id];
+          else o[post.id] = next;
+          return o;
+        },
+      );
       setLikedPosts((prev) => {
-        const next = new Set(prev);
-        if (wasLiked) next.delete(post.id);
-        else next.add(post.id);
-        return next;
+        const n = new Set(prev);
+        if (next == null) n.delete(post.id);
+        else n.add(post.id);
+        return n;
       });
-      bumpPostCount(post.id, 'likeCount', wasLiked ? -1 : 1);
+
       try {
-        await postsService.toggleLike(user.id, post.id);
+        await postsService.setPostReaction(user.id, post.id, next);
+        void queryClient.invalidateQueries({ queryKey: likedPostKeys.forUser(user.id) });
       } catch {
+        patchPostReactionCounts(post.id, next, cur);
+        queryClient.setQueryData(
+          circleContentKeys.viewerPostReactions(community.id, user.id, postIdsSig),
+          (old: Partial<Record<string, PostReactionKind>> | undefined) => {
+            const o = { ...(old ?? {}) };
+            if (cur == null) delete o[post.id];
+            else o[post.id] = cur;
+            return o;
+          },
+        );
+        setLikedPosts((prev) => {
+          const n = new Set(prev);
+          if (cur == null) n.delete(post.id);
+          else n.add(post.id);
+          return n;
+        });
         enqueueAction({
-          type: wasLiked ? 'unlike_post' : 'like_post',
-          payload: { postId: post.id, userId: user.id },
+          type: 'set_post_reaction',
+          payload: { userId: user.id, postId: post.id, reaction: next },
         }).catch(() => {});
       }
     },
-    [user, likedPosts],
+    [user?.id, community?.id, viewerReactionForPost, postIdsSig, queryClient],
   );
 
   const handleShare = useCallback(
@@ -331,19 +560,49 @@ export default function CommunityDetailScreen() {
     );
   }
 
-  if (isPending) {
-    return <LoadingState message="Loading circle…" />;
-  }
-
-  if (isError || !community) {
+  if (isError && community == null) {
     return (
       <ErrorState
-        title={isError ? 'Couldn’t load this circle' : 'Circle not found'}
-        subtitle={
-          isError
-            ? 'Check your connection and try again.'
-            : 'This room may have been removed, or the link may be out of date.'
-        }
+        title="Couldn’t load this circle"
+        subtitle="Check your connection and try again."
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  const shellAccent = getCircleAccent(slug);
+  if (isPending && community == null) {
+    return (
+      <View style={styles.container}>
+        <CircleRoomHeader
+          insetTop={insets.top}
+          iconEmoji="✦"
+          name="Loading…"
+          description={prettySlugLabel(slug)}
+          memberCount={0}
+          onlineCount={0}
+          isJoined={false}
+          accent={shellAccent}
+          showShare={false}
+          onBack={() => router.back()}
+          onShare={() => {}}
+          onMore={() => {}}
+          onJoin={() => {}}
+          onCreatePost={() => {}}
+        />
+        <View style={styles.shellLoading}>
+          <ActivityIndicator size="large" color={shellAccent.color} />
+          <Text style={styles.shellLoadingText}>Loading circle…</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (community == null) {
+    return (
+      <ErrorState
+        title="Circle not found"
+        subtitle="This room may have been removed, or the link may be out of date."
         onRetry={() => refetch()}
       />
     );
@@ -357,6 +616,9 @@ export default function CommunityDetailScreen() {
   const onlineCount = liveStats?.onlineCount ?? 0;
 
   const flatData: (Post | CircleThread)[] = mode === 'questions' ? threadsSorted : postsList;
+
+  const wallPostsLoading = postsPending && allPosts === undefined;
+  const questionsThreadsLoading = threadsPending && circleThreadsRaw === undefined;
 
   const ListHeader = (
     <View>
@@ -401,14 +663,23 @@ export default function CommunityDetailScreen() {
           accent={accent.color}
           description={community.description}
           categories={community.categories}
-          communityId={community.id}
+          isMember={isJoined}
           notificationsMuted={roomMuted}
           onToggleNotificationsMuted={async (next) => {
-            await setCommunityMuted(community.id, next);
-            setRoomMuted(next);
-            toast.show(next ? 'Muted circle buzz on this device' : 'Circle buzz back on', 'success');
-            void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-            void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+            if (!user?.id) return;
+            try {
+              await setCommunityMuted(community.id, next);
+              await communityService.setCirclePostAlerts(community.id, !next);
+              setRoomMuted(next);
+              toast.show(
+                next ? 'Circle alerts off (no new posts in your bell)' : 'Circle alerts on for new posts',
+                'success',
+              );
+              void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+              void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+            } catch {
+              toast.show('Couldn’t update alert settings', 'error');
+            }
           }}
           onClose={() => setShowAbout(false)}
         />
@@ -457,8 +728,23 @@ export default function CommunityDetailScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        ref={wallListRef}
         data={flatData}
         keyExtractor={(item) => item.id}
+        onScrollToIndexFailed={({ index, averageItemLength }) => {
+          if (index < 0 || !averageItemLength) return;
+          wallListRef.current?.scrollToOffset({
+            offset: Math.max(0, index * averageItemLength * 0.85),
+            animated: true,
+          });
+        }}
+        onLayout={() => {
+          if (!feedPerfEnabled || perfRoomT0Ref.current == null || community == null) return;
+          const sig = `${slug}:${community.id}`;
+          if (perfListLaidOutRef.current === sig) return;
+          perfListLaidOutRef.current = sig;
+          feedPerfLog('circleRoom:listFirstLayout', perfRoomT0Ref.current, slug);
+        }}
         renderItem={({ item }) =>
           mode === 'questions' ? (
             <CircleThreadCard
@@ -481,9 +767,10 @@ export default function CommunityDetailScreen() {
               post={item as Post}
               accent={accent}
               isAnonymousRoom={isAnonCircle}
-              isLiked={likedPosts.has((item as Post).id)}
+              viewerReaction={viewerReactionForPost((item as Post).id)}
               isOwner={!!user?.id && user.id === (item as Post).creatorId}
               onOwnerMenu={() => openCirclePostOwnerMenu(item as Post)}
+              jumpHighlight={jumpHighlightPostId === (item as Post).id}
               onPress={() =>
                 router.push(
                   `/post/${(item as Post).id}?circle=${encodeURIComponent(community.slug)}` as any,
@@ -495,7 +782,13 @@ export default function CommunityDetailScreen() {
                   `/post/${(item as Post).id}?circle=${encodeURIComponent(community.slug)}&focusComments=1` as any,
                 )
               }
-              onReact={() => handleReact(item as Post)}
+              onPickReaction={(k) => {
+                if (!user) {
+                  router.push('/auth/login');
+                  return;
+                }
+                void handleCircleWallReaction(item as Post, k);
+              }}
               onShare={() => handleShare(item as Post)}
             />
           )
@@ -503,6 +796,11 @@ export default function CommunityDetailScreen() {
         ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={6}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -513,41 +811,94 @@ export default function CommunityDetailScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="chatbubbles-outline" size={40} color={colors.neutral.midGray} />
-            <Text style={styles.emptyTitle}>
-              {mode === 'questions' ? 'No threads yet' : mode === 'video' ? 'No video or photos yet' : 'No posts yet'}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {mode === 'questions'
-                ? 'Ask a question or tell a story — your crew shows up fast.'
-                : mode === 'video'
+          mode === 'questions' ? (
+            questionsThreadsLoading ? (
+              <View style={styles.empty}>
+                <ActivityIndicator size="large" color={accent.color} />
+                <Text style={styles.emptyLoadingLabel}>Loading threads…</Text>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="chatbubbles-outline" size={40} color={colors.neutral.midGray} />
+                <Text style={styles.emptyTitle}>No threads yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Ask a question or tell a story — your crew shows up fast.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleCreatePost('question')}
+                  activeOpacity={0.85}
+                  style={[styles.emptyCta, { backgroundColor: accent.color }]}
+                >
+                  <Ionicons name="create" size={16} color="#FFFFFF" />
+                  <Text style={styles.emptyCtaText}>Start a discussion</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setMode('top');
+                    handleCreatePost('thread');
+                  }}
+                  activeOpacity={0.85}
+                  style={styles.emptyCtaSecondary}
+                >
+                  <Text style={[styles.emptyCtaSecondaryText, { color: accent.color }]}>
+                    Or open Top → new thread
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )
+          ) : postsError ? (
+            <View style={styles.empty}>
+              <Ionicons name="cloud-offline-outline" size={40} color={colors.neutral.midGray} />
+              <Text style={styles.emptyTitle}>Couldn’t load posts</Text>
+              <Text style={styles.emptySubtitle}>Check your connection and try again.</Text>
+              <TouchableOpacity
+                onPress={() => void refetchPosts()}
+                activeOpacity={0.85}
+                style={[styles.emptyCta, { backgroundColor: accent.color }]}
+              >
+                <Text style={styles.emptyCtaText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : wallPostsLoading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator size="large" color={accent.color} />
+              <Text style={styles.emptyLoadingLabel}>Loading posts…</Text>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Ionicons name="chatbubbles-outline" size={40} color={colors.neutral.midGray} />
+              <Text style={styles.emptyTitle}>
+                {mode === 'video' ? 'No video or photos yet' : 'No posts yet'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {mode === 'video'
                   ? 'Be the first to share a clip or photo in this room.'
                   : 'Be the first to start a conversation!'}
-            </Text>
-            <TouchableOpacity
-              onPress={() => handleCreatePost(mode === 'questions' ? 'question' : mode === 'video' ? 'video' : undefined)}
-              activeOpacity={0.85}
-              style={[styles.emptyCta, { backgroundColor: accent.color }]}
-            >
-              <Ionicons name="create" size={16} color="#FFFFFF" />
-              <Text style={styles.emptyCtaText}>
-                {mode === 'questions' ? 'Start a discussion' : mode === 'video' ? 'Post a clip or photo' : 'Create the first post'}
               </Text>
-            </TouchableOpacity>
-            {mode !== 'questions' ? (
+              <TouchableOpacity
+                onPress={() => handleCreatePost(mode === 'video' ? 'video' : undefined)}
+                activeOpacity={0.85}
+                style={[styles.emptyCta, { backgroundColor: accent.color }]}
+              >
+                <Ionicons name="create" size={16} color="#FFFFFF" />
+                <Text style={styles.emptyCtaText}>
+                  {mode === 'video' ? 'Post a clip or photo' : 'Create the first post'}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
                   setMode('questions');
                   handleCreatePost('thread');
                 }}
-                style={styles.emptyCtaSecondary}
                 activeOpacity={0.85}
+                style={styles.emptyCtaSecondary}
               >
-                <Text style={[styles.emptyCtaSecondaryText, { color: accent.color }]}>Or open Questions → new thread</Text>
+                <Text style={[styles.emptyCtaSecondaryText, { color: accent.color }]}>
+                  Or open Questions → new thread
+                </Text>
               </TouchableOpacity>
-            ) : null}
-          </View>
+            </View>
+          )
         }
       />
       <EditPostCaptionModal
@@ -570,7 +921,7 @@ function AboutSheet({
   accent,
   description,
   categories,
-  communityId: _communityId,
+  isMember,
   notificationsMuted,
   onToggleNotificationsMuted,
   onClose,
@@ -578,7 +929,7 @@ function AboutSheet({
   accent: string;
   description: string;
   categories: string[];
-  communityId: string;
+  isMember: boolean;
   notificationsMuted: boolean;
   onToggleNotificationsMuted: (muted: boolean) => void;
   onClose: () => void;
@@ -598,26 +949,34 @@ function AboutSheet({
         </TouchableOpacity>
       </View>
       <Text style={aboutStyles.desc}>{description}</Text>
-      <TouchableOpacity
-        style={aboutStyles.muteRow}
-        onPress={() => onToggleNotificationsMuted(!notificationsMuted)}
-        activeOpacity={0.85}
-        accessibilityRole="switch"
-        accessibilityLabel={notificationsMuted ? 'Unmute circle notifications' : 'Mute circle notifications'}
-        accessibilityState={{ checked: notificationsMuted }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={aboutStyles.muteTitle}>Circle notifications</Text>
-          <Text style={aboutStyles.muteSub}>
-            {notificationsMuted ? 'Muted on this device — you’ll still see the room in Circles.' : 'On — we’ll surface replies & buzz for this room.'}
-          </Text>
-        </View>
-        <Ionicons
-          name={notificationsMuted ? 'notifications-off-outline' : 'notifications-outline'}
-          size={22}
-          color={accent}
-        />
-      </TouchableOpacity>
+      {isMember ? (
+        <TouchableOpacity
+          style={aboutStyles.muteRow}
+          onPress={() => onToggleNotificationsMuted(!notificationsMuted)}
+          activeOpacity={0.85}
+          accessibilityRole="switch"
+          accessibilityLabel={notificationsMuted ? 'Turn on circle post alerts' : 'Turn off circle post alerts'}
+          accessibilityState={{ checked: notificationsMuted }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={aboutStyles.muteTitle}>New posts in this circle</Text>
+            <Text style={aboutStyles.muteSub}>
+              {notificationsMuted
+                ? 'Off — you won’t get bell or push alerts for new wall posts here.'
+                : 'On — we’ll alert you when members post to this circle’s wall.'}
+            </Text>
+          </View>
+          <Ionicons
+            name={notificationsMuted ? 'notifications-off-outline' : 'notifications-outline'}
+            size={22}
+            color={accent}
+          />
+        </TouchableOpacity>
+      ) : (
+        <Text style={aboutStyles.nonMemberHint}>
+          Join this circle to choose whether you get alerts for new posts.
+        </Text>
+      )}
       <View style={aboutStyles.divider} />
       <Text style={aboutStyles.section}>Guidelines</Text>
       {RULES.map((rule, i) => (
@@ -658,6 +1017,13 @@ const aboutStyles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   title: { fontSize: 15, fontWeight: '800', color: colors.dark.text },
   desc: { fontSize: 13.5, color: colors.dark.textSecondary, lineHeight: 19 },
+  nonMemberHint: {
+    fontSize: 12.5,
+    color: colors.dark.textMuted,
+    marginTop: 12,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
   muteRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -680,6 +1046,14 @@ const aboutStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
+  shellLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+    gap: 12,
+  },
+  shellLoadingText: { fontSize: 14, fontWeight: '600', color: colors.dark.textMuted },
   hintBanner: {
     marginHorizontal: 12,
     marginTop: 6,
@@ -697,6 +1071,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 60, gap: 10, paddingHorizontal: 24 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.dark.text },
   emptySubtitle: { fontSize: 14, color: colors.dark.textMuted, textAlign: 'center' },
+  emptyLoadingLabel: { fontSize: 14, fontWeight: '600', color: colors.dark.textMuted, marginTop: 8 },
   emptyCta: {
     marginTop: 6,
     flexDirection: 'row',
