@@ -1,5 +1,29 @@
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
+import { queryClient } from '@/lib/queryClient';
+import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
+
+function firstQueryString(
+  qp: Linking.QueryParams | null | undefined,
+  key: string,
+): string | undefined {
+  if (!qp) return undefined;
+  const v = qp[key];
+  if (typeof v === 'string' && v.trim()) return v;
+  if (Array.isArray(v) && typeof v[0] === 'string' && v[0].trim()) return v[0];
+  return undefined;
+}
+
+/**
+ * Shared links use `/post/:id` on the web (OG + Universal Links). In-app we open
+ * `feed/[id]` so viewers land on the same full-screen `VideoFeedPost` shell as
+ * the main feed — not the compact `post/[id]` detail + comments layout.
+ */
+function pushFeedForSharedPost(postId: string, parsed: Linking.ParsedURL) {
+  const circle = firstQueryString(parsed.queryParams, 'circle');
+  const q = circle ? `?circle=${encodeURIComponent(circle)}` : '';
+  router.push(`/feed/${postId}${q}` as any);
+}
 
 export function parseAndNavigate(url: string) {
   try {
@@ -15,11 +39,14 @@ export function parseAndNavigate(url: string) {
       if (segments.length >= 3 && segments[1] === 'thread' && segments[2]) {
         const slug = decodeURIComponent(segments[0]);
         const threadId = decodeURIComponent(segments[2]);
+        prefetchCircleRoomBySlug(queryClient, slug, null);
         router.push(`/communities/${slug}/thread/${threadId}` as any);
         return true;
       }
       if (segments.length === 1 && segments[0]) {
-        router.push(`/communities/${decodeURIComponent(segments[0])}` as any);
+        const s = decodeURIComponent(segments[0]);
+        prefetchCircleRoomBySlug(queryClient, s, null);
+        router.push(`/communities/${s}` as any);
         return true;
       }
     }
@@ -31,7 +58,8 @@ export function parseAndNavigate(url: string) {
 
     if (path.startsWith('post/')) {
       const postId = path.replace('post/', '').split('/')[0];
-      router.push(`/post/${postId}` as any);
+      if (!postId) return false;
+      pushFeedForSharedPost(postId, parsed);
       return true;
     }
 
@@ -49,6 +77,7 @@ export function parseAndNavigate(url: string) {
 
     if (path.startsWith('community/')) {
       const slug = path.replace('community/', '');
+      prefetchCircleRoomBySlug(queryClient, slug, null);
       router.push(`/communities/${slug}`);
       return true;
     }
