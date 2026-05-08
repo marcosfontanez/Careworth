@@ -18,47 +18,46 @@ import { LAUNCH_LINKS } from '@/constants/launch';
  */
 const PULSEVERSE_DOWNLOAD_URL = 'https://pulseverse.app/get';
 
+function clampShareHeadline(raw: string, max: number): string {
+  const t = (raw ?? '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
 /**
- * Compose a recipient-friendly share body. Every external share now
- * ends with an explicit "Get PulseVerse" call-to-action so someone who
- * receives the text / email / DM without the app installed knows
- * exactly where to go — solves the silent-drop problem where a raw
- * `pulseverse.app/post/…` link looked broken on devices that hadn't
- * registered the universal-link handler yet.
+ * Compose share text + URL for the native share sheet.
  *
- * iOS's share sheet renders `url` as a rich preview + tacks the url
- * onto the body depending on the chosen target, so we keep the body
- * clean and pass `url` separately. Android has no concept of a
- * dedicated share URL, so we inline the link + the CTA in the text.
+ * **iOS (TikTok-style):** The big thumbnail + title + “View” treatment in iMessage
+ * comes from Apple **unfurling** the **https** link (`url`) against your site’s
+ * Open Graph tags — not from stuffing CTA lines into the bubble. Keep `message`
+ * **short** (caption hook only, no second URL) so the rich preview is the hero
+ * and the thread does not look like a marketing blast.
+ *
+ * **Android:** No system link preview like iMessage; include the post URL once
+ * plus an explicit **Get PulseVerse** line for people without the app.
  */
 function buildShareBody(args: {
   headline: string;
   link: string;
-  /** Trailing line, e.g. "Watch it on PulseVerse". Defaults to "Open it on PulseVerse". */
+  /** Trailing line before the URL on Android, e.g. "Watch on PulseVerse". */
   ctaVerb?: string;
-}): { message: string; url: string } {
-  const headline = args.headline.trim();
+}): { message: string; url?: string } {
+  const headline = clampShareHeadline(args.headline, 140);
   const link = args.link.trim();
-  const verb = args.ctaVerb?.trim() || 'Open it on PulseVerse';
-  /**
-   * Keep the CTA block compact (three lines max) so it doesn't
-   * overflow SMS previews / push notifications. The explicit
-   * "Don't have the app?" phrasing plus a separate download link is
-   * what tested cleanest in internal review — recipients consistently
-   * understood they needed to install PulseVerse to view the content.
-   */
-  const ctaBlock = [
-    `${verb}: ${link}`,
-    `Don't have the app? Get PulseVerse free: ${PULSEVERSE_DOWNLOAD_URL}`,
-  ].join('\n');
+  const verb = args.ctaVerb?.trim() || 'Watch on PulseVerse';
+  const installLine = `Get PulseVerse: ${PULSEVERSE_DOWNLOAD_URL}`;
 
-  const body = headline ? `${headline}\n\n${ctaBlock}` : ctaBlock;
-  /**
-   * On iOS we still pass `url` separately so the link-preview card
-   * renders on iMessage / Mail. Body already includes the link too,
-   * which is harmless (iMessage dedupes).
-   */
-  return { message: body, url: link };
+  if (Platform.OS === 'ios') {
+    const hint = args.headline.trim()
+      ? clampShareHeadline(args.headline, 118)
+      : 'Watch this on PulseVerse';
+    return { message: hint, url: link };
+  }
+
+  const body = headline
+    ? `${headline}\n\n${verb}\n${link}\n\n${installLine}`
+    : `${verb}\n${link}\n\n${installLine}`;
+  return { message: body };
 }
 
 /**
@@ -107,7 +106,8 @@ export async function sharePost(
   opts?: { anonymous?: boolean },
 ) {
   try {
-    const link = `https://pulseverse.app/post/${postId}`;
+    const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+    const link = `${base}/post/${postId}`;
     /**
      * Anonymous rooms deliberately scrub the caption so we don't leak
      * any identifying content in the recipient's text thread. We still
@@ -115,18 +115,23 @@ export async function sharePost(
      * recipient knows what app to install.
      */
     const headline = opts?.anonymous
-      ? 'An anonymous post shared from PulseVerse.'
+      ? 'Someone shared a clip on PulseVerse.'
       : (caption ?? '').trim();
     const { message, url } = buildShareBody({
       headline,
       link,
-      ctaVerb: 'Watch it on PulseVerse',
+      ctaVerb: 'Watch on PulseVerse',
     });
+
+    const previewTitle =
+      Platform.OS === 'ios'
+        ? (headline.trim() ? clampShareHeadline(headline, 56) : 'PulseVerse')
+        : 'Clip on PulseVerse';
 
     const result = await Share.share({
       message,
-      url,
-      title: 'Check this out on PulseVerse',
+      ...(url != null ? { url } : {}),
+      title: previewTitle,
     });
 
     /**
@@ -182,7 +187,7 @@ export async function shareTierUp(opts: {
 
     const result = await Share.share({
       message,
-      url,
+      ...(url != null ? { url } : {}),
       title: `@${opts.displayName} on PulseVerse`,
     });
 
@@ -210,7 +215,7 @@ export async function shareProfile(userId: string, displayName: string) {
 
     await Share.share({
       message,
-      url,
+      ...(url != null ? { url } : {}),
       title: `@${displayName} on PulseVerse`,
     });
 
@@ -229,7 +234,7 @@ export async function shareJob(jobId: string, title: string, employer: string) {
 
     await Share.share({
       message,
-      url,
+      ...(url != null ? { url } : {}),
       title: `${title} - PulseVerse Jobs`,
     });
   } catch {}
@@ -372,7 +377,7 @@ export async function shareCommunity(slug: string, name: string) {
 
     await Share.share({
       message,
-      url,
+      ...(url != null ? { url } : {}),
       title: `${name} - PulseVerse`,
     });
   } catch {}
@@ -390,7 +395,7 @@ export async function shareCircleThread(slug: string, threadId: string, title: s
     });
     await Share.share({
       message,
-      url,
+      ...(url != null ? { url } : {}),
       title: 'PulseVerse · Circle',
     });
   } catch {}
