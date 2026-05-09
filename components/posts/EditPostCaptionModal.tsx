@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 const CAPTION_MAX_LENGTH = 500;
 
@@ -138,41 +139,44 @@ export function EditPostCaptionModal({
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              ref={inputRef}
-              value={text}
-              onChangeText={(v) => {
-                setText(v);
-                setError(null);
-              }}
-              multiline
-              scrollEnabled
-              editable={!saving}
-              placeholder={placeholder}
-              placeholderTextColor={colors.dark.textMuted}
-              maxLength={CAPTION_MAX_LENGTH}
-              textAlignVertical="top"
-              underlineColorAndroid="transparent"
-              selectionColor={accent}
-              style={[
-                styles.input,
-                {
-                  height: CAPTION_FIELD_HEIGHT,
-                },
-              ]}
-            />
+            <AccentComposerFrame
+              accentColor={accent}
+              hint="Caption"
+              compact
+              noShadow
+              footer={
+                <AccentCharCount
+                  length={text.length}
+                  max={CAPTION_MAX_LENGTH}
+                  accentColor={accent}
+                  warnWithin={40}
+                  hideWhenEmpty={false}
+                />
+              }
+            >
+              <TextInput
+                ref={inputRef}
+                value={text}
+                onChangeText={(v) => {
+                  setText(v);
+                  setError(null);
+                }}
+                multiline
+                scrollEnabled
+                editable={!saving}
+                placeholder={placeholder}
+                placeholderTextColor={colors.dark.textMuted}
+                maxLength={CAPTION_MAX_LENGTH}
+                textAlignVertical="top"
+                underlineColorAndroid="transparent"
+                selectionColor={accent}
+                style={[styles.input, { height: CAPTION_FIELD_HEIGHT }]}
+              />
+            </AccentComposerFrame>
 
-            <View style={styles.footer}>
-              {error ? (
-                <Text style={styles.error}>{error}</Text>
-              ) : (
-                <Text style={styles.hint}>{hint}</Text>
-              )}
-              <View style={{ flex: 1 }} />
-              <Text style={styles.count}>
-                {text.length}/{CAPTION_MAX_LENGTH}
-              </Text>
-            </View>
+            {error ? <Text style={styles.errorBelow}>{error}</Text> : null}
+
+            <Text style={styles.hintFooter}>{hint}</Text>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -251,39 +255,24 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
-    padding: 12,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 8,
     color: colors.dark.text,
     fontSize: 15,
     lineHeight: 22,
     textAlignVertical: 'top',
   },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  hintFooter: {
     marginTop: 10,
-  },
-  hint: {
-    flex: 1,
     fontSize: 11.5,
     color: colors.dark.textMuted,
     lineHeight: 16,
   },
-  error: {
-    flex: 1,
+  errorBelow: {
+    marginTop: 8,
     fontSize: 12,
     color: colors.status.error,
     lineHeight: 16,
     fontWeight: '600',
-  },
-  count: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.dark.textMuted,
-    fontVariant: ['tabular-nums'],
   },
 });

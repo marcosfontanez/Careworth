@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { borderRadius, colors, layout, spacing, typography, shadows } from '@/theme';
 import { STREAM_CATEGORIES } from '@/constants/streamCategories';
 import { streamsLiveService } from '@/services/supabase';
@@ -140,26 +141,56 @@ function GoLiveScreenContent() {
         </View>
 
         <Text style={styles.label}>Stream Title</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="What are you streaming about?"
-          placeholderTextColor={colors.dark.textMuted}
-          value={title}
-          onChangeText={setTitle}
-          maxLength={100}
-        />
-        <Text style={styles.charCount}>{title.length}/100</Text>
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Title"
+          compact
+          noShadow
+          footer={
+            <AccentCharCount
+              length={title.length}
+              max={100}
+              accentColor={colors.primary.teal}
+              warnWithin={15}
+              hideWhenEmpty={false}
+            />
+          }
+        >
+          <TextInput
+            style={styles.inputPlain}
+            placeholder="What are you streaming about?"
+            placeholderTextColor={colors.dark.textMuted}
+            value={title}
+            onChangeText={setTitle}
+            maxLength={100}
+          />
+        </AccentComposerFrame>
 
         <Text style={styles.label}>Description (optional)</Text>
-        <TextInput
-          style={[styles.input, styles.inputMulti]}
-          placeholder="Tell viewers what to expect..."
-          placeholderTextColor={colors.dark.textMuted}
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          maxLength={300}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Description"
+          noShadow
+          footer={
+            <AccentCharCount
+              length={description.length}
+              max={300}
+              accentColor={colors.primary.teal}
+              warnWithin={40}
+              hideWhenEmpty={false}
+            />
+          }
+        >
+          <TextInput
+            style={[styles.inputPlain, styles.inputMulti]}
+            placeholder="Tell viewers what to expect..."
+            placeholderTextColor={colors.dark.textMuted}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            maxLength={300}
+          />
+        </AccentComposerFrame>
 
         <Text style={styles.label}>Category</Text>
         <View style={styles.catGrid}>
@@ -183,13 +214,20 @@ function GoLiveScreenContent() {
         </View>
 
         <Text style={styles.label}>Tags</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="nightshift, icu, studywithme"
-          placeholderTextColor={colors.dark.textMuted}
-          value={tags}
-          onChangeText={setTags}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Comma-separated tags"
+          compact
+          noShadow
+        >
+          <TextInput
+            style={styles.inputPlain}
+            placeholder="nightshift, icu, studywithme"
+            placeholderTextColor={colors.dark.textMuted}
+            value={tags}
+            onChangeText={setTags}
+          />
+        </AccentComposerFrame>
         <Text style={styles.hint}>Separate with commas. Helps viewers find your stream.</Text>
 
         <TouchableOpacity
@@ -276,23 +314,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.lg,
   },
-  input: {
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md - 2,
-    paddingVertical: spacing.md,
+  inputPlain: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
     fontSize: 15,
     color: colors.dark.text,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
   },
-  inputMulti: { height: 80, textAlignVertical: 'top' },
-  charCount: {
-    ...typography.caption,
-    color: colors.dark.textMuted,
-    textAlign: 'right',
-    marginTop: spacing.xs,
-  },
+  inputMulti: { minHeight: 80, textAlignVertical: 'top' },
   hint: { ...typography.bodySmall, color: colors.dark.textMuted, marginTop: spacing.xs },
 
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

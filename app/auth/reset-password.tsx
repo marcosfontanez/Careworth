@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme';
+import { colors, iconSize, spacing } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -62,34 +63,55 @@ export default function ResetPasswordScreen() {
         </Text>
 
         <View style={styles.inputGroup}>
-          <View style={styles.inputWrap}>
-            <Ionicons name="lock-closed-outline" size={20} color={colors.dark.textMuted} />
-            <TextInput
-              style={styles.input}
-              placeholder="New password"
-              placeholderTextColor={colors.dark.textMuted}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.dark.textMuted} />
-            </TouchableOpacity>
-          </View>
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="New password"
+            compact
+            noShadow
+          >
+            <View style={styles.fieldRow}>
+              <Ionicons name="lock-closed-outline" size={iconSize.md} color={colors.primary.teal} />
+              <TextInput
+                style={styles.input}
+                placeholder="New password"
+                placeholderTextColor={colors.dark.textMuted}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                autoCapitalize="none"
+                editable={!loading}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={12}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={colors.primary.teal}
+                />
+              </TouchableOpacity>
+            </View>
+          </AccentComposerFrame>
 
-          <View style={styles.inputWrap}>
-            <Ionicons name="lock-closed-outline" size={20} color={colors.dark.textMuted} />
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm password"
-              placeholderTextColor={colors.dark.textMuted}
-              secureTextEntry={!showPassword}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              autoCapitalize="none"
-            />
-          </View>
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="Confirm password"
+            compact
+            noShadow
+            style={{ marginTop: spacing.sm }}
+          >
+            <View style={styles.fieldRow}>
+              <Ionicons name="lock-closed-outline" size={iconSize.md} color={colors.primary.teal} />
+              <TextInput
+                style={styles.input}
+                placeholder="Confirm password"
+                placeholderTextColor={colors.dark.textMuted}
+                secureTextEntry={!showPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                autoCapitalize="none"
+                editable={!loading}
+              />
+            </View>
+          </AccentComposerFrame>
         </View>
 
         <TouchableOpacity
@@ -131,14 +153,13 @@ const styles = StyleSheet.create({
     textAlign: 'center', lineHeight: 20, marginBottom: 32,
     paddingHorizontal: 16,
   },
-  inputGroup: { gap: 14, marginBottom: 28 },
-  inputWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: colors.dark.card, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderWidth: 1, borderColor: colors.dark.border,
+  inputGroup: { marginBottom: 28 },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
   },
-  input: { flex: 1, fontSize: 15, color: colors.dark.text },
+  input: { flex: 1, fontSize: 15, color: colors.dark.text, paddingVertical: 4 },
   btn: { borderRadius: 14, overflow: 'hidden' },
   btnDisabled: { opacity: 0.6 },
   btnGradient: { paddingVertical: 16, alignItems: 'center' },

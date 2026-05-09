@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, borderRadius, spacing } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile } from '@/types';
 import { isLikelyDirectAudioUrl } from '@/lib/profileAudio';
 import { searchITunesSongs } from '@/lib/music/itunesSearch';
@@ -151,6 +152,8 @@ export function FeaturedSoundCard({
   const playerRef = useRef<AudioPlayerLike | null>(null);
   const listenerSubRef = useRef<{ remove: () => void } | null>(null);
   const seekingRef = useRef(false);
+  /** Pulse Page focused — gates autoplay so async `boot()` cannot start audio after user left the screen. */
+  const screenFocusedRef = useRef(false);
   /**
    * Mirror of the latest `looping` state so the boot effect can read it
    * without having to include `looping` in its dependency array (which
@@ -267,7 +270,7 @@ export function FeaturedSoundCard({
         setStreamReady(true);
         setStreamLoading(false);
 
-        if (profileViewAutoplay) {
+        if (profileViewAutoplay && screenFocusedRef.current) {
           try { player.play(); } catch { /* noop */ }
           setPlaying(true);
         }
@@ -308,28 +311,33 @@ export function FeaturedSoundCard({
   }, [looping]);
 
   /**
-   * Pause playback whenever the hosting screen loses focus (tab switch,
-   * navigating to another route, modal pushed on top). Without this the
-   * Current Vibe track keeps playing while the user scrolls Feed / Circles
-   * / Live / etc., which is disorienting and violates the "ambient on your
-   * page, silent everywhere else" contract.
-   *
-   * The cleanup function runs on blur AND on unmount, which is exactly what
-   * we want — one hook covers both cases.
+   * Pause when leaving Pulse Page; resume Current Vibe autoplay only when this
+   * screen is focused again (stops background music on Feed / other tabs).
    */
   useFocusEffect(
     useCallback(() => {
-      return () => {
-        const p = playerRef.current;
-        if (!p) return;
+      screenFocusedRef.current = true;
+      const p = playerRef.current;
+      if (profileViewAutoplay && p?.isLoaded && streamable) {
         try {
-          if (p.isLoaded && p.playing) p.pause();
+          p.play();
+        } catch {
+          /* noop */
+        }
+        setPlaying(true);
+      }
+      return () => {
+        screenFocusedRef.current = false;
+        const cur = playerRef.current;
+        if (!cur) return;
+        try {
+          if (cur.isLoaded && cur.playing) cur.pause();
         } catch {
           /* noop */
         }
         setPlaying(false);
       };
-    }, []),
+    }, [profileViewAutoplay, streamable]),
   );
 
   const openExternalListen = useCallback(async () => {
@@ -496,7 +504,12 @@ export function FeaturedSoundCard({
                   <ActivityIndicator color={accent} />
                 </View>
               ) : artworkUrl ? (
-                <Image source={{ uri: artworkUrl }} style={styles.art} contentFit="cover" />
+                <Image
+                  source={{ uri: artworkUrl }}
+                  style={styles.art}
+                  contentFit="cover"
+                  {...pulseImageListThumbProps}
+                />
               ) : (
                 <LinearGradient
                   colors={[accent + 'AA', accent + '33', colors.dark.cardAlt]}

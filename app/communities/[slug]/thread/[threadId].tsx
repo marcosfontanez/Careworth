@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -28,10 +28,13 @@ import type { CircleReply, CircleThreadKind, CreatorSummary } from '@/types';
 import { circleContentService } from '@/services/circleContent';
 import { shareCircleThread } from '@/lib/share';
 import { setThreadReadReplyCount } from '@/lib/circleExperience';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { getCircleAccent } from '@/lib/circleAccents';
 
 const KIND_LABEL: Record<CircleThreadKind, string> = {
   question: 'Question',
@@ -54,6 +57,8 @@ export default function CircleThreadDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
+
+  const threadReplyMax = 2000;
 
   useFocusEffect(
     useCallback(() => {
@@ -96,6 +101,10 @@ export default function CircleThreadDetailScreen() {
   const threadDisplayName = isAnonRoom ? anonName : author.displayName;
 
   const accent = community?.accentColor ?? colors.primary.teal;
+  const composerAccent = useMemo(
+    () => getCircleAccent(slug, community?.accentColor ?? null),
+    [slug, community?.accentColor],
+  );
   const circleName = community?.name ?? thread.circleSlug;
 
   return (
@@ -208,7 +217,12 @@ export default function CircleThreadDetailScreen() {
           />
 
           {thread.mediaThumbUrl ? (
-            <Image source={{ uri: thread.mediaThumbUrl }} style={styles.heroThumb} contentFit="cover" />
+            <Image
+              source={{ uri: thread.mediaThumbUrl }}
+              style={styles.heroThumb}
+              contentFit="cover"
+              {...pulseImageListThumbProps}
+            />
           ) : null}
 
           <View style={styles.statRow}>
@@ -246,51 +260,72 @@ export default function CircleThreadDetailScreen() {
           ))}
       </ScrollView>
 
-      <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
-        <MentionAutocomplete
-          style={styles.input}
-          placeholder="Add a reply…"
-          placeholderTextColor={colors.dark.textMuted}
-          value={draft}
-          onChangeText={setDraft}
-          multiline
-          textAlignVertical="top"
-          scrollEnabled
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, !draft.trim() && styles.sendOff]}
-          disabled={!draft.trim()}
-          onPress={async () => {
-            const text = draft.trim();
-            if (!text) return;
-            if (!user) {
-              Alert.alert('Sign in required', 'Sign in to join this discussion.');
-              return;
-            }
-            try {
-              await circleContentService.addReply(thread.id, text);
-              setDraft('');
-              await Promise.all([refetchReplies(), refetch()]);
-              await setThreadReadReplyCount(thread.id, thread.replyCount + 1);
-            } catch (e: any) {
-              try {
-                await enqueueAction({
-                  type: 'circle_thread_reply',
-                  payload: { threadId: thread.id, userId: user.id, body: text },
-                });
-                setDraft('');
-                Alert.alert(
-                  'Reply queued',
-                  'Network hiccup — your reply will post automatically once you’re back online.',
-                );
-              } catch {
-                Alert.alert('Reply failed', e?.message ?? 'Could not send your reply.');
-              }
-            }
-          }}
+      <View style={[styles.composerBar, { paddingBottom: insets.bottom + 12 }]}>
+        <AccentComposerFrame
+          accentColor={composerAccent.color}
+          hint="Reply in this thread — @ mentions whoever you pick."
+          style={{ marginHorizontal: 12 }}
+          footer={
+            <AccentCharCount
+              length={draft.length}
+              max={threadReplyMax}
+              accentColor={composerAccent.color}
+              warnWithin={80}
+            />
+          }
         >
-          <Ionicons name="send" size={18} color={draft.trim() ? '#FFF' : colors.dark.textMuted} />
-        </TouchableOpacity>
+          <View style={styles.composerRow}>
+            <MentionAutocomplete
+              style={styles.threadComposerInput}
+              placeholder="Add a reply…"
+              placeholderTextColor={colors.dark.textMuted}
+              value={draft}
+              onChangeText={setDraft}
+              multiline
+              textAlignVertical="top"
+              scrollEnabled
+              maxLength={threadReplyMax}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                !draft.trim() && styles.sendOff,
+                draft.trim() && { backgroundColor: composerAccent.color },
+              ]}
+              disabled={!draft.trim()}
+              onPress={async () => {
+                const text = draft.trim();
+                if (!text) return;
+                if (!user) {
+                  Alert.alert('Sign in required', 'Sign in to join this discussion.');
+                  return;
+                }
+                try {
+                  await circleContentService.addReply(thread.id, text);
+                  setDraft('');
+                  await Promise.all([refetchReplies(), refetch()]);
+                  await setThreadReadReplyCount(thread.id, thread.replyCount + 1);
+                } catch (e: any) {
+                  try {
+                    await enqueueAction({
+                      type: 'circle_thread_reply',
+                      payload: { threadId: thread.id, userId: user.id, body: text },
+                    });
+                    setDraft('');
+                    Alert.alert(
+                      'Reply queued',
+                      'Network hiccup — your reply will post automatically once you’re back online.',
+                    );
+                  } catch {
+                    Alert.alert('Reply failed', e?.message ?? 'Could not send your reply.');
+                  }
+                }
+              }}
+            >
+              <Ionicons name="send" size={18} color={draft.trim() ? '#FFF' : colors.dark.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </AccentComposerFrame>
       </View>
 
       <ReportModal
@@ -379,25 +414,23 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: 8,
   },
-  composer: {
+  composerBar: {
+    paddingTop: 10,
+    backgroundColor: colors.dark.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.dark.border,
+  },
+  composerRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.dark.border,
-    backgroundColor: colors.dark.card,
   },
-  input: {
+  threadComposerInput: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     color: colors.dark.text,
     fontSize: 15,
     textAlignVertical: 'top',
@@ -406,7 +439,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary.teal,
+    backgroundColor: colors.dark.cardAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },

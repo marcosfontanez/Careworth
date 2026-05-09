@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
@@ -56,6 +57,26 @@ export default async function RootLayout({
   return (
     <html lang={htmlLang} className={`dark ${inter.variable} min-h-dvh`}>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
+        <Script id="pv-auth-callback-redirect" strategy="beforeInteractive">
+          {`
+(function(){
+  try {
+    var p = location.pathname || "";
+    if (p.indexOf("/auth/confirm") === 0) return;
+    var s = location.search || "";
+    var h = location.hash || "";
+    if (s.indexOf("code=") !== -1) {
+      location.replace("/auth/confirm" + s + h);
+      return;
+    }
+    var raw = h.charAt(0) === "#" ? h.slice(1) : h;
+    if (raw.indexOf("access_token=") !== -1 && raw.indexOf("refresh_token=") !== -1) {
+      location.replace("/auth/confirm" + s + h);
+    }
+  } catch (e) {}
+})();
+          `}
+        </Script>
         <SkipToMain />
         {children}
         <SiteAnalytics />

@@ -14,6 +14,7 @@ type NotificationType =
   | 'share'
   | 'comment'
   | 'reply'
+  | 'circle_thread_reply'
   | 'mention';
 
 interface CreateNotificationParams {

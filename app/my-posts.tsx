@@ -243,6 +243,10 @@ export default function MyPostsScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: GAP, paddingHorizontal: PAD }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24, gap: GAP }}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
           /** Android virtualization win — see app/followers.tsx for rationale. */
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={

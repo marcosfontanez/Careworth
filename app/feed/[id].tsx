@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, AppState, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as SplashScreen from 'expo-splash-screen';
 import { VideoFeedPost } from '@/components/feed/VideoFeedPost';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { usePost, useLikedPostIds } from '@/hooks/useQueries';
@@ -29,9 +31,24 @@ import { likedPostKeys, savedPostKeys, userKeys } from '@/lib/queryKeys';
 export default function FeedPostScreen() {
   const { id, circle } = useLocalSearchParams<{ id: string; circle?: string }>();
   const router = useRouter();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
+
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
+  const [videoSurfaceEpoch, setVideoSurfaceEpoch] = useState(0);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      setAppIsActive(next === 'active');
+      if (next === 'active') {
+        SplashScreen.hideAsync().catch(() => {});
+        if (Platform.OS !== 'web') setVideoSurfaceEpoch((e) => e + 1);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const { data: post, isLoading } = usePost(id);
   const { data: likedIdsArr = [] } = useLikedPostIds(user?.id);
@@ -119,7 +136,8 @@ export default function FeedPostScreen() {
     <View style={styles.container}>
       <VideoFeedPost
         post={post}
-        isActive
+        videoSurfaceEpoch={videoSurfaceEpoch}
+        isActive={isFocused && appIsActive}
         isLiked={liked}
         isSaved={savedPostIds.has(post.id)}
         isFollowing={followedCreatorIds.has(post.creatorId)}

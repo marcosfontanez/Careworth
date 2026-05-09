@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { type BrandKit, DEFAULT_BRAND_KIT } from '@/lib/brandKit';
 
 interface Props {
@@ -90,15 +91,22 @@ export function BrandKitEditor({ visible, initial, onClose, onSave }: Props) {
 
             <View>
               <Text style={styles.sectionLabel}>Logo URL (optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={kit.logoUrl ?? ''}
-                onChangeText={(t) => update({ logoUrl: t.trim() || null })}
-                placeholder="https://example.com/your-logo.png"
-                placeholderTextColor={colors.dark.textMuted}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
+              <AccentComposerFrame
+                accentColor={kit.primary ?? colors.primary.teal}
+                hint="HTTPS image URL"
+                compact
+                noShadow
+              >
+                <TextInput
+                  style={styles.inputPlain}
+                  value={kit.logoUrl ?? ''}
+                  onChangeText={(t) => update({ logoUrl: t.trim() || null })}
+                  placeholder="https://example.com/your-logo.png"
+                  placeholderTextColor={colors.dark.textMuted}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+              </AccentComposerFrame>
               <Text style={styles.helper}>Square PNG, transparent background. Renders in your end card.</Text>
             </View>
           </ScrollView>
@@ -149,10 +157,11 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: 2, borderColor: 'transparent',
   },
   scrubLabel: { color: '#FFF', fontSize: 11, fontWeight: '800' },
-  input: {
-    backgroundColor: colors.dark.card, borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 12, fontSize: 13,
-    color: colors.dark.text, borderWidth: 1, borderColor: colors.dark.border,
+  inputPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.dark.text,
   },
   helper: { fontSize: 11, color: colors.dark.textMuted, marginTop: 4 },
   actionRow: { flexDirection: 'row', gap: 10 },

@@ -20,6 +20,7 @@ import { useStream } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { LiveChatList } from '@/components/live/LiveChat';
 import { GiftPicker } from '@/components/live/GiftPicker';
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard';
@@ -44,6 +45,7 @@ import { isSeedStream } from '@/lib/liveSeedStreams';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
 import { colors, borderRadius, typography } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { formatCount } from '@/utils/format';
 import type {
   StreamMessage,
@@ -674,7 +676,12 @@ function StreamViewerScreenContent() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Image source={{ uri: stream.thumbnailUrl }} style={styles.streamBg} contentFit="cover" />
+     <Image
+        source={{ uri: stream.thumbnailUrl }}
+        style={styles.streamBg}
+        contentFit="cover"
+        {...pulseImageFeedHeroProps}
+      />
       <LinearGradient
         colors={['rgba(6,14,26,0.65)', 'rgba(6,14,26,0.2)', 'rgba(6,14,26,0.88)']}
         locations={[0, 0.35, 1]}
@@ -732,7 +739,11 @@ function StreamViewerScreenContent() {
           </Text>
 
           <View style={styles.creatorRow}>
-            <Image source={{ uri: stream.host.avatarUrl }} style={styles.creatorAvatar} />
+            <Image
+              source={{ uri: stream.host.avatarUrl }}
+              style={styles.creatorAvatar}
+              {...pulseImageListThumbProps}
+            />
             <View style={styles.creatorMeta}>
               <View style={styles.creatorNameRow}>
                 <Text style={styles.creatorName} numberOfLines={1}>{stream.host.displayName}</Text>
@@ -832,16 +843,31 @@ function StreamViewerScreenContent() {
                 </TouchableOpacity>
               )}
 
-              <TextInput
-                style={styles.chatInput}
-                placeholder={isHost ? 'Talk to your viewers\u2026' : 'Message the room\u2026'}
-                placeholderTextColor={colors.dark.textQuiet}
-                value={inputText}
-                onChangeText={setInputText}
-                onSubmitEditing={sendMessage}
-                returnKeyType="send"
-                maxLength={STREAM_CHAT_MAX_LENGTH}
-              />
+              <AccentComposerFrame
+                accentColor={colors.primary.teal}
+                compact
+                noShadow
+                style={{ flex: 1 }}
+                footer={
+                  <AccentCharCount
+                    length={inputText.length}
+                    max={STREAM_CHAT_MAX_LENGTH}
+                    accentColor={colors.primary.teal}
+                    warnWithin={40}
+                  />
+                }
+              >
+                <TextInput
+                  style={styles.chatInputPlain}
+                  placeholder={isHost ? 'Talk to your viewers\u2026' : 'Message the room\u2026'}
+                  placeholderTextColor={colors.dark.textQuiet}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  onSubmitEditing={sendMessage}
+                  returnKeyType="send"
+                  maxLength={STREAM_CHAT_MAX_LENGTH}
+                />
+              </AccentComposerFrame>
 
               <TouchableOpacity onPress={sendMessage} style={styles.sendBtn} activeOpacity={0.85}>
                 <Ionicons name="arrow-up" size={20} color={colors.dark.bg} />
@@ -1032,17 +1058,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chatInput: {
-    flex: 1,
-    backgroundColor: 'rgba(15,28,48,0.88)',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 11 : 9,
+  chatInputPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: Platform.OS === 'ios' ? 6 : 4,
     color: colors.neutral.white,
     fontSize: 14,
     lineHeight: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
   },
   sendBtn: {
     width: 40,

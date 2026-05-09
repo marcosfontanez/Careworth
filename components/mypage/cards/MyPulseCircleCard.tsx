@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { formatCount, relativeMyPulse } from '@/utils/format';
 import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
@@ -103,7 +104,12 @@ export function MyPulseCircleCard({
       <View style={styles.circleRow}>
         <View style={styles.previewRing}>
           {previewUri ? (
-            <Image source={{ uri: previewUri }} style={styles.previewImg} contentFit="cover" />
+            <Image
+              source={{ uri: previewUri }}
+              style={styles.previewImg}
+              contentFit="cover"
+              {...pulseImageListThumbProps}
+            />
           ) : (
             <View style={styles.previewFallback}>
               <Ionicons name="people" size={28} color={`${ACCENT}99`} />

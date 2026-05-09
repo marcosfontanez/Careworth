@@ -16,6 +16,7 @@ import { colors } from '@/theme';
 import type { Post } from '@/types';
 import { postStaticImagePreviewUri, postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 type ThumbStyle = StyleProp<ImageStyle | ViewStyle>;
 
@@ -49,7 +50,14 @@ function SignedThumbImage({
     };
   }, [uri]);
 
-  return <Image source={{ uri: displayUri }} style={style} contentFit={contentFit} />;
+  return (
+    <Image
+      source={{ uri: displayUri }}
+      style={style}
+      contentFit={contentFit}
+      {...pulseImageListThumbProps}
+    />
+  );
 }
 
 function PausedVideoFrame({ publicUrl, style }: { publicUrl: string; style: ThumbStyle }) {

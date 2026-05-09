@@ -12,6 +12,7 @@ import {
   ScrollView,
   ImageBackground,
   useWindowDimensions,
+  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,13 +28,16 @@ import { sanitizeUsername, isValidUsername } from '@/utils/profileHandle';
 import { PatientPrivacyHipaaPanel } from '@/components/auth/PatientPrivacyHipaaPanel';
 import { TERMS_PRIVACY_CHECKBOX_LABEL } from '@/constants/authLegal';
 import { mapAuthErrorForAlert } from '@/utils/authUserMessages';
+import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 const CYAN = '#22d3ee';
 
 const AUTH_SPLASH_BG = require('@/assets/images/auth-splash-background.png');
 const AUTH_LOGO_MARK = require('@/assets/images/pulseverse-premium-logo.png');
 
-/** Smooth full-width capsule (same tap target for Log In / Create account / phone CTAs). */
+/** Smooth full-width capsule (same tap target for Log In / Create account / social CTAs). */
 const PRIMARY_PILL_H = 52;
 const PRIMARY_PILL_RADIUS = PRIMARY_PILL_H / 2;
 
@@ -116,11 +120,14 @@ export default function LoginScreen() {
     signInWithGoogle,
     signInWithApple,
     isLoading,
+    isAuthenticated,
   } = useAuth();
 
   const [authTab, setAuthTab] = useState<AuthTab>('login');
   const [email, setEmail] = useState('');
+  const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [postSignupNotice, setPostSignupNotice] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
@@ -130,7 +137,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showPhoneLogin, setShowPhoneLogin] = useState(false);
 
   useEffect(() => {
     if (mode === 'signup') setAuthTab('signup');
@@ -139,8 +145,11 @@ export default function LoginScreen() {
   useEffect(() => {
     if (authTab === 'login') {
       setConfirmPassword('');
+      setConfirmEmail('');
       setHandle('');
       setHandleStatus('idle');
+    } else {
+      setPostSignupNotice(false);
     }
   }, [authTab]);
 
@@ -176,7 +185,13 @@ export default function LoginScreen() {
     authTab === 'signup' &&
     (!handle.trim() || handleStatus === 'disallowed' || handleStatus !== 'available');
 
-  const busy = loading || isLoading;
+  /**
+   * Global `isLoading` covers cold boot + profile hydrate. If we OR it in while the user is still a
+   * guest, the primary button shows a spinner forever when `getSession` is slow or stuck (often in
+   * the marketing site’s iframe preview). Only block the pill once we know there is a session.
+   */
+  const authBlockingUi = isAuthenticated && isLoading;
+  const busy = loading || authBlockingUi;
 
   const requireLegal = (forLabel: string) => {
     if (acceptedTerms) return true;
@@ -192,16 +207,43 @@ export default function LoginScreen() {
       Alert.alert('Missing fields', 'Please enter your email and password.');
       return;
     }
+    setPostSignupNotice(false);
     setLoading(true);
-    const { error } = await signInWithEmail(email.trim(), password);
-    setLoading(false);
-    if (error) Alert.alert('Login failed', mapAuthErrorForAlert(error.message));
-    else router.replace('/');
+    const TIMEOUT_MS = Platform.OS === 'web' ? 45_000 : 60_000;
+    try {
+      const { error } = await Promise.race([
+        signInWithEmail(email.trim(), password),
+        new Promise<{ error: Error }>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                error: new Error(
+                  'Sign-in timed out. Try a full browser tab instead of the small preview frame, or check your connection.',
+                ),
+              }),
+            TIMEOUT_MS,
+          ),
+        ),
+      ]);
+      if (error) Alert.alert('Login failed', mapAuthErrorForAlert(error.message));
+      else schedulePostSignInNavigation(router);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignup = async () => {
-    if (!fullName || !email || !password || !confirmPassword || !handle.trim()) {
-      Alert.alert('Missing fields', 'Please fill in all fields, including your @handle.');
+    if (!fullName || !email || !confirmEmail || !password || !confirmPassword || !handle.trim()) {
+      Alert.alert('Missing fields', 'Please fill in all fields, including your @handle and both email boxes.');
+      return;
+    }
+    const emailNorm = email.trim().toLowerCase();
+    const confirmNorm = confirmEmail.trim().toLowerCase();
+    if (emailNorm !== confirmNorm) {
+      Alert.alert(
+        'Emails do not match',
+        'Type your email the same way in both boxes so we send the verification link to the right address.',
+      );
       return;
     }
     if (password !== confirmPassword) {
@@ -233,12 +275,10 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
-    const termsAt = new Date().toISOString();
     const { error } = await signUpWithEmail(
-      email.trim(),
+      emailNorm,
       password,
       fullName.trim(),
-      termsAt,
       preferred,
     );
     setLoading(false);
@@ -247,14 +287,15 @@ export default function LoginScreen() {
       setFullName('');
       setHandle('');
       setConfirmPassword('');
+      setConfirmEmail('');
       setPassword('');
+      setEmail(emailNorm);
       setAcceptedTerms(false);
       setHandleStatus('idle');
-      setAuthTab('login');
-      Alert.alert(
-        'Check your email',
-        'We sent a confirmation link to verify your account. After you verify, sign in below with your email and password.',
-      );
+      setPostSignupNotice(true);
+      InteractionManager.runAfterInteractions(() => {
+        setAuthTab('login');
+      });
     }
   };
 
@@ -264,7 +305,7 @@ export default function LoginScreen() {
     const { error } = await signInWithGoogle();
     setLoading(false);
     if (error) Alert.alert('Google failed', error.message);
-    else router.replace('/');
+    else schedulePostSignInNavigation(router);
   };
 
   const handleApple = async () => {
@@ -273,7 +314,7 @@ export default function LoginScreen() {
     const { error } = await signInWithApple();
     setLoading(false);
     if (error) Alert.alert('Apple failed', error.message);
-    else router.replace('/');
+    else schedulePostSignInNavigation(router);
   };
 
   const socialDisabledSignup = authTab === 'signup' && !acceptedTerms;
@@ -308,6 +349,7 @@ export default function LoginScreen() {
               style={{ width: logoW, height: logoH }}
               contentFit="contain"
               accessibilityLabel="PulseVerse — Built for Healthcare Life."
+              {...pulseImageListThumbProps}
             />
           </View>
 
@@ -356,101 +398,99 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {!showPhoneLogin ? (
-            <View style={styles.form}>
+          <View style={styles.form}>
               {authTab === 'signup' && (
-                <View style={styles.inputWrap}>
-                  <Ionicons name="person-outline" size={iconSize.md} color={CYAN} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Full name"
-                    placeholderTextColor={colors.form.placeholder}
-                    value={fullName}
-                    onChangeText={setFullName}
-                    editable={!busy}
-                  />
-                </View>
+                <AccentComposerFrame accentColor={CYAN} hint="Full name" compact noShadow>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="person-outline" size={iconSize.md} color={CYAN} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Full name"
+                      placeholderTextColor={colors.form.placeholder}
+                      value={fullName}
+                      onChangeText={setFullName}
+                      editable={!busy}
+                    />
+                  </View>
+                </AccentComposerFrame>
               )}
 
               {authTab === 'signup' && (
-                <View style={styles.inputWrap}>
-                  <Text style={styles.atPrefix}>@</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="your.handle"
-                    placeholderTextColor={colors.form.placeholder}
-                    value={handle}
-                    onChangeText={(t) => setHandle(t.replace(/^@+/, '').toLowerCase())}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="username"
-                    editable={!busy}
-                    maxLength={30}
-                  />
-                </View>
+                <AccentComposerFrame accentColor={CYAN} hint="Your @handle" compact noShadow>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.atPrefix}>@</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="your.handle"
+                      placeholderTextColor={colors.form.placeholder}
+                      value={handle}
+                      onChangeText={(t) => setHandle(t.replace(/^@+/, '').toLowerCase())}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="username"
+                      editable={!busy}
+                      maxLength={30}
+                    />
+                  </View>
+                </AccentComposerFrame>
               )}
 
               {authTab === 'signup' ? <SignupHandleHint handle={handle} status={handleStatus} /> : null}
 
-              <View style={styles.inputWrap}>
-                <Ionicons name="mail-outline" size={iconSize.md} color={CYAN} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email address"
-                  placeholderTextColor={colors.form.placeholder}
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  editable={!busy}
-                />
-              </View>
-
-              <View style={styles.inputWrap}>
-                <Ionicons name="lock-closed-outline" size={iconSize.md} color={CYAN} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor={colors.form.placeholder}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  editable={!busy}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword((v) => !v)}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={22}
-                    color={CYAN}
+              <AccentComposerFrame accentColor={CYAN} hint="Email address" compact noShadow>
+                <View style={styles.fieldRow}>
+                  <Ionicons name="mail-outline" size={iconSize.md} color={CYAN} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email address"
+                    placeholderTextColor={colors.form.placeholder}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    editable={!busy}
+                    autoComplete="email"
                   />
-                </TouchableOpacity>
-              </View>
+                </View>
+              </AccentComposerFrame>
 
               {authTab === 'signup' && (
-                <View style={styles.inputWrap}>
+                <AccentComposerFrame accentColor={CYAN} hint="Confirm email" compact noShadow>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="mail-outline" size={iconSize.md} color={CYAN} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm email address"
+                      placeholderTextColor={colors.form.placeholder}
+                      value={confirmEmail}
+                      onChangeText={setConfirmEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      editable={!busy}
+                      autoComplete="off"
+                      textContentType="emailAddress"
+                    />
+                  </View>
+                </AccentComposerFrame>
+              )}
+
+              <AccentComposerFrame accentColor={CYAN} hint="Password" compact noShadow>
+                <View style={styles.fieldRow}>
                   <Ionicons name="lock-closed-outline" size={iconSize.md} color={CYAN} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Confirm password"
+                    placeholder="Password"
                     placeholderTextColor={colors.form.placeholder}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                    value={password}
+                    onChangeText={setPassword}
                     secureTextEntry={!showPassword}
                     editable={!busy}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    textContentType="newPassword"
                   />
                   <TouchableOpacity
                     onPress={() => setShowPassword((v) => !v)}
                     hitSlop={12}
                     accessibilityRole="button"
-                    accessibilityLabel={showPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                   >
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -458,6 +498,48 @@ export default function LoginScreen() {
                       color={CYAN}
                     />
                   </TouchableOpacity>
+                </View>
+              </AccentComposerFrame>
+
+              {authTab === 'signup' && (
+                <AccentComposerFrame accentColor={CYAN} hint="Confirm password" compact noShadow>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="lock-closed-outline" size={iconSize.md} color={CYAN} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm password"
+                      placeholderTextColor={colors.form.placeholder}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={!showPassword}
+                      editable={!busy}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      textContentType="newPassword"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword((v) => !v)}
+                      hitSlop={12}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={22}
+                        color={CYAN}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </AccentComposerFrame>
+              )}
+
+              {authTab === 'login' && postSignupNotice && (
+                <View style={styles.signupNotice} accessibilityRole="summary">
+                  <Ionicons name="mail-unread-outline" size={22} color={colors.primary.teal} />
+                  <Text style={styles.signupNoticeText}>
+                    We sent a verification link to <Text style={styles.signupNoticeEm}>{email}</Text>. Open your email,
+                    tap confirm, then sign in here with the same address and password.
+                  </Text>
                 </View>
               )}
 
@@ -522,7 +604,7 @@ export default function LoginScreen() {
                   <Ionicons name="logo-google" size={20} color={colors.dark.text} />
                   <Text style={styles.socialBtnText}>Google</Text>
                 </TouchableOpacity>
-                {Platform.OS === 'ios' && (
+                {Platform.OS === 'ios' ? (
                   <TouchableOpacity
                     style={[styles.socialBtn, socialDisabledSignup && styles.socialBtnDisabled]}
                     onPress={handleApple}
@@ -531,20 +613,9 @@ export default function LoginScreen() {
                     <Ionicons name="logo-apple" size={20} color={colors.dark.text} />
                     <Text style={styles.socialBtnText}>Apple</Text>
                   </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[styles.socialBtn, socialDisabledSignup && styles.socialBtnDisabled]}
-                  onPress={() => setShowPhoneLogin(true)}
-                  disabled={busy || socialDisabledSignup}
-                >
-                  <Ionicons name="call-outline" size={20} color={colors.dark.text} />
-                  <Text style={styles.socialBtnText}>Phone</Text>
-                </TouchableOpacity>
+                ) : null}
               </View>
             </View>
-          ) : (
-            <PhoneLoginForm phoneBusy={busy} onBack={() => setShowPhoneLogin(false)} />
-          )}
 
           <View style={styles.secureRow}>
             <Ionicons name="shield-checkmark" size={20} color={CYAN} />
@@ -605,84 +676,6 @@ function SignupHandleHint({
   );
 }
 
-function PhoneLoginForm({ phoneBusy, onBack }: { phoneBusy: boolean; onBack: () => void }) {
-  const router = useRouter();
-  const { signInWithPhone, verifyOtp } = useAuth();
-  const [phone, setPhone] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const busy = loading || phoneBusy;
-
-  const handleSendOtp = async () => {
-    if (!phone) return;
-    setLoading(true);
-    const { error } = await signInWithPhone(phone.trim());
-    setLoading(false);
-    if (error) Alert.alert('Error', mapAuthErrorForAlert(error.message));
-    else setOtpSent(true);
-  };
-
-  const handleVerify = async () => {
-    if (!otp) return;
-    setLoading(true);
-    const { error } = await verifyOtp(phone.trim(), otp.trim());
-    setLoading(false);
-    if (error) Alert.alert('Verification failed', mapAuthErrorForAlert(error.message));
-    else router.replace('/');
-  };
-
-  return (
-    <View style={styles.form}>
-      <TouchableOpacity onPress={onBack} style={styles.phoneBack} hitSlop={12}>
-        <Ionicons name="arrow-back" size={24} color={colors.dark.text} />
-      </TouchableOpacity>
-      <Text style={styles.phoneTitle}>{otpSent ? 'Enter verification code' : 'Sign in with phone'}</Text>
-
-      {!otpSent ? (
-        <>
-          <View style={styles.inputWrap}>
-            <Ionicons name="call-outline" size={iconSize.md} color={CYAN} />
-            <TextInput
-              style={styles.input}
-              placeholder="+1 (555) 123-4567"
-              placeholderTextColor={colors.form.placeholder}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              editable={!busy}
-            />
-          </View>
-          <PrimaryActionButton
-            label="Send code"
-            onPress={handleSendOtp}
-            disabled={!phone}
-            busy={loading}
-          />
-        </>
-      ) : (
-        <>
-          <View style={styles.inputWrap}>
-            <Ionicons name="keypad-outline" size={iconSize.md} color={CYAN} />
-            <TextInput
-              style={styles.input}
-              placeholder="6-digit code"
-              placeholderTextColor={colors.form.placeholder}
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-              maxLength={6}
-              editable={!busy}
-            />
-          </View>
-          <PrimaryActionButton label="Verify" onPress={handleVerify} disabled={!otp} busy={loading} />
-        </>
-      )}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   logoWrap: {
@@ -719,20 +712,10 @@ const styles = StyleSheet.create({
   segmentTextOn: { color: colors.dark.text, fontSize: 15, fontWeight: '800' },
   segmentTextOff: { color: 'rgba(255,255,255,0.55)', fontSize: 15, fontWeight: '700' },
   form: { gap: spacing.md },
-  inputWrap: {
+  fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: 'rgba(8,15,30,0.72)',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + 4,
-    borderWidth: 1,
-    borderColor: 'rgba(34,211,238,0.4)',
-    shadowColor: CYAN,
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
   },
   input: { flex: 1, fontSize: 16, color: colors.dark.text },
   atPrefix: {
@@ -761,6 +744,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right',
     marginTop: -spacing.xs,
+  },
+  signupNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 184, 166, 0.35)',
+  },
+  signupNoticeText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.dark.textMuted,
+    fontWeight: '600',
+  },
+  signupNoticeEm: {
+    color: colors.primary.teal,
+    fontWeight: '800',
   },
   primaryTouch: {
     marginTop: spacing.sm,
@@ -873,6 +878,4 @@ const styles = StyleSheet.create({
     color: 'rgba(165,210,230,0.9)',
     fontWeight: '600',
   },
-  phoneBack: { marginBottom: spacing.xs, alignSelf: 'flex-start' },
-  phoneTitle: { ...typography.h3, color: colors.dark.text, marginBottom: spacing.xs },
 });

@@ -10,11 +10,13 @@ import {
   RefreshControl,
   Switch,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { useToast } from '@/components/ui/Toast';
 import { soundCatalogService, type SoundCatalogAdminRow } from '@/services/supabase/soundCatalog';
 
@@ -132,41 +134,45 @@ export default function AdminSoundCatalogScreen() {
         Use a video post ID (with media, not an anonymous repost of another sound). Artist and keywords help search rank this sound.
       </Text>
       <View style={styles.form}>
-        <Text style={styles.label}>Post UUID</Text>
-        <TextInput
-          style={styles.input}
-          value={postId}
-          onChangeText={setPostId}
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-          placeholderTextColor={colors.dark.textMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <Text style={styles.label}>Artist (optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={artist}
-          onChangeText={setArtist}
-          placeholder="Display name or label"
-          placeholderTextColor={colors.dark.textMuted}
-        />
-        <Text style={styles.label}>Keywords (optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={keywords}
-          onChangeText={setKeywords}
-          placeholder="Comma-separated terms"
-          placeholderTextColor={colors.dark.textMuted}
-        />
-        <Text style={styles.label}>Sort boost</Text>
-        <TextInput
-          style={styles.input}
-          value={sortBoost}
-          onChangeText={setSortBoost}
-          placeholder="1000"
-          placeholderTextColor={colors.dark.textMuted}
-          keyboardType="number-pad"
-        />
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Post UUID" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={postId}
+            onChangeText={setPostId}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            placeholderTextColor={colors.dark.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </AccentComposerFrame>
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Artist (optional)" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={artist}
+            onChangeText={setArtist}
+            placeholder="Display name or label"
+            placeholderTextColor={colors.dark.textMuted}
+          />
+        </AccentComposerFrame>
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Keywords (optional)" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={keywords}
+            onChangeText={setKeywords}
+            placeholder="Comma-separated terms"
+            placeholderTextColor={colors.dark.textMuted}
+          />
+        </AccentComposerFrame>
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Sort boost" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={sortBoost}
+            onChangeText={setSortBoost}
+            placeholder="1000"
+            placeholderTextColor={colors.dark.textMuted}
+            keyboardType="number-pad"
+          />
+        </AccentComposerFrame>
         <View style={styles.switchRow}>
           <Text style={styles.labelFlat}>Active (visible in search)</Text>
           <Switch
@@ -213,6 +219,11 @@ export default function AdminSoundCatalogScreen() {
           <FlatList
             data={rows}
             keyExtractor={(item) => item.id}
+            initialNumToRender={14}
+            maxToRenderPerBatch={10}
+            windowSize={9}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={Platform.OS === 'android'}
             ListHeaderComponent={ListHeader}
             refreshControl={(
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />
@@ -282,19 +293,14 @@ const styles = StyleSheet.create({
   form: {
     paddingHorizontal: 16,
     paddingBottom: 8,
-    gap: 6,
+    gap: 10,
   },
-  label: { fontSize: 12, fontWeight: '700', color: colors.dark.textSecondary, marginTop: 6 },
   labelFlat: { fontSize: 14, fontWeight: '600', color: colors.dark.text },
-  input: {
-    backgroundColor: colors.dark.card,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  inputPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     fontSize: 15,
     color: colors.dark.text,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
   },
   switchRow: {
     flexDirection: 'row',

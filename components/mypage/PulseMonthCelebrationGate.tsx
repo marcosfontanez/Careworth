@@ -75,7 +75,7 @@ export function PulseMonthCelebrationGate() {
   const segments = useSegments();
   const { user, profile, isAuthenticated, isLoading } = useAuth();
   const betaTesterBorderBlocking = useAppStore((s) => s.betaTesterBorderBlocking);
-  const inAuth = segments[0] === 'auth' || segments[0] === 'onboarding';
+  const inAuth = segments[0] === 'auth';
   const enabled = isAuthenticated && !isLoading && !inAuth && Boolean(user?.id);
 
   const { data: celebration, isFetched } = usePulseMonthCelebration(user?.id, enabled);
@@ -159,6 +159,19 @@ export function PulseMonthCelebrationGate() {
     router.push('/my-pulse-appearance');
   }, [closeAndMark, router]);
 
+  const confirmThenCustomize = useCallback(() => {
+    Alert.alert(
+      'Open Customize My Pulse?',
+      celebration?.isTop5
+        ? 'Finish opening your gift above if you haven’t yet — then equip your new border under Border on Customize My Pulse.'
+        : 'You can adjust your portrait, avatar border, and how your My Pulse page looks there.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Customize My Pulse', onPress: () => goCustomize() },
+      ],
+    );
+  }, [goCustomize, celebration?.isTop5]);
+
   const postToMyPulse = useCallback(async () => {
     const uid = user?.id;
     const c = celebration;
@@ -213,7 +226,13 @@ export function PulseMonthCelebrationGate() {
   });
 
   return (
-    <Modal visible animationType="fade" transparent statusBarTranslucent onRequestClose={closeAndMark}>
+    <Modal
+      visible
+      animationType="fade"
+      transparent
+      statusBarTranslucent
+      onRequestClose={confirmThenCustomize}
+    >
       <View style={[styles.backdrop, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.md }]}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -279,9 +298,6 @@ export function PulseMonthCelebrationGate() {
                       <Text style={styles.howtoEm}>Customize My Pulse</Text>, then choose{' '}
                       <Text style={styles.howtoEm}>Border</Text> to equip it.
                     </Text>
-                    <Pressable onPress={goCustomize} style={styles.secondaryBtn} accessibilityRole="button">
-                      <Text style={styles.secondaryBtnText}>Open customization</Text>
-                    </Pressable>
                   </>
                 )}
               </>
@@ -303,9 +319,19 @@ export function PulseMonthCelebrationGate() {
             </Pressable>
             <Text style={styles.postHint}>Share your placement on your My Pulse page.</Text>
 
-            <Pressable onPress={closeAndMark} style={styles.primaryBtn} accessibilityRole="button">
-              <Text style={styles.primaryBtnText}>Continue</Text>
-            </Pressable>
+            {!(celebration.isTop5 && !giftOpened) ? (
+              <Pressable
+                onPress={confirmThenCustomize}
+                style={styles.primaryBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm and open Customize My Pulse"
+              >
+                <Text style={styles.primaryBtnText}>Go to Customize My Pulse</Text>
+              </Pressable>
+            ) : null}
+            {celebration.isTop5 && !giftOpened ? (
+              <Text style={styles.continueHint}>Tap the gift above to open your prize, then continue.</Text>
+            ) : null}
           </View>
         </ScrollView>
       </View>
@@ -418,6 +444,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: -spacing.xs,
     marginBottom: spacing.md,
+  },
+  continueHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    fontWeight: '600',
   },
   primaryBtn: {
     alignSelf: 'stretch',

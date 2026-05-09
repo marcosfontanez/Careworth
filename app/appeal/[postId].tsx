@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { colors, layout, spacing, typography } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 export default function ContentAppealScreen() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function ContentAppealScreen() {
   const postId = decodeURIComponent(Array.isArray(postIdRaw) ? postIdRaw[0] : postIdRaw ?? '').trim();
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const MAX_MSG = 2000;
 
   const submit = async () => {
     if (!user?.id) {
@@ -55,17 +58,31 @@ export default function ContentAppealScreen() {
         <Text style={styles.lead}>
           Explain why this content should remain visible or was flagged in error. Include policy references if you have them.
         </Text>
-        <TextInput
-          style={styles.input}
-          value={message}
-          onChangeText={setMessage}
-          placeholder="Your message to moderators…"
-          placeholderTextColor={colors.dark.textMuted}
-          multiline
-          numberOfLines={6}
-          textAlignVertical="top"
-          editable={!submitting}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Message to moderators"
+          footer={
+            <AccentCharCount
+              length={message.length}
+              max={MAX_MSG}
+              accentColor={colors.primary.teal}
+              warnWithin={120}
+            />
+          }
+        >
+          <TextInput
+            style={styles.input}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Explain your case clearly…"
+            placeholderTextColor={colors.dark.textMuted}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+            editable={!submitting}
+            maxLength={MAX_MSG}
+          />
+        </AccentComposerFrame>
         <TouchableOpacity
           style={[styles.btn, (!message.trim() || submitting) && styles.btnDisabled]}
           onPress={() => void submit()}
@@ -89,13 +106,9 @@ const styles = StyleSheet.create({
   lead: { ...typography.bodySmall, color: colors.dark.textSecondary, lineHeight: 20 },
   input: {
     minHeight: 140,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    padding: spacing.md,
-    backgroundColor: colors.dark.cardAlt,
     color: colors.dark.text,
     fontSize: 15,
+    paddingTop: 4,
   },
   btn: {
     marginTop: spacing.sm,

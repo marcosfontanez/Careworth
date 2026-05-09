@@ -26,8 +26,15 @@ export const PULSE_BETA_FRAME_SLUG = 'beta-tester-border';
 const BETA_TESTER_BORDER =
   require('../assets/images/pulse-rings/beta-tester-border.png') as ImageSourcePropType;
 
-/** Inner hole fraction for the beta border PNG (tune if face clips). */
-export const RASTER_BETA_TESTER_INNER_OPENING_FRAC = 0.48;
+/**
+ * Diameter of the transparent “hole” in the beta-tester PNG as a fraction of
+ * the square canvas edge (same meaning as {@link RASTER_PODIUM_INNER_OPENING_FRAC}).
+ *
+ * The art file has a **wide** inner opening; using too small a value here makes
+ * `rasterRingOuterBoxSide` inflate the wrapper so the photo looks tiny (large
+ * dark gap). Tune against `assets/images/pulse-rings/beta-tester-border.png`.
+ */
+export const RASTER_BETA_TESTER_INNER_OPENING_FRAC = 0.71;
 
 export function resolvePulseRingRaster(frame: {
   slug?: string | null;

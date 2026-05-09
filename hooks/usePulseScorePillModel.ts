@@ -26,8 +26,10 @@ export function usePulseScorePillModel(
     queryKey: ['pulseScoreCurrent', userId],
     queryFn: () => pulseScoresService.getCurrent(userId!),
     enabled: !!userId,
-    staleTime: 60_000,
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 20,
     retry: 1,
+    refetchOnMount: false,
     placeholderData:
       Number.isFinite(initialScore) && initialScore != null
         ? {

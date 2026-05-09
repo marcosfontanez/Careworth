@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { messagesService, type Conversation } from '@/services/supabase/messages';
+
+const INBOX_REALTIME_DEBOUNCE_MS = 350;
 
 export function useMessengerInbox(userId: string | undefined) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(!!userId);
   const [refreshing, setRefreshing] = useState(false);
   const [presenceOnline, setPresenceOnline] = useState<Set<string>>(new Set());
+  const realtimeReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadConversations = useCallback(async () => {
     if (!userId) return;
@@ -17,6 +20,16 @@ export function useMessengerInbox(userId: string | undefined) {
       console.warn('[useMessengerInbox] loadConversations', e);
     }
   }, [userId]);
+
+  const scheduleConversationsReload = useCallback(() => {
+    if (realtimeReloadTimerRef.current) {
+      clearTimeout(realtimeReloadTimerRef.current);
+    }
+    realtimeReloadTimerRef.current = setTimeout(() => {
+      realtimeReloadTimerRef.current = null;
+      void loadConversations();
+    }, INBOX_REALTIME_DEBOUNCE_MS);
+  }, [loadConversations]);
 
   useEffect(() => {
     if (!userId) {
@@ -37,14 +50,14 @@ export function useMessengerInbox(userId: string | undefined) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages' },
         () => {
-          void loadConversations();
+          scheduleConversationsReload();
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'conversations' },
         () => {
-          void loadConversations();
+          scheduleConversationsReload();
         },
       )
       .subscribe();
@@ -66,10 +79,14 @@ export function useMessengerInbox(userId: string | undefined) {
 
     return () => {
       cancelled = true;
+      if (realtimeReloadTimerRef.current) {
+        clearTimeout(realtimeReloadTimerRef.current);
+        realtimeReloadTimerRef.current = null;
+      }
       supabase.removeChannel(changesChannel);
       supabase.removeChannel(presenceChannel);
     };
-  }, [userId, loadConversations]);
+  }, [userId, loadConversations, scheduleConversationsReload]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

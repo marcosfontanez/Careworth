@@ -4,6 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import { resolvePicsUrls } from '@/utils/myPulseDisplayType';
 import type { ProfileUpdate } from '@/types';
@@ -114,6 +115,7 @@ function PicsStrip({ urls }: { urls: string[] }) {
           source={{ uri: urls[0] }}
           style={styles.fill}
           contentFit="cover"
+          {...pulseImageFeedHeroProps}
         />
         <LinearGradient
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
@@ -142,7 +144,12 @@ function PicsStrip({ urls }: { urls: string[] }) {
             idx > 0 ? { marginLeft: GAP } : null,
           ]}
         >
-          <ExpoImage source={{ uri: url }} style={styles.fill} contentFit="cover" />
+          <ExpoImage
+            source={{ uri: url }}
+            style={styles.fill}
+            contentFit="cover"
+            {...pulseImageListThumbProps}
+          />
           {/* subtle inner border so each tile feels distinct */}
           <View style={styles.thumbBorder} pointerEvents="none" />
         </View>

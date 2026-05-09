@@ -31,8 +31,12 @@ import { postsService } from '@/services/supabase';
 import { userService } from '@/services/user';
 import { withPulseVerseCta } from '@/lib/share';
 import { postKeys, profileUpdateKeys, userKeys } from '@/lib/queryKeys';
+import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
+import { queryClient } from '@/lib/queryClient';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { colors, borderRadius, typography, spacing } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import { resolvePicsUrls, getMyPulseDisplayType } from '@/utils/myPulseDisplayType';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
@@ -382,10 +386,12 @@ export default function MyPulseDetailScreen() {
       return;
     }
     if (update.linkedThreadId && update.linkedCircleSlug) {
+      prefetchCircleRoomBySlug(queryClient, update.linkedCircleSlug.trim(), authUser?.id ?? null);
       router.push(`/communities/${update.linkedCircleSlug}/thread/${update.linkedThreadId}` as any);
       return;
     }
     if (update.linkedCircleSlug) {
+      prefetchCircleRoomBySlug(queryClient, update.linkedCircleSlug.trim(), authUser?.id ?? null);
       router.push(`/communities/${update.linkedCircleSlug}` as any);
       return;
     }
@@ -398,7 +404,7 @@ export default function MyPulseDetailScreen() {
       const href = raw.startsWith('http') ? raw : `https://${raw}`;
       Linking.openURL(href).catch(() => undefined);
     }
-  }, [router, update, liveStreaming]);
+  }, [router, update, liveStreaming, authUser?.id]);
 
   const sourceButtonLabel = useMemo(() => {
     if (!update) return null;
@@ -458,6 +464,10 @@ export default function MyPulseDetailScreen() {
         style={styles.listFlex}
         data={comments}
         keyExtractor={(c) => c.id}
+        initialNumToRender={14}
+        maxToRenderPerBatch={10}
+        windowSize={11}
+        updateCellsBatchingPeriod={50}
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={false}
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -649,17 +659,32 @@ export default function MyPulseDetailScreen() {
           { paddingBottom: Math.max(insets.bottom, 10) },
         ]}
       >
-        <TextInput
-          ref={inputRef}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={viewerId ? 'Add a comment…' : 'Sign in to comment'}
-          placeholderTextColor={colors.dark.textMuted}
-          style={styles.input}
-          multiline
-          editable={!!viewerId}
-          maxLength={600}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          compact
+          noShadow
+          style={{ flex: 1 }}
+          footer={
+            <AccentCharCount
+              length={draft.length}
+              max={600}
+              accentColor={colors.primary.teal}
+              warnWithin={60}
+            />
+          }
+        >
+          <TextInput
+            ref={inputRef}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={viewerId ? 'Add a comment…' : 'Sign in to comment'}
+            placeholderTextColor={colors.dark.textMuted}
+            style={styles.inputComposer}
+            multiline
+            editable={!!viewerId}
+            maxLength={600}
+          />
+        </AccentComposerFrame>
         <TouchableOpacity
           onPress={postComment}
           disabled={!draft.trim() || addCommentMut.isPending}
@@ -843,7 +868,12 @@ function TypedBody({
         ) : null}
         <Pressable onPress={onOpenSource} style={styles.clipHero}>
           {thumb ? (
-            <ExpoImage source={{ uri: thumb }} style={styles.clipImage} contentFit="cover" />
+            <ExpoImage
+              source={{ uri: thumb }}
+              style={styles.clipImage}
+              contentFit="cover"
+              {...pulseImageFeedHeroProps}
+            />
           ) : (
             <LinearGradient
               colors={['rgba(96,165,250,0.22)', 'rgba(96,165,250,0.05)']}
@@ -948,6 +978,7 @@ function PhotosGrid({ urls }: { urls: string[] }) {
         source={{ uri: urls[0] }}
         style={styles.gridSolo}
         contentFit="cover"
+        {...pulseImageFeedHeroProps}
       />
     );
   }
@@ -961,6 +992,7 @@ function PhotosGrid({ urls }: { urls: string[] }) {
           source={{ uri: u }}
           style={styles.gridTile}
           contentFit="cover"
+          {...pulseImageListThumbProps}
         />
       ))}
     </View>
@@ -1459,14 +1491,12 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: colors.dark.bg,
   },
-  input: {
+  inputComposer: {
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.dark.cardAlt,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     color: colors.dark.text,
     fontSize: 14,
   },

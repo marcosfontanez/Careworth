@@ -47,10 +47,10 @@ class AnalyticsService {
     });
 
     if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => this.flush(), 5000);
+      this.flushTimer = setTimeout(() => this.flush(), 6500);
     }
 
-    if (this.queue.length >= 10) {
+    if (this.queue.length >= 16) {
       this.flush();
     }
   }

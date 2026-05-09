@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
 import { colors } from '@/theme';
 
 export default function AdminLayout() {
@@ -14,6 +15,7 @@ export default function AdminLayout() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
+          resetRootIndexRedirectDedupe();
           router.replace('/auth/login');
           return;
         }

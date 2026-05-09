@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius, spacing } from '@/theme';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import type { Post, ProfileUpdate } from '@/types';
 
@@ -497,7 +498,14 @@ function PulsePicThumb({
     };
   }, [imageUrl]);
 
-  return <Image source={{ uri: displayUri }} style={style} contentFit="cover" />;
+  return (
+    <Image
+      source={{ uri: displayUri }}
+      style={style}
+      contentFit="cover"
+      {...pulseImageListThumbProps}
+    />
+  );
 }
 
 function MediaHubEmpty({

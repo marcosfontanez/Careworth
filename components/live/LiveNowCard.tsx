@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, spacing, typography, shadows } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { LivePill } from './LivePill';
 import { LiveViewerBadge } from './LiveViewerBadge';
 import type { LiveStream } from '@/types';
@@ -35,7 +36,12 @@ export function LiveNowCard({ stream, onPress, onMore, categoryLabel }: Props) {
       accessibilityLabel={`Open live: ${stream.title}`}
     >
       <View style={styles.thumbWrap}>
-        <Image source={{ uri: stream.thumbnailUrl }} style={styles.img} contentFit="cover" />
+        <Image
+          source={{ uri: stream.thumbnailUrl }}
+          style={styles.img}
+          contentFit="cover"
+          {...pulseImageListThumbProps}
+        />
         <LinearGradient
           colors={['rgba(6,14,26,0)', 'rgba(6,14,26,0.7)']}
           locations={[0.55, 1]}

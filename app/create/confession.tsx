@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { postsService } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 export default function CreateConfessionScreen() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function CreateConfessionScreen() {
   const { user } = useAuth();
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
+  const MAX_CHARS = 2000;
 
   const handlePost = async () => {
     if (!content.trim()) {
@@ -75,16 +77,32 @@ export default function CreateConfessionScreen() {
             <Text style={styles.anonText}>This will be posted anonymously</Text>
           </View>
 
-          <TextInput
-            style={styles.mainInput}
-            value={content}
-            onChangeText={setContent}
-            placeholder="What's your confession? This is a safe, anonymous space..."
-            placeholderTextColor={colors.form.placeholder}
-            multiline
-            autoFocus
-            editable={!posting}
-          />
+          <AccentComposerFrame
+            accentColor={colors.primary.gold}
+            hint="Anonymous — only this text is visible to others."
+            style={{ marginBottom: spacing.md }}
+            footer={
+              <AccentCharCount
+                length={content.length}
+                max={MAX_CHARS}
+                accentColor={colors.primary.gold}
+                warnWithin={120}
+                hideWhenEmpty={false}
+              />
+            }
+          >
+            <TextInput
+              style={styles.mainInput}
+              value={content}
+              onChangeText={setContent}
+              placeholder="What's your confession? This is a safe, anonymous space..."
+              placeholderTextColor={colors.form.placeholder}
+              multiline
+              autoFocus
+              editable={!posting}
+              maxLength={MAX_CHARS}
+            />
+          </AccentComposerFrame>
 
           <View style={styles.footer}>
             <Ionicons name="shield-checkmark" size={iconSize.sm} color={colors.form.iconMuted} />
@@ -132,6 +150,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     minHeight: 200,
     textAlignVertical: 'top',
+    paddingTop: 4,
   },
   footer: {
     flexDirection: 'row',

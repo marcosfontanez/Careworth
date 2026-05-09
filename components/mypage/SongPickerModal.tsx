@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors, borderRadius, spacing } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import {
   searchITunesSongs,
   searchITunesAlbums,
@@ -272,6 +274,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
                   style={styles.rowArtwork}
                   contentFit="cover"
                   transition={120}
+                  {...pulseImageListThumbProps}
                 />
               ) : (
                 <View style={[styles.rowArtwork, styles.rowArtworkPh]}>
@@ -325,6 +328,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
                   style={styles.rowArtwork}
                   contentFit="cover"
                   transition={120}
+                  {...pulseImageListThumbProps}
                 />
               ) : (
                 <View style={[styles.rowArtwork, styles.rowArtworkPh]}>
@@ -364,6 +368,7 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
                 style={styles.rowArtwork}
                 contentFit="cover"
                 transition={120}
+                {...pulseImageListThumbProps}
               />
             ) : (
               <View style={[styles.rowArtwork, styles.rowArtworkPh]}>
@@ -424,26 +429,33 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
             ))}
           </View>
         )}
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={16} color={colors.dark.textMuted} />
-          <TextInput
-            ref={inputRef}
-            style={[styles.searchInput, drill && styles.searchInputDisabled]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={drill ? 'Search disabled — go back to browse' : 'Search songs, albums, or artists'}
-            placeholderTextColor={colors.dark.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            editable={!drill}
-          />
-          {query.length > 0 && !drill ? (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={16} color={colors.dark.textMuted} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Search"
+          compact
+          noShadow
+        >
+          <View style={styles.searchRow}>
+            <Ionicons name="search" size={16} color={colors.dark.textMuted} />
+            <TextInput
+              ref={inputRef}
+              style={[styles.searchInput, drill && styles.searchInputDisabled]}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={drill ? 'Search disabled — go back to browse' : 'Search songs, albums, or artists'}
+              placeholderTextColor={colors.dark.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              editable={!drill}
+            />
+            {query.length > 0 && !drill ? (
+              <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={colors.dark.textMuted} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </AccentComposerFrame>
         <Text style={styles.searchHint}>
           {drill
             ? 'Tracks below have 30s previews when available in your region.'
@@ -527,6 +539,11 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
         <FlatList
           data={listRows}
           keyExtractor={keyExtractor}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={renderRow}
           ListHeaderComponent={listHeader}
           ListHeaderComponentStyle={styles.headerSpacer}
@@ -560,7 +577,12 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
 
         {selected ? (
           <View style={styles.selectedBar}>
-            <Image source={{ uri: selected.artworkUrl }} style={styles.selectedArt} contentFit="cover" />
+            <Image
+              source={{ uri: selected.artworkUrl }}
+              style={styles.selectedArt}
+              contentFit="cover"
+              {...pulseImageListThumbProps}
+            />
             <View style={styles.selectedText}>
               <Text style={styles.selectedTitle} numberOfLines={1}>
                 {selected.title}
@@ -693,16 +715,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.dark.text,
   },
-  searchBox: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: borderRadius.lg,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
   },
   searchInput: {
     flex: 1,

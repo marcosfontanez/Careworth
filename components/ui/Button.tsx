@@ -33,7 +33,7 @@ type IonName = ComponentProps<typeof Ionicons>['name'];
  * Sizes
  * - `md` (default) — standard 44pt touch target
  * - `sm`           — inline / within cards
- * - `lg`           — hero / onboarding / full-width primary
+ * - `lg`           — hero / full-width primary
  *
  * Disabled + loading render mutually-exclusive states: loading keeps
  * the button width stable (spinner in place of the label) so the

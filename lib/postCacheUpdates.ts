@@ -27,7 +27,8 @@
  */
 
 import { queryClient } from '@/lib/queryClient';
-import type { Post } from '@/types';
+import { emptyPostReactionCounts } from '@/lib/postReactions';
+import type { Post, PostReactionKind } from '@/types';
 
 export type PostCountField =
   | 'likeCount'
@@ -38,6 +39,16 @@ export type PostCountField =
 function bumpOne(post: Post, field: PostCountField, delta: number): Post {
   const current = (post[field] as number | undefined) ?? 0;
   return { ...post, [field]: Math.max(0, current + delta) };
+}
+
+function patchReactionOne(post: Post, prevKind: PostReactionKind | null, nextKind: PostReactionKind | null): Post {
+  const base = post.reactionCounts ?? emptyPostReactionCounts();
+  const counts = { ...base };
+  if (prevKind) counts[prevKind] = Math.max(0, (counts[prevKind] ?? 0) - 1);
+  if (nextKind) counts[nextKind] = (counts[nextKind] ?? 0) + 1;
+  const likeDelta = (nextKind ? 1 : 0) - (prevKind ? 1 : 0);
+  const likeCount = Math.max(0, post.likeCount + likeDelta);
+  return { ...post, reactionCounts: counts, likeCount };
 }
 
 function isPost(value: unknown): value is Post {
@@ -125,5 +136,81 @@ export function bumpPostCount(
     }
   } catch {
     /* Cache patch is best-effort; never throw from a UI handler. */
+  }
+}
+
+/**
+ * Optimistic reaction swap for circle-wall style multi-emoji (`patchReactionOne`).
+ * Adjusts `likeCount` when the viewer adds or removes their only reaction row.
+ */
+export function patchPostReactionCounts(
+  postId: string,
+  prevKind: PostReactionKind | null,
+  nextKind: PostReactionKind | null,
+): void {
+  if (!postId) return;
+  if (prevKind === nextKind) return;
+
+  try {
+    const cache = queryClient.getQueryCache();
+    for (const query of cache.getAll()) {
+      const data = query.state.data as unknown;
+      if (data == null) continue;
+
+      if (Array.isArray(data)) {
+        let changed = false;
+        const next = data.map((entry) => {
+          if (isPost(entry) && entry.id === postId) {
+            changed = true;
+            return patchReactionOne(entry, prevKind, nextKind);
+          }
+          return entry;
+        });
+        if (changed) queryClient.setQueryData(query.queryKey, next);
+        continue;
+      }
+
+      if (isPost(data) && data.id === postId) {
+        queryClient.setQueryData(query.queryKey, patchReactionOne(data, prevKind, nextKind));
+        continue;
+      }
+
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'pages' in (data as Record<string, unknown>) &&
+        Array.isArray((data as { pages: unknown }).pages)
+      ) {
+        const inf = data as {
+          pages: Array<{ posts?: unknown }>;
+          pageParams: unknown[];
+        };
+        let changed = false;
+        const newPages = inf.pages.map((page) => {
+          if (!page || !Array.isArray((page as { posts?: unknown }).posts)) {
+            return page;
+          }
+          const posts = (page as { posts: unknown[] }).posts;
+          let pageChanged = false;
+          const newPosts = posts.map((p) => {
+            if (isPost(p) && p.id === postId) {
+              pageChanged = true;
+              return patchReactionOne(p, prevKind, nextKind);
+            }
+            return p;
+          });
+          if (pageChanged) {
+            changed = true;
+            return { ...(page as object), posts: newPosts };
+          }
+          return page;
+        });
+        if (changed) {
+          queryClient.setQueryData(query.queryKey, { ...inf, pages: newPages });
+        }
+      }
+    }
+  } catch {
+    /* best-effort */
   }
 }

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +17,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import type { EligibleCircleDiscussion } from '@/types';
 import { useToast } from '@/components/ui/Toast';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { colors, borderRadius, typography } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
 
@@ -101,19 +103,40 @@ export default function MyPulseLinkCircleScreen() {
       <Text style={styles.hint}>Link something you care about in Circles. Optional intro sets the tone on your page.</Text>
 
       <Text style={styles.fieldLbl}>Optional intro</Text>
-      <TextInput
-        style={styles.intro}
-        placeholder="e.g. Would love your take on this…"
-        placeholderTextColor={colors.dark.textMuted}
-        value={intro}
-        onChangeText={setIntro}
-        maxLength={160}
-      />
+      <AccentComposerFrame
+        accentColor={colors.primary.teal}
+        hint="Intro"
+        compact
+        noShadow
+        footer={
+          <AccentCharCount
+            length={intro.length}
+            max={160}
+            accentColor={colors.primary.teal}
+            warnWithin={20}
+            hideWhenEmpty={false}
+          />
+        }
+      >
+        <TextInput
+          style={styles.introPlain}
+          placeholder="e.g. Would love your take on this…"
+          placeholderTextColor={colors.dark.textMuted}
+          value={intro}
+          onChangeText={setIntro}
+          maxLength={160}
+        />
+      </AccentComposerFrame>
 
       <Text style={styles.fieldLbl}>Recent discussions</Text>
       <FlatList
         data={discussions}
         keyExtractor={(d) => d.id}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={9}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
         renderItem={renderRow}
         style={styles.list}
         contentContainerStyle={{ paddingBottom: 24 }}
@@ -144,16 +167,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
   },
-  intro: {
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  introPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     fontSize: 15,
     color: colors.dark.text,
-    marginBottom: 12,
+    marginBottom: 4,
   },
   list: { flex: 1 },
   row: {

@@ -1,10 +1,49 @@
 import { supabase } from '@/lib/supabase';
+import { feedPerfLane, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
 import { finalizePostsForViewer } from '@/lib/postViewerPrivacy';
 import { mergePinnedCommunityPosts, type CommunityPostPinRow } from '@/lib/communityPostPins';
-import type { Post, FeedType, PostType, SoundLibraryRow, ViralSoundRow } from '@/types';
+import type { Post, FeedType, PostType, SoundLibraryRow, ViralSoundRow, Role, Specialty, PostReactionCounts, PostReactionKind } from '@/types';
+import { normalizePostReactionKind } from '@/lib/postReactions';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { feedSignalsService } from '@/services/supabase/feedSignals';
 import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
+
+/** Batches `post_views` inserts — cuts HTTPS round-trips during feed scroll (see Query Performance). */
+type PostViewRow = { post_id: string; viewer_id: string; view_duration_ms: number };
+const postViewQueue: PostViewRow[] = [];
+let postViewFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const POST_VIEW_FLUSH_MS = 3500;
+const POST_VIEW_BATCH_MAX = 8;
+
+async function flushPostViewQueueInternal(): Promise<void> {
+  if (postViewFlushTimer) {
+    clearTimeout(postViewFlushTimer);
+    postViewFlushTimer = null;
+  }
+  if (postViewQueue.length === 0) return;
+  const batch = postViewQueue.splice(0, postViewQueue.length);
+  try {
+    const { error } = await supabase.from('post_views').insert(batch);
+    if (error && __DEV__) console.warn('[postsService.trackView batch]', error.message);
+  } catch (e) {
+    if (__DEV__) console.warn('[postsService.trackView batch]', e);
+    postViewQueue.unshift(...batch);
+  }
+}
+
+function enqueuePostView(row: PostViewRow) {
+  postViewQueue.push(row);
+  if (postViewQueue.length >= POST_VIEW_BATCH_MAX) {
+    void flushPostViewQueueInternal();
+    return;
+  }
+  if (!postViewFlushTimer) {
+    postViewFlushTimer = setTimeout(() => {
+      postViewFlushTimer = null;
+      void flushPostViewQueueInternal();
+    }, POST_VIEW_FLUSH_MS);
+  }
+}
 
 function normalizePostType(raw: unknown): PostType {
   const s = String(raw ?? 'text').toLowerCase();
@@ -86,6 +125,17 @@ function normalizeAdditionalMedia(raw: unknown): string[] | undefined {
   return urls.length ? urls : undefined;
 }
 
+function rowToReactionCounts(row: Record<string, unknown>): PostReactionCounts {
+  return {
+    heart: Number(row.reaction_heart_count ?? 0),
+    haha: Number(row.reaction_haha_count ?? 0),
+    wow: Number(row.reaction_wow_count ?? 0),
+    sad: Number(row.reaction_sad_count ?? 0),
+    angry: Number(row.reaction_angry_count ?? 0),
+    clap: Number(row.reaction_clap_count ?? 0),
+  };
+}
+
 function rowToPost(row: any): Post {
   const creator = row.profiles
     ? profileRowToCreatorSummary(row.profiles)
@@ -104,16 +154,17 @@ function rowToPost(row: any): Post {
     isAnonymous: row.is_anonymous,
     privacyMode: row.privacy_mode,
     likeCount: row.like_count,
+    reactionCounts: rowToReactionCounts(row),
     commentCount: row.comment_count,
     shareCount: row.share_count,
     viewCount: row.view_count,
     saveCount: row.save_count,
     createdAt: row.created_at,
-    rankingScore: row.ranking_score,
+    rankingScore: Number(row.ranking_score ?? 0),
     feedTypeEligible: normalizeFeedTypeEligibleTags(row.feed_type_eligible ?? []) as FeedType[],
-    roleContext: row.role_context,
-    specialtyContext: row.specialty_context,
-    locationContext: row.location_context,
+    roleContext: (row.role_context ?? 'RN') as Role,
+    specialtyContext: (row.specialty_context ?? 'General') as Specialty,
+    locationContext: row.location_context != null ? String(row.location_context) : '',
     soundTitle: row.sound_title?.trim() || undefined,
     soundSourcePostId: row.sound_source_post_id ?? undefined,
     soundSourceMediaUrl: normalizeMediaUrl(row.sound_source_media_url),
@@ -195,6 +246,12 @@ const POST_SELECT = [
   'share_count',
   'view_count',
   'save_count',
+  'reaction_heart_count',
+  'reaction_haha_count',
+  'reaction_wow_count',
+  'reaction_sad_count',
+  'reaction_angry_count',
+  'reaction_clap_count',
   // Ranking
   'ranking_score',
   // Sound attribution (TikTok-style original-sound credit)
@@ -221,10 +278,53 @@ const POST_SELECT = [
   'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
+/**
+ * Slimmer projection for main-feed list responses only (`getFeed`, `getFeedContinuation`,
+ * ranked/trending hydrations). Drops columns feed cells never render and omits
+ * `pulse_score_current` on the profile embed (badge doesn’t use score on the feed).
+ * Detail routes (`getById`, `getByIds`, …) keep {@link POST_SELECT}.
+ */
+const POST_SELECT_FEED = [
+  'id',
+  'creator_id',
+  'type',
+  'caption',
+  'created_at',
+  'media_url',
+  'thumbnail_url',
+  'additional_media',
+  'hashtags',
+  'communities',
+  'feed_type_eligible',
+  'is_anonymous',
+  'privacy_mode',
+  'like_count',
+  'comment_count',
+  'share_count',
+  'view_count',
+  'save_count',
+  'sound_title',
+  'sound_source_post_id',
+  'sound_source_media_url',
+  'duet_parent_id',
+  'evidence_url',
+  'evidence_label',
+  'is_education',
+  'education_citations',
+  'series_id',
+  'series_part',
+  'series_total',
+  'scheduled_at',
+  'scheduled_status',
+  'cover_alt_url',
+  'mood_preset',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption))',
+].join(', ');
+
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */
-async function fetchPostsByIdsOrdered(ids: string[]): Promise<Post[]> {
+async function fetchPostsByIdsOrdered(ids: string[], selectSql: string = POST_SELECT): Promise<Post[]> {
   if (ids.length === 0) return [];
-  const { data, error } = await supabase.from('posts').select(POST_SELECT).in('id', ids);
+  const { data, error } = await supabase.from('posts').select(selectSql).in('id', ids);
   if (error) throw error;
   const byId = new Map<string, Post>((data ?? []).map((row: any) => [row.id, rowToPost(row)]));
   const out: Post[] = [];
@@ -244,7 +344,7 @@ async function fetchForYouPostsChronological(viewerId: string, limit: number): P
 
   if (!rpcErr && idRows != null && (idRows as { id: string }[]).length > 0) {
     const ids = (idRows as { id: string }[]).map((r) => r.id);
-    const ordered = await fetchPostsByIdsOrdered(ids);
+    const ordered = await fetchPostsByIdsOrdered(ids, POST_SELECT_FEED);
     return ordered.filter(postAppearsInMainFeeds);
   }
 
@@ -252,7 +352,7 @@ async function fetchForYouPostsChronological(viewerId: string, limit: number): P
     console.warn('get_for_you_post_ids unavailable, using REST fallback:', rpcErr.message);
   }
 
-  let q = supabase.from('posts').select(POST_SELECT).contains('feed_type_eligible', ['forYou']);
+  let q = supabase.from('posts').select(POST_SELECT_FEED).contains('feed_type_eligible', ['forYou']);
   q = withFeedPrivacy(q, viewerId);
   const { data, error } = await q.order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
@@ -266,7 +366,7 @@ async function fetchForYouPostsChronological(viewerId: string, limit: number): P
 async function fetchOwnRecentPosts(viewerId: string, limit: number): Promise<Post[]> {
   const { data, error } = await supabase
     .from('posts')
-    .select(POST_SELECT)
+    .select(POST_SELECT_FEED)
     .eq('creator_id', viewerId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -314,10 +414,28 @@ function diversifyByCreator(posts: Post[], maxTotal: number, maxPerCreator = 3):
   return primary.slice(0, maxTotal);
 }
 
-async function applyViewerFeedFilters(posts: Post[], viewerId?: string): Promise<Post[]> {
+type FeedExclusionSets = { hiddenPostIds: Set<string>; hiddenCreatorIds: Set<string> };
+
+function emptyFeedExclusions(): FeedExclusionSets {
+  return { hiddenPostIds: new Set<string>(), hiddenCreatorIds: new Set<string>() };
+}
+
+/** Resolve hide creator / not interested / blocks in parallel with feed SQL (see getFeed). */
+function loadFeedExclusions(viewerId?: string | null): Promise<FeedExclusionSets> {
+  if (!viewerId?.trim()) return Promise.resolve(emptyFeedExclusions());
+  return feedPerfLane('feedExclusions', () =>
+    feedSignalsService.listExclusions(viewerId).catch(() => emptyFeedExclusions()),
+  );
+}
+
+async function applyViewerFeedFilters(
+  posts: Post[],
+  viewerId?: string,
+  preloaded?: FeedExclusionSets,
+): Promise<Post[]> {
   if (!viewerId?.trim()) return posts;
   try {
-    const { hiddenPostIds, hiddenCreatorIds } = await feedSignalsService.listExclusions(viewerId);
+    const { hiddenPostIds, hiddenCreatorIds } = preloaded ?? (await feedSignalsService.listExclusions(viewerId));
     return posts.filter((p) => !hiddenPostIds.has(p.id) && !hiddenCreatorIds.has(p.creatorId));
   } catch {
     return posts;
@@ -335,7 +453,7 @@ async function runFriendsFeed(viewerId: string): Promise<Post[]> {
   if (!mutual.length) return [];
   let q = supabase
     .from('posts')
-    .select(POST_SELECT)
+    .select(POST_SELECT_FEED)
     .in('creator_id', mutual)
     .order('created_at', { ascending: false })
     .limit(60);
@@ -386,7 +504,7 @@ async function fetchTrendingForInjection(maxCount: number): Promise<Post[]> {
       .rpc('get_top_today', { feed_limit: maxCount });
     if (rpcError || !ranked?.length) return [];
     const ids = (ranked as { post_id: string }[]).map((r) => r.post_id);
-    const { data } = await supabase.from('posts').select(POST_SELECT).in('id', ids);
+    const { data } = await supabase.from('posts').select(POST_SELECT_FEED).in('id', ids);
     if (!data?.length) return [];
     const scoreMap = new Map(
       (ranked as { post_id: string; score: number }[]).map((r) => [r.post_id, r.score]),
@@ -431,6 +549,7 @@ function stitchTrending(personal: Post[], trending: Post[], every = 7): Post[] {
  *   5. Prepend the viewer's own recent posts (privacy=Followers safety net).
  */
 async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
+  const rankedRunT0 = feedPerfNow();
   const RECENT_FIRST = 15;
   const MAX_FEED = 50;
   const OWN_FIRST = 20;
@@ -438,28 +557,36 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
   const TRENDING_BUDGET = 12;    // worst case ~7 injections at every:7 across 50 slots
 
   const [ownRecent, recentPosts, rankedRpc, trendingPosts] = await Promise.all([
-    fetchOwnRecentPosts(viewerId, OWN_FIRST)
-      .then((p) => p.filter(postAppearsInMainFeeds))
-      .catch((e: any) => {
-        if (__DEV__) console.warn('getRankedFeed own slice failed:', e?.message);
+    feedPerfLane('ownRecent', () =>
+      fetchOwnRecentPosts(viewerId, OWN_FIRST)
+        .then((p) => p.filter(postAppearsInMainFeeds))
+        .catch((e: any) => {
+          if (__DEV__) console.warn('getRankedFeed own slice failed:', e?.message);
+          return [] as Post[];
+        }),
+    ),
+    feedPerfLane('recentChrono', () =>
+      fetchForYouPostsChronological(viewerId, RECENT_FIRST).catch((e: any) => {
+        if (__DEV__) console.warn('getRankedFeed recent slice failed:', e?.message);
         return [] as Post[];
       }),
-    fetchForYouPostsChronological(viewerId, RECENT_FIRST).catch((e: any) => {
-      if (__DEV__) console.warn('getRankedFeed recent slice failed:', e?.message);
-      return [] as Post[];
-    }),
-    callRankedRpc(viewerId, RPC_LIMIT).catch((e: any) => {
-      if (__DEV__) console.warn('get_ranked_feed RPC failed, falling back:', e?.message);
-      return [] as { post_id: string; score: number }[];
-    }),
-    fetchTrendingForInjection(TRENDING_BUDGET),
+    ),
+    feedPerfLane('rankedRpc', () =>
+      callRankedRpc(viewerId, RPC_LIMIT).catch((e: any) => {
+        if (__DEV__) console.warn('get_ranked_feed RPC failed, falling back:', e?.message);
+        return [] as { post_id: string; score: number }[];
+      }),
+    ),
+    feedPerfLane('trendingInject', () => fetchTrendingForInjection(TRENDING_BUDGET)),
   ]);
+  feedPerfLog('ranked:afterParallelLanes', rankedRunT0);
 
+  const hydrateT0 = feedPerfNow();
   let rankedPosts: Post[] = [];
   if (rankedRpc.length) {
     try {
       const ids = rankedRpc.map((r) => r.post_id);
-      const { data } = await supabase.from('posts').select(POST_SELECT).in('id', ids);
+      const { data } = await supabase.from('posts').select(POST_SELECT_FEED).in('id', ids);
       if (data?.length) {
         const scoreMap = new Map(rankedRpc.map((r) => [r.post_id, r.score]));
         rankedPosts = data
@@ -471,11 +598,14 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
       if (__DEV__) console.warn('getRankedFeed hydrate failed:', e?.message);
     }
   }
+  feedPerfLog('ranked:hydrateRankedPosts', hydrateT0);
 
   /* Last-ditch fallback: ranker dead AND fresh chronological dead -> try a wider chronological pull. */
   if (!rankedPosts.length && !recentPosts.length) {
     try {
+      const fbT0 = feedPerfNow();
       const chronological = await fetchForYouPostsChronological(viewerId, MAX_FEED);
+      feedPerfLog('ranked:fallbackChronoOnly', fbT0);
       return mergeOwnPostsFirst(ownRecent, chronological, MAX_FEED);
     } catch (e: any) {
       if (ownRecent.length) {
@@ -486,6 +616,7 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
     }
   }
 
+  const mergeT0 = feedPerfNow();
   const seen = new Set<string>();
   const merged: Post[] = [];
   for (const p of recentPosts) {
@@ -508,7 +639,10 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
      even when the personalization layer hasn't warmed up yet. */
   const stitched = stitchTrending(diversified, trendingPosts, 7);
 
-  return mergeOwnPostsFirst(ownRecent, stitched, MAX_FEED);
+  const out = mergeOwnPostsFirst(ownRecent, stitched, MAX_FEED);
+  feedPerfLog('ranked:mergeDiversifyStitch', mergeT0);
+  feedPerfLog('ranked:pipelineTotal', rankedRunT0, `posts=${out.length}`);
+  return out;
 }
 
 async function runTopTodayFeed(): Promise<Post[]> {
@@ -530,7 +664,7 @@ async function runTopTodayFeed(): Promise<Post[]> {
       const ids = ranked.map((r: any) => r.post_id);
       const { data, error } = await supabase
         .from('posts')
-        .select(POST_SELECT)
+        .select(POST_SELECT_FEED)
         .in('id', ids);
 
       if (!error && data?.length) {
@@ -546,7 +680,7 @@ async function runTopTodayFeed(): Promise<Post[]> {
 
   const { data, error } = await supabase
     .from('posts')
-    .select(POST_SELECT)
+    .select(POST_SELECT_FEED)
     .eq('privacy_mode', 'public')
     .gte('created_at', dayAgoIso)
     .order('created_at', { ascending: false })
@@ -559,44 +693,87 @@ async function runTopTodayFeed(): Promise<Post[]> {
 
 export const postsService = {
   async getFeed(type: FeedType, userId?: string): Promise<Post[]> {
-    if (type === 'community') return [];
+    const __feedT0 = __DEV__ && typeof performance !== 'undefined' ? performance.now() : 0;
+    try {
+      if (type === 'community') return [];
 
-    let posts: Post[];
+      const exclusionsPromise = loadFeedExclusions(userId);
+      let posts: Post[];
 
-    if (type === 'forYou' && userId) {
-      posts = await runRankedForYouFeed(userId);
-    } else if (type === 'topToday') {
-      posts = await runTopTodayFeed();
-    } else if (type === 'friends' && userId) {
-      posts = await runFriendsFeed(userId);
-    } else {
-      let query = supabase.from('posts').select(POST_SELECT);
-      query = withFeedPrivacy(query, userId);
-      query = query.order('created_at', { ascending: false }).limit(50);
-
-      if (type === 'forYou' && !userId) {
-        query = query.contains('feed_type_eligible', ['forYou']);
+      if (type === 'forYou' && userId) {
+        const fyT0 = feedPerfNow();
+        const [merged, ex] = await Promise.all([runRankedForYouFeed(userId), exclusionsPromise]);
+        feedPerfLog('getFeed:forYou ranked+exclusions settled', fyT0);
+        const filterT0 = feedPerfNow();
+        posts = await applyViewerFeedFilters(merged, userId, ex);
+        feedPerfLog('getFeed:forYou applyFilters', filterT0);
+        const finT0 = feedPerfNow();
+        const finalized = finalizePostsForViewer(posts, userId);
+        feedPerfLog('getFeed:forYou finalize', finT0);
+        return finalized;
       }
 
-      if (type === 'following') {
-        query = query.contains('feed_type_eligible', ['following']);
+      if (type === 'topToday') {
+        const [p, ex] = await Promise.all([runTopTodayFeed(), exclusionsPromise]);
+        posts = await applyViewerFeedFilters(p, userId, ex);
+        return finalizePostsForViewer(posts, userId);
       }
 
-      const { data, error } = await query;
-      if (error) {
-        console.error('getFeed error:', error);
-        throw error;
+      if (type === 'friends' && userId) {
+        const [p, ex] = await Promise.all([runFriendsFeed(userId), exclusionsPromise]);
+        posts = await applyViewerFeedFilters(p, userId, ex);
+        return finalizePostsForViewer(posts, userId);
       }
-      posts = (data ?? []).map(rowToPost).filter(postAppearsInMainFeeds);
+
+      {
+        let query = supabase.from('posts').select(POST_SELECT_FEED);
+        query = withFeedPrivacy(query, userId);
+        query = query.order('created_at', { ascending: false }).limit(50);
+
+        if (type === 'forYou' && !userId) {
+          query = query.contains('feed_type_eligible', ['forYou']);
+        }
+
+        if (type === 'following') {
+          query = query.contains('feed_type_eligible', ['following']);
+        }
+
+        const [result, ex] = await Promise.all([query, exclusionsPromise]);
+        const { data, error } = result;
+        if (error) {
+          console.error('getFeed error:', error);
+          throw error;
+        }
+        posts = await applyViewerFeedFilters(
+          (data ?? []).map(rowToPost).filter(postAppearsInMainFeeds),
+          userId,
+          ex,
+        );
+      }
+
+      return finalizePostsForViewer(posts, userId);
+    } finally {
+      if (__DEV__ && typeof performance !== 'undefined' && type !== 'community') {
+        console.log(
+          `[perf] postsService.getFeed(${type}) ${(performance.now() - __feedT0).toFixed(0)}ms`,
+        );
+      }
     }
-
-    return finalizePostsForViewer(await applyViewerFeedFilters(posts, userId), userId);
   },
 
   async getLikedPostIdsForUser(userId: string): Promise<Set<string>> {
     const { data, error } = await supabase.from('post_likes').select('post_id').eq('user_id', userId).limit(2000);
     if (error) {
       if (__DEV__) console.warn('[getLikedPostIdsForUser]', error.message);
+      return new Set();
+    }
+    return new Set((data ?? []).map((r: { post_id: string }) => r.post_id));
+  },
+
+  async getSavedPostIdsForUser(userId: string): Promise<Set<string>> {
+    const { data, error } = await supabase.from('saved_posts').select('post_id').eq('user_id', userId).limit(2000);
+    if (error) {
+      if (__DEV__) console.warn('[getSavedPostIdsForUser]', error.message);
       return new Set();
     }
     return new Set((data ?? []).map((r: { post_id: string }) => r.post_id));
@@ -609,56 +786,74 @@ export const postsService = {
     excludeIds: string[];
     limit?: number;
   }): Promise<{ posts: Post[]; nextCursor: string | null }> {
+    const __contT0 = __DEV__ && typeof performance !== 'undefined' ? performance.now() : 0;
     const { type, viewerId, cursor, excludeIds } = args;
     const limit = args.limit ?? 18;
     const exclude = new Set(excludeIds);
 
-    if (type === 'community') return { posts: [], nextCursor: null };
+    try {
+      if (type === 'community') return { posts: [], nextCursor: null };
 
-    if (type === 'friends' && viewerId) {
-      const mutual = await fetchMutualFollowCreatorIds(viewerId);
-      if (!mutual.length) return { posts: [], nextCursor: null };
-      let q = supabase
+      if (type === 'friends' && viewerId) {
+        const [mutual, exclusions] = await Promise.all([
+          fetchMutualFollowCreatorIds(viewerId),
+          loadFeedExclusions(viewerId),
+        ]);
+        if (!mutual.length) return { posts: [], nextCursor: null };
+        let q = supabase
+          .from('posts')
+          .select(POST_SELECT_FEED)
+          .in('creator_id', mutual)
+          .lt('created_at', cursor)
+          .order('created_at', { ascending: false })
+          .limit(limit * 2);
+        q = withFeedPrivacy(q, viewerId);
+        const { data, error } = await q;
+        if (error) throw error;
+        let posts = (data ?? [])
+          .map(rowToPost)
+          .filter((p) => !exclude.has(p.id) && postAppearsInMainFeeds(p));
+        posts = finalizePostsForViewer(await applyViewerFeedFilters(posts, viewerId, exclusions), viewerId);
+        posts = posts.slice(0, limit);
+        const nextCursor = posts.length ? posts[posts.length - 1].createdAt : null;
+        return { posts, nextCursor };
+      }
+
+      let query = supabase
         .from('posts')
-        .select(POST_SELECT)
-        .in('creator_id', mutual)
+        .select(POST_SELECT_FEED)
         .lt('created_at', cursor)
         .order('created_at', { ascending: false })
         .limit(limit * 2);
-      q = withFeedPrivacy(q, viewerId);
-      const { data, error } = await q;
+
+      query = withFeedPrivacy(query, viewerId);
+
+      if (type === 'forYou') {
+        query = query.contains('feed_type_eligible', ['forYou']);
+      } else if (type === 'following') {
+        query = query.contains('feed_type_eligible', ['following']);
+      } else if (type === 'topToday') {
+        const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', dayAgoIso);
+      }
+
+      const [result, exclusions] = await Promise.all([query, loadFeedExclusions(viewerId)]);
+      const { data, error } = result;
       if (error) throw error;
       let posts = (data ?? [])
         .map(rowToPost)
         .filter((p) => !exclude.has(p.id) && postAppearsInMainFeeds(p));
-      posts = finalizePostsForViewer(await applyViewerFeedFilters(posts, viewerId), viewerId);
+      posts = finalizePostsForViewer(await applyViewerFeedFilters(posts, viewerId, exclusions), viewerId);
       posts = posts.slice(0, limit);
-      const nextCursor = posts.length ? posts[posts.length - 1].createdAt : null;
+      const nextCursor = posts.length === limit ? posts[posts.length - 1].createdAt : null;
       return { posts, nextCursor };
+    } finally {
+      if (__DEV__ && typeof performance !== 'undefined' && type !== 'community') {
+        console.log(
+          `[perf] postsService.getFeedContinuation(${type}) ${(performance.now() - __contT0).toFixed(0)}ms`,
+        );
+      }
     }
-
-    let query = supabase.from('posts').select(POST_SELECT).lt('created_at', cursor).order('created_at', { ascending: false }).limit(limit * 2);
-
-    query = withFeedPrivacy(query, viewerId);
-
-    if (type === 'forYou') {
-      query = query.contains('feed_type_eligible', ['forYou']);
-    } else if (type === 'following') {
-      query = query.contains('feed_type_eligible', ['following']);
-    } else if (type === 'topToday') {
-      const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      query = query.gte('created_at', dayAgoIso);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    let posts = (data ?? [])
-      .map(rowToPost)
-      .filter((p) => !exclude.has(p.id) && postAppearsInMainFeeds(p));
-    posts = finalizePostsForViewer(await applyViewerFeedFilters(posts, viewerId), viewerId);
-    posts = posts.slice(0, limit);
-    const nextCursor = posts.length === limit ? posts[posts.length - 1].createdAt : null;
-    return { posts, nextCursor };
   },
 
   async getPostsByHashtag(tag: string, limit = 40, viewerId?: string | null): Promise<Post[]> {
@@ -697,11 +892,16 @@ export const postsService = {
   getTopToday: runTopTodayFeed,
 
   async trackView(postId: string, viewerId: string, durationMs: number): Promise<void> {
-    await supabase.from('post_views').insert({
+    enqueuePostView({
       post_id: postId,
       viewer_id: viewerId,
       view_duration_ms: durationMs,
-    }).then(() => {});
+    });
+  },
+
+  /** Flush queued view rows (e.g. tab unmount) so completion signals are not lost. */
+  async flushPostViewQueue(): Promise<void> {
+    await flushPostViewQueueInternal();
   },
 
   async getFeedPaginated(
@@ -1147,9 +1347,60 @@ export const postsService = {
       await supabase.from('post_likes').delete().eq('id', existing.id);
       return false;
     } else {
-      await supabase.from('post_likes').insert({ user_id: userId, post_id: postId });
+      await supabase.from('post_likes').insert({ user_id: userId, post_id: postId, reaction: 'heart' });
       return true;
     }
+  },
+
+  /**
+   * Circle wall: one reaction row per user; `null` removes. Feed still uses {@link toggleLike} (heart).
+   */
+  async setPostReaction(userId: string, postId: string, kind: PostReactionKind | null): Promise<void> {
+    if (!kind) {
+      const { error } = await supabase.from('post_likes').delete().eq('user_id', userId).eq('post_id', postId);
+      if (error) throw error;
+      return;
+    }
+    const { data: existing, error: exErr } = await supabase
+      .from('post_likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('post_id', postId)
+      .maybeSingle();
+    if (exErr) throw exErr;
+    if (existing) {
+      const { error } = await supabase
+        .from('post_likes')
+        .update({ reaction: kind })
+        .eq('id', (existing as { id: string }).id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('post_likes')
+        .insert({ user_id: userId, post_id: postId, reaction: kind });
+      if (error) throw error;
+    }
+  },
+
+  /** Viewer-scoped reaction pick for a batch of posts (circle room cards). */
+  async getViewerReactionsForPosts(
+    userId: string,
+    postIds: string[],
+  ): Promise<Partial<Record<string, PostReactionKind>>> {
+    if (postIds.length === 0) return {};
+    const { data, error } = await supabase
+      .from('post_likes')
+      .select('post_id, reaction')
+      .eq('user_id', userId)
+      .in('post_id', postIds);
+    if (error) throw error;
+    const out: Partial<Record<string, PostReactionKind>> = {};
+    for (const row of data ?? []) {
+      const r = row as { post_id: string; reaction: string };
+      const k = normalizePostReactionKind(r.reaction);
+      if (k) out[r.post_id] = k;
+    }
+    return out;
   },
 
   async getSavedPosts(userId: string): Promise<Post[]> {

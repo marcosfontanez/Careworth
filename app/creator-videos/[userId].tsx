@@ -28,6 +28,7 @@ import { PulseHistorySheet } from '@/components/mypage/PulseHistorySheet';
 import { PulseScorePill } from '@/components/mypage/PulseScorePill';
 import type { Post, UserProfile } from '@/types';
 import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { avatarThumb } from '@/lib/storage';
 import { usePulseScorePillModel } from '@/hooks/usePulseScorePillModel';
@@ -212,6 +213,7 @@ export default function CreatorVideosGridScreen() {
                     style={styles.avatar}
                     contentFit="cover"
                     transition={120}
+                    {...pulseImageListThumbProps}
                   />
                   <View style={styles.avatarRing} pointerEvents="none" />
                 </View>
@@ -260,6 +262,10 @@ export default function CreatorVideosGridScreen() {
           columnWrapperStyle={{ gap: GAP, paddingHorizontal: PAD }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24, gap: GAP }}
           removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={colors.primary.teal} />
           }

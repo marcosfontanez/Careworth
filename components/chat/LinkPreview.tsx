@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { colors } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 interface LinkMeta {
   url: string;
@@ -66,7 +67,12 @@ export function LinkPreview({ url }: { url: string }) {
       activeOpacity={0.7}
     >
       {meta.image && (
-        <Image source={{ uri: meta.image }} style={styles.image} contentFit="cover" />
+        <Image
+          source={{ uri: meta.image }}
+          style={styles.image}
+          contentFit="cover"
+          {...pulseImageListThumbProps}
+        />
       )}
       <View style={styles.body}>
         <Text style={styles.domain}>{new URL(url).hostname}</Text>

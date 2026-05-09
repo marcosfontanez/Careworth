@@ -28,6 +28,7 @@ import { useEventListener } from 'expo';
 import { trySignedUrlFromPostMediaPublicUrl, avatarThumb } from '@/lib/storage';
 import { pickAbCoverUrl } from '@/lib/coverAbPoster';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { usePostCoverAbImpression } from '@/hooks/usePostCoverAbImpression';
 import { usePost } from '@/hooks/useQueries';
 import { useRouter } from 'expo-router';
@@ -56,12 +57,18 @@ interface Props {
   onLongPress?: () => void;
   /** Swipe left (TikTok-style) → open this creator’s video grid; video + non-anonymous only. */
   onOpenCreatorVideos?: () => void;
+  /**
+   * From the feed tab: increments on `AppState` → `active` so the *active* cell
+   * remounts `expo-video` after long background (recovers black decoder surfaces).
+   */
+  videoSurfaceEpoch?: number;
 }
 
 function VideoFeedPostInner({
   post, viewportHeight, isActive, isLiked, isSaved, isFollowing,
   onLike, onComment, onSave, onShare, onFollow, onProfile,
   onCommunity, onHashtag, onReport, onLongPress, onOpenCreatorVideos,
+  videoSurfaceEpoch = 0,
 }: Props) {
   const router = useRouter();
   usePostCoverAbImpression(post, isActive);
@@ -236,7 +243,7 @@ function VideoFeedPostInner({
       {hasVideo ? (
         <>
           <FeedVideoPlayer
-            key={videoUri}
+            key={`${videoUri}|${isActive ? videoSurfaceEpoch : 0}`}
             uri={videoUri}
             paused={paused}
             isActive={isActive}
@@ -272,6 +279,7 @@ function VideoFeedPostInner({
                 source={{ uri }}
                 style={{ width: SCREEN_W, height: pageH }}
                 contentFit="cover"
+                {...pulseImageFeedHeroProps}
               />
             ))}
           </ScrollView>
@@ -285,7 +293,12 @@ function VideoFeedPostInner({
           </View>
         </View>
       ) : posterUri || (post.type === 'image' && post.mediaUrl) ? (
-        <Image source={{ uri: posterUri || post.mediaUrl }} style={styles.bg} contentFit="cover" />
+        <Image
+          source={{ uri: posterUri || post.mediaUrl }}
+          style={styles.bg}
+          contentFit="cover"
+          {...pulseImageFeedHeroProps}
+        />
       ) : (
         <View style={[styles.bg, styles.textBg]}>
           {post.type === 'video' && !videoUri ? (
@@ -516,6 +529,7 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
   if (prev.isSaved !== next.isSaved) return false;
   if (prev.isFollowing !== next.isFollowing) return false;
   if (prev.viewportHeight !== next.viewportHeight) return false;
+  if ((prev.videoSurfaceEpoch ?? 0) !== (next.videoSurfaceEpoch ?? 0)) return false;
 
   const p = prev.post;
   const n = next.post;

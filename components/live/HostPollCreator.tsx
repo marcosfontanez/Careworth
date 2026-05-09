@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography, shadows } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 interface Props {
   visible: boolean;
@@ -137,47 +138,77 @@ export function HostPollCreator({ visible, onClose, onSubmit }: Props) {
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.label}>Question</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="What do you want to ask viewers?"
-              placeholderTextColor={colors.dark.textMuted}
-              value={question}
-              onChangeText={setQuestion}
-              maxLength={QUESTION_MAX}
-              multiline
-            />
-            <Text style={styles.charCount}>
-              {question.length}/{QUESTION_MAX}
-            </Text>
+            <AccentComposerFrame
+              accentColor={colors.primary.teal}
+              hint="Poll question"
+              compact
+              noShadow
+              footer={
+                <AccentCharCount
+                  length={question.length}
+                  max={QUESTION_MAX}
+                  accentColor={colors.primary.teal}
+                  warnWithin={20}
+                  hideWhenEmpty={false}
+                />
+              }
+            >
+              <TextInput
+                style={styles.inputPlain}
+                placeholder="What do you want to ask viewers?"
+                placeholderTextColor={colors.dark.textMuted}
+                value={question}
+                onChangeText={setQuestion}
+                maxLength={QUESTION_MAX}
+                multiline
+              />
+            </AccentComposerFrame>
 
             <Text style={styles.label}>Options</Text>
             {options.map((opt, i) => (
-              <View key={opt.id} style={styles.optionRow}>
-                <View style={styles.optionIndex}>
-                  <Text style={styles.optionIndexText}>{i + 1}</Text>
+              <AccentComposerFrame
+                key={opt.id}
+                accentColor={colors.primary.teal}
+                compact
+                noShadow
+                style={styles.optionFrame}
+                footer={
+                  <AccentCharCount
+                    length={opt.text.length}
+                    max={OPTION_MAX}
+                    accentColor={colors.primary.teal}
+                    warnWithin={12}
+                    hideWhenEmpty={false}
+                  />
+                }
+              >
+                <View style={styles.optionRow}>
+                  <View style={styles.optionIndex}>
+                    <Text style={styles.optionIndexText}>{i + 1}</Text>
+                  </View>
+                  <TextInput
+                    style={styles.optionInputPlain}
+                    placeholder={`Option ${i + 1}`}
+                    placeholderTextColor={colors.dark.textMuted}
+                    value={opt.text}
+                    onChangeText={(t) => updateOption(opt.id, t)}
+                    maxLength={OPTION_MAX}
+                  />
+                  {options.length > 2 && (
+                    <TouchableOpacity
+                      onPress={() => removeOption(opt.id)}
+                      hitSlop={8}
+                      style={styles.optionRemove}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={20}
+                        color={colors.dark.textMuted}
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <TextInput
-                  style={styles.optionInput}
-                  placeholder={`Option ${i + 1}`}
-                  placeholderTextColor={colors.dark.textMuted}
-                  value={opt.text}
-                  onChangeText={(t) => updateOption(opt.id, t)}
-                  maxLength={OPTION_MAX}
-                />
-                {options.length > 2 && (
-                  <TouchableOpacity
-                    onPress={() => removeOption(opt.id)}
-                    hitSlop={8}
-                    style={styles.optionRemove}
-                  >
-                    <Ionicons
-                      name="close-circle"
-                      size={20}
-                      color={colors.dark.textMuted}
-                    />
-                  </TouchableOpacity>
-                )}
-              </View>
+              </AccentComposerFrame>
             ))}
 
             {options.length < MAX_OPTIONS && (
@@ -279,29 +310,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.md,
   },
-  input: {
-    backgroundColor: colors.dark.elevated,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md - 2,
-    paddingVertical: spacing.md,
+  inputPlain: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
     fontSize: 15,
     color: colors.dark.text,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.borderInner,
-    minHeight: 54,
+    minHeight: 48,
     textAlignVertical: 'top',
   },
-  charCount: {
-    ...typography.caption,
-    color: colors.dark.textMuted,
-    textAlign: 'right',
-    marginTop: spacing.xs,
-  },
+  optionFrame: { marginBottom: spacing.sm },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
   },
   optionIndex: {
     width: 28,
@@ -316,16 +337,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.primary.teal,
   },
-  optionInput: {
+  optionInputPlain: {
     flex: 1,
-    backgroundColor: colors.dark.elevated,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md - 2,
-    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
     fontSize: 14,
     color: colors.dark.text,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.borderInner,
   },
   optionRemove: { padding: 4 },
   addOptionBtn: {

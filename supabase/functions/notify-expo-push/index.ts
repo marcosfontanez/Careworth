@@ -12,7 +12,17 @@ const corsHeaders: Record<string, string> = {
     "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
-const CIRCLE_THREAD_REPLY_MESSAGE = "New reply in your circle thread";
+const LEGACY_CIRCLE_THREAD_REPLY_MESSAGE = "New reply in your circle thread";
+
+function isCircleThreadPush(
+  type: string,
+  message: string,
+): boolean {
+  return (
+    type === "circle_thread_reply" ||
+    (type === "reply" && message === LEGACY_CIRCLE_THREAD_REPLY_MESSAGE)
+  );
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -75,7 +85,7 @@ Deno.serve(async (req) => {
 
   const data: Record<string, string> = {};
 
-  if (type === "reply" && message === CIRCLE_THREAD_REPLY_MESSAGE && targetId && communityId) {
+  if (isCircleThreadPush(type, message) && targetId && communityId) {
     const { data: comm } = await supabase
       .from("communities")
       .select("slug")
@@ -109,6 +119,23 @@ Deno.serve(async (req) => {
   } else if (type === "new_follower" && targetId) {
     data.profileId = targetId;
     data.url = `${site}/profile/${targetId}`;
+  } else if (type === "circle_new_post" && targetId) {
+    data.postId = targetId;
+    if (communityId) {
+      const { data: comm } = await supabase
+        .from("communities")
+        .select("slug")
+        .eq("id", communityId)
+        .maybeSingle();
+      if (comm?.slug) {
+        data.circleSlug = comm.slug;
+        data.url = `${site}/post/${targetId}?circle=${encodeURIComponent(comm.slug)}`;
+      } else {
+        data.url = `${site}/post/${targetId}`;
+      }
+    } else {
+      data.url = `${site}/post/${targetId}`;
+    }
   } else if (type === "community_invite" && targetId) {
     const { data: comm } = await supabase
       .from("communities")

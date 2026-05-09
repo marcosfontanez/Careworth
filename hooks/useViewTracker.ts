@@ -27,13 +27,14 @@ export function useViewTracker(userId?: string) {
 
   useEffect(() => {
     return () => {
-      // Flush remaining views on unmount
       viewTimers.current.forEach((start, postId) => {
         const duration = Date.now() - start;
         if (duration > 2000 && userId && !tracked.current.has(postId)) {
+          tracked.current.add(postId);
           postsService.trackView(postId, userId, duration).catch(() => {});
         }
       });
+      void postsService.flushPostViewQueue();
     };
   }, [userId]);
 

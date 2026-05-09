@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import { Image } from 'expo-image';
 import { usePost } from '@/hooks/useQueries';
 import { colors, typography } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const STRIP_W = Math.round(SCREEN_W * 0.34);
@@ -14,7 +15,12 @@ export function DuetParentPreview({ parentPostId, pageHeight }: { parentPostId: 
   return (
     <View style={[styles.strip, { width: STRIP_W, height: pageHeight }]} pointerEvents="none">
       {uri ? (
-        <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+        <Image
+          source={{ uri }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          {...pulseImageListThumbProps}
+        />
       ) : (
         <View style={[styles.ph, { height: pageHeight }]} />
       )}

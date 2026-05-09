@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -22,6 +23,7 @@ export default function ImageViewerScreen() {
         source={{ uri: decodeURIComponent(uri ?? '') }}
         style={styles.image}
         contentFit="contain"
+        {...pulseImageFeedHeroProps}
       />
 
       <TouchableOpacity

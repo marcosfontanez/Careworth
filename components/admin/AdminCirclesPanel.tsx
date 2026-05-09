@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { communitiesService } from '@/services/supabase';
 import { adminCirclesService, normalizeCommunitySlug } from '@/services/adminCircles';
 import { communityKeys } from '@/lib/queryKeys';
@@ -108,7 +109,7 @@ export function AdminCirclesPanel() {
   const invalidateAfterCuration = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: communityKeys.listAll() });
     queryClient.invalidateQueries({ queryKey: communityKeys.circlesHome() });
-    queryClient.invalidateQueries({ queryKey: communityKeys.circlesFeaturedFull() });
+    queryClient.invalidateQueries({ queryKey: communityKeys.circlesDirectoryAlpha() });
   }, [queryClient]);
 
   const onRefresh = async () => {
@@ -229,45 +230,73 @@ export function AdminCirclesPanel() {
     >
       <Text style={styles.sectionTitle}>Create circle</Text>
       <Text style={styles.hint}>Slug is auto-normalized (lowercase, hyphens). Leave slug empty to derive from name.</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Slug (optional)"
-        placeholderTextColor={colors.neutral.midGray}
-        value={newSlug}
-        onChangeText={setNewSlug}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Display name"
-        placeholderTextColor={colors.neutral.midGray}
-        value={newName}
-        onChangeText={setNewName}
-      />
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        placeholder="Description"
-        placeholderTextColor={colors.neutral.midGray}
-        value={newDescription}
-        onChangeText={setNewDescription}
-        multiline
-      />
-      <View style={styles.row}>
+      <AccentComposerFrame
+        accentColor={colors.primary.teal}
+        hint="Slug (optional)"
+        compact
+        noShadow
+        style={{ marginBottom: 10 }}
+      >
         <TextInput
-          style={[styles.input, { flex: 1 }]}
-          placeholder="Icon emoji"
+          style={styles.inputPlain}
+          placeholder="Slug (optional)"
           placeholderTextColor={colors.neutral.midGray}
-          value={newIcon}
-          onChangeText={setNewIcon}
-        />
-        <TextInput
-          style={[styles.input, { flex: 2, marginLeft: 8 }]}
-          placeholder="Accent #hex"
-          placeholderTextColor={colors.neutral.midGray}
-          value={newAccent}
-          onChangeText={setNewAccent}
+          value={newSlug}
+          onChangeText={setNewSlug}
           autoCapitalize="none"
         />
+      </AccentComposerFrame>
+      <AccentComposerFrame
+        accentColor={colors.primary.teal}
+        hint="Display name"
+        compact
+        noShadow
+        style={{ marginBottom: 10 }}
+      >
+        <TextInput
+          style={styles.inputPlain}
+          placeholder="Display name"
+          placeholderTextColor={colors.neutral.midGray}
+          value={newName}
+          onChangeText={setNewName}
+        />
+      </AccentComposerFrame>
+      <AccentComposerFrame
+        accentColor={colors.primary.teal}
+        hint="Description"
+        compact
+        noShadow
+        style={{ marginBottom: 10 }}
+      >
+        <TextInput
+          style={[styles.inputPlain, styles.multiline]}
+          placeholder="Description"
+          placeholderTextColor={colors.neutral.midGray}
+          value={newDescription}
+          onChangeText={setNewDescription}
+          multiline
+        />
+      </AccentComposerFrame>
+      <View style={styles.row}>
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Icon" compact noShadow style={{ flex: 1 }}>
+          <TextInput
+            style={styles.inputPlain}
+            placeholder="Icon emoji"
+            placeholderTextColor={colors.neutral.midGray}
+            value={newIcon}
+            onChangeText={setNewIcon}
+          />
+        </AccentComposerFrame>
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Accent hex" compact noShadow style={{ flex: 2 }}>
+          <TextInput
+            style={styles.inputPlain}
+            placeholder="Accent #hex"
+            placeholderTextColor={colors.neutral.midGray}
+            value={newAccent}
+            onChangeText={setNewAccent}
+            autoCapitalize="none"
+          />
+        </AccentComposerFrame>
       </View>
       <TouchableOpacity
         style={[styles.primaryBtn, creating && styles.btnDisabled]}
@@ -305,14 +334,16 @@ export function AdminCirclesPanel() {
             <Text style={styles.circleName}>{c.icon} {c.name}</Text>
             <Text style={styles.circleSlug}>{c.slug}</Text>
           </View>
-          <TextInput
-            style={styles.orderInput}
-            keyboardType="number-pad"
-            placeholder="—"
-            placeholderTextColor={colors.neutral.midGray}
-            value={featuredDraft[c.id] ?? ''}
-            onChangeText={(t) => setFeaturedDraft((prev) => ({ ...prev, [c.id]: t }))}
-          />
+          <AccentComposerFrame accentColor={colors.primary.teal} hint="Rank" compact noShadow style={styles.orderFrame}>
+            <TextInput
+              style={styles.orderPlain}
+              keyboardType="number-pad"
+              placeholder="—"
+              placeholderTextColor={colors.neutral.midGray}
+              value={featuredDraft[c.id] ?? ''}
+              onChangeText={(t) => setFeaturedDraft((prev) => ({ ...prev, [c.id]: t }))}
+            />
+          </AccentComposerFrame>
         </View>
       ))}
 
@@ -372,14 +403,16 @@ export function AdminCirclesPanel() {
 
           <Text style={styles.subheading}>Pin by post ID</Text>
           <View style={styles.row}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="Post UUID"
-              placeholderTextColor={colors.neutral.midGray}
-              value={postIdInput}
-              onChangeText={setPostIdInput}
-              autoCapitalize="none"
-            />
+            <AccentComposerFrame accentColor={colors.primary.teal} hint="Post UUID" compact noShadow style={{ flex: 1 }}>
+              <TextInput
+                style={styles.inputPlain}
+                placeholder="Post UUID"
+                placeholderTextColor={colors.neutral.midGray}
+                value={postIdInput}
+                onChangeText={setPostIdInput}
+                autoCapitalize="none"
+              />
+            </AccentComposerFrame>
             <TouchableOpacity style={styles.smallPrimary} onPress={() => pinPostById(postIdInput)}>
               <Text style={styles.smallPrimaryText}>Pin</Text>
             </TouchableOpacity>
@@ -441,18 +474,22 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 18,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  inputPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     color: colors.dark.text,
-    marginBottom: 10,
     fontSize: 15,
   },
   multiline: { minHeight: 72, textAlignVertical: 'top' },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
+  orderFrame: { width: 72 },
+  orderPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    textAlign: 'center',
+    color: colors.dark.text,
+    fontSize: 15,
+  },
   primaryBtn: {
     backgroundColor: colors.primary.teal,
     paddingVertical: 14,
@@ -479,17 +516,6 @@ const styles = StyleSheet.create({
   },
   circleName: { fontSize: 15, fontWeight: '600', color: colors.dark.text },
   circleSlug: { fontSize: 12, color: colors.dark.textMuted, marginTop: 2 },
-  orderInput: {
-    width: 56,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    textAlign: 'center',
-    color: colors.dark.text,
-    fontSize: 15,
-  },
   chipScroll: { marginBottom: 8, maxHeight: 44 },
   chip: {
     paddingHorizontal: 14,

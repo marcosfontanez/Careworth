@@ -3,6 +3,8 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { completeSupabaseOAuthFromUrl, parseOAuthCallbackParams } from '@/lib/oauthNative';
+import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
+import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
 import { colors } from '@/theme';
 
 /**
@@ -31,13 +33,13 @@ export default function AuthCallbackScreen() {
       const tryUrl = initial?.includes('auth/callback') ? initial : buildFromRouterParams();
 
       if (!tryUrl) {
-        router.replace('/');
+        schedulePostSignInNavigation(router);
         return;
       }
 
       const parsed = parseOAuthCallbackParams(tryUrl);
       if (!parsed.code && !parsed.access_token && !parsed.error) {
-        router.replace('/');
+        schedulePostSignInNavigation(router);
         return;
       }
 
@@ -46,11 +48,12 @@ export default function AuthCallbackScreen() {
 
       if (error) {
         console.warn('[auth/callback]', error.message);
+        resetRootIndexRedirectDedupe();
         router.replace('/auth/login');
         return;
       }
 
-      router.replace('/');
+      schedulePostSignInNavigation(router);
     }
 
     handleCallback();

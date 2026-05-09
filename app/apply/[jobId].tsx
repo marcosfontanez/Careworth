@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { analytics } from '@/lib/analytics';
 import { useToast } from '@/components/ui/Toast';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 export default function ApplyScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
@@ -87,46 +88,50 @@ export default function ApplyScreen() {
       )}
 
       <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>Full Name *</Text>
-        <TextInput
-          style={styles.input}
-          value={fullName}
-          onChangeText={setFullName}
-          placeholder="Your full name"
-          placeholderTextColor={colors.dark.textMuted}
-        />
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Full name (required)" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={fullName}
+            onChangeText={setFullName}
+            placeholder="Your full name"
+            placeholderTextColor={colors.dark.textMuted}
+          />
+        </AccentComposerFrame>
 
-        <Text style={styles.label}>Email *</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="your@email.com"
-          placeholderTextColor={colors.dark.textMuted}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Email (required)" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="your@email.com"
+            placeholderTextColor={colors.dark.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </AccentComposerFrame>
 
-        <Text style={styles.label}>Phone</Text>
-        <TextInput
-          style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="(555) 000-0000"
-          placeholderTextColor={colors.dark.textMuted}
-          keyboardType="phone-pad"
-        />
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Phone (optional)" compact noShadow>
+          <TextInput
+            style={styles.inputPlain}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="(555) 000-0000"
+            placeholderTextColor={colors.dark.textMuted}
+            keyboardType="phone-pad"
+          />
+        </AccentComposerFrame>
 
-        <Text style={styles.label}>Cover Letter</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={coverLetter}
-          onChangeText={setCoverLetter}
-          placeholder="Tell the employer why you're a great fit for this role..."
-          placeholderTextColor={colors.dark.textMuted}
-          multiline
-          textAlignVertical="top"
-        />
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="Cover letter (optional)" compact noShadow>
+          <TextInput
+            style={[styles.inputPlain, styles.textArea]}
+            value={coverLetter}
+            onChangeText={setCoverLetter}
+            placeholder="Tell the employer why you're a great fit for this role..."
+            placeholderTextColor={colors.dark.textMuted}
+            multiline
+            textAlignVertical="top"
+          />
+        </AccentComposerFrame>
 
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={iconSize.md} color={colors.primary.teal} />
@@ -166,24 +171,13 @@ const styles = StyleSheet.create({
   },
   jobTitle: { ...typography.sectionTitle, fontSize: 16, color: colors.dark.text },
   jobCompany: { ...typography.bodySmall, color: colors.dark.textMuted, marginTop: 2 },
-  form: { padding: layout.screenPadding, gap: spacing.xs, paddingBottom: spacing['4xl'] },
-  label: {
-    ...typography.sectionLabel,
-    color: colors.dark.textSecondary,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + spacing.xs,
+  form: { padding: layout.screenPadding, gap: spacing.md, paddingBottom: spacing['4xl'] },
+  inputPlain: {
     fontSize: 15,
     color: colors.dark.text,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
+    paddingVertical: 4,
   },
-  textArea: { minHeight: 120, paddingTop: spacing.md + spacing.xs },
+  textArea: { minHeight: 120, textAlignVertical: 'top' },
   infoBox: {
     flexDirection: 'row',
     gap: spacing.sm,

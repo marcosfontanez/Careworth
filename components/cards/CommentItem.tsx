@@ -248,7 +248,19 @@ export function CommentItem({
       )}
       <View style={styles.body}>
         <View style={styles.headerRow}>
-          <Text style={styles.name}>{isDeleted ? 'Removed' : displayName}</Text>
+          {!anonymousMode && !isDeleted && comment.author.id ? (
+            <TouchableOpacity
+              onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 4, bottom: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${displayName} profile`}
+            >
+              <Text style={styles.name}>{displayName}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.name}>{isDeleted ? 'Removed' : displayName}</Text>
+          )}
           {!anonymousMode && !isDeleted ? <RoleBadge role={comment.author.role} size="sm" /> : null}
           {/*
             Pulse tier chip next to role. Hides for Murmur (0–19) so new

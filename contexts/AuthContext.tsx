@@ -1,16 +1,18 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { signInWithOAuthNative } from '@/lib/oauthNative';
 import { signInWithAppleAdaptive } from '@/lib/appleAuthNative';
-import { normalizePhoneE164 } from '@/lib/phoneE164';
 import { analytics } from '@/lib/analytics';
 import { LAUNCH_LINKS } from '@/constants/launch';
-import type { Session, User } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { useProfileCustomization } from '@/store/useProfileCustomization';
 import { useAppStore } from '@/store/useAppStore';
 import { PROFILE_SELECT_WITH_AVATAR_FRAME } from '@/services/supabase/profiles';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
+import { validateServerAuthSession } from '@/lib/authSessionGuard';
+import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
 
 interface AuthState {
   session: Session | null;
@@ -18,6 +20,11 @@ interface AuthState {
   profile: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /**
+   * Incremented on each successful sign-in (`SIGNED_IN` + inline email hydrate) so consumers like
+   * {@link BetaTesterBorderGate} can re-run idempotent post-login checks even when `user.id` is unchanged.
+   */
+  betaGiftCheckNonce: number;
 }
 
 interface AuthContextValue extends AuthState {
@@ -26,19 +33,49 @@ interface AuthContextValue extends AuthState {
     email: string,
     password: string,
     fullName: string,
-    termsAcceptedAtIso: string,
     preferredUsername: string,
   ) => Promise<{ error: Error | null }>;
-  signInWithPhone: (phone: string) => Promise<{ error: Error | null }>;
-  verifyOtp: (phone: string, token: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signInWithApple: () => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** Merge fields into the cached profile (e.g. after legal-ack save) without waiting on a full hydrate. */
+  applyProfilePatch: (patch: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * `app/index.tsx` stays on a blank shell while `isLoading` is true. Login uses
+ * `onAuthStateChange`, which had no timeout — a stuck PostgREST call could leave
+ * hydration pending forever. Cold boot only had a 12s failsafe on `getSession`.
+ */
+const PROFILE_HYDRATE_TIMEOUT_MS = 18_000;
+
+async function fetchProfileWithTimeout(
+  fetchProfile: (userId: string) => Promise<UserProfile | null>,
+  userId: string,
+): Promise<UserProfile | null> {
+  try {
+    return await Promise.race([
+      fetchProfile(userId),
+      new Promise<UserProfile | null>((resolve) => {
+        setTimeout(() => {
+          if (__DEV__) {
+            console.warn(
+              `[auth] Profile hydrate timed out after ${PROFILE_HYDRATE_TIMEOUT_MS}ms — clearing loading gate`,
+            );
+          }
+          resolve(null);
+        }, PROFILE_HYDRATE_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (e) {
+    console.error('[auth] fetchProfileWithTimeout', e);
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -47,7 +84,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile: null,
     isLoading: true,
     isAuthenticated: false,
+    betaGiftCheckNonce: 0,
   });
+
+  /**
+   * Suppresses stale profile hydrates when `getSession` and `onAuthStateChange` overlap, or when
+   * React Strict Mode tears down the listener while an async hydrate is in flight (otherwise `finally`
+   * could be skipped and `isLoading` stays `true` — index never routes off the black shell until cold start).
+   */
+  const authHydrateGenerationRef = useRef(0);
+  /**
+   * While email/password sign-in runs (including `signInWithPassword`), ignore `onAuthStateChange` for
+   * the signed-in branch. Otherwise the listener increments {@link authHydrateGenerationRef} and the
+   * inline email hydrate’s generation check fails → `isLoading` never clears on fast logout→login in one session.
+   */
+  const emailPasswordHydrateLockRef = useRef(false);
 
   const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
     /**
@@ -57,9 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * chain. On a cold boot this serialized ~5 × 80–150ms = 400–750ms
      * before any UI could render.
      *
-     * `Promise.all` here cuts that to one round-trip latency (the
-     * slowest single query — typically the profile row itself), saving
-     * ~300–500ms on cold boot on a typical mobile network.
+     * `Promise.all` (now six parallel reads including `saved_posts` ids)
+     * cuts that to one round-trip latency (the slowest single query —
+     * typically the profile row itself), saving ~300–500ms on cold boot
+     * on a typical mobile network.
      *
      * We still await the bundle before returning the `UserProfile`
      * because every consumer of `useAuth().profile` expects the
@@ -72,13 +124,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       interestRes,
       communityRes,
       followsRes,
+      savedRes,
     ] = await Promise.all([
       supabase.from('profiles').select(PROFILE_SELECT_WITH_AVATAR_FRAME).eq('id', userId).single(),
-      supabase.from('user_badges').select('badge_id, badges(*)').eq('user_id', userId),
+      supabase
+        .from('user_badges')
+        .select('badge_id, badges(id, name, description, icon, color, category)')
+        .eq('user_id', userId),
       supabase.from('user_interests').select('interest').eq('user_id', userId),
       supabase.from('community_members').select('community_id').eq('user_id', userId),
       supabase.from('follows').select('following_id').eq('follower_id', userId).limit(2000),
+      supabase.from('saved_posts').select('post_id').eq('user_id', userId).limit(2000),
     ]);
+
+    const badgeRows = badgeRes.data;
+    const interestRows = interestRes.data;
+    const communityRows = communityRes.data;
+    const followRows = followsRes.data;
+    const savedRows = savedRes.data;
+
+    useAppStore.getState().setJoinedCommunityIdsFromServer(
+      (communityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
+    );
+
+    if (followRows) {
+      useAppStore.getState().setFollowedCreatorIdsFromServer(
+        followRows.map((r: { following_id: string }) => String(r.following_id)),
+      );
+    }
+
+    useAppStore.getState().setSavedPostIdsFromServer(
+      (savedRows ?? []).map((r: { post_id: string }) => String(r.post_id)),
+    );
 
     const { data, error } = profileRes;
     if (error || !data) return null;
@@ -107,26 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile_song_url?: string | null;
     };
 
-    const badgeRows = badgeRes.data;
-    const interestRows = interestRes.data;
-    const communityRows = communityRes.data;
-    const followRows = followsRes.data;
-
-    useAppStore.getState().setJoinedCommunityIdsFromServer(
-      (communityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
-    );
-
-    /**
-     * Hydrate the followed-creator set from `public.follows` so the UI shows the
-     * correct following state across sessions. Errors here are non-fatal — we
-     * leave whatever's already in the store rather than wiping it.
-     */
-    if (followRows) {
-      useAppStore.getState().setFollowedCreatorIdsFromServer(
-        followRows.map((r: { following_id: string }) => String(r.following_id)),
-      );
-    }
-
     const title = row.profile_song_title;
     const artist = row.profile_song_artist;
     const url = row.profile_song_url;
@@ -143,7 +200,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const pr = data as any;
 
-    return {
+    const termsPrivacyAcceptedAt: UserProfile['termsPrivacyAcceptedAt'] =
+      pr.terms_and_privacy_accepted_at != null
+        ? String(pr.terms_and_privacy_accepted_at)
+        : pr.terms_and_privacy_accepted_at === null
+          ? null
+          : undefined;
+
+    const profile: UserProfile = {
       id: row.id,
       displayName: row.display_name,
       username: (row as { username?: string | null }).username?.trim()
@@ -196,20 +260,180 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pr.pulse_avatar_frame === undefined
           ? undefined
           : mapPulseAvatarFrameEmbed(pr.pulse_avatar_frame) ?? null,
-      termsPrivacyAcceptedAt:
-        pr.terms_and_privacy_accepted_at != null
-          ? String(pr.terms_and_privacy_accepted_at)
-          : pr.terms_and_privacy_accepted_at === null
-            ? null
-            : undefined,
+      termsPrivacyAcceptedAt,
     };
+
+    return profile;
   }, []);
+
+  /**
+   * Read the current Supabase session and materialize `user` + `profile` in React state with a
+   * bounded `fetchProfileWithTimeout`. Used after email/password and OAuth/Apple completes so we
+   * don’t depend solely on `onAuthStateChange` (races with `USER_UPDATED`, duplicate `SIGNED_IN`, or
+   * generation mismatch can leave `isLoading` true → index black screen until cold start).
+   */
+  const hydrateAuthenticatedSession = useCallback(
+    async (options?: { bumpBetaNonce?: boolean }): Promise<{ error: Error | null }> => {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (sessionError || !session?.user) {
+        return { error: new Error(sessionError?.message ?? 'No session after sign-in. Try again.') };
+      }
+
+      const userId = session.user.id;
+      const bumpBetaNonce = options?.bumpBetaNonce ?? false;
+
+      setState((prev) => ({
+        ...prev,
+        session,
+        user: session.user,
+        profile: null,
+        isAuthenticated: true,
+        isLoading: true,
+      }));
+
+      let profile: UserProfile | null = null;
+      try {
+        profile = await fetchProfileWithTimeout(fetchProfile, userId);
+      } catch (e) {
+        console.error('[auth] hydrateAuthenticatedSession profile bundle', e);
+      }
+
+      setState((prev) => {
+        if (!prev.session?.user || prev.session.user.id !== userId) {
+          return { ...prev, isLoading: false };
+        }
+        return {
+          ...prev,
+          session,
+          user: session.user,
+          profile,
+          isAuthenticated: true,
+          isLoading: false,
+          betaGiftCheckNonce: bumpBetaNonce ? prev.betaGiftCheckNonce + 1 : prev.betaGiftCheckNonce,
+        };
+      });
+
+      return { error: null };
+    },
+    [fetchProfile],
+  );
 
   const refreshProfile = useCallback(async () => {
     if (!state.user) return;
-    const profile = await fetchProfile(state.user.id);
-    setState((prev) => ({ ...prev, profile }));
+    try {
+      const profile = await fetchProfileWithTimeout(fetchProfile, state.user.id);
+      setState((prev) => ({
+        ...prev,
+        /** Resume / flaky cell: don’t wipe the shell if PostgREST hiccups (My Pulse tab stuck on spinner). */
+        profile: profile ?? prev.profile,
+      }));
+    } catch (e) {
+      if (__DEV__) console.warn('[auth] refreshProfile failed', e);
+    }
   }, [state.user, fetchProfile]);
+
+  const applyProfilePatch = useCallback((patch: Partial<UserProfile>) => {
+    setState((prev) => {
+      if (!prev.profile) return prev;
+      return { ...prev, profile: { ...prev.profile, ...patch } };
+    });
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      analytics.track('sign_out');
+      await analytics.flush();
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) {
+        console.warn('[auth] signOut:', error.message);
+      }
+    } catch (e) {
+      console.warn('[auth] signOut failed', e);
+    }
+    try {
+      useProfileCustomization.getState().setProfileSong(null);
+      useAppStore.getState().setJoinedCommunityIdsFromServer([]);
+      useAppStore.getState().setFollowedCreatorIdsFromServer([]);
+      useAppStore.getState().setSavedPostIdsFromServer([]);
+      useAppStore.getState().setBetaTesterBorderBlocking(false);
+      useAppStore.getState().clearBetaTesterGiftPending();
+    } catch {
+      /* non-fatal */
+    }
+    emailPasswordHydrateLockRef.current = false;
+    authHydrateGenerationRef.current = 0;
+    resetRootIndexRedirectDedupe();
+    setState({
+      session: null,
+      user: null,
+      profile: null,
+      isAuthenticated: false,
+      isLoading: false,
+      betaGiftCheckNonce: 0,
+    });
+  }, []);
+
+  const isAuthenticatedRef = useRef(false);
+  useEffect(() => {
+    isAuthenticatedRef.current = state.isAuthenticated;
+  }, [state.isAuthenticated]);
+
+  const sessionGuardBusy = useRef(false);
+
+  useEffect(() => {
+    if (!state.isAuthenticated || state.isLoading) return;
+
+    let cancelled = false;
+    void (async () => {
+      const r = await validateServerAuthSession();
+      if (cancelled || r === 'ok') return;
+      await signOut();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.isAuthenticated, state.isLoading, signOut]);
+
+  useEffect(() => {
+    const runGuard = () => {
+      if (!isAuthenticatedRef.current || sessionGuardBusy.current) return;
+      sessionGuardBusy.current = true;
+      void (async () => {
+        try {
+          const r = await validateServerAuthSession();
+          if (r !== 'ok') await signOut();
+        } finally {
+          sessionGuardBusy.current = false;
+        }
+      })();
+    };
+
+    let foregroundGuardTimer: ReturnType<typeof setTimeout> | null = null;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      /**
+       * iOS/Android radios + TLS often need a beat after resume. Hitting Auth
+       * `getUser` immediately can fail transiently and feel like a "stuck" app
+       * if paired with other foreground work.
+       */
+      if (foregroundGuardTimer != null) clearTimeout(foregroundGuardTimer);
+      foregroundGuardTimer = setTimeout(() => {
+        foregroundGuardTimer = null;
+        runGuard();
+      }, 550);
+    });
+    const interval = setInterval(runGuard, 90_000);
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+      if (foregroundGuardTimer != null) clearTimeout(foregroundGuardTimer);
+    };
+  }, [signOut]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,8 +444,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         const user = session?.user ?? null;
         if (!user) {
+          authHydrateGenerationRef.current = 0;
+          emailPasswordHydrateLockRef.current = false;
           useAppStore.getState().setJoinedCommunityIdsFromServer([]);
           useAppStore.getState().setFollowedCreatorIdsFromServer([]);
+          useAppStore.getState().setSavedPostIdsFromServer([]);
+          useAppStore.getState().setBetaTesterBorderBlocking(false);
+          useAppStore.getState().clearBetaTesterGiftPending();
+          resetRootIndexRedirectDedupe();
           setState((prev) => ({
             ...prev,
             session,
@@ -229,38 +459,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             profile: null,
             isAuthenticated: false,
             isLoading: false,
+            betaGiftCheckNonce: 0,
           }));
           return;
         }
-        void fetchProfile(user.id)
-          .then((profile) => {
-            if (cancelled) return;
-            setState((prev) => ({
-              ...prev,
-              session,
-              user,
-              profile,
-              isAuthenticated: true,
-              isLoading: false,
-            }));
-          })
-          .catch((e) => {
+        /**
+         * Expose the Supabase session before `fetchProfile` finishes.
+         * `login.tsx` navigates to `/` immediately after `signInWithPassword`; if we only
+         * `setState` after the profile bundle returns, `AppShell` briefly sees
+         * `isAuthenticated === false` + `isLoading === false` and fires
+         * `router.replace('/auth/login')`, which ping-pongs with `/` and can blow the
+         * React update depth limit.
+         */
+        const coldBootGeneration = ++authHydrateGenerationRef.current;
+        if (!cancelled) {
+          setState((prev) => ({
+            ...prev,
+            session,
+            user,
+            profile: user.id === prev.user?.id ? prev.profile : null,
+            isAuthenticated: true,
+            isLoading: true,
+          }));
+        }
+        void (async () => {
+          let profile: UserProfile | null = null;
+          try {
+            profile = await fetchProfileWithTimeout(fetchProfile, user.id);
+          } catch (e) {
             console.error('[auth] fetchProfile (initial session)', e);
-            if (!cancelled) {
-              setState((prev) => ({
-                ...prev,
-                session,
-                user,
-                profile: null,
-                isAuthenticated: true,
-                isLoading: false,
-              }));
-            }
-          });
+          }
+          if (coldBootGeneration !== authHydrateGenerationRef.current) return;
+          setState((prev) => ({
+            ...prev,
+            session,
+            user,
+            profile: profile ?? prev.profile,
+            isAuthenticated: true,
+            isLoading: false,
+          }));
+        })();
       })
       .catch((e) => {
         console.error('[auth] getSession failed', e);
         if (!cancelled) {
+          authHydrateGenerationRef.current = 0;
+          emailPasswordHydrateLockRef.current = false;
+          resetRootIndexRedirectDedupe();
+          useAppStore.getState().clearBetaTesterGiftPending();
           setState((prev) => ({
             ...prev,
             session: null,
@@ -268,6 +514,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             profile: null,
             isAuthenticated: false,
             isLoading: false,
+            betaGiftCheckNonce: 0,
           }));
         }
       });
@@ -278,28 +525,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 12_000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event: AuthChangeEvent, session) => {
         const user = session?.user ?? null;
-        let profile: UserProfile | null = null;
-        try {
-          if (user) {
-            profile = await fetchProfile(user.id);
-          } else {
+
+        if (!user) {
+          authHydrateGenerationRef.current = 0;
+          emailPasswordHydrateLockRef.current = false;
+          try {
             useProfileCustomization.getState().setProfileSong(null);
             useAppStore.getState().setJoinedCommunityIdsFromServer([]);
             useAppStore.getState().setFollowedCreatorIdsFromServer([]);
+            useAppStore.getState().setSavedPostIdsFromServer([]);
+            useAppStore.getState().setBetaTesterBorderBlocking(false);
+            useAppStore.getState().clearBetaTesterGiftPending();
+          } catch (e) {
+            console.error('[auth] onAuthStateChange sign-out cleanup', e);
           }
-        } catch (e) {
-          console.error('[auth] onAuthStateChange profile hydrate', e);
+          resetRootIndexRedirectDedupe();
+          if (!cancelled) {
+            setState({
+              session: null,
+              user: null,
+              profile: null,
+              isAuthenticated: false,
+              isLoading: false,
+              betaGiftCheckNonce: 0,
+            });
+          }
+          return;
         }
+
+        /**
+         * Silent JWT rotation (common right after resume). Re-running the full
+         * profile `Promise.all` set `isLoading: true`, blocks the index route,
+         * and can leave video surfaces / stacks in a bad state — without
+         * changing any user-visible auth data.
+         */
+        if (event === 'TOKEN_REFRESHED' && session) {
+          if (emailPasswordHydrateLockRef.current) {
+            return;
+          }
+          if (!cancelled) {
+            setState((prev) => ({
+              ...prev,
+              session,
+              user: session.user,
+              isAuthenticated: true,
+              isLoading: false,
+            }));
+          }
+          return;
+        }
+
+        if (emailPasswordHydrateLockRef.current) {
+          return;
+        }
+
+        const listenerGeneration = ++authHydrateGenerationRef.current;
         if (!cancelled) {
-          setState({
+          setState((prev) => ({
+            ...prev,
             session,
             user,
-            profile: user ? profile : null,
-            isAuthenticated: !!session,
+            profile: user.id === prev.user?.id ? prev.profile : null,
+            isAuthenticated: true,
+            isLoading: true,
+            betaGiftCheckNonce: event === 'SIGNED_IN' ? prev.betaGiftCheckNonce + 1 : prev.betaGiftCheckNonce,
+          }));
+        }
+
+        let profile: UserProfile | null = null;
+        try {
+          profile = await fetchProfileWithTimeout(fetchProfile, user.id);
+        } catch (e) {
+          console.error('[auth] onAuthStateChange profile hydrate', e);
+        } finally {
+          if (listenerGeneration !== authHydrateGenerationRef.current) return;
+          setState((prev) => ({
+            ...prev,
+            session,
+            user,
+            profile: profile ?? prev.profile,
+            isAuthenticated: true,
             isLoading: false,
-          });
+          }));
         }
       },
     );
@@ -311,16 +620,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchProfile]);
 
-  const signInWithEmail = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error ? new Error(error.message) : null };
-  };
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    emailPasswordHydrateLockRef.current = true;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: new Error(error.message) };
+      return await hydrateAuthenticatedSession({ bumpBetaNonce: true });
+    } finally {
+      emailPasswordHydrateLockRef.current = false;
+    }
+  }, [hydrateAuthenticatedSession]);
 
   const signUpWithEmail = async (
     email: string,
     password: string,
     fullName: string,
-    termsAcceptedAtIso: string,
     preferredUsername: string,
   ) => {
     const [firstName, ...rest] = fullName.trim().split(' ');
@@ -343,7 +657,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           full_name: fullName,
           first_name: firstName,
           last_name: lastName,
-          terms_accepted_at: termsAcceptedAtIso,
           preferred_username: preferredUsername.trim().toLowerCase(),
         },
       },
@@ -353,27 +666,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
-  const signInWithPhone = async (phone: string) => {
-    const e164 = normalizePhoneE164(phone);
-    if (!e164 || e164.length < 8) {
-      return { error: new Error('Enter a full number with country code (e.g. +1 for US).') };
+  const signInWithGoogle = useCallback(async () => {
+    emailPasswordHydrateLockRef.current = true;
+    try {
+      const { error } = await signInWithOAuthNative('google');
+      if (error) return { error };
+      return await hydrateAuthenticatedSession({ bumpBetaNonce: true });
+    } finally {
+      emailPasswordHydrateLockRef.current = false;
     }
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: e164,
-      options: { channel: 'sms' },
-    });
-    return { error: error ? new Error(error.message) : null };
-  };
+  }, [hydrateAuthenticatedSession]);
 
-  const verifyOtp = async (phone: string, token: string) => {
-    const e164 = normalizePhoneE164(phone);
-    const { error } = await supabase.auth.verifyOtp({ phone: e164, token, type: 'sms' });
-    return { error: error ? new Error(error.message) : null };
-  };
-
-  const signInWithGoogle = async () => signInWithOAuthNative('google');
-
-  const signInWithApple = async () => signInWithAppleAdaptive();
+  const signInWithApple = useCallback(async () => {
+    emailPasswordHydrateLockRef.current = true;
+    try {
+      const { error } = await signInWithAppleAdaptive();
+      if (error) return { error };
+      return await hydrateAuthenticatedSession({ bumpBetaNonce: true });
+    } finally {
+      emailPasswordHydrateLockRef.current = false;
+    }
+  }, [hydrateAuthenticatedSession]);
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -382,44 +695,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? new Error(error.message) : null };
   };
 
-  const signOut = async () => {
-    try {
-      analytics.track('sign_out');
-      await analytics.flush();
-    } catch {
-      /* non-fatal */
-    }
-    try {
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-      if (error) {
-        console.warn('[auth] signOut:', error.message);
-      }
-    } catch (e) {
-      console.warn('[auth] signOut failed', e);
-    }
-    useProfileCustomization.getState().setProfileSong(null);
-    setState({
-      session: null,
-      user: null,
-      profile: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
-  };
-
   return (
     <AuthContext.Provider
       value={{
         ...state,
         signInWithEmail,
         signUpWithEmail,
-        signInWithPhone,
-        verifyOtp,
         signInWithGoogle,
         signInWithApple,
         resetPassword,
         signOut,
         refreshProfile,
+        applyProfilePatch,
       }}
     >
       {children}

@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, iconSize, spacing, typography } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -46,19 +47,26 @@ export default function ForgotPasswordScreen() {
 
       {!sent ? (
         <View style={styles.form}>
-          <View style={styles.inputWrap}>
-            <Ionicons name="mail-outline" size={iconSize.md} color={colors.form.iconMuted} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={colors.form.placeholder}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              editable={!loading}
-            />
-          </View>
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="Account email"
+            compact
+            noShadow
+          >
+            <View style={styles.fieldRow}>
+              <Ionicons name="mail-outline" size={iconSize.md} color={colors.form.iconMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={colors.form.placeholder}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={!loading}
+              />
+            </View>
+          </AccentComposerFrame>
           <TouchableOpacity style={styles.resetBtn} onPress={handleReset} activeOpacity={0.8} disabled={loading}>
             {loading ? (
               <ActivityIndicator color={colors.dark.text} />
@@ -92,16 +100,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing['3xl'],
   },
   form: { gap: spacing.lg },
-  inputWrap: {
+  fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.form.glassSurface,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.form.glassBorderInner,
   },
   input: { flex: 1, fontSize: 16, color: colors.dark.text },
   resetBtn: {

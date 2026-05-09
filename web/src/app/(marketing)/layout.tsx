@@ -1,4 +1,5 @@
 import { AppJsonLd } from "@/components/json-ld";
+import { MarketingAuthHashRedirect } from "@/components/auth/marketing-auth-hash-redirect";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingNav, type MarketingAccountChip } from "@/components/marketing/marketing-nav";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
@@ -34,6 +35,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-dvh flex-1 flex-col">
+      <MarketingAuthHashRedirect />
       <AppJsonLd data={organizationAndWebsiteGraph()} />
       <MarketingNav locale={locale} account={account} />
       <main id="main-content" tabIndex={-1} className="flex-1 outline-none">

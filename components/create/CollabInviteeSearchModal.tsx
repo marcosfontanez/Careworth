@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { colors, borderRadius, layout } from '@/theme';
+import { colors, layout, spacing } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { profilesService } from '@/services/supabase/profiles';
 import { avatarThumb } from '@/lib/storage';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile } from '@/types';
 
 interface Props {
@@ -81,6 +83,7 @@ export function CollabInviteeSearchModal({ visible, onClose, onSelect, excludeUs
           source={{ uri: avatarThumb(item.avatarUrl, 40) || undefined }}
           style={styles.avatar}
           contentFit="cover"
+          {...pulseImageListThumbProps}
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{item.displayName}</Text>
@@ -105,25 +108,39 @@ export function CollabInviteeSearchModal({ visible, onClose, onSelect, excludeUs
           <Text style={styles.title}>Invite collaborator</Text>
           <View style={{ width: 56 }} />
         </View>
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color={colors.dark.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Name, @username, or specialty"
-            placeholderTextColor={colors.dark.textMuted}
-            value={q}
-            onChangeText={setQ}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            onSubmitEditing={runSearch}
-          />
-          {busy ? <ActivityIndicator size="small" color={colors.primary.teal} /> : null}
+        <View style={styles.searchOuter}>
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="Search"
+            compact
+            noShadow
+          >
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={18} color={colors.dark.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Name, @username, or specialty"
+                placeholderTextColor={colors.dark.textMuted}
+                value={q}
+                onChangeText={setQ}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={runSearch}
+              />
+              {busy ? <ActivityIndicator size="small" color={colors.primary.teal} /> : null}
+            </View>
+          </AccentComposerFrame>
         </View>
         <Text style={styles.hint}>Shows people on PulseVerse. They must have an account.</Text>
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={renderRow}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: layout.screenPadding + 24 }}
@@ -149,19 +166,16 @@ const styles = StyleSheet.create({
   },
   cancel: { fontSize: 16, fontWeight: '700', color: colors.primary.teal },
   title: { fontSize: 16, fontWeight: '800', color: colors.dark.text },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  searchOuter: {
     marginHorizontal: layout.screenPadding,
     marginBottom: 8,
-    paddingHorizontal: 12,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    backgroundColor: colors.dark.card,
   },
-  searchIcon: { marginRight: 6 },
-  searchInput: { flex: 1, paddingVertical: 12, color: colors.dark.text, fontSize: 15 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  searchInput: { flex: 1, paddingVertical: 4, color: colors.dark.text, fontSize: 15 },
   hint: {
     fontSize: 11,
     color: colors.dark.textMuted,

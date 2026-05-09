@@ -22,11 +22,7 @@ export const feedService = {
   },
 
   async getCommunityPosts(communityId: string, viewerId?: string | null): Promise<Post[]> {
-    try {
-      return await postsService.getByCommunity(communityId, viewerId);
-    } catch {
-      return [];
-    }
+    return postsService.getByCommunity(communityId, viewerId);
   },
 
   async getUserPosts(userId: string, viewerId?: string | null): Promise<Post[]> {

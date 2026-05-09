@@ -8,6 +8,7 @@ import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
 import { ShareToMyPulseButton } from './ShareToMyPulseButton';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const KIND_SHORT: Record<CircleThread['kind'], string> = {
   question: 'Ask',
@@ -138,7 +139,12 @@ export function CircleThreadCard({
         </Text>
 
         {thread.mediaThumbUrl ? (
-          <Image source={{ uri: thread.mediaThumbUrl }} style={styles.thumb} contentFit="cover" />
+          <Image
+            source={{ uri: thread.mediaThumbUrl }}
+            style={styles.thumb}
+            contentFit="cover"
+            {...pulseImageListThumbProps}
+          />
         ) : null}
 
         <View style={styles.footer}>

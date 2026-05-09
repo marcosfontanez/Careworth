@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { colors } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const HEADER = require('../../assets/images/circles-header-lockup.png');
 
@@ -11,7 +12,7 @@ type Props = {
 };
 
 /**
- * Branded Circles tab intro — uses exported lockup (transparent / black-friendly art).
+ * Branded Circles tab intro — PulseVerse Circles lockup (transparent on dark bg).
  */
 export function CirclesTabHeading({ onPress }: Props) {
   const inner = (
@@ -20,8 +21,10 @@ export function CirclesTabHeading({ onPress }: Props) {
         source={HEADER}
         style={styles.img}
         contentFit="contain"
-        contentPosition="left"
+        contentPosition="center"
         transition={0}
+        accessibilityIgnoresInvertColors
+        {...pulseImageListThumbProps}
       />
     </View>
   );
@@ -51,22 +54,22 @@ export function CirclesTabHeading({ onPress }: Props) {
   );
 }
 
-const HEADER_HEIGHT = 112;
+const HEADER_HEIGHT = 128;
 
 const styles = StyleSheet.create({
   root: {
     width: '100%',
     alignSelf: 'stretch',
     minHeight: HEADER_HEIGHT,
-    maxHeight: 120,
+    maxHeight: 136,
     justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: colors.dark.bg,
   },
   img: {
     width: '100%',
     height: HEADER_HEIGHT,
-    maxWidth: 360,
-    alignSelf: 'flex-start',
+    maxWidth: 560,
     backgroundColor: colors.dark.bg,
   },
 });

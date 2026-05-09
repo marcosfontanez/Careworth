@@ -2,16 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, TextInput, RefreshControl,
-  Image, Modal,
+  Platform, Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { useFeatureFlags } from '@/lib/featureFlags';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { adsService, subscriptionService, jobPricingService, creatorTipsService } from '@/services/monetization';
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
 
@@ -495,7 +498,12 @@ export default function AdminPanel() {
                   <Text style={styles.detailLabel}>Reported Content</Text>
                   <View style={styles.contentPreview}>
                     {r.target_content.media_url && (
-                      <Image source={{ uri: r.target_content.media_url }} style={styles.previewImage} />
+                      <Image
+                        source={{ uri: r.target_content.media_url }}
+                        style={styles.previewImage}
+                        contentFit="cover"
+                        {...pulseImageFeedHeroProps}
+                      />
                     )}
                     <Text style={styles.previewText} numberOfLines={4}>
                       {r.target_content.caption ?? r.target_content.content ?? r.target_content.display_name ?? '—'}
@@ -565,7 +573,12 @@ export default function AdminPanel() {
               <View style={styles.userDetailHeader}>
                 <View style={styles.userAvatar}>
                   {u.avatar_url ? (
-                    <Image source={{ uri: u.avatar_url }} style={styles.avatarImg} />
+                    <Image
+                      source={{ uri: u.avatar_url }}
+                      style={styles.avatarImg}
+                      contentFit="cover"
+                      {...pulseImageListThumbProps}
+                    />
                   ) : (
                     <Ionicons name="person" size={32} color={colors.neutral.midGray} />
                   )}
@@ -681,6 +694,11 @@ export default function AdminPanel() {
               <FlatList
                 data={reports}
                 keyExtractor={(item) => item.id}
+                initialNumToRender={12}
+                maxToRenderPerBatch={10}
+                windowSize={9}
+                updateCellsBatchingPeriod={50}
+                removeClippedSubviews={Platform.OS === 'android'}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.card} onPress={() => setSelectedReport(item)} activeOpacity={0.7}>
@@ -732,36 +750,54 @@ export default function AdminPanel() {
 
         {tab === 'users' && (
           <>
-            <View style={styles.searchRow}>
-              <Ionicons name="search-outline" size={18} color={colors.neutral.midGray} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search users..."
-                placeholderTextColor={colors.neutral.midGray}
-                value={userSearch}
-                onChangeText={setUserSearch}
-                onSubmitEditing={loadData}
-                returnKeyType="search"
-              />
+            <AccentComposerFrame
+              accentColor={colors.primary.teal}
+              hint="Users"
+              compact
+              noShadow
+              style={styles.searchFrame}
+            >
+              <View style={styles.searchInner}>
+                <Ionicons name="search-outline" size={18} color={colors.neutral.midGray} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search users..."
+                  placeholderTextColor={colors.neutral.midGray}
+                  value={userSearch}
+                  onChangeText={setUserSearch}
+                  onSubmitEditing={loadData}
+                  returnKeyType="search"
+                />
               {userSearch.length > 0 && (
                 <TouchableOpacity onPress={() => { setUserSearch(''); setTimeout(loadData, 100); }}>
                   <Ionicons name="close-circle" size={18} color={colors.neutral.midGray} />
                 </TouchableOpacity>
               )}
-            </View>
+              </View>
+            </AccentComposerFrame>
             {loading ? (
               <ActivityIndicator size="large" color={colors.primary.teal} style={{ marginTop: 40 }} />
             ) : (
               <FlatList
                 data={users}
                 keyExtractor={(item) => item.id}
+                initialNumToRender={12}
+                maxToRenderPerBatch={10}
+                windowSize={9}
+                updateCellsBatchingPeriod={50}
+                removeClippedSubviews={Platform.OS === 'android'}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.card} onPress={() => setSelectedUser(item)} activeOpacity={0.7}>
                     <View style={styles.userRow}>
                       <View style={styles.userAvatarSmall}>
                         {item.avatar_url ? (
-                          <Image source={{ uri: item.avatar_url }} style={styles.avatarSmallImg} />
+                          <Image
+                            source={{ uri: item.avatar_url }}
+                            style={styles.avatarSmallImg}
+                            contentFit="cover"
+                            {...pulseImageListThumbProps}
+                          />
                         ) : (
                           <Ionicons name="person" size={20} color={colors.neutral.midGray} />
                         )}
@@ -790,29 +826,42 @@ export default function AdminPanel() {
 
         {tab === 'content' && (
           <>
-            <View style={styles.searchRow}>
-              <Ionicons name="search-outline" size={18} color={colors.neutral.midGray} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search posts..."
-                placeholderTextColor={colors.neutral.midGray}
-                value={contentSearch}
-                onChangeText={setContentSearch}
-                onSubmitEditing={loadData}
-                returnKeyType="search"
-              />
-              {contentSearch.length > 0 && (
-                <TouchableOpacity onPress={() => { setContentSearch(''); setTimeout(loadData, 100); }}>
-                  <Ionicons name="close-circle" size={18} color={colors.neutral.midGray} />
-                </TouchableOpacity>
-              )}
-            </View>
+            <AccentComposerFrame
+              accentColor={colors.primary.teal}
+              hint="Posts"
+              compact
+              noShadow
+              style={styles.searchFrame}
+            >
+              <View style={styles.searchInner}>
+                <Ionicons name="search-outline" size={18} color={colors.neutral.midGray} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search posts..."
+                  placeholderTextColor={colors.neutral.midGray}
+                  value={contentSearch}
+                  onChangeText={setContentSearch}
+                  onSubmitEditing={loadData}
+                  returnKeyType="search"
+                />
+                {contentSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => { setContentSearch(''); setTimeout(loadData, 100); }}>
+                    <Ionicons name="close-circle" size={18} color={colors.neutral.midGray} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </AccentComposerFrame>
             {loading ? (
               <ActivityIndicator size="large" color={colors.primary.teal} style={{ marginTop: 40 }} />
             ) : (
               <FlatList
                 data={content}
                 keyExtractor={(item) => item.id}
+                initialNumToRender={12}
+                maxToRenderPerBatch={10}
+                windowSize={9}
+                updateCellsBatchingPeriod={50}
+                removeClippedSubviews={Platform.OS === 'android'}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
                 renderItem={({ item }) => (
                   <View style={styles.card}>
@@ -1121,13 +1170,16 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 12, fontWeight: '600', color: colors.dark.textMuted },
   filterTextActive: { color: colors.dark.text },
 
-  searchRow: {
-    flexDirection: 'row', alignItems: 'center', margin: 16, marginBottom: 8,
-    backgroundColor: colors.dark.card, borderRadius: 12, paddingHorizontal: 12, gap: 8,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
+  searchFrame: {
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
-  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: colors.dark.text },
+  searchInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchInput: { flex: 1, paddingVertical: 4, fontSize: 14, color: colors.dark.text },
 
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   card: {

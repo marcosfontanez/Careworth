@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 import { colors, borderRadius } from '@/theme';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { useAuth } from '@/contexts/AuthContext';
 import { storageService } from '@/lib/storage';
 import { postsService, communitiesService } from '@/services/supabase';
@@ -32,6 +33,7 @@ import {
   type CirclePostSettings,
 } from '@/components/circles/CircleSettingsCard';
 import { CircleContextFooter } from '@/components/circles/CircleContextFooter';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 /** Legacy AsyncStorage key for circle drafts — purged on open/post so nothing lingers. */
 const LEGACY_CIRCLE_DRAFT = 'circle';
@@ -102,7 +104,8 @@ export default function CommunityCreatePostScreen() {
     const wantVideos = postType === 'video';
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: wantVideos ? ['videos'] : ['images'],
-      allowsEditing: !wantVideos,
+      /** Full-bleed photos — native crop sheet was forcing an unwanted square crop on memes. */
+      allowsEditing: false,
       quality: 0.85,
       videoMaxDuration: 60,
     });
@@ -269,17 +272,21 @@ export default function CommunityCreatePostScreen() {
         {/* ===================== POST TYPE CHIPS ===================== */}
         <CirclePostTypeChips active={postType} accent={accent} onSelect={setPostType} />
 
-        {/* ===================== MAIN COMPOSER ======================
-            The composer is the hero of this screen — give it a quiet
-            accent presence on the leading edge so it visually belongs to
-            the room (not a generic dark card). The room's prompt sits
-            above the input with a subtle accent dot, then the field
-            with character count. Premium without being decorative. */}
-        <View style={[styles.composer, { borderLeftColor: accent.color, borderLeftWidth: 3 }]}>
-          <View style={styles.composerHintRow}>
-            <View style={[styles.composerHintDot, { backgroundColor: accent.color }]} />
-            <Text style={styles.composerHint}>{accent.composerPrompt}</Text>
-          </View>
+        {/* ===================== MAIN COMPOSER ====================== */}
+        <AccentComposerFrame
+          accentColor={accent.color}
+          hint={accent.composerPrompt}
+          style={{ marginHorizontal: 14 }}
+          footer={
+            <AccentCharCount
+              length={body.length}
+              max={500}
+              accentColor={accent.color}
+              warnWithin={100}
+              hideWhenEmpty={false}
+            />
+          }
+        >
           <TextInput
             style={styles.composerInput}
             value={body}
@@ -290,27 +297,19 @@ export default function CommunityCreatePostScreen() {
             maxLength={500}
             textAlignVertical="top"
           />
-          <View style={styles.composerFooter}>
-            {/* Char count is now a soft indicator that warms toward the
-                accent as the user approaches the cap, instead of a flat
-                grey number. Reads as part of the room's voice. */}
-            <Text
-              style={[
-                styles.charCount,
-                body.length > 400 && { color: accent.color, fontWeight: '700' },
-              ]}
-            >
-              {body.length}/500
-            </Text>
-          </View>
-        </View>
+        </AccentComposerFrame>
 
         {/* ====================== MEDIA TILES ======================= */}
         {allowsMedia && (
           <View style={styles.mediaTiles}>
             {mediaUri ? (
               <View style={styles.mediaTile}>
-                <Image source={{ uri: mediaUri }} style={styles.mediaImg} contentFit="cover" />
+                <Image
+                  source={{ uri: mediaUri }}
+                  style={styles.mediaImg}
+                  contentFit="cover"
+                  {...pulseImageFeedHeroProps}
+                />
                 {mediaKind === 'video' && (
                   <View style={styles.playOverlay}>
                     <Ionicons name="play-circle" size={36} color="#FFFFFFE6" />
@@ -458,32 +457,6 @@ const styles = StyleSheet.create({
   /* ---- Body ---- */
   scrollPad: { paddingBottom: 24, gap: 14 },
 
-  composer: {
-    marginHorizontal: 14,
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.card ?? 16,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 10,
-    gap: 8,
-    /* Subtle elevation so the composer reads as the page's primary
-       surface — matches the lifted feel of room post cards. */
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.22,
-        shadowRadius: 8,
-      },
-      android: { elevation: 3 },
-      default: {},
-    }),
-  },
-  composerHintRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  composerHintDot: { width: 6, height: 6, borderRadius: 3 },
-  composerHint: { fontSize: 13, color: colors.dark.textMuted, fontWeight: '700', letterSpacing: 0.1 },
   composerInput: {
     minHeight: 130,
     fontSize: 16,
@@ -491,12 +464,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingTop: 4,
   },
-  composerFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  charCount: { fontSize: 11, color: colors.dark.textQuiet },
 
   /* ---- Media Tiles ---- */
   mediaTiles: {

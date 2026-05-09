@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQueries, useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   feedService,
@@ -34,9 +34,9 @@ export function useFeed(type: FeedType, userId?: string) {
     queryKey: ['feed', FEED_QUERY_KEY_VERSION, type, userId ?? null],
     queryFn: () => feedService.getFeed(type, userId),
     /** Avoid re-running ranked merge on every tab focus/mount; pull-to-refresh still refetches. */
-    staleTime: 30_000,
+    staleTime: 60_000,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
@@ -45,8 +45,9 @@ export function useLikedPostIds(userId?: string) {
     queryKey: likedPostKeys.forUser(userId),
     queryFn: async () => [...(await postsService.getLikedPostIdsForUser(userId!))],
     enabled: !!userId,
-    staleTime: 30_000,
+    staleTime: 60_000,
     gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -80,7 +81,8 @@ export function useFeedInfinite(type: FeedType, userId?: string) {
     },
     getNextPageParam: (last) =>
       last.nextCursor && last.posts.length ? { cursor: last.nextCursor, seenIds: last.seenIds } : undefined,
-    staleTime: 30_000,
+    /** Longer TTL cuts duplicate ranked-merge work when switching tabs; pull-to-refresh still refetches. */
+    staleTime: 60_000,
     gcTime: 1000 * 60 * 30,
     /** Matches cold-boot `prefetchInfiniteQuery` in `app/_layout.tsx` — avoids duplicate network on tab mount. */
     refetchOnMount: false,
@@ -96,6 +98,10 @@ export function usePost(id: string, opts?: { enabled?: boolean }) {
     queryKey: postKeys.detail(id, viewerId),
     queryFn: () => feedService.getPostById(id, viewerId),
     enabled,
+    /** Matches feed TTL; detail screen still refetches via `refetch()` / mutations / invalidation. */
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -197,6 +203,7 @@ export function useLinkedPostsMap(
        *  hammering the DB if someone pins 10+ clips. */
       staleTime: 30_000,
       gcTime: 1000 * 60 * 15,
+      refetchOnMount: false,
     })),
   });
 
@@ -213,13 +220,38 @@ export function useCommunityPosts(communityId: string) {
   const viewerId = user?.id ?? null;
   return useQuery({
     queryKey: circleContentKeys.communityPosts(communityId, viewerId),
-    queryFn: () => feedService.getCommunityPosts(communityId, viewerId),
+    queryFn: () => postsService.getByCommunity(communityId, viewerId),
+    /**
+     * Load as soon as the room id is known. Gating on auth used to leave the query
+     * `disabled` while `getSession` ran — in RQ v5 that stays `pending` with no data,
+     * so the circle wall showed “Loading posts…” until a later focus refetch.
+     * `getByCommunity` accepts null `viewerId`; when the session appears, the key
+     * changes and we refetch with the signed-in viewer.
+     */
     enabled: !!communityId,
     /**
-     * When `user` hydrates after `community`, the query key adds `viewerId` and
-     * would otherwise remount with empty `data` until the second fetch completes
-     * — Circles room briefly showed "No posts". Keep prior fetch visible.
+     * When `user` hydrates after the first fetch, the key gains `viewerId` — keep
+     * the prior page visible until the viewer-scoped fetch finishes.
      */
+    placeholderData: (previousData) => previousData,
+    staleTime: 45_000,
+    gcTime: 1000 * 60 * 20,
+    refetchOnMount: true,
+    retry: 2,
+  });
+}
+
+/** Viewer’s selected reaction emoji per post in a circle wall (batch over current list). */
+export function useCircleViewerPostReactions(communityId: string, postIds: string[]) {
+  const { user } = useAuth();
+  const sig = useMemo(() => [...postIds].sort().join(','), [postIds]);
+  const uid = user?.id ?? '';
+  return useQuery({
+    queryKey: circleContentKeys.viewerPostReactions(communityId, uid, sig),
+    queryFn: () => postsService.getViewerReactionsForPosts(user!.id, postIds),
+    enabled: !!user?.id && !!communityId && postIds.length > 0,
+    staleTime: 60_000,
+    gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
   });
 }
@@ -241,6 +273,7 @@ export function useUserPosts(userId: string) {
      * blank for ~300ms when re-visited).
      */
     staleTime: 15_000,
+    refetchOnMount: false,
   });
 }
 
@@ -249,6 +282,9 @@ export function useUserStreak(userId: string | undefined) {
     queryKey: ['streak', userId],
     queryFn: () => streaksService.getStreak(userId!),
     enabled: !!userId,
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -256,6 +292,9 @@ export function useCommunities() {
   return useQuery({
     queryKey: ['communities'],
     queryFn: () => communityService.getAll(),
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -265,6 +304,10 @@ export function useCommunity(slug: string) {
     queryKey: ['community', key],
     queryFn: () => communityService.getBySlug(key),
     enabled: key.length > 0,
+    staleTime: 60_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: true,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -272,6 +315,9 @@ export function useFeaturedCommunities() {
   return useQuery({
     queryKey: ['communities', 'featured'],
     queryFn: () => communityService.getFeatured(),
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -287,14 +333,27 @@ export function useCirclesHome() {
       return { featured, trending, newCircles };
     },
     staleTime: 1000 * 60,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
-export function useCircleThreads(slug: string | undefined) {
+/**
+ * Questions tab threads: loads only after `communityId` is known so we never run a
+ * second `getBySlug` inside `listBySlug` in parallel with `useCommunity`.
+ */
+export function useCircleThreads(slug: string | undefined, communityId: string | undefined) {
+  const s = (slug ?? '').trim();
+  const cid = (communityId ?? '').trim();
+  const roomKey = cid || '__pending__';
   return useQuery({
-    queryKey: circleContentKeys.threadsBySlug(slug ?? '__disabled__'),
-    queryFn: () => circleContentService.getThreadsByCircleSlug(slug!),
-    enabled: !!slug,
+    queryKey: circleContentKeys.threadsForRoom(s || '__disabled__', roomKey),
+    queryFn: () => circleContentService.getThreadsByCommunityId(cid),
+    enabled: !!s && !!cid,
+    staleTime: 45_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: true,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -303,6 +362,9 @@ export function useCircleThread(threadId: string | undefined) {
     queryKey: circleContentKeys.thread(threadId ?? '__disabled__'),
     queryFn: () => circleContentService.getThreadById(threadId!),
     enabled: !!threadId,
+    staleTime: 30_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
   });
 }
 
@@ -318,6 +380,9 @@ export function useJobs() {
   return useQuery({
     queryKey: ['jobs'],
     queryFn: () => jobService.getAll(),
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -326,6 +391,9 @@ export function useJob(id: string) {
     queryKey: ['job', id],
     queryFn: () => jobService.getById(id),
     enabled: !!id,
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -333,6 +401,9 @@ export function useFeaturedJobs() {
   return useQuery({
     queryKey: ['jobs', 'featured'],
     queryFn: () => jobService.getFeatured(),
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -341,6 +412,9 @@ export function useUser(id: string) {
     queryKey: userKeys.detail(id),
     queryFn: () => userService.getUserById(id),
     enabled: !!id,
+    staleTime: 45_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -349,20 +423,33 @@ export function useComments(postId: string) {
     queryKey: commentKeys.byPost(postId),
     queryFn: () => commentService.getByPostId(postId),
     enabled: !!postId,
+    staleTime: 20_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
   });
 }
 
 export function useNotifications() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => notificationService.getAll(),
+    queryKey: ['notifications', user?.id ?? null],
+    queryFn: () => notificationService.getAll(user!.id),
+    enabled: !!user?.id,
+    staleTime: 45_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
 export function useUnreadCount() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['notifications', 'unread'],
-    queryFn: () => notificationService.getUnreadCount(),
+    queryKey: ['notifications', 'unread', user?.id ?? null],
+    queryFn: () => notificationService.getUnreadCount(user!.id),
+    enabled: !!user?.id,
+    staleTime: 45_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -379,6 +466,9 @@ export function useLiveStreams() {
      */
     refetchInterval: 90_000,
     refetchIntervalInBackground: false,
+    /** Align with poll cadence so remounts don’t immediately refetch the same payload. */
+    staleTime: 90_000,
+    gcTime: 1000 * 60 * 30,
   });
 }
 
@@ -387,6 +477,9 @@ export function useStream(id: string) {
     queryKey: ['stream', id],
     queryFn: () => streamsService.getStreamById(id),
     enabled: !!id,
+    staleTime: 30_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 }
 
@@ -403,6 +496,9 @@ export function useProfileUpdates(userId: string | undefined) {
     queryKey: profileUpdateKeys.forUserByViewer(userId!, viewerId),
     queryFn: () => profileUpdatesService.getLatestForUser(userId!, 5, viewerId),
     enabled: !!userId,
+    staleTime: 30_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
   });
 }
 

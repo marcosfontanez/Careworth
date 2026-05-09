@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, roleColor } from '@/theme';
 import type { StreamMessage, StreamPinnedMessage, Role } from '@/types';
@@ -147,6 +147,11 @@ export function LiveChatList({
         ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
+        initialNumToRender={16}
+        maxToRenderPerBatch={12}
+        windowSize={11}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
         renderItem={({ item }) => (
           <ChatMessage
             message={item}

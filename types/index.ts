@@ -38,6 +38,18 @@ export type PrivacyMode = 'public' | 'followers' | 'alias' | 'private';
 /** `community` = circle-only surface; excluded from main For You / Following / Friends / Top Today feeds */
 export type FeedType = 'forYou' | 'following' | 'friends' | 'topToday' | 'community';
 
+/** Facepile-style reactions on posts (see `post_likes.reaction`, migration 115). */
+export type PostReactionKind = 'heart' | 'haha' | 'wow' | 'sad' | 'angry' | 'clap';
+
+export interface PostReactionCounts {
+  heart: number;
+  haha: number;
+  wow: number;
+  sad: number;
+  angry: number;
+  clap: number;
+}
+
 export type ShiftPreference = 'Day' | 'Night' | 'Rotating' | 'No Preference';
 
 export type EmploymentType = 'Full-Time' | 'Part-Time' | 'Contract' | 'Travel' | 'Per Diem' | 'PRN';
@@ -49,8 +61,10 @@ export type NotificationType =
   | 'share'
   | 'comment'
   | 'reply'
+  | 'circle_thread_reply'
   | 'mention'
   | 'community_invite'
+  | 'circle_new_post'
   | 'job_alert'
   | 'badge_earned'
   | 'tier_up';
@@ -380,8 +394,8 @@ export interface UserProfile {
   selectedPulseAvatarFrameId?: string | null;
   pulseAvatarFrame?: PulseAvatarFrame | null;
   /**
-   * When the user affirmed Terms + Privacy (and patient-privacy notice).
-   * Set on email sign-up from raw_user_meta_data; OAuth users complete via legal-ack.
+   * When the user affirmed Terms + Privacy (and patient-privacy notice) on `/auth/legal-ack`.
+   * New accounts leave this null until that step; email sign-up no longer pre-fills it from metadata.
    */
   termsPrivacyAcceptedAt?: string | null;
 }
@@ -432,6 +446,8 @@ export interface Post {
   isAnonymous: boolean;
   privacyMode: PrivacyMode;
   likeCount: number;
+  /** Per-emoji tallies when loaded (community wall uses full set). */
+  reactionCounts?: PostReactionCounts;
   commentCount: number;
   shareCount: number;
   viewCount: number;
@@ -494,6 +510,8 @@ export interface Community {
    * `null` / `undefined` = not in the curated featured strip (falls back to legacy logic if none set).
    */
   featuredOrder?: number | null;
+  /** Opens of the Circle room by signed-in users — popularity signal for featured ordering. */
+  profileOpenCount?: number;
   /** Recently active members (e.g. last 30m), from `get_community_card_stats` */
   onlineCount?: number;
   /** Up to 5 avatar URLs for presence strip on featured cards */
@@ -770,24 +788,6 @@ export interface StreamPinnedMessage {
   createdAt: string;
 }
 
-export interface OnboardingData {
-  firstName: string;
-  lastName?: string;
-  displayName: string;
-  role: Role;
-  specialty: Specialty;
-  city: string;
-  state: string;
-  yearsExperience: number;
-  shiftPreference: ShiftPreference;
-  avatarUrl?: string;
-  bio?: string;
-  interests: ContentInterest[];
-  communitiesToFollow: string[];
-  privacyMode: PrivacyMode;
-}
-
-// ─── Monetization Types (hidden behind feature flags) ───
 
 export type SubscriptionTier = 'free' | 'pro_monthly' | 'pro_yearly';
 

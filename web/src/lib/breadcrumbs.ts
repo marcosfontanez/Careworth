@@ -17,6 +17,7 @@ export const MARKETING_SEGMENT_LABELS: Record<string, string> = {
   "pulse-page": "Pulse Page",
   "my-pulse": "My Pulse",
   partners: "Partners",
+  post: "Post",
   privacy: "Privacy",
   support: "Support",
   terms: "Terms",

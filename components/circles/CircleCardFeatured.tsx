@@ -6,6 +6,7 @@ import { featuredCardSchemeForSlug } from '@/constants/featuredCircleSchemes';
 import { borderRadius, colors, typography } from '@/theme';
 import { formatCount } from '@/utils/format';
 import type { Community } from '@/types';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const CARD_HEIGHT = 268;
 const BUBBLE = 78;
@@ -77,7 +78,12 @@ export function CircleCardFeatured({ community, accent, onPress }: Props) {
         <View style={styles.presenceRow}>
           {avatars.map((uri, i) => (
             <View key={`${uri}-${i}`} style={[styles.avatarSlot, { zIndex: 10 - i, marginLeft: i === 0 ? 0 : -10 }]}>
-              <Image source={{ uri }} style={styles.avatarImg} contentFit="cover" />
+              <Image
+                source={{ uri }}
+                style={styles.avatarImg}
+                contentFit="cover"
+                {...pulseImageListThumbProps}
+              />
             </View>
           ))}
           <View style={styles.onlineCol}>

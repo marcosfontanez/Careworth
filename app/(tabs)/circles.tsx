@@ -33,7 +33,8 @@ import {
   getRecentCircleSearches,
 } from '@/lib/circleExperience';
 import { hrefCommunity, hrefCommunityThread, hrefPost } from '@/lib/communityRoutes';
-import { primeCommunityDetailCache } from '@/lib/communityCache';
+import { prefetchCircleRoom } from '@/lib/communityCache';
+import { useAuth } from '@/contexts/AuthContext';
 import { addSearchQuery } from '@/lib/searchHistory';
 import { FEATURED_CIRCLE_SLUGS_ORDER } from '@/constants/circleDiscovery';
 import { timeAgo } from '@/utils/format';
@@ -47,6 +48,7 @@ export default function CirclesScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { data, isLoading, isError, refetch, isFetching } = useCirclesHome();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const toggleJoin = useAppStore((s) => s.toggleJoinCommunity);
@@ -178,10 +180,10 @@ export default function CirclesScreen() {
 
   const openCommunity = useCallback(
     (c: Community) => {
-      primeCommunityDetailCache(queryClient, c);
+      prefetchCircleRoom(queryClient, c, user?.id ?? null);
       router.push(hrefCommunity(c.slug));
     },
-    [queryClient, router],
+    [queryClient, router, user?.id],
   );
 
   const featuredForScope = useMemo(() => {
@@ -193,6 +195,8 @@ export default function CirclesScreen() {
     if (scope === 'yours') return newCircles.filter((c) => joinedIds.has(c.id));
     return newCircles;
   }, [newCircles, scope, joinedIds]);
+
+  const newCirclesSpotlight = useMemo(() => newForScope.slice(0, 3), [newForScope]);
 
   const discoveryFallbackChips = useMemo(() => {
     const feat = data?.featured ?? [];
@@ -456,13 +460,13 @@ export default function CirclesScreen() {
           <>
             <View style={styles.section}>
               <View style={styles.sectionTitleRow}>
-                <Text style={styles.featuredTitle}>Featured Circles</Text>
+                <Text style={styles.featuredTitle}>Popular Circles</Text>
                 <TouchableOpacity
                   onPress={() => router.push('/circles-featured')}
                   hitSlop={8}
                   style={styles.seeAllHit}
                   accessibilityRole="button"
-                  accessibilityLabel="See all featured circles"
+                  accessibilityLabel="See all circles, alphabetical list"
                 >
                   <Text style={styles.seeAll}>See all</Text>
                 </TouchableOpacity>
@@ -471,7 +475,7 @@ export default function CirclesScreen() {
               {featuredForScope.length === 0 ? (
                 <View style={styles.emptyInline}>
                   <Text style={styles.emptyText}>
-                    No featured circles right now — check back soon or explore New circles below.
+                    No featured circles right now — try See all or New circles below.
                   </Text>
                 </View>
               ) : (
@@ -525,10 +529,10 @@ export default function CirclesScreen() {
               <View style={styles.sectionTitleRow}>
                 <Text style={styles.sectionKicker}>New circles</Text>
               </View>
-              <Text style={styles.sectionLede}>Fresh circles, added regularly for new ways to connect.</Text>
+              <Text style={styles.sectionLede}>The three newest spotlight rooms.</Text>
               {renderCompactList(
-                newForScope,
-                'Nothing new here yet — try Discover or search for a circle.',
+                newCirclesSpotlight,
+                'Nothing new here yet — try search or browse all circles.',
                 true,
                 activityByCircleId,
               )}

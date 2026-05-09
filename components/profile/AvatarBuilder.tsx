@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { PulseAvatarRingCaption } from '@/components/profile/PulseAvatarRingCaption';
 import { GoldFireworksBurst } from '@/components/profile/GoldFireworksBurst';
 import {
@@ -13,6 +14,7 @@ import {
   DICEBEAR_STYLES, DICEBEAR_BG_COLORS, buildDiceBearUrl,
 } from '@/store/useProfileCustomization';
 import { rasterRingOuterBoxSide, resolvePulseRingRaster } from '@/lib/pulseRingRasterAssets';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { AvatarType, PulseAvatarFrame } from '@/types';
 import type { PrizeFireworksTier } from './GoldFireworksBurst';
 
@@ -149,7 +151,12 @@ export function AvatarDisplay({
   const content = (() => {
     if (prioritizeRemoteAvatar && avatarUrl?.trim()) {
       return (
-        <Image source={{ uri: avatarUrl.trim() }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+        <Image
+          source={{ uri: avatarUrl.trim() }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="cover"
+          {...pulseImageListThumbProps}
+        />
       );
     }
     if (avatarType === 'illustrated') {
@@ -160,11 +167,19 @@ export function AvatarDisplay({
           style={{ width: size, height: size, borderRadius: size / 2 }}
           contentFit="cover"
           transition={300}
+          {...pulseImageListThumbProps}
         />
       );
     }
     if (avatarType === 'photo' && avatarUrl) {
-      return <Image source={{ uri: avatarUrl }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+      return (
+        <Image
+          source={{ uri: avatarUrl }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="cover"
+          {...pulseImageListThumbProps}
+        />
+      );
     }
     if (avatarType === 'gradient') {
       return (
@@ -251,6 +266,7 @@ export function AvatarDisplay({
             }}
             contentFit="contain"
             pointerEvents="none"
+            {...pulseImageListThumbProps}
           />
         ) : null}
         {showRasterGoldFireworks && pulseFrame ? (
@@ -348,7 +364,13 @@ export function AvatarBuilderModal({ visible, onClose, avatarUrl, onPickPhoto }:
                         onPress={() => setIllustratedAvatar({ style: s.key })}
                         activeOpacity={0.7}
                       >
-                        <Image source={{ uri: previewUrl }} style={styles.stylePreview} contentFit="cover" transition={200} />
+                        <Image
+                          source={{ uri: previewUrl }}
+                          style={styles.stylePreview}
+                          contentFit="cover"
+                          transition={200}
+                          {...pulseImageListThumbProps}
+                        />
                         <Text style={[styles.styleLabel, illustratedAvatar.style === s.key && styles.styleLabelActive]}>
                           {s.label}
                         </Text>
@@ -362,16 +384,24 @@ export function AvatarBuilderModal({ visible, onClose, avatarUrl, onPickPhoto }:
 
                 {/* Randomize + Custom Input */}
                 <View style={styles.seedRow}>
-                  <TextInput
-                    style={styles.seedInput}
-                    value={customSeed}
-                    onChangeText={(text) => {
-                      setCustomSeed(text);
-                      if (text.length > 0) setIllustratedAvatar({ seed: text });
-                    }}
-                    placeholder="Type a name or word..."
-                    placeholderTextColor={colors.dark.textMuted}
-                  />
+                  <AccentComposerFrame
+                    accentColor={colors.primary.teal}
+                    hint="Character seed"
+                    compact
+                    noShadow
+                    style={{ flex: 1 }}
+                  >
+                    <TextInput
+                      style={styles.seedPlain}
+                      value={customSeed}
+                      onChangeText={(text) => {
+                        setCustomSeed(text);
+                        if (text.length > 0) setIllustratedAvatar({ seed: text });
+                      }}
+                      placeholder="Type a name or word..."
+                      placeholderTextColor={colors.dark.textMuted}
+                    />
+                  </AccentComposerFrame>
                   <TouchableOpacity
                     style={styles.randomBtn}
                     onPress={() => {
@@ -458,14 +488,22 @@ export function AvatarBuilderModal({ visible, onClose, avatarUrl, onPickPhoto }:
                 </View>
 
                 <Text style={styles.optionTitle}>Your Initials</Text>
-                <TextInput
-                  style={styles.initialsInput}
-                  value={gradientAvatar.initials}
-                  onChangeText={(text) => setGradientAvatar({ initials: text.toUpperCase().slice(0, 3) })}
-                  maxLength={3}
-                  placeholder="AB"
-                  placeholderTextColor={colors.dark.textMuted}
-                />
+                <AccentComposerFrame
+                  accentColor={colors.primary.teal}
+                  hint="Initials (max 3)"
+                  compact
+                  noShadow
+                  style={{ alignSelf: 'center' }}
+                >
+                  <TextInput
+                    style={styles.initialsPlain}
+                    value={gradientAvatar.initials}
+                    onChangeText={(text) => setGradientAvatar({ initials: text.toUpperCase().slice(0, 3) })}
+                    maxLength={3}
+                    placeholder="AB"
+                    placeholderTextColor={colors.dark.textMuted}
+                  />
+                </AccentComposerFrame>
               </>
             )}
 
@@ -562,10 +600,11 @@ const styles = StyleSheet.create({
   styleLabelActive: { color: colors.primary.teal },
 
   seedRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  seedInput: {
-    flex: 1, backgroundColor: colors.dark.card, borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.dark.text,
-    borderWidth: 1, borderColor: colors.dark.border,
+  seedPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: colors.dark.text,
   },
   randomBtn: {
     width: 44, height: 44, borderRadius: 12,
@@ -618,11 +657,14 @@ const styles = StyleSheet.create({
   },
   gradientSampleActive: { borderColor: '#FFF' },
   gradientInitials: { fontSize: 22, fontWeight: '900', color: '#FFF' },
-  initialsInput: {
-    backgroundColor: colors.dark.card, borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12, fontSize: 20,
-    color: colors.dark.text, fontWeight: '800', textAlign: 'center',
-    borderWidth: 1, borderColor: colors.dark.border, width: 100,
+  initialsPlain: {
+    minWidth: 88,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    color: colors.dark.text,
   },
 
   photoHint: { alignItems: 'center', paddingVertical: 30, gap: 10 },

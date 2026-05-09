@@ -10,6 +10,7 @@ import {
   TextInput,
   ScrollView,
   FlatList,
+  Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
@@ -18,7 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { VIDEO_MAX_SECONDS, type MediaAsset } from '@/lib/media';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { setPendingVideoCapture } from '@/lib/pendingVideoCapture';
 import { probeVideoFile } from '@/lib/videoMetadata';
 import { looksByKind, tintForLook, type VideoLookId, type VideoLookKind } from '@/lib/videoFilters';
@@ -484,23 +487,25 @@ function SoundPickerModal({ visible, currentId, onClose, onPick }: SoundPickerMo
             </TouchableOpacity>
           </View>
 
-          <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={colors.dark.textMuted} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search sounds or titles"
-              placeholderTextColor={colors.dark.textMuted}
-              style={styles.searchInput}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {query.length > 0 ? (
-              <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={colors.dark.textMuted} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <AccentComposerFrame accentColor={colors.primary.teal} hint="Search sounds" compact noShadow>
+            <View style={styles.soundSearchRow}>
+              <Ionicons name="search-outline" size={18} color={colors.dark.textMuted} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search sounds or titles"
+                placeholderTextColor={colors.dark.textMuted}
+                style={styles.searchInput}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {query.length > 0 ? (
+                <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.dark.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </AccentComposerFrame>
 
           <Text style={styles.sectionHint}>
             {query.trim().length === 0 ? 'Trending sounds this week' : 'Matching sounds'}
@@ -518,6 +523,11 @@ function SoundPickerModal({ visible, currentId, onClose, onPick }: SoundPickerMo
             <FlatList
               data={items}
               keyExtractor={(item) => item.postId}
+              initialNumToRender={12}
+              maxToRenderPerBatch={8}
+              windowSize={9}
+              updateCellsBatchingPeriod={50}
+              removeClippedSubviews={Platform.OS === 'android'}
               renderItem={({ item }) => {
                 const isOn = item.postId === currentId;
                 return (
@@ -527,7 +537,12 @@ function SoundPickerModal({ visible, currentId, onClose, onPick }: SoundPickerMo
                     activeOpacity={0.85}
                   >
                     {item.thumbnailUrl ? (
-                      <Image source={{ uri: item.thumbnailUrl }} style={styles.soundThumb} contentFit="cover" />
+                      <Image
+                        source={{ uri: item.thumbnailUrl }}
+                        style={styles.soundThumb}
+                        contentFit="cover"
+                        {...pulseImageListThumbProps}
+                      />
                     ) : (
                       <View style={[styles.soundThumb, styles.soundThumbPh]}>
                         <Ionicons name="musical-notes" size={20} color={colors.primary.gold} />
@@ -757,16 +772,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sheetTitle: { color: colors.dark.text, fontSize: 18, fontWeight: '800' },
-  searchWrap: {
+  soundSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.dark.cardAlt,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
   },
   searchInput: {
     flex: 1,

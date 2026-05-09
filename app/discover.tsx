@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, ScrollView, StyleSheet, TouchableOpacity,
-  Dimensions, RefreshControl,
+  Dimensions, RefreshControl, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,8 +17,10 @@ import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { formatCount } from '@/utils/format';
 import { supabase } from '@/lib/supabase';
 import { postsService } from '@/services/supabase';
-import { primeCommunityDetailCache } from '@/lib/communityCache';
+import { useAuth } from '@/contexts/AuthContext';
+import { prefetchCircleRoom } from '@/lib/communityCache';
 import type { UserProfile, Post } from '@/types';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W * 0.42;
@@ -52,6 +54,7 @@ export default function DiscoverScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { data: trendingPosts, refetch: refetchPosts } = useFeed('topToday');
   const { data: featuredCommunities } = useFeaturedCommunities();
   const { data: featuredJobs } = useFeaturedJobs();
@@ -221,7 +224,11 @@ export default function DiscoverScreen() {
             >
               <View style={styles.creatorAvatarWrap}>
                 {c.avatarUrl ? (
-                  <Image source={{ uri: c.avatarUrl }} style={styles.creatorAvatarImg} />
+                  <Image
+                    source={{ uri: c.avatarUrl }}
+                    style={styles.creatorAvatarImg}
+                    {...pulseImageListThumbProps}
+                  />
                 ) : (
                   <Ionicons name="person" size={26} color={colors.primary.teal} />
                 )}
@@ -249,6 +256,11 @@ export default function DiscoverScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScroll}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              windowSize={5}
+              updateCellsBatchingPeriod={50}
+              removeClippedSubviews={Platform.OS === 'android'}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.postCard}
@@ -279,6 +291,11 @@ export default function DiscoverScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScroll}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              windowSize={5}
+              updateCellsBatchingPeriod={50}
+              removeClippedSubviews={Platform.OS === 'android'}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.postCard}
@@ -306,6 +323,11 @@ export default function DiscoverScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.hScroll}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.postCard}
@@ -333,13 +355,18 @@ export default function DiscoverScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScroll}
+              initialNumToRender={5}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+              updateCellsBatchingPeriod={50}
+              removeClippedSubviews={Platform.OS === 'android'}
               renderItem={({ item }) => {
                 const isJoined = joinedIds.has(item.id);
                 return (
                   <TouchableOpacity
                     style={styles.communityCard}
                     onPress={() => {
-                      primeCommunityDetailCache(queryClient, item);
+                      prefetchCircleRoom(queryClient, item, user?.id ?? null);
                       router.push(`/communities/${item.slug}`);
                     }}
                     activeOpacity={0.7}

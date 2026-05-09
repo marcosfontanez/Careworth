@@ -75,6 +75,10 @@ export default function JobsScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={9}
+        updateCellsBatchingPeriod={50}
         /** Job listings can scroll to hundreds in a major metro. */
         removeClippedSubviews={Platform.OS === 'android'}
         renderItem={({ item }) => (

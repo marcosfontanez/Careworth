@@ -26,11 +26,27 @@ export const communityService = {
     return communitiesService.search(query);
   },
 
-  async toggleJoin(communityId: string): Promise<boolean> {
+  async toggleJoin(communityId: string, options?: { notifyNewPosts?: boolean }): Promise<boolean> {
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return false;
-    return communitiesService.toggleJoin(user.id, communityId);
+    return communitiesService.toggleJoin(user.id, communityId, options);
+  },
+
+  async setCirclePostAlerts(communityId: string, enabled: boolean): Promise<void> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not signed in');
+    await communitiesService.setMemberNotifyNewPosts(user.id, communityId, enabled);
+  },
+
+  async getCirclePostAlerts(communityId: string): Promise<boolean | null> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    return communitiesService.getMemberNotifyNewPosts(user.id, communityId);
   },
 };

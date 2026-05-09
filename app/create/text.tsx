@@ -7,13 +7,14 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
-import { borderRadius, colors, layout, spacing, typography } from '@/theme';
+import { colors, layout, spacing, typography } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { postsService } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
 import { useToast } from '@/components/ui/Toast';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 export default function CreateTextScreen() {
   const router = useRouter();
@@ -85,30 +86,47 @@ export default function CreateTextScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <TextInput
-          style={styles.mainInput}
-          value={content}
-          onChangeText={setContent}
-          placeholder="Start a discussion, share a thought, or ask a question..."
-          placeholderTextColor={colors.dark.textMuted}
-          multiline
-          autoFocus
-          editable={!posting}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Start a discussion — share a thought or ask a question."
+          footer={
+            <AccentCharCount
+              length={charCount}
+              max={MAX_CHARS}
+              accentColor={colors.primary.teal}
+              warnWithin={200}
+              hideWhenEmpty={false}
+            />
+          }
+        >
+          <TextInput
+            style={styles.mainInput}
+            value={content}
+            onChangeText={setContent}
+            placeholder="What’s on your mind?"
+            placeholderTextColor={colors.dark.textMuted}
+            multiline
+            autoFocus
+            editable={!posting}
+            maxLength={MAX_CHARS}
+          />
+        </AccentComposerFrame>
 
-        <Text style={[styles.charCount, charCount > MAX_CHARS && { color: colors.status.error }]}>
-          {charCount}/{MAX_CHARS}
-        </Text>
-
-        <Text style={styles.label}>Hashtags</Text>
-        <TextInput
-          style={styles.input}
-          value={hashtags}
-          onChangeText={setHashtags}
-          placeholder="#Discussion #NurseLife"
-          placeholderTextColor={colors.dark.textMuted}
-          editable={!posting}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Hashtags (optional)"
+          compact
+          noShadow
+        >
+          <TextInput
+            style={styles.tagsInput}
+            value={hashtags}
+            onChangeText={setHashtags}
+            placeholder="#Discussion #NurseLife"
+            placeholderTextColor={colors.dark.textMuted}
+            editable={!posting}
+          />
+        </AccentComposerFrame>
       </ScrollView>
     </View>
   );
@@ -126,23 +144,12 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     minHeight: 160,
     textAlignVertical: 'top',
+    paddingTop: 4,
   },
-  label: { ...typography.sectionLabel, color: colors.dark.textSecondary },
-  input: {
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + spacing.xs,
+  tagsInput: {
+    ...typography.body,
     fontSize: 15,
     color: colors.dark.text,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
-  },
-  charCount: {
-    ...typography.caption,
-    color: colors.dark.textMuted,
-    textAlign: 'right',
-    fontWeight: '500',
-    marginTop: -spacing.sm,
+    paddingVertical: 4,
   },
 });

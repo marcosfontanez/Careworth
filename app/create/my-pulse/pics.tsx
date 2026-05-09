@@ -25,6 +25,7 @@ import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { storageService } from '@/lib/storage';
 import { colors, borderRadius, typography, shadows } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const MAX_PICS = 4;
 
@@ -292,7 +293,12 @@ export default function MyPulsePicsScreen() {
           <View style={styles.grid}>
             {assets.map((a) => (
               <View key={a.uri} style={styles.tile}>
-                <Image source={{ uri: a.uri }} style={styles.tileImg} />
+                <Image
+                  source={{ uri: a.uri }}
+                  style={styles.tileImg}
+                  contentFit="cover"
+                  {...pulseImageListThumbProps}
+                />
                 {a.uploading ? (
                   <View style={styles.tileOverlay}>
                     <ActivityIndicator color="#FFF" />

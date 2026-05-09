@@ -14,8 +14,15 @@ const typeConfig: Record<string, { name: string; color: string; bg: string; acti
   share: { name: 'paper-plane', color: colors.primary.royal, bg: colors.primary.royal + '18', action: 'View' },
   comment: { name: 'chatbubble', color: colors.primary.teal, bg: colors.primary.teal + '18', action: 'Reply' },
   reply: { name: 'chatbubble-ellipses', color: colors.primary.teal, bg: colors.primary.teal + '18', action: 'Reply' },
+  circle_thread_reply: {
+    name: 'chatbubble-ellipses',
+    color: colors.primary.teal,
+    bg: colors.primary.teal + '18',
+    action: 'View',
+  },
   mention: { name: 'at', color: colors.primary.teal, bg: colors.primary.teal + '22', action: 'View' },
   community_invite: { name: 'people', color: colors.status.invite, bg: colors.status.invite + '18', action: 'Join' },
+  circle_new_post: { name: 'albums', color: colors.primary.teal, bg: colors.primary.teal + '18', action: 'View' },
   job_alert: { name: 'briefcase', color: colors.primary.gold, bg: colors.primary.gold + '18' },
   badge_earned: { name: 'ribbon', color: colors.primary.gold, bg: colors.primary.gold + '18' },
   tier_up: { name: 'pulse', color: '#F59E0B', bg: 'rgba(245,158,11,0.18)', action: 'View' },
@@ -62,7 +69,7 @@ export function NotificationRow({ notification, onPress, onAvatarPress }: Props)
       )}
       <TouchableOpacity style={styles.bodyTouchable} onPress={onPress} activeOpacity={0.7}>
         <View style={styles.body}>
-          <Text style={styles.message} numberOfLines={2}>{notification.message}</Text>
+          <Text style={styles.message} numberOfLines={3}>{notification.message}</Text>
           <View style={styles.metaRow}>
             <Text style={styles.time}>{timeAgo(notification.createdAt)}</Text>
             {cfg.action && (

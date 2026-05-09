@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { useAuth } from '@/contexts/AuthContext';
 import { storageService } from '@/lib/storage';
 import { postsService } from '@/services/supabase';
@@ -944,61 +945,104 @@ export default function CreateVideoScreen() {
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Headline (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={shortTitle}
-            onChangeText={setShortTitle}
-            placeholder="Short title — shows above your caption in the feed"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-            maxLength={120}
-          />
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="Headline (optional)"
+            compact
+            noShadow
+            footer={
+              <AccentCharCount
+                length={shortTitle.length}
+                max={120}
+                accentColor={colors.primary.teal}
+                warnWithin={14}
+                hideWhenEmpty={false}
+              />
+            }
+          >
+            <TextInput
+              style={styles.inputPlain}
+              value={shortTitle}
+              onChangeText={setShortTitle}
+              placeholder="Short title — shows above your caption in the feed"
+              placeholderTextColor={colors.dark.textMuted}
+              editable={!posting}
+              maxLength={120}
+            />
+          </AccentComposerFrame>
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>On-video text (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={overlayLine}
-            onChangeText={setOverlayLine}
-            placeholder="Sticker-style line on the preview — also added to caption when you post"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-            maxLength={80}
-          />
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="On-video text (optional)"
+            compact
+            noShadow
+            footer={
+              <AccentCharCount
+                length={overlayLine.length}
+                max={80}
+                accentColor={colors.primary.teal}
+                warnWithin={12}
+                hideWhenEmpty={false}
+              />
+            }
+          >
+            <TextInput
+              style={styles.inputPlain}
+              value={overlayLine}
+              onChangeText={setOverlayLine}
+              placeholder="Sticker-style line on the preview — also added to caption when you post"
+              placeholderTextColor={colors.dark.textMuted}
+              editable={!posting}
+              maxLength={80}
+            />
+          </AccentComposerFrame>
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Caption</Text>
-          <TextInput
-            style={styles.captionInput}
-            value={caption}
-            onChangeText={setCaption}
-            placeholder="What's on your mind?"
-            placeholderTextColor={colors.dark.textMuted}
-            multiline
-            numberOfLines={4}
-            editable={!posting}
-          />
+          <AccentComposerFrame accentColor={colors.primary.teal} hint="Caption" noShadow>
+            <TextInput
+              style={styles.captionPlain}
+              value={caption}
+              onChangeText={setCaption}
+              placeholder="What's on your mind?"
+              placeholderTextColor={colors.dark.textMuted}
+              multiline
+              numberOfLines={4}
+              editable={!posting}
+            />
+          </AccentComposerFrame>
         </View>
 
         {!soundPostIdTrim ? (
           <View style={styles.fieldGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Name this sound (optional)</Text>
-              <Text style={styles.labelHint}>{soundTitle.length}/60</Text>
-            </View>
-            <TextInput
-              style={styles.input}
-              value={soundTitle}
-              onChangeText={(t) => setSoundTitle(t.slice(0, 60))}
-              placeholder="e.g. ICU shift vibes · part 2"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-              maxLength={60}
-              returnKeyType="done"
-            />
+            <AccentComposerFrame
+              accentColor={colors.primary.teal}
+              hint="Name this sound (optional)"
+              compact
+              noShadow
+              footer={
+                <AccentCharCount
+                  length={soundTitle.length}
+                  max={60}
+                  accentColor={colors.primary.teal}
+                  warnWithin={10}
+                  hideWhenEmpty={false}
+                />
+              }
+            >
+              <TextInput
+                style={styles.inputPlain}
+                value={soundTitle}
+                onChangeText={(t) => setSoundTitle(t.slice(0, 60))}
+                placeholder="e.g. ICU shift vibes · part 2"
+                placeholderTextColor={colors.dark.textMuted}
+                editable={!posting}
+                maxLength={60}
+                returnKeyType="done"
+              />
+            </AccentComposerFrame>
             <Text style={styles.helperText}>
               Shown in the Sounds search and on every clip that uses your audio. Leave blank and we&apos;ll attribute it to your handle.
             </Text>
@@ -1006,39 +1050,42 @@ export default function CreateVideoScreen() {
         ) : null}
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Hashtags</Text>
-          <TextInput
-            style={styles.input}
-            value={hashtags}
-            onChangeText={setHashtags}
-            placeholder="#NurseLife #ICU #NightShift"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-          />
+          <AccentComposerFrame accentColor={colors.primary.teal} hint="Hashtags" compact noShadow>
+            <TextInput
+              style={styles.inputPlain}
+              value={hashtags}
+              onChangeText={setHashtags}
+              placeholder="#NurseLife #ICU #NightShift"
+              placeholderTextColor={colors.dark.textMuted}
+              editable={!posting}
+            />
+          </AccentComposerFrame>
         </View>
 
         {duetPostIdTrim ? (
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Evidence link (optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={evidenceUrl}
-              onChangeText={setEvidenceUrl}
-              placeholder="https://guideline.org/… or PubMed link"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
-            <Text style={styles.label}>Evidence label (optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={evidenceLabel}
-              onChangeText={setEvidenceLabel}
-              placeholder="e.g. CDC hand hygiene 2024"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-            />
+            <AccentComposerFrame accentColor={colors.primary.teal} hint="Evidence link (optional)" compact noShadow>
+              <TextInput
+                style={styles.inputPlain}
+                value={evidenceUrl}
+                onChangeText={setEvidenceUrl}
+                placeholder="https://guideline.org/… or PubMed link"
+                placeholderTextColor={colors.dark.textMuted}
+                editable={!posting}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </AccentComposerFrame>
+            <AccentComposerFrame accentColor={colors.primary.teal} hint="Evidence label (optional)" compact noShadow>
+              <TextInput
+                style={styles.inputPlain}
+                value={evidenceLabel}
+                onChangeText={setEvidenceLabel}
+                placeholder="e.g. CDC hand hygiene 2024"
+                placeholderTextColor={colors.dark.textMuted}
+                editable={!posting}
+              />
+            </AccentComposerFrame>
           </View>
         ) : null}
 
@@ -1183,20 +1230,20 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 14, fontWeight: '700' },
 
   fieldGroup: { gap: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: colors.dark.textSecondary, marginLeft: 4 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginRight: 4 },
-  labelHint: { fontSize: 12, fontWeight: '600', color: colors.dark.textMuted },
   helperText: { fontSize: 12, color: colors.dark.textMuted, marginLeft: 4, marginTop: 2, lineHeight: 16 },
-  captionInput: {
-    backgroundColor: colors.dark.card, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 14, fontSize: 15,
-    color: colors.dark.text, height: 110, textAlignVertical: 'top',
-    borderWidth: 1, borderColor: colors.dark.border,
+  inputPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: colors.dark.text,
   },
-  input: {
-    backgroundColor: colors.dark.card, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 14, fontSize: 15,
-    color: colors.dark.text, borderWidth: 1, borderColor: colors.dark.border,
+  captionPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: colors.dark.text,
+    minHeight: 110,
+    textAlignVertical: 'top',
   },
 
   optionsRow: { flexDirection: 'row', gap: 10 },

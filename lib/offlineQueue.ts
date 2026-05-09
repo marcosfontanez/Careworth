@@ -14,6 +14,7 @@ export interface QueuedAction {
   type:
     | 'like_post'
     | 'unlike_post'
+    | 'set_post_reaction'
     | 'save_post'
     | 'unsave_post'
     | 'follow_user'
@@ -115,12 +116,14 @@ export function createOfflineExecutor() {
   return async (action: QueuedAction): Promise<boolean> => {
     switch (action.type) {
       case 'like_post': {
-        const { error } = await supabase
-          .from('post_likes')
-          .upsert(
-            { post_id: action.payload.postId, user_id: action.payload.userId },
-            { onConflict: 'user_id,post_id', ignoreDuplicates: true },
-          );
+        const { error } = await supabase.from('post_likes').upsert(
+          {
+            post_id: action.payload.postId,
+            user_id: action.payload.userId,
+            reaction: action.payload.reaction ?? 'heart',
+          },
+          { onConflict: 'user_id,post_id', ignoreDuplicates: true },
+        );
         return !error;
       }
       case 'unlike_post': {
@@ -129,6 +132,22 @@ export function createOfflineExecutor() {
           .delete()
           .eq('post_id', action.payload.postId)
           .eq('user_id', action.payload.userId);
+        return !error;
+      }
+      case 'set_post_reaction': {
+        const { userId, postId, reaction } = action.payload as {
+          userId: string;
+          postId: string;
+          reaction: string | null;
+        };
+        if (!reaction) {
+          const { error } = await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userId);
+          return !error;
+        }
+        const { error } = await supabase.from('post_likes').upsert(
+          { post_id: postId, user_id: userId, reaction },
+          { onConflict: 'user_id,post_id' },
+        );
         return !error;
       }
       case 'save_post': {

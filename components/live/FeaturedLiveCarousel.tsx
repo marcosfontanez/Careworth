@@ -64,6 +64,9 @@ export function FeaturedLiveCarousel({
         ref={listRef}
         data={data}
         keyExtractor={(item) => item.id}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={5}
         renderItem={({ item }) => (
           <View style={{ width: CARD_WIDTH, marginRight: spacing.md }}>
             <FeaturedLiveCard

@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { colors, layout, spacing, typography } from '@/theme';
 import { postKeys } from '@/lib/queryKeys';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { Post } from '@/types';
 
 export default function SoundDetailScreen() {
@@ -85,7 +86,12 @@ export default function SoundDetailScreen() {
         onPress={() => router.push(`/post/${item.id}`)}
       >
         {thumb ? (
-          <Image source={{ uri: thumb }} style={styles.remixThumb} contentFit="cover" />
+          <Image
+            source={{ uri: thumb }}
+            style={styles.remixThumb}
+            contentFit="cover"
+            {...pulseImageListThumbProps}
+          />
         ) : (
           <View style={[styles.remixThumb, styles.thumbPh]} />
         )}
@@ -111,7 +117,12 @@ export default function SoundDetailScreen() {
         <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}>
           <View style={styles.hero}>
             {thumb ? (
-              <Image source={{ uri: thumb }} style={styles.heroThumb} contentFit="cover" />
+              <Image
+                source={{ uri: thumb }}
+                style={styles.heroThumb}
+                contentFit="cover"
+                {...pulseImageFeedHeroProps}
+              />
             ) : (
               <View style={[styles.heroThumb, styles.thumbPh]} />
             )}

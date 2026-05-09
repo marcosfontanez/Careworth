@@ -69,7 +69,9 @@ export default function ProfileByIdScreen() {
     if (!authUser) return;
     try {
       const convId = await messagesService.getOrCreateConversation(authUser.id, user.id);
-      router.push(`/messages/${convId}?name=${encodeURIComponent(user.displayName)}`);
+      router.push(
+        `/messages/${convId}?name=${encodeURIComponent(user.displayName)}&peerId=${encodeURIComponent(user.id)}` as any,
+      );
     } catch (e: any) {
       toast.show(e?.message ?? 'Could not open messages', 'error');
     }

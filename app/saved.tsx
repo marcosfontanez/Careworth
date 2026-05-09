@@ -151,6 +151,10 @@ export default function SavedScreen() {
             data={savedPosts}
             keyExtractor={(item) => item.id}
             numColumns={3}
+            initialNumToRender={9}
+            maxToRenderPerBatch={9}
+            windowSize={7}
+            updateCellsBatchingPeriod={50}
             /** Android virtualization win for power users with many saves. */
             removeClippedSubviews={Platform.OS === 'android'}
             renderItem={({ item }) => (
@@ -185,6 +189,10 @@ export default function SavedScreen() {
         <FlatList
           data={savedJobs}
           keyExtractor={(item) => item.id}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          updateCellsBatchingPeriod={50}
           removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => (
             <TouchableOpacity

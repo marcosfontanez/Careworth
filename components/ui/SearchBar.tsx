@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, iconSize, typography } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 interface Props {
   value: string;
@@ -26,38 +27,49 @@ export function SearchBar({
 }: Props) {
   const isDark = variant === 'dark';
   const iconColor = isDark ? colors.dark.textMuted : colors.neutral.midGray;
+  const accent = colors.primary.teal;
   return (
-    <View style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}>
-      <Ionicons name="search" size={iconSize.sm} color={iconColor} />
-      <TextInput
-        style={[styles.input, isDark ? styles.inputDark : styles.inputLight]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={iconColor}
-        accessibilityLabel={accessibilityLabel}
-      />
-    </View>
+    <AccentComposerFrame
+      accentColor={accent}
+      compact
+      noShadow
+      innerStyle={{
+        paddingVertical: 4,
+        paddingHorizontal: 4,
+        gap: 0,
+      }}
+      style={[
+        styles.frameOuter,
+        isDark
+          ? undefined
+          : { backgroundColor: colors.neutral.lightGray, borderColor: colors.overlay.light },
+      ]}
+    >
+      <View style={styles.container}>
+        <Ionicons name="search" size={iconSize.sm} color={iconColor} />
+        <TextInput
+          style={[styles.input, isDark ? styles.inputDark : styles.inputLight]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={iconColor}
+          accessibilityLabel={accessibilityLabel}
+        />
+      </View>
+    </AccentComposerFrame>
   );
 }
 
 const styles = StyleSheet.create({
+  frameOuter: {
+    borderRadius: borderRadius.xl,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing.md + spacing.xs,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     gap: spacing.sm + spacing.xs,
-    borderWidth: 1,
-  },
-  containerDark: {
-    backgroundColor: colors.dark.card,
-    borderColor: colors.dark.border,
-  },
-  containerLight: {
-    backgroundColor: colors.neutral.lightGray,
-    borderColor: colors.overlay.light,
   },
   input: {
     ...typography.body,

@@ -58,6 +58,19 @@ const THREAD_SELECT = `
 `;
 
 export const circleThreadsDb = {
+  async listByCommunityId(communityId: string): Promise<CircleThread[]> {
+    const id = (communityId ?? '').trim();
+    if (!id) return [];
+    const { data, error } = await supabase
+      .from('circle_threads')
+      .select(THREAD_SELECT)
+      .eq('community_id', id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data ?? []).map(rowToThread);
+  },
+
   async listBySlug(slug: string): Promise<CircleThread[]> {
     const comm = await communitiesService.getBySlug(slug);
     if (!comm) return [];

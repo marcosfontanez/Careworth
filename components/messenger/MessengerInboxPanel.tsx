@@ -20,6 +20,7 @@ import { useToast } from '@/components/ui/Toast';
 import { messagesService, type Conversation } from '@/services/supabase/messages';
 import { timeAgo } from '@/utils/format';
 import { useAuth } from '@/contexts/AuthContext';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 export type MessengerSortMode = 'recent' | 'unread' | 'name';
 
@@ -85,7 +86,7 @@ export function MessengerInboxPanel({
   const openThread = useCallback(
     (item: Conversation) => {
       router.push(
-        `/messages/${item.id}?name=${encodeURIComponent(item.otherUser.displayName)}` as any,
+        `/messages/${item.id}?name=${encodeURIComponent(item.otherUser.displayName)}&peerId=${encodeURIComponent(item.otherUser.id)}` as any,
       );
     },
     [router],
@@ -216,6 +217,10 @@ export function MessengerInboxPanel({
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.id}
+        initialNumToRender={14}
+        maxToRenderPerBatch={10}
+        windowSize={9}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl
@@ -228,43 +233,61 @@ export function MessengerInboxPanel({
           const isOnline = presenceOnline.has(item.otherUser.id);
           return (
             <View style={[styles.row, item.unreadCount > 0 && styles.rowUnread]}>
-              <TouchableOpacity
-                style={styles.rowMain}
-                onPress={() => openThread(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.avatarWrap}>
-                  <Image source={{ uri: item.otherUser.avatarUrl }} style={styles.avatar} />
-                  {isOnline ? <View style={styles.onlineDot} /> : null}
-                </View>
-                <View style={styles.body}>
-                  <View style={styles.nameRow}>
+              <View style={styles.rowMain}>
+                <TouchableOpacity
+                  style={styles.avatarHit}
+                  onPress={() => router.push(`/profile/${item.otherUser.id}` as any)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.otherUser.displayName} profile`}
+                >
+                  <View style={styles.avatarWrap}>
+                    <Image
+                      source={{ uri: item.otherUser.avatarUrl }}
+                      style={styles.avatar}
+                      {...pulseImageListThumbProps}
+                    />
+                    {isOnline ? <View style={styles.onlineDot} /> : null}
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.rowBodyHit}
+                  onPress={() => openThread(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.body}>
+                    <View style={styles.nameRow}>
+                      <Text
+                        style={[styles.name, item.unreadCount > 0 && styles.nameUnread]}
+                        numberOfLines={1}
+                      >
+                        {item.otherUser.displayName}
+                      </Text>
+                      {item.otherUser.isVerified ? (
+                        <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
+                      ) : null}
+                      <Text style={styles.time}>{timeAgo(item.lastMessageAt)}</Text>
+                    </View>
                     <Text
-                      style={[styles.name, item.unreadCount > 0 && styles.nameUnread]}
+                      style={[styles.preview, item.unreadCount > 0 && styles.previewUnread]}
                       numberOfLines={1}
                     >
-                      {item.otherUser.displayName}
+                      {item.lastMessage ?? 'Start chatting…'}
                     </Text>
-                    {item.otherUser.isVerified ? (
-                      <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
-                    ) : null}
-                    <Text style={styles.time}>{timeAgo(item.lastMessageAt)}</Text>
                   </View>
-                  <Text
-                    style={[styles.preview, item.unreadCount > 0 && styles.previewUnread]}
-                    numberOfLines={1}
-                  >
-                    {item.lastMessage ?? 'Start chatting…'}
-                  </Text>
-                </View>
+                </TouchableOpacity>
                 {item.unreadCount > 0 ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{item.unreadCount}</Text>
-                  </View>
+                  <TouchableOpacity onPress={() => openThread(item)} style={styles.badgeHit} activeOpacity={0.7}>
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{item.unreadCount}</Text>
+                    </View>
+                  </TouchableOpacity>
                 ) : (
-                  <View style={styles.badgePlaceholder} />
+                  <TouchableOpacity onPress={() => openThread(item)} style={styles.badgeHit} activeOpacity={0.7}>
+                    <View style={styles.badgePlaceholder} />
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 onPress={() => openRowMenu(item)}
                 style={styles.moreBtn}
@@ -308,6 +331,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md - 2,
     minWidth: 0,
   },
+  avatarHit: { flexShrink: 0 },
+  rowBodyHit: { flex: 1, minWidth: 0 },
+  badgeHit: { flexShrink: 0, justifyContent: 'center' },
   moreBtn: { paddingRight: layout.screenPadding, paddingVertical: spacing.md },
   avatarWrap: { position: 'relative' },
   avatar: {

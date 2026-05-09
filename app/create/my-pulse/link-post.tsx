@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -236,8 +237,13 @@ export default function MyPulseLinkPostScreen() {
       <FlatList
         data={list}
         keyExtractor={(p) => p.id}
-        renderItem={renderTile}
         numColumns={2}
+        initialNumToRender={6}
+        maxToRenderPerBatch={4}
+        windowSize={5}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
+        renderItem={renderTile}
         columnWrapperStyle={{ gap: GRID_GAP }}
         contentContainerStyle={{
           paddingBottom: insets.bottom + 28,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +22,9 @@ import { analytics } from '@/lib/analytics';
 import { getSearchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory } from '@/lib/searchHistory';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { primeCommunityDetailCache } from '@/lib/communityCache';
+import { useAuth } from '@/contexts/AuthContext';
+import { prefetchCircleRoom } from '@/lib/communityCache';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile, Community, SoundLibraryRow, ViralSoundRow } from '@/types';
 
 const SEARCH_TABS = ['All', 'Creators', 'Sounds', 'Viral Songs', 'Communities', 'Hashtags'] as const;
@@ -40,6 +42,7 @@ export default function SearchScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ q?: string }>();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [query, setQuery] = useState(params.q ?? '');
   const [tab, setTab] = useState<SearchTab>(() =>
     params.q?.startsWith('#') ? 'Hashtags' : 'All',
@@ -343,6 +346,11 @@ export default function SearchScreen() {
       ) : (
         <FlatList
           data={listData}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={8}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           keyExtractor={(item, i) => {
             if (item.type === 'creator') return `c-${item.data.id}`;
             if (item.type === 'community') return `co-${item.data.id}`;
@@ -403,10 +411,10 @@ export default function SearchScreen() {
                   <CommunityCard
                     community={{ ...community, isJoined: joinedIds.has(community.id) }}
                     onPress={() => {
-                      primeCommunityDetailCache(queryClient, {
+                      prefetchCircleRoom(queryClient, {
                         ...community,
                         isJoined: joinedIds.has(community.id),
-                      });
+                      }, user?.id ?? null);
                       router.push(`/communities/${community.slug}`);
                     }}
                     onJoin={() => toggleJoinCommunity(community.id)}
@@ -444,7 +452,12 @@ export default function SearchScreen() {
                 >
                   <View style={styles.soundThumbWrap}>
                     {thumb ? (
-                      <Image source={{ uri: thumb }} style={styles.soundThumb} contentFit="cover" />
+                      <Image
+                        source={{ uri: thumb }}
+                        style={styles.soundThumb}
+                        contentFit="cover"
+                        {...pulseImageListThumbProps}
+                      />
                     ) : (
                       <View style={[styles.soundThumb, styles.soundThumbPh]}>
                         <Ionicons name="musical-notes" size={22} color={colors.dark.textMuted} />
@@ -478,7 +491,12 @@ export default function SearchScreen() {
                 </View>
                 <View style={styles.soundThumbWrap}>
                   {thumb ? (
-                    <Image source={{ uri: thumb }} style={styles.soundThumb} contentFit="cover" />
+                    <Image
+                      source={{ uri: thumb }}
+                      style={styles.soundThumb}
+                      contentFit="cover"
+                      {...pulseImageListThumbProps}
+                    />
                   ) : (
                     <View style={[styles.soundThumb, styles.soundThumbPh]}>
                       <Ionicons name="flame" size={22} color={colors.primary.gold} />

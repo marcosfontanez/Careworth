@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { borderRadius, colors, layout, spacing, typography } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 interface BlockedUser {
   blockId: string;
@@ -90,9 +91,18 @@ export default function BlockedUsersScreen() {
         <FlatList
           data={blocked}
           keyExtractor={(item) => item.blockId}
+          initialNumToRender={14}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Image source={{ uri: item.avatarUrl ?? '' }} style={styles.avatar} />
+              <Image
+                source={{ uri: item.avatarUrl ?? '' }}
+                style={styles.avatar}
+                {...pulseImageListThumbProps}
+              />
               <View style={styles.body}>
                 <Text style={styles.name}>{item.displayName}</Text>
                 <Text style={styles.role}>{item.role}</Text>

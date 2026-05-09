@@ -17,6 +17,7 @@ export function rowToCommunity(row: any): Community {
     categories: row.categories ?? [],
     trendingTopics: row.trending_topics ?? [],
     featuredOrder: row.featured_order ?? null,
+    profileOpenCount: row.profile_open_count ?? 0,
   };
 }
 
@@ -26,6 +27,17 @@ export const communitiesService = {
       .from('communities')
       .select('*')
       .order('member_count', { ascending: false });
+
+    if (error) throw error;
+    return (data ?? []).map(rowToCommunity);
+  },
+
+  /** Every circle, A–Z by URL slug (for directory / browse-all). */
+  async getAllAlphabeticalBySlug(): Promise<Community[]> {
+    const { data, error } = await supabase
+      .from('communities')
+      .select('*')
+      .order('slug', { ascending: true });
 
     if (error) throw error;
     return (data ?? []).map(rowToCommunity);
@@ -158,20 +170,65 @@ export const communitiesService = {
     return out;
   },
 
-  async toggleJoin(userId: string, communityId: string): Promise<boolean> {
+  /**
+   * Popularity signal for Circles featured ordering. Best-effort RPC;
+   * fails silently when unauthenticated or offline.
+   */
+  async bumpProfileOpen(communityId: string): Promise<void> {
+    const id = (communityId ?? '').trim();
+    if (!id) return;
+    const { error } = await supabase.rpc('bump_community_profile_open', { p_community_id: id });
+    if (error && __DEV__) console.warn('[communitiesService.bumpProfileOpen]', error.message);
+  },
+
+  async toggleJoin(
+    userId: string,
+    communityId: string,
+    options?: { notifyNewPosts?: boolean },
+  ): Promise<boolean> {
+    const notifyNewPosts = options?.notifyNewPosts ?? true;
     const { data: existing } = await supabase
       .from('community_members')
       .select('id')
       .eq('user_id', userId)
       .eq('community_id', communityId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       await supabase.from('community_members').delete().eq('id', existing.id);
       return false;
     } else {
-      await supabase.from('community_members').insert({ user_id: userId, community_id: communityId });
+      await supabase.from('community_members').insert({
+        user_id: userId,
+        community_id: communityId,
+        notify_new_posts: notifyNewPosts,
+      });
       return true;
     }
+  },
+
+  /** null = not a member */
+  async getMemberNotifyNewPosts(userId: string, communityId: string): Promise<boolean | null> {
+    const { data, error } = await supabase
+      .from('community_members')
+      .select('notify_new_posts')
+      .eq('user_id', userId)
+      .eq('community_id', communityId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.notify_new_posts !== false;
+  },
+
+  async setMemberNotifyNewPosts(
+    userId: string,
+    communityId: string,
+    notifyNewPosts: boolean,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('community_members')
+      .update({ notify_new_posts: notifyNewPosts })
+      .eq('user_id', userId)
+      .eq('community_id', communityId);
+    if (error && __DEV__) console.warn('[communitiesService.setMemberNotifyNewPosts]', error.message);
   },
 };

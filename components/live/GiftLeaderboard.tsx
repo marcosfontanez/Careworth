@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, FlatList, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { StreamGiftLeaderboard } from '@/types';
 
 const RANK_EMOJIS = ['👑', '🥈', '🥉'];
@@ -34,6 +35,10 @@ export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
             <FlatList
               data={leaderboard}
               keyExtractor={(item) => item.userId}
+              initialNumToRender={12}
+              maxToRenderPerBatch={8}
+              windowSize={7}
+              removeClippedSubviews={Platform.OS === 'android'}
               renderItem={({ item, index }) => (
                 <View style={[styles.row, index < 3 && styles.rowTop]}>
                   <View style={[styles.rankBadge, { backgroundColor: index < 3 ? RANK_COLORS[index] + '20' : colors.dark.cardAlt }]}>
@@ -46,7 +51,7 @@ export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
 
                   <View style={styles.avatarWrap}>
                     {item.avatarUrl ? (
-                      <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+                      <Image source={{ uri: item.avatarUrl }} style={styles.avatar} {...pulseImageListThumbProps} />
                     ) : (
                       <View style={[styles.avatar, styles.avatarPlaceholder]}>
                         <Ionicons name="person" size={16} color={colors.dark.textMuted} />
@@ -87,7 +92,7 @@ export function MiniLeaderboard({ top3 }: { top3: StreamGiftLeaderboard[] }) {
           <Text style={styles.miniEmoji}>{RANK_EMOJIS[i] ?? `#${i + 1}`}</Text>
           <View style={styles.miniAvatarWrap}>
             {item.avatarUrl ? (
-              <Image source={{ uri: item.avatarUrl }} style={styles.miniAvatar} />
+              <Image source={{ uri: item.avatarUrl }} style={styles.miniAvatar} {...pulseImageListThumbProps} />
             ) : (
               <View style={[styles.miniAvatar, styles.avatarPlaceholder]}>
                 <Ionicons name="person" size={10} color={colors.dark.textMuted} />

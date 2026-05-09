@@ -15,7 +15,7 @@ export function MarketingFooter({ locale }: { locale: Locale }) {
   const legalLine = c.legalBlurb.replace("{date}", legalDocumentsLastUpdatedDisplay);
 
   return (
-    <footer className="border-t border-[rgba(148,163,184,0.1)] bg-[#030712]">
+    <footer className="border-t border-[rgba(148,163,184,0.1)] bg-pv-navy-deep">
       <div className={cn(marketingGutterX, "py-14 sm:py-16")}>
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-6">
           <div className="sm:col-span-2 lg:col-span-2">
@@ -34,7 +34,7 @@ export function MarketingFooter({ locale }: { locale: Locale }) {
                 <nav className="mt-4" aria-labelledby={navId}>
                   <ul className="space-y-2.5">
                     {col.links.map((l) => (
-                      <li key={`${col.title}-${l.label}`}>
+                      <li key={`${col.title}-${l.href}`}>
                         <Link href={l.href} className="text-sm text-muted-foreground transition hover:text-primary">
                           {l.label}
                         </Link>

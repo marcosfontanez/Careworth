@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { copyTextWithFallback } from '@/lib/copyLink';
 import { colors } from '@/theme';
+import { LAUNCH_LINKS } from '@/constants/launch';
 import { sharePost, shareToMyPulseAsClip } from '@/lib/share';
 import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
 import { useToast } from '@/components/ui/Toast';
@@ -72,7 +73,8 @@ export function LongPressMenu({
         void shareDownloadedPostMedia(post);
         break;
       case 'copy': {
-        const url = `https://pulseverse.app/post/${post.id}`;
+        const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+        const url = `${base}/post/${post.id}`;
         await copyTextWithFallback(url);
         onClose();
         break;

@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing } from '@/theme';
 import { useUnreadCount } from '@/hooks/useQueries';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -49,6 +50,7 @@ const TabIcon = React.memo(function TabIcon({ tab, focused, color }: { tab: type
               style={styles.createLogo}
               contentFit="cover"
               contentPosition="center"
+              {...pulseImageListThumbProps}
             />
           </View>
         </LinearGradient>

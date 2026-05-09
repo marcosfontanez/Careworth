@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,16 +19,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { pickAvatarImageFromGallery, pickBannerImageFromGallery } from '@/lib/media';
+import {
+  pickAvatarImageRawFromGallery,
+  pickBannerImageFromGallery,
+  normalizeRasterForUpload,
+  type MediaAsset,
+} from '@/lib/media';
 import { storageService } from '@/lib/storage';
 import { profilesService, pulseAvatarFramesService } from '@/services/supabase';
 import { supabaseMessage } from '@/utils/supabaseErrors';
 import { userKeys } from '@/lib/queryKeys';
+import { profileNeedsPublicNameReview } from '@/lib/oauthProfilePlaceholders';
 import { SongPickerModal, type PickedSong } from '@/components/mypage/SongPickerModal';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { CircularAvatarCropModal } from '@/components/profile/CircularAvatarCropModal';
+import {
+  CustomizeMoreTabs,
+  type CustomizeMoreTabsHandle,
+} from '@/components/mypage/CustomizeMoreTabs';
+import { useProfileCustomization } from '@/store/useProfileCustomization';
 
 const DEFAULT_BANNER =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1200&q=80';
@@ -68,6 +82,9 @@ export default function MyPageAppearanceScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, profile, refreshProfile } = useAuth();
+  const { accentColor } = useProfileCustomization();
+  const moreRef = useRef<CustomizeMoreTabsHandle>(null);
+  const [mainTab, setMainTab] = useState<'look' | 'more'>('look');
 
   const uid = user?.id ?? '';
 
@@ -89,10 +106,21 @@ export default function MyPageAppearanceScreen() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<'banner' | 'avatar' | null>(null);
+  const [avatarCropAsset, setAvatarCropAsset] = useState<MediaAsset | null>(null);
   const [identityTagsInput, setIdentityTagsInput] = useState('');
   const [pageIntroLine, setPageIntroLine] = useState('');
   const [hideRecentPostsStrip, setHideRecentPostsStrip] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const getSongFields = useCallback(
+    () => ({
+      title: songTitle,
+      artist: songArtist,
+      url: songUrl,
+      artworkUrl: songArtworkUrl,
+    }),
+    [songTitle, songArtist, songUrl, songArtworkUrl],
+  );
 
   useEffect(() => {
     if (!profile) return;
@@ -169,23 +197,36 @@ export default function MyPageAppearanceScreen() {
 
   const pickAvatar = async () => {
     try {
-      setUploading('avatar');
-      const asset = await pickAvatarImageFromGallery();
-      if (!asset) return;
-      const url = await storageService.uploadAvatar(uid, {
-        uri: asset.uri,
-        type: asset.mimeType,
-        name: asset.fileName,
-      });
-      setAvatarPreview(url);
-      await profilesService.update(uid, { avatar_url: url });
-      await refreshProfile();
+      const raw = await pickAvatarImageRawFromGallery();
+      if (!raw) return;
+      setAvatarCropAsset(raw);
     } catch (e: unknown) {
-      Alert.alert('Upload failed', supabaseMessage(e));
-    } finally {
-      setUploading(null);
+      Alert.alert('Could not open photo', supabaseMessage(e));
     }
   };
+
+  const onAvatarCropComplete = useCallback(
+    async (asset: MediaAsset) => {
+      setAvatarCropAsset(null);
+      try {
+        setUploading('avatar');
+        const normalized = await normalizeRasterForUpload(asset, 'avatar');
+        const url = await storageService.uploadAvatar(uid, {
+          uri: normalized.uri,
+          type: normalized.mimeType,
+          name: normalized.fileName,
+        });
+        setAvatarPreview(url);
+        await profilesService.update(uid, { avatar_url: url });
+        await refreshProfile();
+      } catch (e: unknown) {
+        Alert.alert('Upload failed', supabaseMessage(e));
+      } finally {
+        setUploading(null);
+      }
+    },
+    [uid, refreshProfile],
+  );
 
   const saveCopyAndSong = async () => {
     const tags = parseIdentityTags(identityTagsInput);
@@ -207,6 +248,18 @@ export default function MyPageAppearanceScreen() {
       Alert.alert('Could not save', supabaseMessage(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleHeaderSave = async () => {
+    if (mainTab === 'look') {
+      await saveCopyAndSong();
+      return;
+    }
+    const ok = await moreRef.current?.save();
+    if (ok) {
+      Alert.alert('Saved', 'Your profile was updated.');
+      router.back();
     }
   };
 
@@ -237,8 +290,8 @@ export default function MyPageAppearanceScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="close" size={26} color={colors.dark.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Pulse look</Text>
-        <TouchableOpacity onPress={saveCopyAndSong} disabled={saving}>
+        <Text style={styles.headerTitle}>Customize My Pulse</Text>
+        <TouchableOpacity onPress={handleHeaderSave} disabled={saving}>
           {saving ? (
             <ActivityIndicator color={colors.primary.teal} />
           ) : (
@@ -247,7 +300,42 @@ export default function MyPageAppearanceScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={[styles.mainTabBar, { paddingHorizontal: 16, borderBottomColor: colors.dark.border }]}>
+        <TouchableOpacity
+          style={[styles.mainTabChip, mainTab === 'look' && styles.mainTabChipOn]}
+          onPress={() => setMainTab('look')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.mainTabChipText, mainTab === 'look' && styles.mainTabChipTextOn]}>Look</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mainTabChip, mainTab === 'more' && styles.mainTabChipOn]}
+          onPress={() => setMainTab('more')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.mainTabChipText, mainTab === 'more' && styles.mainTabChipTextOn]}>Profile & more</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {mainTab === 'look' ? (
+          <>
+        {profileNeedsPublicNameReview(profile, user?.email) ? (
+          <View style={styles.oauthPublicNameCallout} accessibilityRole="text">
+            <View style={styles.oauthPublicNameIconWrap}>
+              <Ionicons name="person-circle-outline" size={26} color={colors.primary.teal} />
+            </View>
+            <View style={styles.oauthPublicNameTextWrap}>
+              <Text style={styles.oauthPublicNameTitle}>Fix your name & @handle</Text>
+              <Text style={styles.oauthPublicNameBody}>
+                Sign in with Apple sometimes uses a private relay email, which can show up as your display name or
+                suggest a random @handle. Open the <Text style={{ fontWeight: '800' }}>Profile & more</Text> tab
+                above, then <Text style={{ fontWeight: '800' }}>Save</Text>.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         <Text style={styles.sectionLabel}>Banner</Text>
         <Text style={styles.hint}>
           Recommended: wide image at least <Text style={styles.hintBold}>1200 × 400 px</Text> (about 3:1). Like a
@@ -258,6 +346,7 @@ export default function MyPageAppearanceScreen() {
             source={{ uri: bannerPreview ?? DEFAULT_BANNER }}
             style={styles.bannerPreview}
             contentFit="cover"
+            {...pulseImageFeedHeroProps}
           />
           <View style={styles.bannerFab}>
             {uploading === 'banner' ? (
@@ -273,14 +362,15 @@ export default function MyPageAppearanceScreen() {
 
         <Text style={styles.sectionLabel}>Profile photo</Text>
         <Text style={styles.hint}>
-          Square works best — at least <Text style={styles.hintBold}>500 × 500 px</Text>. We crop to a circle on your
-          page.
+          You&apos;ll adjust the photo inside a <Text style={styles.hintBold}>circle</Text> so it matches how it appears
+          everywhere in the app. Any image works; pinch to zoom and drag to frame your face.
         </Text>
         <View style={styles.avatarRow}>
           <Image
             source={{ uri: avatarPreview ?? profile.avatarUrl }}
             style={styles.avatarImg}
             contentFit="cover"
+            {...pulseImageListThumbProps}
           />
           <TouchableOpacity style={styles.secondaryBtn} onPress={pickAvatar} disabled={!!uploading}>
             {uploading === 'avatar' ? (
@@ -345,13 +435,20 @@ export default function MyPageAppearanceScreen() {
           wraps to a second line. Three short tags (e.g. <Text style={styles.hintBold}>RN, ICU, Night shift</Text>)
           usually looks best. Leave empty to show your role & specialty instead.
         </Text>
-        <TextInput
-          style={styles.input}
-          value={identityTagsInput}
-          onChangeText={setIdentityTagsInput}
-          placeholder="RN, ICU, Coffee addict..."
-          placeholderTextColor={colors.dark.textMuted}
-        />
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Neon tags"
+          compact
+          noShadow
+        >
+          <TextInput
+            style={styles.inputPlain}
+            value={identityTagsInput}
+            onChangeText={setIdentityTagsInput}
+            placeholder="RN, ICU, Coffee addict..."
+            placeholderTextColor={colors.dark.textMuted}
+          />
+        </AccentComposerFrame>
         {(() => {
           const parsed = parseIdentityTags(identityTagsInput);
           const used = tagsCharCount(parsed);
@@ -373,19 +470,31 @@ export default function MyPageAppearanceScreen() {
           One or two short lines under your neon tags on My Pulse — who you are, what you create, or your vibe. Leave
           empty if you prefer only tags + stats.
         </Text>
-        <TextInput
-          style={styles.input}
-          value={pageIntroLine}
-          onChangeText={setPageIntroLine}
-          placeholder="Aspiring nurse creator · Night shift · Coffee first"
-          placeholderTextColor={colors.dark.textMuted}
-          multiline
-          maxLength={200}
-          scrollEnabled
-        />
-        <Text style={styles.counter}>
-          {pageIntroLine.length}/200 characters
-        </Text>
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Page intro"
+          noShadow
+          footer={
+            <AccentCharCount
+              length={pageIntroLine.length}
+              max={200}
+              accentColor={colors.primary.teal}
+              warnWithin={30}
+              hideWhenEmpty={false}
+            />
+          }
+        >
+          <TextInput
+            style={styles.inputIntro}
+            value={pageIntroLine}
+            onChangeText={setPageIntroLine}
+            placeholder="Aspiring nurse creator · Night shift · Coffee first"
+            placeholderTextColor={colors.dark.textMuted}
+            multiline
+            maxLength={200}
+            scrollEnabled
+          />
+        </AccentComposerFrame>
 
         <Text style={styles.sectionLabel}>Current vibe (music)</Text>
         <Text style={styles.hint}>
@@ -396,7 +505,12 @@ export default function MyPageAppearanceScreen() {
         {hasSong ? (
           <View style={styles.songPreview}>
             {songArtworkUrl ? (
-              <Image source={{ uri: songArtworkUrl }} style={styles.songArt} contentFit="cover" />
+              <Image
+                source={{ uri: songArtworkUrl }}
+                style={styles.songArt}
+                contentFit="cover"
+                {...pulseImageListThumbProps}
+              />
             ) : (
               <View style={[styles.songArt, styles.songArtPh]}>
                 <Ionicons name="musical-notes" size={22} color="#FFF" />
@@ -464,6 +578,18 @@ export default function MyPageAppearanceScreen() {
         </View>
 
         <View style={{ height: 40 }} />
+          </>
+        ) : (
+          <CustomizeMoreTabs
+            ref={moreRef}
+            user={user!}
+            profile={profile}
+            userEmail={user?.email}
+            accentColor={accentColor}
+            refreshProfile={refreshProfile}
+            getSongFields={getSongFields}
+          />
+        )}
       </ScrollView>
 
       <Modal
@@ -551,6 +677,13 @@ export default function MyPageAppearanceScreen() {
         onSelect={onPickSong}
         initialQuery={songTitle}
       />
+
+      <CircularAvatarCropModal
+        visible={avatarCropAsset != null}
+        asset={avatarCropAsset}
+        onDismiss={() => setAvatarCropAsset(null)}
+        onComplete={onAvatarCropComplete}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -570,6 +703,29 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: '800', color: colors.dark.text },
   saveTxt: { fontSize: 16, fontWeight: '800', color: colors.primary.teal },
+  mainTabBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    backgroundColor: colors.dark.bg,
+  },
+  mainTabChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.dark.card,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+    alignItems: 'center',
+  },
+  mainTabChipOn: {
+    borderColor: colors.primary.teal,
+    backgroundColor: 'rgba(20,184,166,0.12)',
+  },
+  mainTabChipText: { fontSize: 13, fontWeight: '700', color: colors.dark.textMuted },
+  mainTabChipTextOn: { color: colors.primary.teal },
   scroll: { padding: 16, paddingBottom: 48 },
   sectionLabel: {
     fontSize: 13,
@@ -625,15 +781,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark.card,
   },
   secondaryBtnText: { fontSize: 15, fontWeight: '800', color: colors.primary.teal },
-  input: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    padding: 14,
+  inputPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
     fontSize: 15,
     color: colors.dark.text,
-    backgroundColor: colors.dark.card,
-    marginBottom: 10,
+    marginBottom: 4,
+  },
+  inputIntro: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: colors.dark.text,
+    minHeight: 72,
+    textAlignVertical: 'top',
+    marginBottom: 4,
   },
   counter: {
     alignSelf: 'flex-end',
@@ -654,6 +816,34 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   switchLabel: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.dark.text, paddingRight: 12 },
+
+  oauthPublicNameCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(20,184,166,0.5)',
+    backgroundColor: 'rgba(20,184,166,0.12)',
+  },
+  oauthPublicNameIconWrap: {
+    marginTop: 2,
+  },
+  oauthPublicNameTextWrap: { flex: 1, minWidth: 0 },
+  oauthPublicNameTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.dark.text,
+    letterSpacing: -0.2,
+  },
+  oauthPublicNameBody: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.dark.textSecondary,
+  },
 
   /**
    * Empty-state CTA that opens the Song Picker. Styled as a clearly

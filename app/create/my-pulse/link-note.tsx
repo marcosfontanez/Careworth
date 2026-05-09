@@ -17,8 +17,11 @@ import { useAppStore } from '@/store/useAppStore';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { useToast } from '@/components/ui/Toast';
 import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
-import { colors, borderRadius, typography } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { colors, typography } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
+
+const LINK_NOTE_ACCENT = '#60A5FA';
 
 function normalizeUrl(raw: string): string {
   const t = raw.trim();
@@ -85,26 +88,44 @@ export default function MyPulseLinkNoteScreen() {
       <Text style={styles.hint}>Share a resource — it opens your URL when someone taps the row.</Text>
 
       <Text style={styles.fieldLbl}>What you&apos;re sharing</Text>
-      <MentionAutocomplete
-        style={styles.single}
-        placeholder="Your take — tag folks with @"
-        placeholderTextColor={colors.dark.textMuted}
-        value={title}
-        onChangeText={setTitle}
-        maxLength={200}
-      />
+      <AccentComposerFrame
+        accentColor={LINK_NOTE_ACCENT}
+        hint="Caption"
+        compact
+        noShadow
+        footer={
+          <AccentCharCount
+            length={title.length}
+            max={200}
+            accentColor={LINK_NOTE_ACCENT}
+            warnWithin={25}
+            hideWhenEmpty={false}
+          />
+        }
+      >
+        <MentionAutocomplete
+          style={styles.singlePlain}
+          placeholder="Your take — tag folks with @"
+          placeholderTextColor={colors.dark.textMuted}
+          value={title}
+          onChangeText={setTitle}
+          maxLength={200}
+        />
+      </AccentComposerFrame>
 
       <Text style={styles.fieldLbl}>URL</Text>
-      <TextInput
-        style={styles.single}
-        placeholder="https://…"
-        placeholderTextColor={colors.dark.textMuted}
-        value={url}
-        onChangeText={setUrl}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-      />
+      <AccentComposerFrame accentColor={LINK_NOTE_ACCENT} hint="Link URL" compact noShadow>
+        <TextInput
+          style={styles.singlePlain}
+          placeholder="https://…"
+          placeholderTextColor={colors.dark.textMuted}
+          value={url}
+          onChangeText={setUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+      </AccentComposerFrame>
     </KeyboardAvoidingView>
   );
 }
@@ -127,15 +148,10 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     marginBottom: 8,
   },
-  single: {
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  singlePlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
     fontSize: 15,
     color: colors.dark.text,
-    marginBottom: 16,
   },
 });

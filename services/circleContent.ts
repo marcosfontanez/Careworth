@@ -113,36 +113,65 @@ async function searchCirclesAndTopicsGroupedFn(query: string): Promise<{
   return primary;
 }
 
+const FEATURED_CAROUSEL_COUNT = 10;
+
+function popularityScore(c: Community): number {
+  const posts = Number(c.postCount ?? 0);
+  const members = Number(c.memberCount ?? 0);
+  const opens = Number(c.profileOpenCount ?? 0);
+  return posts * 2 + members + opens * 5;
+}
+
+async function mergeCommunityCardStats(communities: Community[]): Promise<Community[]> {
+  if (communities.length === 0) return [];
+  const stats = await communitiesService.getCardStatsForIds(communities.map((c) => c.id));
+  return communities.map((c) => {
+    const s = stats.get(c.id);
+    if (!s) return c;
+    return {
+      ...c,
+      memberCount: s.memberCount,
+      postCount: s.postCount,
+      onlineCount: s.onlineCount,
+      presenceAvatars: s.avatarUrls,
+    };
+  });
+}
+
+async function rankCommunitiesByPopularity(): Promise<Community[]> {
+  const all = await communitiesService.getAll().catch(() => [] as Community[]);
+  if (all.length === 0) return [];
+  const merged = await mergeCommunityCardStats(all);
+  merged.sort((a, b) => popularityScore(b) - popularityScore(a));
+  return merged;
+}
+
+async function featuredFallbackSlugOrder(): Promise<Community[]> {
+  const all = await communitiesService.getAll().catch(() => [] as Community[]);
+  const bySlug = new Map(all.map((c) => [c.slug, c]));
+  const out: Community[] = [];
+  for (const slug of FEATURED_CIRCLE_SLUGS_ORDER) {
+    const c = bySlug.get(slug);
+    if (c) out.push(c);
+  }
+  return mergeCommunityCardStats(out);
+}
+
 export const circleContentService = {
+  /**
+   * Top **10** Circles on the horizontal strip — **popularity** (posts, members, room opens).
+   * Falls back to slug seed order only when ranking fails or the directory is empty.
+   */
   async getFeaturedCircles(): Promise<Community[]> {
-    const all = await communitiesService.getAll().catch(() => [] as Community[]);
-    const curated = all
-      .filter((c) => c.featuredOrder != null)
-      .sort((a, b) => Number(a.featuredOrder) - Number(b.featuredOrder));
-    let out: Community[];
-    if (curated.length > 0) {
-      out = curated;
-    } else {
-      const bySlug = new Map(all.map((c) => [c.slug, c]));
-      out = [];
-      for (const slug of FEATURED_CIRCLE_SLUGS_ORDER) {
-        const c = bySlug.get(slug);
-        if (c) out.push(c);
+    try {
+      const ranked = await rankCommunitiesByPopularity();
+      if (ranked.length > 0) {
+        return ranked.slice(0, FEATURED_CAROUSEL_COUNT);
       }
+    } catch {
+      /* fall through */
     }
-    if (out.length === 0) return out;
-    const stats = await communitiesService.getCardStatsForIds(out.map((c) => c.id));
-    return out.map((c) => {
-      const s = stats.get(c.id);
-      if (!s) return c;
-      return {
-        ...c,
-        memberCount: s.memberCount,
-        postCount: s.postCount,
-        onlineCount: s.onlineCount,
-        presenceAvatars: s.avatarUrls,
-      };
-    });
+    return featuredFallbackSlugOrder();
   },
 
   /**
@@ -212,6 +241,33 @@ export const circleContentService = {
         }
       }
 
+      /** When real thread/post activity is sparse, still show 3 cards using seeded rooms (opens circle hub). */
+      if (picked.length < 3) {
+        const usedCircle = new Set(picked.map((p) => p.circleId));
+        const comms = await communitiesService.getBySlugsOrdered([...FEATURED_CIRCLE_SLUGS_ORDER]);
+        for (const c of comms) {
+          if (picked.length >= 3) break;
+          if (usedCircle.has(c.id)) continue;
+          usedCircle.add(c.id);
+          const fid = `trend-room-${c.id}`;
+          if (seenIds.has(fid)) continue;
+          seenIds.add(fid);
+          const rawTag = (c.trendingTopics?.[0] ?? '').trim().replace(/^#/, '');
+          picked.push({
+            id: fid,
+            circleId: c.id,
+            circleSlug: c.slug,
+            circleName: c.name,
+            title: rawTag ? `#${rawTag}` : `What’s new in ${c.name}`,
+            preview: (c.description ?? '').slice(0, 140) || ' ',
+            replyCount: 0,
+            reactionCount: 0,
+            shareCount: 0,
+            lastActiveAt: new Date().toISOString(),
+          });
+        }
+      }
+
       return picked;
     } catch {
       return [];
@@ -225,13 +281,18 @@ export const circleContentService = {
   async getNewCircles(): Promise<Community[]> {
     try {
       const promoted = await communitiesService.getBySlugsOrdered([...PROMOTED_NEW_CIRCLE_SLUGS]);
-      const recent = await communitiesService.getRecentlyAdded(12);
+      const recent = await communitiesService.getRecentlyAdded(32);
       const promotedSet = new Set<string>([...PROMOTED_NEW_CIRCLE_SLUGS]);
       const rest = recent.filter((c) => !promotedSet.has(c.slug));
-      return [...promoted, ...rest].slice(0, 5);
+      /** Extra rows feed the “More new & recent” list; the Circles tab only spotlights the first 3. */
+      return [...promoted, ...rest].slice(0, 28);
     } catch {
       return [];
     }
+  },
+
+  async getThreadsByCommunityId(communityId: string): Promise<CircleThread[]> {
+    return circleThreadsDb.listByCommunityId(communityId);
   },
 
   async getThreadsByCircleSlug(slug: string): Promise<CircleThread[]> {

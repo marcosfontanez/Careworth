@@ -159,17 +159,24 @@ export const communityKeys = {
    * Circles tab Discover payload (featured + trending + new). Bump version
    * when the tuple shape or RPC meaning changes so persisted cache refetches.
    */
-  circlesHome: () => ['circles', 'home', 'v4'] as const,
-  /** Full-screen featured grid — keep in sync with `circlesHome` when curating. */
-  circlesFeaturedFull: () => ['circles', 'featured', 'full-grid'] as const,
+  circlesHome: () => ['circles', 'home', 'v5'] as const,
+  /** Full-screen A–Z directory (slug sort) — Circles tab "See all". */
+  circlesDirectoryAlpha: () => ['circles', 'directory', 'alphaSlug', 'v1'] as const,
 };
 
 /** Circle thread / room lists (versioned for pulse frame and other embeds). */
 export const circleContentKeys = {
   communityPosts: (communityId: string, viewerId: Nullable<string>) =>
     ['communityPosts', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId, maybe(viewerId)] as const,
+  /** Signed-in viewer's picked reaction per post id in a room (stable `postIdsSig` from sorted ids). */
+  viewerPostReactions: (communityId: string, viewerId: string, postIdsSig: string) =>
+    ['circleViewerReactions', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId, viewerId, postIdsSig] as const,
+  /** @deprecated Prefer threadsForRoom — avoids duplicate getBySlug when community id is known. */
   threadsBySlug: (slug: string) =>
     ['circleThreads', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, slug] as const,
+  /** Slug + community id (use `__pending__` until id hydrates). */
+  threadsForRoom: (slug: string, communityId: string) =>
+    ['circleThreads', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, slug, communityId] as const,
   thread: (threadId: string) =>
     ['circleThread', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId] as const,
   replies: (threadId: string) =>

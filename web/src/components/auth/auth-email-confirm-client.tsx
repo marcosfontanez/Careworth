@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { CircleCheck } from "lucide-react";
 
 import { getSupabaseBrowserClient } from "@/components/auth/supabase-browser-client";
 
@@ -57,6 +58,19 @@ export function AuthEmailConfirmClient() {
 
       const rawHash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
       const hashParams = new URLSearchParams(rawHash);
+      const hashError =
+        hashParams.get("error_description")?.replace(/\+/g, " ") ||
+        hashParams.get("error") ||
+        "";
+      if (hashError) {
+        if (!cancelled) {
+          setState({
+            status: "error",
+            message: hashError || "This verification link is not valid. Try signing up again or request a new email.",
+          });
+        }
+        return;
+      }
       const access = hashParams.get("access_token");
       const refresh = hashParams.get("refresh_token");
       if (access && refresh) {
@@ -99,7 +113,9 @@ export function AuthEmailConfirmClient() {
   if (state.status === "working") {
     return (
       <div className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.85)] p-8 text-center backdrop-blur-md">
-        <p className="text-muted-foreground">Confirming your email…</p>
+        <h1 className="font-heading text-xl font-semibold text-foreground">Email verification</h1>
+        <p className="mt-3 font-medium text-muted-foreground">Verifying your email…</p>
+        <p className="mt-1 text-sm text-muted-foreground">This only takes a moment.</p>
       </div>
     );
   }
@@ -120,18 +136,26 @@ export function AuthEmailConfirmClient() {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.85)] p-8 text-center backdrop-blur-md">
-      <h1 className="font-heading text-xl font-semibold text-foreground">Email verified</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        You can close this tab. Open the <strong className="text-foreground">PulseVerse</strong> app on your phone
-        and sign in with your email and password.
+    <div className="rounded-2xl border border-teal-500/25 bg-[rgba(12,21,36,0.85)] p-8 text-center backdrop-blur-md">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-500/15 ring-2 ring-teal-500/40">
+        <CircleCheck className="h-8 w-8 text-teal-400" aria-hidden />
+      </div>
+      <h1 className="font-heading mt-5 text-2xl font-bold tracking-tight text-foreground">
+        You&apos;re verified
+      </h1>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+        Your email is confirmed and your PulseVerse account is ready.
       </p>
-      <p className="mt-4 text-sm text-muted-foreground">
-        If you use PulseVerse on the web, you can sign in here instead.
+      <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+        Open the <strong className="text-foreground">PulseVerse</strong> app on your phone and sign in with the
+        email and password you used to register.
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        You can close this browser tab when you&apos;re done.
       </p>
       <Link
         href="/login"
-        className="mt-6 inline-block rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-500"
+        className="mt-8 inline-block rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-900/30 hover:bg-teal-500"
       >
         Sign in on the web
       </Link>

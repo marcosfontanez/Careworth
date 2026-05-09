@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, layout, typography } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { PulseLeaderboards } from '@/components/leaderboards/PulseLeaderboards';
 import { useFeatureFlags } from '@/lib/featureFlags';
 
@@ -86,6 +87,7 @@ export default function CreateScreen() {
             style={styles.heroBanner}
             contentFit="contain"
             accessibilityLabel="PulseVerse Creator Hub"
+            {...pulseImageListThumbProps}
           />
         </View>
 

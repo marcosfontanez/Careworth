@@ -3,6 +3,7 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import type { ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
@@ -106,6 +107,7 @@ export function MyPulseLinkCard({
               source={{ uri: u.mediaThumb }}
               style={styles.favicon}
               contentFit="cover"
+              {...pulseImageListThumbProps}
             />
           ) : (
             <Ionicons name="link" size={16} color={LINK_ACCENT} />

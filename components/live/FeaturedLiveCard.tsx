@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, spacing, typography, shadows } from '@/theme';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { LivePill } from './LivePill';
 import { LiveViewerBadge } from './LiveViewerBadge';
 import type { LiveStream } from '@/types';
@@ -43,6 +44,7 @@ export function FeaturedLiveCard({ stream, width, onPress, subtitle }: Props) {
         style={StyleSheet.absoluteFill}
         contentFit="cover"
         transition={150}
+        {...pulseImageFeedHeroProps}
       />
       <LinearGradient
         colors={['rgba(6,14,26,0.05)', 'rgba(6,14,26,0.45)', 'rgba(6,14,26,0.95)']}
@@ -66,7 +68,7 @@ export function FeaturedLiveCard({ stream, width, onPress, subtitle }: Props) {
         ) : null}
 
         <View style={styles.identityRow}>
-          <Image source={{ uri: stream.host.avatarUrl }} style={styles.avatar} />
+          <Image source={{ uri: stream.host.avatarUrl }} style={styles.avatar} {...pulseImageListThumbProps} />
           <View style={styles.identityText}>
             <Text style={styles.name} numberOfLines={1}>
               {stream.host.displayName}

@@ -262,14 +262,18 @@ export function MyPulseCardShell({
       />
 
       <View style={styles.body}>
-        <Pressable
-          onPress={onPress}
-          onPressIn={() => setPressed(true)}
-          onPressOut={() => setPressed(false)}
-          style={[styles.tap, pressed && onPress ? styles.tapPressed : null]}
-          accessibilityRole={onPress ? 'button' : undefined}
-        >
-          <View style={styles.topRow}>
+        <View style={styles.topRow}>
+          <Pressable
+            onPress={onPress}
+            onPressIn={() => setPressed(true)}
+            onPressOut={() => setPressed(false)}
+            disabled={!onPress}
+            style={[
+              styles.topRowMainHit,
+              pressed && onPress ? styles.tapPressed : null,
+            ]}
+            accessibilityRole={onPress ? 'button' : undefined}
+          >
             <View
               style={[
                 styles.typePill,
@@ -301,36 +305,44 @@ export function MyPulseCardShell({
               {wasEdited ? <Text style={styles.editedTag}> · edited</Text> : null}
             </Text>
             <View style={{ flex: 1 }} />
-            {!readOnly && onTogglePin ? (
-              <TouchableOpacity
-                onPress={() => void onTogglePin()}
-                hitSlop={10}
-                accessibilityLabel={isPinned ? 'Unpin from top' : 'Pin to top'}
-                style={styles.menuBtn}
-              >
-                <Ionicons
-                  name={isPinned ? 'pin' : 'pin-outline'}
-                  size={14}
-                  color={isPinned ? colors.primary.teal : colors.dark.textMuted}
-                />
-              </TouchableOpacity>
-            ) : null}
-            {!readOnly && (onDelete || onShare || shareMessage || onTogglePin || onEdit) ? (
-              <TouchableOpacity
-                onPress={handleMenu}
-                hitSlop={10}
-                accessibilityLabel="More options"
-                style={styles.menuBtn}
-              >
-                <Ionicons
-                  name="ellipsis-horizontal"
-                  size={14}
-                  color={colors.dark.textMuted}
-                />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          </Pressable>
+          {!readOnly && onTogglePin ? (
+            <TouchableOpacity
+              onPress={() => void onTogglePin()}
+              hitSlop={10}
+              accessibilityLabel={isPinned ? 'Unpin from top' : 'Pin to top'}
+              style={styles.menuBtn}
+            >
+              <Ionicons
+                name={isPinned ? 'pin' : 'pin-outline'}
+                size={14}
+                color={isPinned ? colors.primary.teal : colors.dark.textMuted}
+              />
+            </TouchableOpacity>
+          ) : null}
+          {!readOnly && (onDelete || onShare || shareMessage || onTogglePin || onEdit) ? (
+            <TouchableOpacity
+              onPress={handleMenu}
+              hitSlop={10}
+              accessibilityLabel="More options"
+              style={styles.menuBtn}
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={14}
+                color={colors.dark.textMuted}
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
+        <Pressable
+          onPress={onPress}
+          onPressIn={() => setPressed(true)}
+          onPressOut={() => setPressed(false)}
+          style={[styles.tap, pressed && onPress ? styles.tapPressed : null]}
+          accessibilityRole={onPress ? 'button' : undefined}
+        >
           {children}
         </Pressable>
 
@@ -507,6 +519,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 10,
+  },
+  /** Fills row minus pin/⋯ so those controls are not children of the card Pressable (web hit-testing). */
+  topRowMainHit: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
   },
   typePill: {
     flexDirection: 'row',

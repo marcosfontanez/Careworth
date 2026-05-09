@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
+
+const EDU_ACCENT = '#10B981';
 
 export interface EducationCitation {
   label: string;
@@ -84,41 +87,61 @@ export function EducationModeToggle({ enabled, onToggle, citations, onChange }: 
             </View>
           ))}
           <View style={styles.draftRow}>
-            <TextInput
-              style={[styles.input, { flex: 0.45 }]}
-              value={draftLabel}
-              onChangeText={setDraftLabel}
-              placeholder="Source label"
-              placeholderTextColor={colors.dark.textMuted}
-            />
-            <TextInput
-              style={[styles.input, { flex: 0.55 }]}
-              value={draftUrl}
-              onChangeText={setDraftUrl}
-              placeholder="https://…"
-              placeholderTextColor={colors.dark.textMuted}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
+            <AccentComposerFrame
+              accentColor={EDU_ACCENT}
+              hint="Label"
+              compact
+              noShadow
+              style={{ flex: 0.45 }}
+            >
+              <TextInput
+                style={styles.inputPlain}
+                value={draftLabel}
+                onChangeText={setDraftLabel}
+                placeholder="Source label"
+                placeholderTextColor={colors.dark.textMuted}
+              />
+            </AccentComposerFrame>
+            <AccentComposerFrame
+              accentColor={EDU_ACCENT}
+              hint="URL"
+              compact
+              noShadow
+              style={{ flex: 0.55 }}
+            >
+              <TextInput
+                style={styles.inputPlain}
+                value={draftUrl}
+                onChangeText={setDraftUrl}
+                placeholder="https://…"
+                placeholderTextColor={colors.dark.textMuted}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </AccentComposerFrame>
             <TouchableOpacity style={styles.addBtn} onPress={add} activeOpacity={0.8}>
               <Ionicons name="add" size={16} color="#10B981" />
             </TouchableOpacity>
           </View>
           <View style={styles.draftRow}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              value={draftDoi}
-              onChangeText={setDraftDoi}
-              placeholder="DOI (optional)"
-              placeholderTextColor={colors.dark.textMuted}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              value={draftReviewed}
-              onChangeText={setDraftReviewed}
-              placeholder="Last reviewed (optional)"
-              placeholderTextColor={colors.dark.textMuted}
-            />
+            <AccentComposerFrame accentColor={EDU_ACCENT} hint="DOI (opt.)" compact noShadow style={{ flex: 1 }}>
+              <TextInput
+                style={styles.inputPlain}
+                value={draftDoi}
+                onChangeText={setDraftDoi}
+                placeholder="DOI (optional)"
+                placeholderTextColor={colors.dark.textMuted}
+              />
+            </AccentComposerFrame>
+            <AccentComposerFrame accentColor={EDU_ACCENT} hint="Reviewed (opt.)" compact noShadow style={{ flex: 1 }}>
+              <TextInput
+                style={styles.inputPlain}
+                value={draftReviewed}
+                onChangeText={setDraftReviewed}
+                placeholder="Last reviewed (optional)"
+                placeholderTextColor={colors.dark.textMuted}
+              />
+            </AccentComposerFrame>
           </View>
           <Text style={styles.helper}>
             Up to 5 citations. We render them as a Sources block under your post.
@@ -164,10 +187,11 @@ const styles = StyleSheet.create({
   citeUrl: { fontSize: 11, color: colors.dark.textMuted },
   citeMeta: { fontSize: 10, color: colors.dark.textMuted, marginTop: 2 },
   draftRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  input: {
-    backgroundColor: colors.dark.bg, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 8, fontSize: 12,
-    color: colors.dark.text, borderWidth: 1, borderColor: colors.dark.border,
+  inputPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    fontSize: 12,
+    color: colors.dark.text,
   },
   addBtn: {
     width: 32, height: 32, borderRadius: 10,

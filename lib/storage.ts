@@ -414,13 +414,46 @@ export const storageService = {
   async uploadAvatar(userId: string, file: { uri: string; type?: string; name?: string }) {
     const ext = fileExtForUpload(file);
     const path = `${userId}/${Date.now()}.${ext}`;
-    const data = await uploadFile(STORAGE_BUCKETS.avatars, path, file, { upsert: true });
+    const contentType =
+      file.type && file.type.startsWith('image/')
+        ? file.type.toLowerCase().includes('png')
+          ? 'image/png'
+          : 'image/jpeg'
+        : 'image/jpeg';
 
-    const { data: urlData } = supabase.storage
-      .from(STORAGE_BUCKETS.avatars)
-      .getPublicUrl(data.path);
+    let storedPath: string;
 
-    return urlData.publicUrl;
+    if (Platform.OS === 'web') {
+      const data = await uploadFile(STORAGE_BUCKETS.avatars, path, file, { upsert: false });
+      storedPath = data.path;
+    } else {
+      /**
+       * Avatars are small JPEG/PNG after client normalize — use the Storage JS `upload(ArrayBuffer)`
+       * path instead of `FileSystem.uploadAsync`. The latter pairs with `x-upsert` and some project
+       * revisions return `DatabaseInvalidObjectDefinition` / 400 for profile uploads.
+       */
+      const { path: localPath, cleanup } = await ensureLocalFilePath(file.uri);
+      try {
+        const blob = await uriToBlobNative(localPath, contentType);
+        if (!blob || blob.size <= 0) {
+          throw new Error('Avatar file is empty — could not read this image from the device.');
+        }
+        const body = await blobToArrayBuffer(blob);
+        const { data, error } = await supabase.storage
+          .from(STORAGE_BUCKETS.avatars)
+          .upload(path, body, { contentType, upsert: false });
+        if (error) throw error;
+        if (!data?.path) throw new Error('Storage returned no path for avatar upload');
+        storedPath = data.path;
+      } finally {
+        cleanup();
+      }
+    }
+
+    const { data: urlData } = supabase.storage.from(STORAGE_BUCKETS.avatars).getPublicUrl(storedPath);
+    const url = urlData.publicUrl?.trim();
+    if (!url) throw new Error('Storage returned no public URL for avatar');
+    return url;
   },
 
   /** Wide banner for My Pulse — uses same bucket as post media. */

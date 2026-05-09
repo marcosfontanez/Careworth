@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, RefreshControl, Alert,
@@ -19,10 +19,12 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { bumpPostCount } from '@/lib/postCacheUpdates';
-import { borderRadius, colors, iconSize, layout, spacing, typography } from '@/theme';
+import { colors, iconSize, layout, spacing, typography } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { postShouldMaskIdentity } from '@/lib/anonymousCircle';
 import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { getCircleAccent } from '@/lib/circleAccents';
 import { COMMENT_MAX_LENGTH } from '@/constants';
 
 function asParamString(v: string | string[] | undefined): string | undefined {
@@ -45,6 +47,8 @@ export default function CommentsScreen() {
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [reportCommentId, setReportCommentId] = useState<string | null>(null);
+
+  const accentColor = useMemo(() => getCircleAccent(circle).color, [circle]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -113,12 +117,13 @@ export default function CommentsScreen() {
     setSending(false);
   };
 
-  const remaining = COMMENT_MAX_LENGTH - text.length;
-  const nearLimit = remaining <= 30;
-
   const handleReply = (commentId: string, authorName: string) => {
     setReplyTo({ id: commentId, name: authorName });
   };
+
+  const commentHint = replyTo
+    ? 'Add your reply — @ to mention.'
+    : 'Comment on this post — @ to mention.';
 
   const title = post ? `Comments (${post.commentCount})` : 'Comments';
 
@@ -162,6 +167,10 @@ export default function CommentsScreen() {
           style={styles.listFlex}
           data={comments}
           keyExtractor={(item) => item.id}
+          initialNumToRender={14}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          updateCellsBatchingPeriod={50}
           /** Clipping + virtualization hides multiline edit fields mid-edit on Android. */
           removeClippedSubviews={false}
           renderItem={({ item }) => (
@@ -186,8 +195,16 @@ export default function CommentsScreen() {
       )}
 
       {replyTo && (
-        <View style={styles.replyBar}>
-          <Text style={styles.replyText}>Replying to {replyTo.name}</Text>
+        <View
+          style={[
+            styles.replyBar,
+            {
+              backgroundColor: `${accentColor}12`,
+              borderTopColor: `${accentColor}35`,
+            },
+          ]}
+        >
+          <Text style={[styles.replyText, { color: accentColor }]}>Replying to {replyTo.name}</Text>
           <TouchableOpacity onPress={() => setReplyTo(null)} activeOpacity={0.7}>
             <Ionicons name="close-circle" size={18} color={colors.dark.textMuted} />
           </TouchableOpacity>
@@ -195,45 +212,46 @@ export default function CommentsScreen() {
       )}
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <View style={{ flex: 1 }}>
-          <MentionAutocomplete
-            style={styles.input}
-            value={text}
-            onChangeText={setText}
-            placeholder={replyTo ? `Reply to ${replyTo.name}...` : 'Add a comment...'}
-            placeholderTextColor={colors.dark.textMuted}
-            multiline
-            textAlignVertical="top"
-            scrollEnabled
-            maxLength={COMMENT_MAX_LENGTH}
-          />
-          {/* Char counter — hidden until the user starts typing so the bar
-              stays minimal at rest, then turns teal at the danger zone to
-              signal the cap is approaching. */}
-          {text.length > 0 ? (
-            <Text
-              style={[
-                styles.counter,
-                nearLimit && styles.counterNear,
-              ]}
-              accessibilityLiveRegion="polite"
-            >
-              {text.length}/{COMMENT_MAX_LENGTH}
-            </Text>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          style={[styles.sendBtn, (!text.trim() || sending) && styles.sendDisabled]}
-          disabled={!text.trim() || sending}
-          onPress={handleSend}
-          activeOpacity={0.7}
+        <AccentComposerFrame
+          accentColor={accentColor}
+          hint={commentHint}
+          style={{ flex: 1 }}
+          innerStyle={{ paddingTop: 10, paddingBottom: 8 }}
+          footer={
+            <AccentCharCount
+              length={text.length}
+              max={COMMENT_MAX_LENGTH}
+              accentColor={accentColor}
+              warnWithin={30}
+            />
+          }
         >
-          <Ionicons
-            name="send"
-            size={iconSize.md}
-            color={text.trim() && !sending ? colors.primary.teal : colors.dark.textMuted}
-          />
-        </TouchableOpacity>
+          <View style={styles.inputRow}>
+            <MentionAutocomplete
+              style={styles.inputFramed}
+              value={text}
+              onChangeText={setText}
+              placeholder={replyTo ? `Reply to ${replyTo.name}...` : 'Add a comment...'}
+              placeholderTextColor={colors.dark.textMuted}
+              multiline
+              textAlignVertical="top"
+              scrollEnabled
+              maxLength={COMMENT_MAX_LENGTH}
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, (!text.trim() || sending) && styles.sendDisabled]}
+              disabled={!text.trim() || sending}
+              onPress={handleSend}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="send"
+                size={iconSize.md}
+                color={text.trim() && !sending ? accentColor : colors.dark.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+        </AccentComposerFrame>
       </View>
       <ReportModal
         visible={!!reportCommentId}
@@ -256,47 +274,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: layout.screenPadding,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.primary.teal + '12',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.primary.teal + '35',
   },
-  replyText: { ...typography.bodySmall, color: colors.primary.teal, fontWeight: '600' },
+  replyText: { ...typography.bodySmall, fontWeight: '600' },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: spacing.sm,
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
     backgroundColor: colors.dark.bg,
   },
-  input: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  inputFramed: {
     flex: 1,
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.sheet / 2,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 14,
-    color: colors.dark.text,
     minHeight: 44,
     maxHeight: 100,
+    paddingHorizontal: 6,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+    color: colors.dark.text,
     textAlignVertical: 'top',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
   },
   sendBtn: { padding: spacing.sm },
   sendDisabled: { opacity: 0.4 },
-  counter: {
-    alignSelf: 'flex-end',
-    marginTop: 4,
-    marginRight: 4,
-    fontSize: 11,
-    color: colors.dark.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
-  counterNear: {
-    color: colors.primary.teal,
-    fontWeight: '700',
-  },
 });

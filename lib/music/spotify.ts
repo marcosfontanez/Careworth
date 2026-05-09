@@ -1,9 +1,13 @@
+import { Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
 import { SPOTIFY_ACCESS_KEY, SPOTIFY_REFRESH_KEY, SPOTIFY_EXPIRES_KEY } from './storage';
 import type { TokenResponse } from 'expo-auth-session';
 
 const SPOTIFY_CLIENT_ID = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ?? '';
+
+/** `expo-secure-store` is not supported on web — calling it throws (e.g. missing native getValueWithKeyAsync). */
+const canUseSecureStore = Platform.OS !== 'web' && typeof SecureStore.getItemAsync === 'function';
 
 const discovery: AuthSession.DiscoveryDocument = {
   authorizationEndpoint: 'https://accounts.spotify.com/authorize',
@@ -22,6 +26,7 @@ export function isSpotifyConfigured(): boolean {
 }
 
 async function persistTokenResponse(tr: TokenResponse) {
+  if (!canUseSecureStore) return;
   await SecureStore.setItemAsync(SPOTIFY_ACCESS_KEY, tr.accessToken);
   if (tr.refreshToken) {
     await SecureStore.setItemAsync(SPOTIFY_REFRESH_KEY, tr.refreshToken);
@@ -31,19 +36,21 @@ async function persistTokenResponse(tr: TokenResponse) {
 }
 
 export async function clearSpotifySession() {
+  if (!canUseSecureStore) return;
   await SecureStore.deleteItemAsync(SPOTIFY_ACCESS_KEY);
   await SecureStore.deleteItemAsync(SPOTIFY_REFRESH_KEY);
   await SecureStore.deleteItemAsync(SPOTIFY_EXPIRES_KEY);
 }
 
 export async function hasSpotifySession(): Promise<boolean> {
+  if (!canUseSecureStore) return false;
   const refresh = await SecureStore.getItemAsync(SPOTIFY_REFRESH_KEY);
   const access = await SecureStore.getItemAsync(SPOTIFY_ACCESS_KEY);
   return Boolean(refresh || access);
 }
 
 async function getValidAccessToken(): Promise<string | null> {
-  if (!SPOTIFY_CLIENT_ID) return null;
+  if (!SPOTIFY_CLIENT_ID || !canUseSecureStore) return null;
 
   const expStr = await SecureStore.getItemAsync(SPOTIFY_EXPIRES_KEY);
   const expiresAt = expStr ? parseInt(expStr, 10) : 0;
@@ -80,6 +87,9 @@ async function getValidAccessToken(): Promise<string | null> {
 export async function connectSpotify(): Promise<{ ok: boolean; error?: string }> {
   if (!SPOTIFY_CLIENT_ID) {
     return { ok: false, error: 'Spotify is not configured (missing EXPO_PUBLIC_SPOTIFY_CLIENT_ID).' };
+  }
+  if (!canUseSecureStore) {
+    return { ok: false, error: 'Spotify sign-in is only available in the mobile app (not in web preview).' };
   }
 
   const redirectUri = getSpotifyRedirectUri();
@@ -118,8 +128,8 @@ export async function connectSpotify(): Promise<{ ok: boolean; error?: string }>
     );
     await persistTokenResponse(tokenResponse);
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'Token exchange failed' };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Token exchange failed' };
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Animated,
@@ -13,6 +13,19 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/ui/Toast';
 import { timeAgo } from '@/utils/format';
 import { LinkPreview, extractUrls } from '@/components/chat/LinkPreview';
+import { Image } from 'expo-image';
+import { useUser } from '@/hooks/useQueries';
+import { avatarThumb } from '@/lib/storage';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+
+const DM_MESSAGE_MAX_LENGTH = 1000;
+
+function asQueryString(v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined;
+  const s = Array.isArray(v) ? v[0] : v;
+  return typeof s === 'string' && s.length > 0 ? s : undefined;
+}
 
 function TypingIndicator() {
   const dots = [
@@ -51,7 +64,10 @@ function TypingIndicator() {
 }
 
 export default function ChatScreen() {
-  const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
+  const params = useLocalSearchParams<{ id: string; name?: string | string[]; peerId?: string | string[] }>();
+  const id = typeof params.id === 'string' ? params.id : params.id?.[0] ?? '';
+  const nameFromQuery = asQueryString(params.name);
+  const peerIdFromQuery = asQueryString(params.peerId);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -61,9 +77,34 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
+  const [resolvedPeerId, setResolvedPeerId] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const effectivePeerId = peerIdFromQuery ?? resolvedPeerId ?? '';
+  const { data: peerUser } = useUser(effectivePeerId);
+
+  const headerTitle = useMemo(
+    () => nameFromQuery ?? peerUser?.displayName ?? 'Chat',
+    [nameFromQuery, peerUser?.displayName],
+  );
+
+  useEffect(() => {
+    setResolvedPeerId(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !user || peerIdFromQuery) return;
+    let cancelled = false;
+    (async () => {
+      const other = await messagesService.getOtherParticipantUserId(id, user.id);
+      if (!cancelled && other) setResolvedPeerId(other);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user, peerIdFromQuery]);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -217,12 +258,31 @@ export default function ChatScreen() {
         >
           <Ionicons name="arrow-back" size={iconSize.lg} color={colors.dark.text} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerName} numberOfLines={1}>
-            {name ?? 'Chat'}
-          </Text>
-          {otherTyping && <Text style={styles.typingLabel}>typing...</Text>}
-        </View>
+        <TouchableOpacity
+          style={styles.headerCenter}
+          activeOpacity={effectivePeerId ? 0.7 : 1}
+          disabled={!effectivePeerId}
+          onPress={() => {
+            if (effectivePeerId) router.push(`/profile/${effectivePeerId}` as any);
+          }}
+          accessibilityRole={effectivePeerId ? 'button' : 'header'}
+          accessibilityLabel={effectivePeerId ? `Open ${headerTitle} profile` : undefined}
+        >
+          {effectivePeerId ? (
+            <Image
+              source={{ uri: avatarThumb(peerUser?.avatarUrl, 36) }}
+              style={styles.headerAvatar}
+              recyclingKey={effectivePeerId}
+              {...pulseImageListThumbProps}
+            />
+          ) : null}
+          <View style={styles.headerTitles}>
+            <Text style={styles.headerName} numberOfLines={1}>
+              {headerTitle}
+            </Text>
+            {otherTyping ? <Text style={styles.typingLabel}>typing...</Text> : null}
+          </View>
+        </TouchableOpacity>
         <View style={styles.headerHit} />
       </View>
 
@@ -234,6 +294,11 @@ export default function ChatScreen() {
           style={styles.listFlex}
           data={messages}
           keyExtractor={(item) => item.id}
+          initialNumToRender={18}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           inverted
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
@@ -243,26 +308,51 @@ export default function ChatScreen() {
       )}
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <TextInput
-          style={styles.input}
-          value={text}
-          onChangeText={(t) => {
-            setText(t);
-            broadcastTyping();
-          }}
-          placeholder="Type a message..."
-          placeholderTextColor={colors.dark.textMuted}
-          multiline
-          maxLength={1000}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, !text.trim() && styles.sendDisabled]}
-          onPress={handleSend}
-          disabled={!text.trim() || sending}
-          activeOpacity={0.7}
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Message — link previews appear after you send."
+          style={{ flex: 1 }}
+          innerStyle={{ paddingTop: 10, paddingBottom: 8 }}
+          footer={
+            <AccentCharCount
+              length={text.length}
+              max={DM_MESSAGE_MAX_LENGTH}
+              accentColor={colors.primary.teal}
+              warnWithin={80}
+            />
+          }
         >
-          <Ionicons name="send" size={iconSize.md} color={colors.dark.text} />
-        </TouchableOpacity>
+          <View style={styles.composerRow}>
+            <TextInput
+              style={styles.inputDm}
+              value={text}
+              onChangeText={(t) => {
+                setText(t);
+                broadcastTyping();
+              }}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.dark.textMuted}
+              multiline
+              maxLength={DM_MESSAGE_MAX_LENGTH}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                !text.trim() && styles.sendDisabled,
+                text.trim() && { backgroundColor: colors.primary.teal },
+              ]}
+              onPress={handleSend}
+              disabled={!text.trim() || sending}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="send"
+                size={iconSize.md}
+                color={text.trim() ? '#FFFFFF' : colors.dark.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+        </AccentComposerFrame>
       </View>
     </KeyboardAvoidingView>
   );
@@ -286,7 +376,24 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.min,
     justifyContent: 'center',
   },
-  headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm },
+  headerCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    minWidth: 0,
+  },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.dark.border,
+    backgroundColor: colors.dark.card,
+  },
+  headerTitles: { flex: 1, alignItems: 'center', minWidth: 0 },
   headerName: { ...typography.navTitle, color: colors.dark.text },
   typingLabel: { ...typography.overlayMicro, color: colors.primary.teal, marginTop: 2 },
   loader: { flex: 1 },
@@ -342,30 +449,30 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     backgroundColor: colors.dark.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
   },
-  input: {
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  inputDm: {
     flex: 1,
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.sheet / 2,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
     fontSize: 15,
     color: colors.dark.text,
     maxHeight: 100,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
+    paddingHorizontal: 6,
+    paddingVertical: spacing.sm + 2,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary.royal,
+    backgroundColor: colors.dark.cardAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },

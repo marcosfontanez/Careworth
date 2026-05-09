@@ -21,6 +21,7 @@ import { colors, layout, spacing, typography } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { formatCount } from '@/utils/format';
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 /** Matches My Pulse header trimming — keep list rows from overflowing. */
 const NEON_PILL_MAX_LEN = 14;
@@ -103,6 +104,7 @@ function FollowListMedia({
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={120}
+            {...pulseImageListThumbProps}
           />
         ) : (
           <LinearGradient
@@ -130,6 +132,7 @@ function FollowListMedia({
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
             transition={120}
+            {...pulseImageListThumbProps}
           />
         ) : (
           <View style={styles.avatarPlaceholderInner}>
@@ -214,6 +217,10 @@ export default function FollowersScreen() {
         <FlatList
           data={data}
           keyExtractor={(item) => item.id}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          updateCellsBatchingPeriod={50}
           /**
            * Android-only: virtualizes off-screen rows by detaching them
            * from the native view hierarchy. Power users with thousands

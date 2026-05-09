@@ -11,10 +11,12 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
+import * as SplashScreen from 'expo-splash-screen';
 import { avatarThumb } from '@/lib/storage';
+import { pickAbCoverUrl } from '@/lib/coverAbPoster';
 import { VideoFeedPost } from '@/components/feed/VideoFeedPost';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
-import { LoadingState } from '@/components/ui/LoadingState';
+import { FeedLoadingSkeleton } from '@/components/feed/FeedLoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { LongPressMenu } from '@/components/feed/LongPressMenu';
@@ -28,10 +30,11 @@ import { useToast } from '@/components/ui/Toast';
 import { sharePostMenu } from '@/lib/share';
 import { postsService, feedSignalsService, profilesService } from '@/services/supabase';
 import { queryClient } from '@/lib/queryClient';
-import { primeCommunityDetailCache } from '@/lib/communityCache';
+import { prefetchCircleRoom } from '@/lib/communityCache';
 import { bumpPostCount } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { feedKeys, likedPostKeys, savedPostKeys, userKeys } from '@/lib/queryKeys';
+import { getFeedVideoListWindow } from '@/lib/feedVideoListWindow';
 import type { Post, FeedType } from '@/types';
 
 const VIDEO_BG = colors.media.videoCanvas;
@@ -39,12 +42,29 @@ const { height: SCREEN_H } = Dimensions.get('window');
 /** Must match app/(tabs)/_layout tabBarStyle height or paging breaks (blank / misaligned pages). */
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 86 : 68;
 
+/** Avatars / posters / image slides warmed around the focused page (not only the first dozen cells). */
+const FEED_WARM_RADIUS = 5;
+/** Attributed-sound `getByIds` batch: only near the active index to avoid huge requests on long sessions. */
+const FEED_SOUND_WARM_RADIUS = 4;
+/** Start loading the next infinite page before the user hits the true tail. */
+const FETCH_NEXT_WHEN_WITHIN = 6;
+const MAX_IMAGE_PREFETCH_URLS = 36;
+
+function feedWindowRange(len: number, centerIdx: number, radius: number) {
+  if (len <= 0) return { start: 0, end: 0 };
+  const c = Math.max(0, Math.min(len - 1, centerIdx));
+  return {
+    start: Math.max(0, c - radius),
+    end: Math.min(len, c + radius + 1),
+  };
+}
 const VIEWABILITY_CONFIG = {
   itemVisiblePercentThreshold: 60,
   minimumViewTime: 100,
 };
 
 export default function FeedScreen() {
+  const feedListWindow = useMemo(() => getFeedVideoListWindow(), []);
   const router = useRouter();
   const isFocused = useIsFocused();
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
@@ -87,43 +107,10 @@ export default function FeedScreen() {
   const posts = useMemo(() => feedInfData?.pages.flatMap((p) => p.posts) ?? [], [feedInfData]);
   const { data: likedIdsArr = [] } = useLikedPostIds(user?.id);
 
-  /**
-   * Batch-prefetch every visible cell's attributed sound source in a
-   * single DB round-trip. Without this, each `VideoFeedPost` cell whose
-   * `soundSourcePostId` lacks an inline `soundSourceMediaUrl` would
-   * fire its own `usePost` query (~one network call per cell — classic
-   * N+1). With this, the cache is seeded on the next paint and the
-   * per-cell `usePost` returns instantly from cache.
-   */
-  const soundSourceIds = useMemo(
-    () =>
-      posts
-        .filter((p) => p.type === 'video' && !p.soundSourceMediaUrl?.trim() && p.soundSourcePostId)
-        .map((p) => p.soundSourcePostId!),
-    [posts],
-  );
-  usePrefetchPostsByIds(soundSourceIds);
-
-  /**
-   * Pre-warm `expo-image`'s memory + disk cache for the next 8 cells'
-   * creator avatars so they're decoded before the cell mounts. Pairs
-   * with the `avatarThumb()` transform helper — both reduce visible
-   * "pop-in" during fast scroll.
-   */
-  useEffect(() => {
-    if (posts.length === 0) return;
-    const upcoming = posts
-      .slice(0, 12)
-      .map((p) => avatarThumb(p.creator.avatarUrl, 36))
-      .filter((u) => !!u);
-    if (upcoming.length === 0) return;
-    const task = InteractionManager.runAfterInteractions(() => {
-      void ExpoImage.prefetch(upcoming);
-    });
-    return () => task.cancel?.();
-  }, [posts]);
   const { onViewStart, onViewEnd } = useViewTracker(user?.id);
   const flatListRef = useRef<FlatList>(null);
+  /** Incremented when app returns to foreground so the active `expo-video` surface can remount (black GL layer recovery). */
+  const [videoSurfaceEpoch, setVideoSurfaceEpoch] = useState(0);
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -132,6 +119,12 @@ export default function FeedScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       setAppIsActive(next === 'active');
+      if (next === 'active') {
+        SplashScreen.hideAsync().catch(() => {});
+        if (Platform.OS !== 'web') {
+          setVideoSurfaceEpoch((e) => e + 1);
+        }
+      }
     });
     return () => sub.remove();
   }, []);
@@ -159,6 +152,67 @@ export default function FeedScreen() {
   const activePostIdRef = useRef<string | null>(null);
   /** Synced each render; read from `renderItem` without listing `activePostId` in `useCallback` deps (avoids new renderItem every snap). */
   activePostIdRef.current = activePostId;
+
+  /** Index of the snapped “page”; drives windowed prefetch so deep scrolls warm the right neighbors. */
+  const activeWarmIndex = useMemo(() => {
+    if (!posts.length) return 0;
+    if (!activePostId) return 0;
+    const i = posts.findIndex((p) => p.id === activePostId);
+    return i >= 0 ? i : 0;
+  }, [posts, activePostId]);
+
+  /**
+   * Batch attributed-sound posts for the warm window only (single `getByIds`).
+   * Cells outside the window resolve via per-cell `usePost` if the user jumps quickly.
+   */
+  const soundSourceIds = useMemo(() => {
+    const { start, end } = feedWindowRange(posts.length, activeWarmIndex, FEED_SOUND_WARM_RADIUS);
+    return posts
+      .slice(start, end)
+      .filter((p) => p.type === 'video' && !p.soundSourceMediaUrl?.trim() && p.soundSourcePostId)
+      .map((p) => p.soundSourcePostId!);
+  }, [posts, activeWarmIndex]);
+
+  usePrefetchPostsByIds(soundSourceIds);
+
+  /**
+   * Pre-warm `expo-image` for avatars, video posters, and image-carousel URLs around the active page.
+   */
+  useEffect(() => {
+    if (posts.length === 0) return;
+    const { start, end } = feedWindowRange(posts.length, activeWarmIndex, FEED_WARM_RADIUS);
+    const slice = posts.slice(start, end);
+    const avatars = slice
+      .map((p) => avatarThumb(p.creator.avatarUrl, 36))
+      .filter((u): u is string => !!u);
+    const posters = slice
+      .map((p) => pickAbCoverUrl(p) ?? p.thumbnailUrl?.trim())
+      .filter((u): u is string => !!u);
+    const imageUrls: string[] = [];
+    for (const p of slice) {
+      if (p.type !== 'image') continue;
+      const main = p.mediaUrl?.trim();
+      const extras = (p.additionalMedia ?? [])
+        .map((u) => u?.trim())
+        .filter((u): u is string => Boolean(u));
+      if (main) imageUrls.push(main);
+      imageUrls.push(...extras);
+    }
+    const upcoming = [...new Set([...avatars, ...posters, ...imageUrls])].slice(0, MAX_IMAGE_PREFETCH_URLS);
+    if (upcoming.length === 0) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void ExpoImage.prefetch(upcoming, 'memory-disk');
+    });
+    return () => task.cancel?.();
+  }, [posts, activeWarmIndex]);
+
+  /** Load more before the last page so the next swipe rarely waits on the network. */
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || posts.length === 0) return;
+    if (activeWarmIndex >= posts.length - FETCH_NEXT_WHEN_WITHIN) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, posts.length, activeWarmIndex, fetchNextPage]);
 
   /**
    * When the feed query result changes, keep the current post if it still exists; otherwise jump to the first item.
@@ -367,6 +421,7 @@ export default function FeedScreen() {
       <VideoFeedPost
         post={item}
         viewportHeight={pageHeight}
+        videoSurfaceEpoch={videoSurfaceEpoch}
         isActive={isFocused && appIsActive && item.id === activePostIdRef.current}
         isLiked={likedPostsRef.current.has(item.id)}
         isSaved={savedPostIdsRef.current.has(item.id)}
@@ -382,7 +437,7 @@ export default function FeedScreen() {
             const { communitiesService } = await import('@/services/supabase');
             const c = await communitiesService.getById(cId);
             if (c?.slug) {
-              primeCommunityDetailCache(queryClient, c);
+              prefetchCircleRoom(queryClient, c, user?.id ?? null);
               router.push(`/communities/${c.slug}`);
             }
           } catch {
@@ -399,7 +454,7 @@ export default function FeedScreen() {
         }
       />
     ),
-    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient],
+    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
@@ -423,7 +478,7 @@ export default function FeedScreen() {
     [pageHeight],
   );
 
-  if (isPending && !feedInfData) return <LoadingState />;
+  if (isPending && !feedInfData) return <FeedLoadingSkeleton />;
   if (isError) {
     const hint =
       __DEV__ && feedError != null
@@ -453,7 +508,7 @@ export default function FeedScreen() {
         onEndReached={() => {
           if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
         }}
-        onEndReachedThreshold={0.45}
+        onEndReachedThreshold={0.55}
         ListFooterComponent={
           isFetchingNextPage ? (
             <View style={{ paddingVertical: 24, alignItems: 'center' }}>
@@ -484,10 +539,10 @@ export default function FeedScreen() {
          * instant. The trade-off is ~50 MB of extra RAM for video
          * surfaces — well within budget on any phone we support.
          */
-        maxToRenderPerBatch={3}
+        maxToRenderPerBatch={feedListWindow.maxToRenderPerBatch}
         updateCellsBatchingPeriod={50}
-        windowSize={5}
-        initialNumToRender={2}
+        windowSize={feedListWindow.windowSize}
+        initialNumToRender={feedListWindow.initialNumToRender}
         {...(Platform.OS === 'web'
           ? { viewabilityConfigCallbackPairs: viewabilityConfigCallbackPairs.current }
           : {

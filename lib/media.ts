@@ -129,6 +129,7 @@ export async function normalizeRasterForUpload(asset: MediaAsset, kind: 'avatar'
       });
     }
   } else {
+    /** Unknown dimensions (some library URIs): force a bounded decode so HEIC/PNG always become normal JPEG rasters before Storage. */
     actions.push({ resize: { width: maxPrimary } });
   }
 
@@ -147,21 +148,33 @@ export async function normalizeRasterForUpload(asset: MediaAsset, kind: 'avatar'
   };
 }
 
-/** Square crop UI (where supported) + JPEG + size cap — My Pulse / onboarding / edit profile. */
-export async function pickAvatarImageFromGallery(): Promise<MediaAsset | null> {
+/**
+ * Picks a full-resolution still (no native square crop). Open {@link CircularAvatarCropModal}
+ * so the visible circle matches in-app avatars, then call {@link normalizeRasterForUpload} before Storage.
+ */
+export async function pickAvatarImageRawFromGallery(): Promise<MediaAsset | null> {
   const ok = await ensurePermission('library');
   if (!ok) return null;
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    allowsEditing: true,
-    aspect: [1, 1],
+    allowsEditing: false,
     quality: 1,
   });
 
   const asset = assetFromResult(result);
   if (!asset || asset.type !== 'image') return null;
-  return normalizeRasterForUpload(asset, 'avatar');
+  return asset;
+}
+
+/**
+ * @deprecated Prefer {@link pickAvatarImageRawFromGallery} + {@link CircularAvatarCropModal} +
+ * {@link normalizeRasterForUpload} so avatars match the circular display everywhere.
+ */
+export async function pickAvatarImageFromGallery(): Promise<MediaAsset | null> {
+  const raw = await pickAvatarImageRawFromGallery();
+  if (!raw) return null;
+  return normalizeRasterForUpload(raw, 'avatar');
 }
 
 /** Wide crop (~3:1) + JPEG + cap — My Pulse banner. */

@@ -4,6 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
@@ -114,6 +115,7 @@ export function MyPulseClipCard({
               source={{ uri: staticThumb }}
               style={styles.thumb}
               contentFit="cover"
+              {...pulseImageListThumbProps}
             />
           ) : showVideoPreview && linkedPost ? (
             <RecentMediaThumb post={linkedPost} style={styles.thumb} />

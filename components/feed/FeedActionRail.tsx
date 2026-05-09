@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, Pressable, TouchableOpacity } from 'react-native';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -36,31 +36,31 @@ export function FeedActionRail({
 
   return (
     <View style={[styles.rail, bottomInset != null && { bottom: bottomInset }]}>
-      <TouchableOpacity
-        style={styles.avatarWrap}
-        onPress={onProfile}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel={`Open profile for ${post.creator.displayName}`}
-      >
-        <AvatarDisplay
-          size={38}
-          avatarUrl={post.creator.avatarUrl}
-          prioritizeRemoteAvatar
-          ringColor="rgba(255,255,255,0.88)"
-          pulseFrame={pulseFrameFromUser(post.creator.pulseAvatarFrame)}
-        />
+      <View style={styles.avatarWrap}>
+        <Pressable
+          onPress={onProfile}
+          accessibilityRole="button"
+          accessibilityLabel={`Open profile for ${post.creator.displayName}`}
+        >
+          <AvatarDisplay
+            size={38}
+            avatarUrl={post.creator.avatarUrl}
+            prioritizeRemoteAvatar
+            ringColor="rgba(255,255,255,0.88)"
+            pulseFrame={pulseFrameFromUser(post.creator.pulseAvatarFrame)}
+          />
+        </Pressable>
         {!isFollowing && (
-          <TouchableOpacity
+          <Pressable
             style={styles.followBubble}
             onPress={action(onFollow)}
             accessibilityRole="button"
             accessibilityLabel={`Follow ${post.creator.displayName}`}
           >
             <Ionicons name="add" size={14} color="#FFF" />
-          </TouchableOpacity>
+          </Pressable>
         )}
-      </TouchableOpacity>
+      </View>
 
       <ActionButton
         icon={isLiked ? 'heart' : 'heart-outline'}

@@ -29,37 +29,45 @@ function notificationPassesLocalMute(n: NotificationItem, muted: Set<string>): b
   return !muted.has(n.communityId);
 }
 
+async function resolveViewerId(explicit?: string | null): Promise<string | null> {
+  const t = explicit?.trim();
+  if (t) return t;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? null;
+}
+
 export const notificationService = {
-  async getAll(): Promise<NotificationItem[]> {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return [];
+  /**
+   * Pass `viewerId` from `useAuth().user.id` to skip an extra `getUser()` round-trip.
+   */
+  async getAll(viewerId?: string | null): Promise<NotificationItem[]> {
+    const [uid, muted] = await Promise.all([resolveViewerId(viewerId), getMutedCommunityIds()]);
+    if (!uid) return [];
 
     const { data, error } = await supabase
       .from('notifications')
-      .select(`*, actor_profile:actor_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})`)
-      .eq('user_id', user.id)
+      .select(
+        `id, type, actor_id, message, created_at, read, target_id, community_id, actor_profile:actor_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})`,
+      )
+      .eq('user_id', uid)
       .order('created_at', { ascending: false })
       .limit(50);
 
     if (error || !data) return [];
-    const muted = await getMutedCommunityIds();
     return data.map(rowToNotification).filter((n) => notificationPassesLocalMute(n, muted));
   },
 
-  async getUnreadCount(): Promise<number> {
+  async getUnreadCount(viewerId?: string | null): Promise<number> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return 0;
+      const [uid, muted] = await Promise.all([resolveViewerId(viewerId), getMutedCommunityIds()]);
+      if (!uid) return 0;
 
-      const muted = await getMutedCommunityIds();
       let q = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
+        .eq('user_id', uid)
         .eq('read', false);
       if (muted.size > 0) {
         const list = [...muted].join(',');

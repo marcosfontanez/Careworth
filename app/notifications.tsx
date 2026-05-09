@@ -1,5 +1,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, SectionList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  SectionList,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NotificationRow } from '@/components/cards/NotificationRow';
@@ -13,12 +21,19 @@ import { useMessengerInbox } from '@/hooks/useMessengerInbox';
 import { MessengerInboxPanel } from '@/components/messenger/MessengerInboxPanel';
 import { notificationService } from '@/services';
 import { queryClient } from '@/lib/queryClient';
-import { primeCommunityDetailCache } from '@/lib/communityCache';
+import { prefetchCircleRoom } from '@/lib/communityCache';
 import { colors, typography, spacing } from '@/theme';
 import type { NotificationItem } from '@/types';
 
-/** DB copy from migration 033 / 088 `notify_on_circle_reply`; `target_id` is thread UUID, not post id. */
-const CIRCLE_THREAD_REPLY_MESSAGE = 'New reply in your circle thread';
+/** Legacy circle thread rows (pre-118) used type `reply` + this exact message. */
+const LEGACY_CIRCLE_THREAD_REPLY_MESSAGE = 'New reply in your circle thread';
+
+function isCircleThreadNotification(n: NotificationItem): boolean {
+  return (
+    n.type === 'circle_thread_reply' ||
+    (n.type === 'reply' && n.message === LEGACY_CIRCLE_THREAD_REPLY_MESSAGE)
+  );
+}
 
 function groupByTime(items: any[]) {
   const now = Date.now();
@@ -76,10 +91,12 @@ export default function NotificationsScreen() {
           'share',
           'comment',
           'reply',
+          'circle_thread_reply',
           'mention',
           'new_follower',
           'badge_earned',
           'tier_up',
+          'circle_new_post',
         ].includes(n.type),
       );
     }
@@ -88,7 +105,8 @@ export default function NotificationsScreen() {
         (n) =>
           n.type === 'community_invite' ||
           Boolean(n.communityId) ||
-          (n.type === 'reply' && n.message === CIRCLE_THREAD_REPLY_MESSAGE),
+          Boolean(n.communityId) ||
+          isCircleThreadNotification(n),
       );
     }
     return items;
@@ -108,13 +126,10 @@ export default function NotificationsScreen() {
     }
 
     if (notification.targetId) {
-      if (notification.type === 'comment' || notification.type === 'reply') {
+      if (notification.type === 'comment' || notification.type === 'reply' || notification.type === 'circle_thread_reply') {
         if (notification.targetId?.startsWith('profile_update:')) {
           router.push('/(tabs)/my-pulse' as any);
-        } else if (
-          notification.type === 'reply' &&
-          notification.message === CIRCLE_THREAD_REPLY_MESSAGE
-        ) {
+        } else if (isCircleThreadNotification(notification)) {
           const { circleThreadsDb } = await import('@/services/supabase');
           const thread = await circleThreadsDb.getById(notification.targetId);
           if (thread?.circleSlug) {
@@ -167,9 +182,17 @@ export default function NotificationsScreen() {
         const { communityService } = await import('@/services');
         const community = await communityService.getById(notification.targetId);
         if (community?.slug) {
-          primeCommunityDetailCache(queryClient, community);
+          prefetchCircleRoom(queryClient, community, authUser?.id ?? null);
           router.push(`/communities/${community.slug}`);
         }
+      } else if (notification.type === 'circle_new_post' && notification.targetId) {
+        let qs = '';
+        if (notification.communityId) {
+          const { communityService } = await import('@/services');
+          const c = await communityService.getById(notification.communityId);
+          if (c?.slug) qs = `?circle=${encodeURIComponent(c.slug)}`;
+        }
+        router.push(`/post/${notification.targetId}${qs}` as any);
       } else if (notification.type === 'tier_up') {
         // Tier promotions send the recipient to their own profile so the
         // history sheet (tap the pill) is one tap away. We include:
@@ -181,7 +204,7 @@ export default function NotificationsScreen() {
         );
       }
     }
-  }, [router, queryClient]);
+  }, [router, queryClient, authUser?.id]);
 
   const handleMarkAllRead = useCallback(async () => {
     await notificationService.markAllAsRead();
@@ -250,6 +273,11 @@ export default function NotificationsScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderSectionHeader={({ section: { title } }) => (
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{title}</Text>

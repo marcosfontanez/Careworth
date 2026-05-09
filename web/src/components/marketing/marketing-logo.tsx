@@ -26,7 +26,8 @@ export function MarketingLogo({ className, variant = "nav" }: { className?: stri
         sizes="(max-width: 640px) 88vw, (max-width: 768px) 360px, 400px"
         priority={variant === "nav"}
         className={cn(
-          "w-auto max-w-[min(88vw,320px)] object-contain object-left sm:max-w-[360px] md:max-w-[400px]",
+          /* Nav lockup: keep width bounded so center links are not covered (wide max-w was crowding flex row). */
+          "w-auto max-w-38 object-contain object-left sm:max-w-50 md:max-w-54",
           variant === "footer" && "max-w-[min(92vw,380px)] sm:max-w-[420px]",
           variant === "admin" && "max-w-[240px] sm:max-w-[280px]",
           heights[variant],

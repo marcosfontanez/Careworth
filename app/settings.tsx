@@ -20,8 +20,11 @@ import { LAUNCH_LINKS } from '@/constants/launch';
 import { sendSentryTestEvent } from '@/lib/monitoring';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { userHasEmailPasswordIdentity } from '@/lib/authIdentity';
+import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
+
 /** After sign-out, jump to login. Avoid `router.dismiss(1)` loops — they dispatch POP and warn when no modal stack exists. */
 function replaceWithLogin(router: Router) {
+  resetRootIndexRedirectDedupe();
   router.replace('/auth/login');
 }
 
@@ -234,8 +237,8 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <SettingRow
             icon="sparkles-outline"
-            label="My Pulse — banner, photo & bio"
-            subtitle="Customize how your profile looks"
+            label="Customize My Pulse"
+            subtitle="Banner, photo, bio, name, @handle, status, and more"
             onPress={() => router.push('/my-pulse-appearance')}
             right={<Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />}
           />

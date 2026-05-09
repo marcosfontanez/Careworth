@@ -40,7 +40,7 @@ function NavLink({
       {label}
       <span
         className={cn(
-          "absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--accent)] shadow-[0_0_12px_rgba(0,210,255,0.45)] transition-opacity",
+          "absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent shadow-[0_0_12px_rgba(0,210,255,0.45)] transition-opacity",
           active ? "opacity-100" : "opacity-0 hover:opacity-40",
         )}
         aria-hidden
@@ -62,27 +62,27 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
     <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.92)] backdrop-blur-xl">
       <div
         className={cn(
-          "flex min-h-[5.5rem] items-center gap-3 py-2 sm:min-h-[6rem] sm:gap-4 lg:gap-5",
+          "flex min-h-22 items-center gap-3 py-2 sm:min-h-24 sm:gap-4 lg:gap-5",
           marketingGutterX,
         )}
       >
-        <MarketingLogo className="relative z-10 shrink-0" />
+        <MarketingLogo className="shrink-0" />
         <nav
-          className="relative z-0 hidden min-h-0 min-w-0 flex-1 basis-0 items-center justify-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden"
+          className="hidden min-h-0 min-w-0 flex-1 basis-0 items-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden"
           aria-label="Primary"
         >
-          <div className="flex items-center gap-x-2 px-1 sm:gap-x-3 xl:gap-x-5 2xl:gap-x-6">
+          <div className="flex w-max items-center justify-start gap-x-2 px-1 sm:gap-x-3 xl:gap-x-5 2xl:gap-x-6">
             {centerLinks.map((item) => {
               const active = item.match(pathname);
               return <NavLink key={item.href} href={item.href} label={item.label} active={active} />;
             })}
           </div>
         </nav>
-        <div className="relative z-10 ml-auto flex min-w-0 shrink-0 items-center gap-2 border-l border-white/[0.08] pl-3 sm:gap-3 sm:pl-4 lg:ml-0">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 border-l border-white/8 pl-3 sm:gap-3 sm:pl-4 lg:ml-0">
           {account ? (
             <Link
               href="/me"
-              className="hidden max-w-[6.5rem] truncate text-sm font-semibold text-foreground hover:text-primary md:inline md:max-w-[9rem] xl:max-w-[11rem]"
+              className="hidden max-w-26 truncate text-sm font-semibold text-foreground hover:text-primary md:inline md:max-w-36 xl:max-w-44"
               title={meLabel}
             >
               {meLabel}

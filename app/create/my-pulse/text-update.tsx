@@ -16,8 +16,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { useToast } from '@/components/ui/Toast';
-import { colors, borderRadius, typography } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { colors, typography } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
+
+const TEXT_UPDATE_ACCENT = '#34D399';
 
 /** Short line / checklist-style update — maps to `status` (text update) in My Pulse. */
 export default function MyPulseTextUpdateScreen() {
@@ -74,27 +77,49 @@ export default function MyPulseTextUpdateScreen() {
       <Text style={styles.hint}>One thought or checklist moment — shows with the green document style on My Pulse.</Text>
 
       <Text style={styles.fieldLbl}>Mood (optional)</Text>
-      <TextInput
-        style={styles.moodInput}
-        placeholder="e.g. Grateful, On edge"
-        placeholderTextColor={colors.dark.textMuted}
-        value={mood}
-        onChangeText={setMood}
-        maxLength={40}
-      />
+      <AccentComposerFrame
+        accentColor={TEXT_UPDATE_ACCENT}
+        hint="Mood"
+        compact
+        noShadow
+        style={styles.fieldGap}
+      >
+        <TextInput
+          style={styles.moodPlain}
+          placeholder="e.g. Grateful, On edge"
+          placeholderTextColor={colors.dark.textMuted}
+          value={mood}
+          onChangeText={setMood}
+          maxLength={40}
+        />
+      </AccentComposerFrame>
 
       <Text style={styles.fieldLbl}>Update</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="What’s one thing you want on your page today?"
-        placeholderTextColor={colors.dark.textMuted}
-        value={body}
-        onChangeText={setBody}
-        multiline
-        textAlignVertical="top"
-        maxLength={280}
-      />
-      <Text style={styles.count}>{body.length}/280</Text>
+      <AccentComposerFrame
+        accentColor={TEXT_UPDATE_ACCENT}
+        hint="Update"
+        noShadow
+        footer={
+          <AccentCharCount
+            length={body.length}
+            max={280}
+            accentColor={TEXT_UPDATE_ACCENT}
+            warnWithin={30}
+            hideWhenEmpty={false}
+          />
+        }
+      >
+        <TextInput
+          style={styles.inputPlain}
+          placeholder="What’s one thing you want on your page today?"
+          placeholderTextColor={colors.dark.textMuted}
+          value={body}
+          onChangeText={setBody}
+          multiline
+          textAlignVertical="top"
+          maxLength={280}
+        />
+      </AccentComposerFrame>
     </KeyboardAvoidingView>
   );
 }
@@ -117,33 +142,20 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     marginBottom: 8,
   },
-  moodInput: {
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  fieldGap: { marginBottom: 4 },
+  moodPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     fontSize: 15,
     color: colors.dark.text,
-    marginBottom: 18,
   },
-  input: {
-    flex: 1,
+  inputPlain: {
     minHeight: 140,
     fontSize: 16,
     lineHeight: 24,
     color: colors.dark.text,
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    padding: 14,
-  },
-  count: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
-    fontSize: 12,
-    color: colors.dark.textMuted,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    textAlignVertical: 'top',
   },
 });

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, spacing, typography } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const LOGO = require('../../assets/images/pulseverse-logo.png');
 
@@ -22,7 +23,13 @@ export function AuthBrandHero({ title = 'PulseVerse', subtitle = 'Built for Heal
         end={{ x: 0.5, y: 1 }}
       />
       <View style={styles.logoRing}>
-        <Image source={LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="PulseVerse logo" />
+        <Image
+          source={LOGO}
+          style={styles.logo}
+          contentFit="contain"
+          accessibilityLabel="PulseVerse logo"
+          {...pulseImageListThumbProps}
+        />
       </View>
       {kicker ? <Text style={styles.kicker}>{kicker}</Text> : null}
       <Text style={styles.title}>{title}</Text>

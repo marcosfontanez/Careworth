@@ -1,12 +1,10 @@
 import { create } from 'zustand';
-import type { UserProfile, FeedType, OnboardingData } from '@/types';
+import type { UserProfile, FeedType, PulseAvatarFrame } from '@/types';
 import { profilesService } from '@/services/supabase';
-import { profileFromOnboarding } from '@/store/profileFromOnboarding';
 
 interface AppState {
   currentUser: UserProfile | null;
   isAuthenticated: boolean;
-  hasCompletedOnboarding: boolean;
   feedTab: FeedType;
   savedPostIds: Set<string>;
   savedJobIds: Set<string>;
@@ -16,10 +14,16 @@ interface AppState {
   /** When true, the beta tester gift modal is visible — monthly celebration waits. */
   betaTesterBorderBlocking: boolean;
   setBetaTesterBorderBlocking: (val: boolean) => void;
+  /**
+   * Survives screen remounts (e.g. leaving `/auth/legal-ack`). The gate presents the modal once
+   * `inAuth` is false and terms are accepted.
+   */
+  betaTesterGiftPending: { userId: string; frame: PulseAvatarFrame } | null;
+  setBetaTesterGiftPending: (v: { userId: string; frame: PulseAvatarFrame } | null) => void;
+  clearBetaTesterGiftPending: () => void;
 
   setCurrentUser: (user: UserProfile | null) => void;
   setAuthenticated: (val: boolean) => void;
-  setOnboardingComplete: (val: boolean) => void;
   setFeedTab: (tab: FeedType) => void;
   toggleSavePost: (id: string) => void;
   toggleSaveJob: (id: string) => void;
@@ -30,15 +34,15 @@ interface AppState {
   setCommunityJoined: (communityId: string, joined: boolean) => void;
   /** Replace the local followed-creator set from the server (e.g. after auth). */
   setFollowedCreatorIdsFromServer: (creatorIds: string[]) => void;
+  /** Replace bookmark ids from `saved_posts` after sign-in (feed bookmark chip). */
+  setSavedPostIdsFromServer: (postIds: string[]) => void;
   setCreatorFollowed: (creatorId: string, followed: boolean) => void;
-  completeOnboarding: (data: OnboardingData) => void;
   syncFromSupabase: (userId: string) => Promise<void>;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set) => ({
   currentUser: null,
   isAuthenticated: false,
-  hasCompletedOnboarding: false,
   feedTab: 'forYou',
   savedPostIds: new Set(),
   savedJobIds: new Set(),
@@ -46,11 +50,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   joinedCommunityIds: new Set(),
 
   betaTesterBorderBlocking: false,
+  betaTesterGiftPending: null,
 
   setCurrentUser: (user) => set({ currentUser: user }),
   setAuthenticated: (val) => set({ isAuthenticated: val }),
-  setOnboardingComplete: (val) => set({ hasCompletedOnboarding: val }),
   setBetaTesterBorderBlocking: (val) => set({ betaTesterBorderBlocking: val }),
+  setBetaTesterGiftPending: (v) => set({ betaTesterGiftPending: v }),
+  clearBetaTesterGiftPending: () => set({ betaTesterGiftPending: null }),
 
   setFeedTab: (tab) => set({ feedTab: tab }),
 
@@ -100,23 +106,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFollowedCreatorIdsFromServer: (creatorIds) =>
     set({ followedCreatorIds: new Set(creatorIds) }),
 
+  setSavedPostIdsFromServer: (postIds) =>
+    set({ savedPostIds: new Set(postIds) }),
+
   setCreatorFollowed: (creatorId, followed) =>
     set((state) => {
       const next = new Set(state.followedCreatorIds);
       if (followed) next.add(creatorId);
       else next.delete(creatorId);
       return { followedCreatorIds: next };
-    }),
-
-  completeOnboarding: (data) =>
-    set((state) => {
-      const id = state.currentUser?.id ?? '';
-      return {
-        currentUser: profileFromOnboarding(data, id),
-        joinedCommunityIds: new Set(data.communitiesToFollow),
-        hasCompletedOnboarding: true,
-        isAuthenticated: true,
-      };
     }),
 
   syncFromSupabase: async (userId: string) => {
@@ -126,7 +124,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           currentUser: profile,
           isAuthenticated: true,
-          hasCompletedOnboarding: true,
         });
       }
     } catch {}

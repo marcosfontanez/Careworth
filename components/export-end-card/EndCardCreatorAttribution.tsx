@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { exportEndCardTokens } from '@/theme/exportEndCard';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { EndCardTheme, ExportEndCardData } from '@/types/exportEndCard';
 import { getEndCardCreatorLines } from './attribution';
 
@@ -73,6 +74,7 @@ export function EndCardCreatorAttribution({
           style={styles.avatar}
           contentFit="cover"
           transition={120}
+          {...pulseImageListThumbProps}
         />
       ) : null}
       <View style={[styles.textCol, align === 'right' && styles.textColRight]}>

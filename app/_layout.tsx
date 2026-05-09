@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, AppState } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as SplashScreen from 'expo-splash-screen';
@@ -15,7 +15,8 @@ import { realtime } from '@/lib/realtime';
 import { useThemeStore } from '@/lib/theme';
 import { setupDeepLinkHandler } from '@/lib/deepLink';
 import { postsService } from '@/services/supabase';
-import { feedKeys } from '@/lib/queryKeys';
+import { notificationService } from '@/services';
+import { feedKeys, likedPostKeys } from '@/lib/queryKeys';
 import { NetworkBanner } from '@/components/ui/NetworkBanner';
 import { ToastContainer } from '@/components/ui/Toast';
 import { MediaExportOverlay } from '@/components/export/MediaExportOverlay';
@@ -26,6 +27,11 @@ import { initPushNotifications } from '@/lib/notifications';
 import { initMonitoring } from '@/lib/monitoring';
 import { PulseMonthCelebrationGate } from '@/components/mypage/PulseMonthCelebrationGate';
 import { BetaTesterBorderGate } from '@/components/mypage/BetaTesterBorderGate';
+import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
+import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
+import { attachSupabaseAuthAutoRefreshToAppState } from '@/lib/supabaseAuthLifecycle';
+import * as Updates from 'expo-updates';
+import { attachAppResumeStaleDataRefresh } from '@/lib/appResumeQuerySync';
 
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();
@@ -57,11 +63,11 @@ function AppShell() {
     const cleanupDeepLinks = setupDeepLinkHandler();
 
     /**
-     * Persist every 30s so a backgrounded → foregrounded session has a
+     * Persist every 60s so a backgrounded → foregrounded session has a
      * recent snapshot to restore from. Cheap — `persistQueryCache` is
      * size-capped to ~1MB and bails on serialisation errors.
      */
-    const interval = setInterval(persistQueryCache, 30000);
+    const interval = setInterval(persistQueryCache, 60000);
     return () => {
       clearInterval(interval);
       cleanupDeepLinks();
@@ -69,15 +75,30 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (isLoading) return;
-
-    const inAuth = segments[0] === 'auth' || segments[0] === 'onboarding';
+    const inAuth = segments[0] === 'auth';
 
     if (!isAuthenticated) {
       hasRedirected.current = false;
     }
 
+    /**
+     * Cold boot: keep `isLoading true` + `isAuthenticated false` until `getSession` resolves.
+     * Do not send the user to `/auth/login` during that window (avoid an ugly flash).
+     *
+     * Once we know there is a Supabase session (`isAuthenticated`), allow routing even while
+     * `isLoading` is still true — profile hydration can take hundreds of ms and we must still
+     * move off `/auth/login` (and let `app/index.tsx` gate on `isLoading`).
+     */
+    if (isLoading && !isAuthenticated) return;
+
     if (!isAuthenticated && !inAuth) {
+      /**
+       * User can be on `/(tabs)/*` when the session drops. Without clearing the index
+       * redirect dedupe, `lastReplaceTarget` may still be `'/(tabs)/feed'` from the
+       * prior session — then after the next sign-in, `app/index` skips `replace` and
+       * the app sits on a blank shell until a hard restart.
+       */
+      resetRootIndexRedirectDedupe();
       queryClient.clear();
       router.replace('/auth/login');
       return;
@@ -87,7 +108,7 @@ function AppShell() {
       const onLegalAck = segments[0] === 'auth' && segments.some((s) => s === 'legal-ack');
       if (!onLegalAck) {
         hasRedirected.current = true;
-        router.replace('/');
+        schedulePostSignInNavigation(router);
       }
     }
   }, [isAuthenticated, isLoading, segments, router]);
@@ -99,6 +120,52 @@ function AppShell() {
    * recovery moment.
    */
   useOfflineQueueProcessor(user?.id ?? null);
+
+  /**
+   * Background: persist React Query + analytics. Long resume: soft-refresh
+   * notifications / live / Circles shell (see `attachAppResumeStaleDataRefresh`).
+   */
+  useEffect(
+    () =>
+      attachAppResumeStaleDataRefresh(queryClient, {
+        onBackground: () => {
+          void persistQueryCache();
+          void analytics.flush();
+        },
+        /**
+         * ~10+ minutes suspended (phone locked): reload the JS bundle when OTA is enabled
+         * so expo-video / navigation recover from a stuck non-loading surface; dev builds
+         * fall back to clearing feed queries + jumping to the Feed tab.
+         */
+        onLongIdleResume: () => {
+          void (async () => {
+            try {
+              if (!__DEV__ && Updates.isEnabled) {
+                await Updates.reloadAsync();
+                return;
+              }
+            } catch {
+              /* expo-updates reload unavailable */
+            }
+            try {
+              queryClient.removeQueries({
+                predicate: (q) => {
+                  const k = q.queryKey;
+                  return Array.isArray(k) && k[0] === 'feedInf';
+                },
+              });
+              queryClient.invalidateQueries({ queryKey: feedKeys.root() });
+              if (isAuthenticated) {
+                router.replace('/(tabs)/feed');
+              }
+            } catch {
+              /* noop */
+            }
+          })();
+        },
+      }),
+    [isAuthenticated, router],
+  );
 
   useEffect(() => {
     if (!user) {
@@ -113,7 +180,13 @@ function AppShell() {
     analytics.setUser(uid);
     analytics.track('app_open');
     trackAppOpen().then(() => promptReview());
-    pruneCache().catch(() => {});
+    /**
+     * Prune after first interactions so disk walks don’t contend with
+     * feed + tab-bar paint (same idea as deferred `restoreQueryCache`).
+     */
+    InteractionManager.runAfterInteractions(() => {
+      void pruneCache();
+    });
 
     let cancelled = false;
     let pushCleanup: (() => void) | undefined;
@@ -122,40 +195,71 @@ function AppShell() {
       else pushCleanup = cleanup;
     });
 
-    realtime.subscribeToNotifications(uid, () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
-    });
+    /**
+     * Debounce invalidation: a burst of notification inserts (e.g. batch
+     * fan-out) becomes one refetch instead of N separate notification queries.
+     */
+    let notifInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNotificationCacheRefresh = () => {
+      if (notifInvalidateTimer != null) clearTimeout(notifInvalidateTimer);
+      notifInvalidateTimer = setTimeout(() => {
+        notifInvalidateTimer = null;
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+      }, 350);
+    };
+
+    realtime.subscribeToNotifications(uid, scheduleNotificationCacheRefresh);
 
     /**
-     * Cold-boot speed: kick off the For You feed fetch the moment we
-     * have an auth session — *in parallel with* profile hydration in
-     * `AuthContext.fetchProfile`. The feed query in `app/(tabs)/feed.tsx`
-     * keys off `useFeedInfinite('forYou', user.id)`, so when the tab
-     * mounts a few hundred ms later it sees a hot cache entry and
-     * skips the network entirely.
-     *
-     * Saves ~300–800ms of "blank feed" on first launch, depending on
-     * RTT. `prefetchInfiniteQuery` is a no-op if the cache is already
-     * fresh, so re-mounts of AppShell don't re-fetch.
+     * Cold-boot wave (parallel RTT with profile hydration): For You infinite
+     * feed plus lightweight queries the tab bar / feed use (`useLikedPostIds`,
+     * `useUnreadCount`). `allSettled` so one failed prefetch never blocks the
+     * others. Each `prefetch*` no-ops when cache is already fresh.
      */
-    void queryClient.prefetchInfiniteQuery({
-      queryKey: feedKeys.infinitePage('forYou', uid),
-      initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
-      queryFn: async () => {
-        const posts = await postsService.getFeed('forYou', uid);
-        const last = posts[posts.length - 1];
-        return {
-          posts,
-          nextCursor: posts.length ? last.createdAt : null,
-          seenIds: posts.map((p) => p.id),
-        };
-      },
-      staleTime: 30_000,
+    void Promise.allSettled([
+      queryClient.prefetchInfiniteQuery({
+        queryKey: feedKeys.infinitePage('forYou', uid),
+        initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
+        queryFn: async () => {
+          const posts = await postsService.getFeed('forYou', uid);
+          const last = posts[posts.length - 1];
+          return {
+            posts,
+            nextCursor: posts.length ? last.createdAt : null,
+            seenIds: posts.map((p) => p.id),
+          };
+        },
+        staleTime: 60_000,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: likedPostKeys.forUser(uid),
+        queryFn: async () => [...(await postsService.getLikedPostIdsForUser(uid))],
+        staleTime: 60_000,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ['notifications', 'unread', uid],
+        queryFn: () => notificationService.getUnreadCount(uid),
+        staleTime: 45_000,
+      }),
+    ]);
+
+    /** Full notification list (50 rows + actor join) fights the feed for RTT on cold boot — warm after first interactions. */
+    const notifListTask = InteractionManager.runAfterInteractions(() => {
+      void queryClient.prefetchQuery({
+        queryKey: ['notifications', uid],
+        queryFn: () => notificationService.getAll(uid),
+        staleTime: 45_000,
+      });
     });
 
     return () => {
       cancelled = true;
+      notifListTask.cancel?.();
+      if (notifInvalidateTimer != null) {
+        clearTimeout(notifInvalidateTimer);
+        notifInvalidateTimer = null;
+      }
       pushCleanup?.();
       realtime.unsubscribe(`notifications:${uid}`);
       analytics.flush();
@@ -180,7 +284,6 @@ function AppShell() {
         <Stack.Screen name="search" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="comments/[postId]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="legal" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="messages" options={{ animation: 'slide_from_right' }} />
@@ -210,6 +313,11 @@ function AppShell() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    const detachAuthRefresh = attachSupabaseAuthAutoRefreshToAppState();
+    return () => detachAuthRefresh();
+  }, []);
+
   useEffect(() => {
     const hide = () => SplashScreen.hideAsync().catch(() => {});
     hide();

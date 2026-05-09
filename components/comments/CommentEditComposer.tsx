@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing } from '@/theme';
 import { COMMENT_MAX_LENGTH } from '@/constants';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 
 const WIN = Dimensions.get('window');
 /** Fixed pixel height — multiline TextInputs must not rely on minHeight inside keyboards/modals or they often measure as 0. */
@@ -69,7 +70,6 @@ export function CommentEditComposer({
   const trimmed = text.trim();
   const isEmpty = trimmed.length === 0;
   const isUnchanged = trimmed === initialContent.trim();
-  const atLimit = text.length >= maxLength;
   const canSave = !isEmpty && !isUnchanged && !saving && !disabled;
 
   const handleSave = useCallback(async () => {
@@ -119,34 +119,34 @@ export function CommentEditComposer({
               <View style={styles.headerBtn} />
             </View>
 
-            <TextInput
-              ref={inputRef}
-              value={text}
-              onChangeText={setText}
-              multiline
-              editable={!disabled && !saving}
-              placeholder={placeholder}
-              placeholderTextColor={colors.dark.textMuted}
-              maxLength={maxLength}
-              scrollEnabled
-              textAlignVertical="top"
-              underlineColorAndroid="transparent"
-              selectionColor={accent}
-              style={[
-                styles.textField,
-                { height: EDIT_FIELD_HEIGHT, borderColor: `${accent}55` },
-                disabled ? styles.textFieldDisabled : null,
-              ]}
-              returnKeyType="default"
-            />
+            <AccentComposerFrame
+              accentColor={accent}
+              hint="Your comment"
+              compact
+              noShadow
+              footer={
+                <AccentCharCount length={text.length} max={maxLength} accentColor={accent} warnWithin={30} hideWhenEmpty={false} />
+              }
+            >
+              <TextInput
+                ref={inputRef}
+                value={text}
+                onChangeText={setText}
+                multiline
+                editable={!disabled && !saving}
+                placeholder={placeholder}
+                placeholderTextColor={colors.dark.textMuted}
+                maxLength={maxLength}
+                scrollEnabled
+                textAlignVertical="top"
+                underlineColorAndroid="transparent"
+                selectionColor={accent}
+                style={[styles.textField, { height: EDIT_FIELD_HEIGHT }, disabled ? styles.textFieldDisabled : null]}
+                returnKeyType="default"
+              />
+            </AccentComposerFrame>
 
             <View style={styles.actions}>
-              <Text
-                style={[styles.count, atLimit ? { color: accent } : null]}
-                accessibilityLiveRegion="polite"
-              >
-                {text.length}/{maxLength}
-              </Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity
                 onPress={onCancel}
@@ -229,11 +229,8 @@ const styles = StyleSheet.create({
   },
   textField: {
     width: '100%',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 8,
     fontSize: 15,
     lineHeight: 22,
     color: colors.dark.text,
@@ -246,12 +243,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginTop: 14,
-  },
-  count: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.dark.textMuted,
-    fontVariant: ['tabular-nums'],
   },
   cancelBtn: {
     paddingVertical: 6,

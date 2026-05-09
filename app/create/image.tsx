@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '@/theme';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { useAuth } from '@/contexts/AuthContext';
 import { storageService } from '@/lib/storage';
 import { postsService } from '@/services/supabase';
@@ -680,54 +681,86 @@ export default function CreateImageScreen() {
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Headline (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={headline}
-            onChangeText={setHeadline}
-            placeholder="Short punchy line above the caption"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-            maxLength={120}
-          />
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="Headline (optional)"
+            compact
+            noShadow
+            footer={
+              <AccentCharCount
+                length={headline.length}
+                max={120}
+                accentColor={colors.primary.teal}
+                warnWithin={14}
+                hideWhenEmpty={false}
+              />
+            }
+          >
+            <TextInput
+              style={styles.inputPlain}
+              value={headline}
+              onChangeText={setHeadline}
+              placeholder="Short punchy line above the caption"
+              placeholderTextColor={colors.dark.textMuted}
+              editable={!posting}
+              maxLength={120}
+            />
+          </AccentComposerFrame>
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>On-photo sticker text (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={overlayLine}
-            onChangeText={setOverlayLine}
-            placeholder="Shows on the preview — also added when you post"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-            maxLength={80}
-          />
+          <AccentComposerFrame
+            accentColor={colors.primary.teal}
+            hint="On-photo sticker (optional)"
+            compact
+            noShadow
+            footer={
+              <AccentCharCount
+                length={overlayLine.length}
+                max={80}
+                accentColor={colors.primary.teal}
+                warnWithin={12}
+                hideWhenEmpty={false}
+              />
+            }
+          >
+            <TextInput
+              style={styles.inputPlain}
+              value={overlayLine}
+              onChangeText={setOverlayLine}
+              placeholder="Shows on the preview — also added when you post"
+              placeholderTextColor={colors.dark.textMuted}
+              editable={!posting}
+              maxLength={80}
+            />
+          </AccentComposerFrame>
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Caption</Text>
-          <TextInput
-            style={styles.captionInput}
-            value={caption}
-            onChangeText={setCaption}
-            placeholder="Describe your photo..."
-            placeholderTextColor={colors.dark.textMuted}
-            multiline
-            editable={!posting}
-          />
+          <AccentComposerFrame accentColor={colors.primary.teal} hint="Caption" noShadow>
+            <TextInput
+              style={styles.captionPlain}
+              value={caption}
+              onChangeText={setCaption}
+              placeholder="Describe your photo..."
+              placeholderTextColor={colors.dark.textMuted}
+              multiline
+              editable={!posting}
+            />
+          </AccentComposerFrame>
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Hashtags</Text>
-          <TextInput
-            style={styles.input}
-            value={hashtags}
-            onChangeText={setHashtags}
-            placeholder="#NurseLife #ICU #WorkDay"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-          />
+          <AccentComposerFrame accentColor={colors.primary.teal} hint="Hashtags" compact noShadow>
+            <TextInput
+              style={styles.inputPlain}
+              value={hashtags}
+              onChangeText={setHashtags}
+              placeholder="#NurseLife #ICU #WorkDay"
+              placeholderTextColor={colors.dark.textMuted}
+              editable={!posting}
+            />
+          </AccentComposerFrame>
         </View>
 
         <View style={styles.optionsRow}>
@@ -864,17 +897,19 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 14, fontWeight: '700' },
 
   fieldGroup: { gap: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: colors.dark.textSecondary, marginLeft: 4 },
-  captionInput: {
-    backgroundColor: colors.dark.card, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 14, fontSize: 15,
-    color: colors.dark.text, height: 110, textAlignVertical: 'top',
-    borderWidth: 1, borderColor: colors.dark.border,
+  inputPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: colors.dark.text,
   },
-  input: {
-    backgroundColor: colors.dark.card, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 14, fontSize: 15,
-    color: colors.dark.text, borderWidth: 1, borderColor: colors.dark.border,
+  captionPlain: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: colors.dark.text,
+    minHeight: 110,
+    textAlignVertical: 'top',
   },
 
   optionsRow: { flexDirection: 'row', gap: 10 },

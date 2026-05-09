@@ -95,6 +95,24 @@ export const messagesService = {
     return conversations;
   },
 
+  /**
+   * Who the other person is in a 1:1 thread — used when opening `/messages/:id` from a push
+   * or deep link that only carries the conversation id.
+   */
+  async getOtherParticipantUserId(conversationId: string, currentUserId: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('participant_1, participant_2')
+      .eq('id', conversationId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const p1 = String((data as { participant_1: string }).participant_1);
+    const p2 = String((data as { participant_2: string }).participant_2);
+    if (p1 === currentUserId) return p2;
+    if (p2 === currentUserId) return p1;
+    return null;
+  },
+
   async getMessages(conversationId: string, limit = 50): Promise<Message[]> {
     const { data, error } = await supabase
       .from('messages')

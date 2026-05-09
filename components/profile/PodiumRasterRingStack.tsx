@@ -6,6 +6,7 @@ import { GoldFireworksBurst } from '@/components/profile/GoldFireworksBurst';
 import { podiumPulseRingSource, rasterRingOuterBoxSide } from '@/lib/pulseRingRasterAssets';
 import { avatarThumb } from '@/lib/storage';
 import { colors } from '@/theme';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 export type PodiumRasterTier = 'gold' | 'silver' | 'bronze';
 
@@ -56,6 +57,7 @@ export function PodiumRasterRingStack({
             }}
             contentFit="cover"
             transition={150}
+            {...pulseImageListThumbProps}
           />
         ) : (
           <View
@@ -77,6 +79,7 @@ export function PodiumRasterRingStack({
         style={[styles.ring, { width: outerBox, height: outerBox }]}
         contentFit="contain"
         pointerEvents="none"
+        {...pulseImageListThumbProps}
       />
     </View>
   );

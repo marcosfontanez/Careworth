@@ -144,6 +144,12 @@ export interface Database {
           share_count: number;
           view_count: number;
           save_count: number;
+          reaction_heart_count: number;
+          reaction_haha_count: number;
+          reaction_wow_count: number;
+          reaction_sad_count: number;
+          reaction_angry_count: number;
+          reaction_clap_count: number;
           ranking_score: number;
           feed_type_eligible: string[];
           role_context: string;
@@ -309,6 +315,7 @@ export interface Database {
           trending_topics: string[];
           created_at: string;
           featured_order: number | null;
+          profile_open_count: number;
         };
         Insert: {
           id?: string;
@@ -321,6 +328,7 @@ export interface Database {
           categories?: string[];
           trending_topics?: string[];
           featured_order?: number | null;
+          profile_open_count?: number;
         };
         Update: {
           slug?: string;
@@ -334,6 +342,7 @@ export interface Database {
           member_count?: number;
           post_count?: number;
           featured_order?: number | null;
+          profile_open_count?: number;
         };
         Relationships: [];
       };
@@ -364,11 +373,14 @@ export interface Database {
           community_id: string;
           user_id: string;
           joined_at: string;
+          notify_new_posts: boolean;
         };
         Insert: {
           id?: string;
           community_id: string;
           user_id: string;
+          joined_at?: string;
+          notify_new_posts?: boolean;
         };
         Update: Partial<Database['public']['Tables']['community_members']['Insert']>;
         Relationships: [];
@@ -478,11 +490,13 @@ export interface Database {
           user_id: string;
           post_id: string;
           created_at: string;
+          reaction: string;
         };
         Insert: {
           id?: string;
           user_id: string;
           post_id: string;
+          reaction?: string;
         };
         Update: Partial<Database['public']['Tables']['post_likes']['Insert']>;
         Relationships: [];
@@ -1500,6 +1514,10 @@ export interface Database {
         Args: { viewer_uuid: string; result_limit?: number };
         Returns: { id: string }[];
       };
+      get_feed_exclusions: {
+        Args: { viewer_uuid: string };
+        Returns: Json;
+      };
       get_ranked_feed_v2: {
         Args: { viewer_id: string; feed_limit: number };
         Returns: { post_id: string; score: number }[];
@@ -1569,6 +1587,10 @@ export interface Database {
       get_community_card_stats: {
         Args: { p_ids: string[] };
         Returns: Record<string, Json>[];
+      };
+      bump_community_profile_open: {
+        Args: { p_community_id: string };
+        Returns: undefined;
       };
       increment_ad_click: {
         Args: { campaign_id: string };

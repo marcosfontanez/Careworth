@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal,
-  TextInput, Alert,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, shadows, spacing, typography } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 const REASONS = [
   { key: 'spam', label: 'Spam', icon: 'mail-unread-outline' },
@@ -31,6 +42,8 @@ interface ReportModalProps {
  * primitive for the submit CTA). Behaviour and copy unchanged.
  */
 export function ReportModal({ visible, onClose, targetType, targetId }: ReportModalProps) {
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { user } = useAuth();
   const [reason, setReason] = useState<string | null>(null);
   const [details, setDetails] = useState('');
@@ -59,79 +72,118 @@ export function ReportModal({ visible, onClose, targetType, targetId }: ReportMo
     }
   };
 
+  const sheetPadBottom = Math.max(insets.bottom, spacing['3xl']);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              Report{' '}
-              {targetType === 'circle_thread' ? 'discussion' : targetType}
-            </Text>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={10}>
-              <Ionicons name="close" size={22} color={colors.dark.textMuted} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.subtitle}>Why are you reporting this?</Text>
-
-          {REASONS.map((r) => {
-            const active = reason === r.key;
-            return (
-              <TouchableOpacity
-                key={r.key}
-                style={[styles.reasonRow, active && styles.reasonActive]}
-                onPress={() => setReason(r.key)}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name={r.icon as any}
-                  size={20}
-                  color={active ? colors.primary.teal : colors.dark.textMuted}
-                />
-                <Text style={[styles.reasonText, active && styles.reasonTextActive]}>
-                  {r.label}
-                </Text>
-                {active && (
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary.teal} />
-                )}
+      <KeyboardAvoidingView
+        style={styles.keyboardRoot}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        enabled
+      >
+        <ScrollView
+          style={styles.scrollFill}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View
+            style={[
+              styles.sheet,
+              { paddingBottom: sheetPadBottom, maxHeight: Math.round(windowHeight * 0.92) },
+            ]}
+          >
+            <View style={styles.handle} />
+            <View style={styles.header}>
+              <Text style={styles.title}>
+                Report{' '}
+                {targetType === 'circle_thread' ? 'discussion' : targetType}
+              </Text>
+              <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.dark.textMuted} />
               </TouchableOpacity>
-            );
-          })}
+            </View>
 
-          {reason && (
-            <TextInput
-              style={styles.detailsInput}
-              placeholder="Additional details (optional)"
-              placeholderTextColor={colors.dark.textMuted}
-              value={details}
-              onChangeText={setDetails}
-              multiline
-              numberOfLines={3}
+            <Text style={styles.subtitle}>Why are you reporting this?</Text>
+
+            {REASONS.map((r) => {
+              const active = reason === r.key;
+              return (
+                <TouchableOpacity
+                  key={r.key}
+                  style={[styles.reasonRow, active && styles.reasonActive]}
+                  onPress={() => setReason(r.key)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name={r.icon as any}
+                    size={20}
+                    color={active ? colors.primary.teal : colors.dark.textMuted}
+                  />
+                  <Text style={[styles.reasonText, active && styles.reasonTextActive]}>
+                    {r.label}
+                  </Text>
+                  {active && (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.primary.teal} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+
+            {reason ? (
+              <AccentComposerFrame
+                accentColor={colors.primary.teal}
+                hint="Additional context (optional)"
+                compact
+                noShadow
+                style={{ marginTop: spacing.sm }}
+              >
+                <TextInput
+                  style={[
+                    styles.detailsInput,
+                    Platform.OS === 'android' ? { textAlignVertical: 'top' as const } : null,
+                  ]}
+                  placeholder="What should we know?"
+                  placeholderTextColor={colors.dark.textMuted}
+                  value={details}
+                  onChangeText={setDetails}
+                  multiline
+                  numberOfLines={4}
+                  scrollEnabled
+                />
+              </AccentComposerFrame>
+            ) : null}
+
+            <Button
+              label="Submit Report"
+              variant="destructive"
+              size="lg"
+              fullWidth
+              disabled={!reason}
+              loading={submitting}
+              onPress={handleSubmit}
+              style={styles.submit}
             />
-          )}
-
-          <Button
-            label="Submit Report"
-            variant="destructive"
-            size="lg"
-            fullWidth
-            disabled={!reason}
-            loading={submitting}
-            onPress={handleSubmit}
-            style={styles.submit}
-          />
-        </View>
-      </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  keyboardRoot: {
     flex: 1,
     backgroundColor: colors.overlay.dark,
+    justifyContent: 'flex-end',
+  },
+  scrollFill: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -140,7 +192,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius.sheet,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing['3xl'],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
     ...shadows.sheet,
@@ -186,16 +237,11 @@ const styles = StyleSheet.create({
   },
   reasonTextActive: { fontWeight: '700', color: colors.primary.teal },
   detailsInput: {
-    backgroundColor: colors.dark.cardAlt,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
     ...typography.body,
     color: colors.dark.text,
-    marginTop: spacing.sm,
-    height: 90,
-    textAlignVertical: 'top',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
+    minHeight: 100,
+    maxHeight: 160,
+    paddingVertical: 4,
   },
   submit: {
     marginTop: spacing.lg,

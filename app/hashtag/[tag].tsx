@@ -10,6 +10,7 @@ import { postsService } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, layout, spacing, typography } from '@/theme';
 import type { Post } from '@/types';
+import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 export default function HashtagPostsScreen() {
   const router = useRouter();
@@ -24,6 +25,9 @@ export default function HashtagPostsScreen() {
     queryKey: ['hashtagPosts', tag, viewerId ?? ''],
     queryFn: () => postsService.getPostsByHashtag(tag, 50, viewerId),
     enabled: tag.length > 0,
+    staleTime: 60_000,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
   });
 
   const renderItem = ({ item }: { item: Post }) => {
@@ -35,7 +39,12 @@ export default function HashtagPostsScreen() {
         onPress={() => router.push(`/post/${item.id}`)}
       >
         {thumb ? (
-          <Image source={{ uri: thumb }} style={styles.thumb} contentFit="cover" />
+          <Image
+            source={{ uri: thumb }}
+            style={styles.thumb}
+            contentFit="cover"
+            {...pulseImageListThumbProps}
+          />
         ) : (
           <View style={[styles.thumb, styles.thumbPh]}>
             <Text style={styles.thumbPhText}>{item.type}</Text>
@@ -70,6 +79,10 @@ export default function HashtagPostsScreen() {
           keyExtractor={(p) => p.id}
           renderItem={renderItem}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          updateCellsBatchingPeriod={50}
           /** Trending hashtags can return hundreds of posts. */
           removeClippedSubviews={Platform.OS === 'android'}
           ListEmptyComponent={<Text style={styles.empty}>No public posts with this tag yet.</Text>}

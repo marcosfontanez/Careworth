@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Alert, Platform,
-  KeyboardAvoidingView,
+  View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet, Dimensions, Alert, Platform,
+  KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useEventListener } from 'expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
@@ -22,10 +25,12 @@ import { profileUpdatesService } from '@/services/profileUpdates';
 import { commentService } from '@/services/comment';
 import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius } from '@/theme';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import { MentionAutocomplete, type MentionRef } from '@/components/ui/MentionAutocomplete';
+import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import { ReportModal } from '@/components/ui/ReportModal';
@@ -41,9 +46,116 @@ import { enqueueAction } from '@/lib/offlineQueue';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { pickCoverForSession } from '@/lib/coverAbRotation';
+import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
 import type { Comment } from '@/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+/** Inline player for `/post/[id]` — feed uses `VideoFeedPost`; this screen previously showed a static cover + dead play icon. */
+function PostDetailVideo({ publicUri }: { publicUri: string }) {
+  const isFocused = useIsFocused();
+  const [userPaused, setUserPaused] = useState(false);
+  const [fallbackUri, setFallbackUri] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [buffering, setBuffering] = useState(true);
+  const sourcePhase = useRef<'public' | 'signed'>('public');
+  const publicFallbackInFlight = useRef(false);
+
+  useEffect(() => {
+    sourcePhase.current = 'public';
+    publicFallbackInFlight.current = false;
+    setFallbackUri(null);
+    setLoadError(false);
+    setBuffering(true);
+  }, [publicUri]);
+
+  const resolvedUri = fallbackUri ?? publicUri;
+  const source = useMemo(
+    () => ({ uri: resolvedUri, contentType: 'auto' as const }),
+    [resolvedUri],
+  );
+
+  const player = useVideoPlayer(source, (p: { loop?: boolean }) => {
+    p.loop = true;
+  });
+
+  useEventListener(player, 'statusChange', ({ status, error }: { status?: string; error?: unknown }) => {
+    if (status === 'readyToPlay') {
+      setLoadError(false);
+      setBuffering(false);
+    }
+    if (status !== 'error' || !error) return;
+    if (sourcePhase.current === 'signed') {
+      setLoadError(true);
+      setBuffering(false);
+      return;
+    }
+    if (publicFallbackInFlight.current) return;
+    publicFallbackInFlight.current = true;
+    void trySignedUrlFromPostMediaPublicUrl(publicUri).then((signed) => {
+      publicFallbackInFlight.current = false;
+      if (signed) {
+        sourcePhase.current = 'signed';
+        setFallbackUri(signed);
+      } else {
+        setLoadError(true);
+        setBuffering(false);
+      }
+    });
+  });
+
+  const paused = userPaused || !isFocused;
+
+  useEffect(() => {
+    if (!player) return;
+    if (!isFocused) {
+      try {
+        player.pause();
+        player.muted = true;
+      } catch { /* noop */ }
+      return;
+    }
+    try {
+      player.muted = false;
+      player.volume = 1;
+      if (userPaused) player.pause();
+      else player.play();
+    } catch { /* noop */ }
+  }, [player, isFocused, userPaused]);
+
+  return (
+    <Pressable
+      style={StyleSheet.absoluteFillObject}
+      onPress={() => setUserPaused((p) => !p)}
+      accessibilityRole="button"
+      accessibilityLabel={userPaused ? 'Play video' : 'Pause video'}
+    >
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+        nativeControls={false}
+        {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
+      />
+      {buffering && isFocused && !paused && !loadError ? (
+        <View style={styles.videoBuffering} pointerEvents="none">
+          <ActivityIndicator size="large" color={colors.dark.textMuted} />
+        </View>
+      ) : null}
+      {paused && isFocused ? (
+        <View style={styles.playOverlay} pointerEvents="none">
+          <Ionicons name="play" size={42} color="#FFFFFFE6" />
+        </View>
+      ) : null}
+      {loadError ? (
+        <View style={styles.videoErrorWrap} pointerEvents="none">
+          <Ionicons name="alert-circle-outline" size={22} color={colors.dark.textMuted} />
+          <Text style={styles.videoErrorText}>Could not load this video.</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
 
 function asParamString(v: string | string[] | undefined): string | undefined {
   if (v == null) return undefined;
@@ -439,10 +551,14 @@ export default function PostDetailScreen() {
           ) : null}
 
           {/* Media */}
-          {(post.type === 'image' || post.type === 'video') && previewUri ? (
+          {post.type === 'video' && post.mediaUrl?.trim() ? (
+            <View style={styles.mediaWrap}>
+              <PostDetailVideo publicUri={post.mediaUrl.trim()} />
+            </View>
+          ) : post.type === 'image' && previewUri ? (
             <TouchableOpacity
               onPress={() => {
-                if (post.type === 'image' && post.mediaUrl) {
+                if (post.mediaUrl) {
                   router.push(`/image-viewer?uri=${encodeURIComponent(post.mediaUrl)}`);
                 }
               }}
@@ -454,12 +570,8 @@ export default function PostDetailScreen() {
                 style={styles.media}
                 contentFit="cover"
                 transition={120}
+                {...pulseImageFeedHeroProps}
               />
-              {post.type === 'video' && (
-                <View style={styles.playOverlay}>
-                  <Ionicons name="play" size={42} color="#FFFFFFE6" />
-                </View>
-              )}
             </TouchableOpacity>
           ) : null}
 
@@ -667,12 +779,6 @@ function CommentsCard({
   const [sending, setSending] = useState(false);
   const [reportCommentId, setReportCommentId] = useState<string | null>(null);
 
-  /** Live char-count derived from the current draft — drives both the
-   *  inline counter and the "near limit" colour swap so the user has
-   *  warning before the maxLength prop hard-stops their input. */
-  const remaining = COMMENT_MAX_LENGTH - text.length;
-  const nearLimit = remaining <= 30;
-
   const focusComposer = useCallback(() => {
     /** Slight delay so the field is mounted before requesting focus on
      *  Android, where the system keyboard race-condition can swallow
@@ -875,57 +981,60 @@ function CommentsCard({
         </View>
       )}
 
-      {/* Inline composer — taps directly to type, no modal navigation. */}
-      <View style={styles.composerRow}>
-        <MentionAutocomplete
-          ref={inputRef}
-          style={styles.composerInput}
-          value={text}
-          onChangeText={setText}
-          placeholder={replyTo ? `Reply to ${replyTo.name}…` : 'Add a comment…'}
-          placeholderTextColor={colors.dark.textMuted}
-          multiline
-          textAlignVertical="top"
-          scrollEnabled
-          editable={!sending}
-          maxLength={COMMENT_MAX_LENGTH}
-          /** Bring the composer above the keyboard the moment it gets
-           *  focus. The parent screen (which owns the ScrollView) is
-           *  the only thing that can scroll us into view, so we fan a
-           *  callback up rather than try to do it from inside the card. */
-          onFocus={onComposerFocus}
-        />
-        <TouchableOpacity
-          style={[
-            styles.composerSendBtn,
-            { backgroundColor: text.trim() ? accent : colors.dark.cardAlt },
-          ]}
-          disabled={!text.trim() || sending}
-          onPress={handleSend}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="send"
-            size={16}
-            color={text.trim() ? '#FFFFFF' : colors.dark.textMuted}
+      {/* Inline composer — same accent card chrome as Circle create/replies. */}
+      <AccentComposerFrame
+        accentColor={accent}
+        hint={
+          replyTo
+            ? 'Add your reply — @ to mention.'
+            : 'Join the conversation — @ to mention.'
+        }
+        style={{ marginTop: 10 }}
+        footer={
+          <AccentCharCount
+            length={text.length}
+            max={COMMENT_MAX_LENGTH}
+            accentColor={accent}
+            warnWithin={30}
           />
-        </TouchableOpacity>
-      </View>
-
-      {/* Char-count footer — only surfaces once the user starts typing so
-          the composer doesn't feel form-like at rest. Colour swaps to the
-          room accent when the user is within 30 chars of the cap. */}
-      {text.length > 0 ? (
-        <Text
-          style={[
-            styles.composerCount,
-            nearLimit && { color: accent, fontWeight: '700' },
-          ]}
-          accessibilityLiveRegion="polite"
-        >
-          {text.length}/{COMMENT_MAX_LENGTH}
-        </Text>
-      ) : null}
+        }
+      >
+        <View style={styles.composerRow}>
+          <MentionAutocomplete
+            ref={inputRef}
+            style={styles.composerInputFramed}
+            value={text}
+            onChangeText={setText}
+            placeholder={replyTo ? `Reply to ${replyTo.name}…` : 'Add a comment…'}
+            placeholderTextColor={colors.dark.textMuted}
+            multiline
+            textAlignVertical="top"
+            scrollEnabled
+            editable={!sending}
+            maxLength={COMMENT_MAX_LENGTH}
+            /** Bring the composer above the keyboard the moment it gets
+             *  focus. The parent screen (which owns the ScrollView) is
+             *  the only thing that can scroll us into view, so we fan a
+             *  callback up rather than try to do it from inside the card. */
+            onFocus={onComposerFocus}
+          />
+          <TouchableOpacity
+            style={[
+              styles.composerSendBtn,
+              { backgroundColor: text.trim() ? accent : colors.dark.cardAlt },
+            ]}
+            disabled={!text.trim() || sending}
+            onPress={handleSend}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="send"
+              size={16}
+              color={text.trim() ? '#FFFFFF' : colors.dark.textMuted}
+            />
+          </TouchableOpacity>
+        </View>
+      </AccentComposerFrame>
       <ReportModal
         visible={!!reportCommentId}
         onClose={() => setReportCommentId(null)}
@@ -1056,9 +1165,24 @@ function CommentNode({
       )}
       <View style={styles.commentBody}>
         <View style={styles.commentNameRow}>
-          <Text style={styles.commentName} numberOfLines={1}>
-            {isDeleted ? 'Removed' : displayName}
-          </Text>
+          {!maskAuthors && !isDeleted && comment.author.id ? (
+            <TouchableOpacity
+              onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+              activeOpacity={0.7}
+              style={styles.commentNameHit}
+              hitSlop={{ top: 4, bottom: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${displayName} profile`}
+            >
+              <Text style={styles.commentName} numberOfLines={1}>
+                {displayName}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.commentName} numberOfLines={1}>
+              {isDeleted ? 'Removed' : displayName}
+            </Text>
+          )}
           {!maskAuthors && !isDeleted && comment.author.isVerified ? (
             <Ionicons name="checkmark-circle" size={11} color={colors.primary.teal} />
           ) : null}
@@ -1300,6 +1424,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.30)',
   },
+  videoBuffering: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  videoErrorWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  videoErrorText: {
+    color: colors.dark.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 
   caption: {
     fontSize: 14,
@@ -1403,6 +1547,7 @@ const styles = StyleSheet.create({
   commentBody: { flex: 1, minWidth: 0 },
   commentNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
   commentName: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
+  commentNameHit: { flexShrink: 1, minWidth: 0 },
   commentTime: { fontSize: 11.5, color: colors.dark.textMuted },
   commentEditedTag: {
     fontSize: 11,
@@ -1452,21 +1597,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    marginTop: 10,
   },
-  composerInput: {
+  composerInputFramed: {
     flex: 1,
-    backgroundColor: colors.dark.cardAlt,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     fontSize: 14,
     color: colors.dark.text,
     minHeight: 44,
     maxHeight: 120,
     textAlignVertical: 'top',
-    borderWidth: 1,
-    borderColor: colors.dark.border,
   },
   composerSendBtn: {
     width: 40,
@@ -1474,14 +1615,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  composerCount: {
-    alignSelf: 'flex-end',
-    marginTop: 6,
-    marginRight: 4,
-    fontSize: 11,
-    color: colors.dark.textMuted,
-    fontVariant: ['tabular-nums'],
   },
 
   /* Appeal */

@@ -10,6 +10,7 @@ import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { colors, borderRadius, iconSize, layout, spacing, typography } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/ui/Toast';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
@@ -55,28 +56,34 @@ export default function ChangePasswordScreen() {
       <StackScreenHeader insetTop={insets.top} title="Change Password" onPressLeft={() => router.back()} />
 
       <View style={styles.form}>
-        <Text style={styles.label}>New Password</Text>
-        <View style={styles.inputWrap}>
-          <TextInput
-            style={styles.input}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder="Enter new password"
-            placeholderTextColor={colors.dark.textMuted}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
-            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={iconSize.md} color={colors.dark.textMuted} />
-          </TouchableOpacity>
-        </View>
+        <AccentComposerFrame accentColor={colors.primary.teal} hint="New password" compact noShadow>
+          <View style={styles.fieldRow}>
+            <TextInput
+              style={styles.input}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password"
+              placeholderTextColor={colors.dark.textMuted}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={iconSize.md} color={colors.dark.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </AccentComposerFrame>
 
         {newPassword.length > 0 && newPassword.length < 8 && (
           <Text style={styles.hint}>Must be at least 8 characters</Text>
         )}
 
-        <Text style={[styles.label, styles.labelSpaced]}>Confirm Password</Text>
-        <View style={styles.inputWrap}>
+        <AccentComposerFrame
+          accentColor={colors.primary.teal}
+          hint="Confirm password"
+          compact
+          noShadow
+          style={{ marginTop: spacing.sm }}
+        >
           <TextInput
             style={styles.input}
             value={confirmPassword}
@@ -86,7 +93,7 @@ export default function ChangePasswordScreen() {
             secureTextEntry={!showPassword}
             autoCapitalize="none"
           />
-        </View>
+        </AccentComposerFrame>
 
         {confirmPassword.length > 0 && newPassword !== confirmPassword && (
           <Text style={styles.hint}>Passwords do not match</Text>
@@ -134,22 +141,16 @@ const styles = StyleSheet.create({
   form: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.lg,
+    gap: spacing.sm,
   },
-  label: { ...typography.sectionLabel, color: colors.dark.textSecondary, marginBottom: spacing.sm },
-  labelSpaced: { marginTop: spacing.xl },
-  inputWrap: {
+  fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm + 2,
-    backgroundColor: colors.dark.card,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.dark.border,
   },
   input: {
     flex: 1,
-    paddingVertical: spacing.md + spacing.xs,
+    paddingVertical: spacing.xs,
     fontSize: 15,
     color: colors.dark.text,
   },

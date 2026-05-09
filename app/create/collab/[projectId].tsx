@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, layout, typography } from '@/theme';
+import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { useAuth } from '@/contexts/AuthContext';
 import { collabProjectsService } from '@/services/supabase';
 import type { CollabProjectRow, CollabSlotRow } from '@/services/supabase/collabProjects';
@@ -217,14 +218,22 @@ export default function CollabProjectScreen() {
                 </TouchableOpacity>
                 {showAdvancedUuid ? (
                   <View style={styles.row}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="uuid…"
-                      placeholderTextColor={colors.dark.textMuted}
-                      value={inviteUserId[slot.id] ?? ''}
-                      onChangeText={(t) => setInviteUserId((prev) => ({ ...prev, [slot.id]: t }))}
-                      autoCapitalize="none"
-                    />
+                    <AccentComposerFrame
+                      accentColor={colors.primary.teal}
+                      hint="Paste user id"
+                      compact
+                      noShadow
+                      style={{ flex: 1 }}
+                    >
+                      <TextInput
+                        style={styles.inputPlain}
+                        placeholder="uuid…"
+                        placeholderTextColor={colors.dark.textMuted}
+                        value={inviteUserId[slot.id] ?? ''}
+                        onChangeText={(t) => setInviteUserId((prev) => ({ ...prev, [slot.id]: t }))}
+                        autoCapitalize="none"
+                      />
+                    </AccentComposerFrame>
                     <TouchableOpacity style={styles.assignBtn} onPress={() => assign(slot)}>
                       <Text style={styles.assignBtnText}>Assign</Text>
                     </TouchableOpacity>
@@ -303,13 +312,9 @@ const styles = StyleSheet.create({
   advancedToggleText: { fontSize: 11, fontWeight: '700', color: colors.dark.textMuted },
   assignedMeta: { fontSize: 11, color: colors.dark.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   row: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  inputPlain: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     color: colors.dark.text,
     fontSize: 13,
   },
