@@ -12,8 +12,11 @@ module.exports = defineConfig([
     'supabase/functions/**',
     '**/dist/**',
     'dist-web-test/**',
-    /** Optional sharp dependency — local-only script; not installed on EAS / minimal CI images. */
+    /** Optional sharp dependency — local-only scripts; not installed on EAS / minimal CI images. */
     'scripts/remove-white-png.mjs',
+    'scripts/prepare-circles-tab-logos.mjs',
+    'scripts/strip-black-matte.mjs',
+    'scripts/strip-logo-bg.mjs',
     'metro.config.js',
     'babel.config.js',
   ]),
