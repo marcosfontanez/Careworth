@@ -21,6 +21,10 @@ PulseVerse is a TikTok-style short-form social platform purpose-built for nurses
 | Gradients | Expo Linear Gradient |
 | Backend | Supabase (Auth, Database, Storage, Realtime) |
 
+## Web deployment (Vercel)
+
+The **primary** production site is **[pulseverse.app](https://pulseverse.app)** (Vercel project **pulseverse**, tracking this repo’s **`main`**). A second Vercel project, **careworth** (**[careworth.vercel.app](https://careworth.vercel.app)**), uses the same GitHub repo for an additional web slice (e.g. app-in-site flows). If both exist, **pulseverse** is the one to keep current for the main marketing experience; redeploy **careworth** when that slice must match `main`.
+
 ## Getting Started
 
 ```bash
@@ -104,7 +108,7 @@ PulseVerse/
 - Follower/Following stats, post grid
 
 ### Auth & Onboarding
-- Email, Google, Apple, Phone (SMS) sign-in
+- Email, Google, and Apple sign-in
 - 5-step onboarding flow
 
 ## Brand
