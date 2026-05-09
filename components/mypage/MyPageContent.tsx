@@ -7,8 +7,8 @@
  *   3. PulseStatsRow — three boxed cards (Followers · Following · Pulse Score)
  *   4. Visitor actions (Follow / Message / Share) — visitors only
  *   5. Current Vibe music player
- *   6. My Pulse (composer chips + rolling 5 cards)
- *   7. Media Hub (Recent Videos · Favorites · My Photos)
+ *   6. Media Hub (videos / favorites / photos strip)
+ *   7. My Pulse (composer chips + rolling 5 cards)
  */
 import React, { useMemo, useCallback } from 'react';
 import {
@@ -40,11 +40,11 @@ import { profileHandleDisplay } from '@/utils/profileHandle';
 import { shareProfile } from '@/lib/share';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { FeaturedSoundCard } from '@/components/mypage/FeaturedSoundCard';
+import { MediaHubSection } from '@/components/mypage/MediaHubSection';
 import { useUnreadCount, useLinkedPostsMap } from '@/hooks/useQueries';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
 import { MyPulseSection } from '@/components/mypage/MyPulseSection';
 import { PulseStatsRow } from '@/components/mypage/PulseStatsRow';
-import { MediaHubSection } from '@/components/mypage/MediaHubSection';
 import type { Post, ProfileUpdate, UserProfile } from '@/types';
 import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
 import { canVisitorSeeProfilePosts } from '@/utils/mypagePosts';
@@ -272,6 +272,7 @@ export function MyPageContent({
                   'rgba(6,14,26,0.55)',
                   'rgba(6,14,26,0.82)',
                 ]}
+                pointerEvents="none"
                 style={StyleSheet.absoluteFill}
               />
               <BannerChrome
@@ -300,6 +301,7 @@ export function MyPageContent({
                   'rgba(6,14,26,0.5)',
                   'rgba(6,14,26,0.78)',
                 ]}
+                pointerEvents="none"
                 style={StyleSheet.absoluteFill}
               />
               <BannerChrome
@@ -492,22 +494,19 @@ export function MyPageContent({
             }
           />
 
+          <MediaHubSection
+            userId={user.id}
+            userPosts={postsVisibleOnProfile}
+            profileUpdates={profileUpdates}
+            isOwner={isOwner}
+          />
+
           {/* My Pulse (rolling 5) */}
           <MyPulseSection
             updates={profileUpdates}
             userId={user.id}
             readOnly={!isOwner}
             resolveLinkedPost={resolveLinkedPost}
-          />
-
-          {/* Media Hub (Recent Videos / Favorites / My Photos).
-              profileUpdates is passed so Pulse "pics" posts surface as
-              photos in the hub alongside feed-based image posts. */}
-          <MediaHubSection
-            userId={user.id}
-            userPosts={postsVisibleOnProfile}
-            profileUpdates={profileUpdates}
-            isOwner={isOwner}
           />
         </View>
       </ScrollView>
@@ -536,7 +535,7 @@ function BannerChrome({
   const badgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
 
   return (
-    <View style={styles.bannerChrome}>
+    <View style={styles.bannerChrome} pointerEvents="box-none">
       {showBack ? (
         <TouchableOpacity
           style={[
@@ -587,7 +586,7 @@ function BannerChrome({
       >
         <Ionicons name="ellipsis-vertical" size={22} color="#FFF" />
       </TouchableOpacity>
-      <View style={styles.bannerFill} />
+      <View style={styles.bannerFill} pointerEvents="none" />
     </View>
   );
 }
