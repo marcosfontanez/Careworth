@@ -28,7 +28,21 @@ type EventName =
   | 'tier_shared'
   | 'search_performed'
   | 'notification_tapped'
-  | 'report_submitted';
+  | 'report_submitted'
+  | 'shop_opened'
+  | 'shop_tab_viewed'
+  | 'border_viewed'
+  | 'border_purchase_started'
+  | 'border_purchase_recipient_self'
+  | 'border_purchase_recipient_gift'
+  | 'border_purchase_completed'
+  | 'border_gift_started'
+  | 'border_gift_completed'
+  | 'team_border_gift_opened'
+  | 'spark_pack_purchase_started'
+  | 'spark_pack_purchase_completed'
+  | 'gift_sent'
+  | 'insufficient_sparks_prompt_shown';
 
 class AnalyticsService {
   private userId: string | null = null;

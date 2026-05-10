@@ -4,7 +4,7 @@ import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
 import type { UserProfile } from '@/types';
 export const PROFILE_SELECT_WITH_AVATAR_FRAME =
-  '*, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption)';
+  '*, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)';
 
 function rowToProfile(row: any): UserProfile {
   return {
@@ -228,5 +228,45 @@ export const profilesService = {
       return new Set();
     }
     return new Set((data ?? []).map((r: { following_id: string }) => r.following_id));
+  },
+
+  /** Opt-in notifications when `creatorId` publishes a new live post. */
+  async isSubscribedToCreatorPosts(subscriberId: string, creatorId: string): Promise<boolean> {
+    if (!subscriberId || !creatorId || subscriberId === creatorId) return false;
+    const { data, error } = await supabase
+      .from('creator_post_subscribers')
+      .select('subscriber_id')
+      .eq('subscriber_id', subscriberId)
+      .eq('creator_id', creatorId)
+      .maybeSingle();
+    if (error) {
+      if (__DEV__) console.warn('[isSubscribedToCreatorPosts]', error.message);
+      return false;
+    }
+    return !!data;
+  },
+
+  async setCreatorPostNotifications(
+    subscriberId: string,
+    creatorId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    if (!subscriberId || !creatorId || subscriberId === creatorId) {
+      throw new Error('Invalid subscription');
+    }
+    if (enabled) {
+      const { error } = await supabase.from('creator_post_subscribers').upsert(
+        { subscriber_id: subscriberId, creator_id: creatorId },
+        { onConflict: 'subscriber_id,creator_id' },
+      );
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('creator_post_subscribers')
+        .delete()
+        .eq('subscriber_id', subscriberId)
+        .eq('creator_id', creatorId);
+      if (error) throw error;
+    }
   },
 };

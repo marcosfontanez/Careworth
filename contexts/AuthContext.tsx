@@ -139,13 +139,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const badgeRows = badgeRes.data;
     const interestRows = interestRes.data;
-    const communityRows = communityRes.data;
+    const communityRows = communityRes.error ? null : communityRes.data;
     const followRows = followsRes.data;
     const savedRows = savedRes.data;
 
-    useAppStore.getState().setJoinedCommunityIdsFromServer(
-      (communityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
-    );
+    if (!communityRes.error) {
+      useAppStore.getState().setJoinedCommunityIdsFromServer(
+        (communityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
+      );
+    } else if (__DEV__) {
+      console.warn('[auth] community_members hydrate failed', communityRes.error.message);
+    }
 
     if (followRows) {
       useAppStore.getState().setFollowedCreatorIdsFromServer(
@@ -236,7 +240,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         color: r.badges.color,
         category: r.badges.category,
       })),
-      communitiesJoined: (communityRows ?? []).map((r: any) => r.community_id),
+      communitiesJoined: communityRes.error
+        ? [...useAppStore.getState().joinedCommunityIds]
+        : (communityRows ?? []).map((r: any) => r.community_id),
       privacyMode: row.privacy_mode as any,
       interests: (interestRows ?? []).map((r: any) => r.interest),
       isVerified: row.is_verified,

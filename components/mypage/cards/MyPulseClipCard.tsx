@@ -4,7 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
-import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
@@ -84,6 +84,71 @@ export function MyPulseClipCard({
   const showVideoPreview =
     !staticThumb && linkedPost?.type === 'video' && !!linkedPost.mediaUrl;
 
+  const isVideoClip =
+    u.type === 'link_live' ||
+    linkedPost?.type === 'video' ||
+    (u.type === 'link_post' && linkedPost == null);
+
+  const metaBlock = (
+    <View
+      style={[
+        styles.meta,
+        staticThumb && !isVideoClip ? styles.metaBelowImage : null,
+      ]}
+    >
+      <Text style={styles.title} numberOfLines={3}>
+        {headline}
+      </Text>
+
+      {likes > 0 || comments > 0 ? (
+        <View style={styles.engageRow}>
+          {likes > 0 ? (
+            <View style={styles.engageItem}>
+              <Ionicons
+                name="heart"
+                size={11}
+                color="#FF2D92"
+              />
+              <Text style={styles.engageValue}>
+                {formatCompact(likes)}
+              </Text>
+            </View>
+          ) : null}
+          {comments > 0 ? (
+            <View style={styles.engageItem}>
+              <Ionicons
+                name="chatbubble"
+                size={10}
+                color={colors.dark.textMuted}
+              />
+              <Text style={styles.engageValue}>
+                {formatCompact(comments)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <Text style={styles.placeholderMeta}>
+          PulseVerse feed clip
+        </Text>
+      )}
+    </View>
+  );
+
+  const sourcePill = (
+    <View style={styles.sourcePill}>
+      <Ionicons
+        name="pulse"
+        size={9}
+        color={CLIP_ACCENT}
+        style={styles.sourceIcon}
+      />
+      <Text style={styles.sourcePillLabel} numberOfLines={1}>
+        {sourceLabel}
+      </Text>
+    </View>
+  );
+
   return (
     <MyPulseCardShell
       displayType="clip"
@@ -108,92 +173,64 @@ export function MyPulseClipCard({
         />
       ) : null}
 
-      <View style={styles.mediaRow}>
-        <View style={styles.thumbWrap}>
-          {staticThumb ? (
+      {staticThumb && !isVideoClip ? (
+        <>
+          <View style={styles.heroClip}>
             <ExpoImage
               source={{ uri: staticThumb }}
-              style={styles.thumb}
-              contentFit="cover"
-              {...pulseImageListThumbProps}
+              style={styles.heroClipImg}
+              contentFit="contain"
+              {...pulseImageFeedHeroProps}
             />
-          ) : showVideoPreview && linkedPost ? (
-            <RecentMediaThumb post={linkedPost} style={styles.thumb} />
-          ) : (
             <LinearGradient
-              colors={['rgba(96,165,250,0.22)', 'rgba(96,165,250,0.05)']}
-              style={[styles.thumb, styles.thumbEmpty]}
-            >
-              <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.7)" />
-            </LinearGradient>
-          )}
-
-          {/* Gradient scrim for legibility of overlays */}
-          <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}
-            style={styles.scrim}
-          />
-
-          {/* Centered play affordance — the key "this is a video" cue */}
-          <View style={styles.playCenter}>
-            <View style={styles.playCircle}>
-              <Ionicons name="play" size={16} color="#FFF" />
-            </View>
-          </View>
-
-          {/* PulseVerse source pill pinned to the bottom-left of the thumb */}
-          <View style={styles.sourcePill}>
-            <Ionicons
-              name="pulse"
-              size={9}
-              color={CLIP_ACCENT}
-              style={styles.sourceIcon}
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
+              style={styles.heroScrim}
+              pointerEvents="none"
             />
-            <Text style={styles.sourcePillLabel} numberOfLines={1}>
-              {sourceLabel}
-            </Text>
+            {sourcePill}
           </View>
-        </View>
+          {metaBlock}
+        </>
+      ) : (
+        <View style={styles.mediaRow}>
+          <View style={styles.thumbWrap}>
+            {staticThumb ? (
+              <ExpoImage
+                source={{ uri: staticThumb }}
+                style={styles.thumb}
+                contentFit="cover"
+                {...pulseImageListThumbProps}
+              />
+            ) : showVideoPreview && linkedPost ? (
+              <RecentMediaThumb post={linkedPost} style={styles.thumb} />
+            ) : (
+              <LinearGradient
+                colors={['rgba(96,165,250,0.22)', 'rgba(96,165,250,0.05)']}
+                style={[styles.thumb, styles.thumbEmpty]}
+              >
+                <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.7)" />
+              </LinearGradient>
+            )}
 
-        <View style={styles.meta}>
-          <Text style={styles.title} numberOfLines={3}>
-            {headline}
-          </Text>
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}
+              style={styles.scrim}
+            />
 
-          {likes > 0 || comments > 0 ? (
-            <View style={styles.engageRow}>
-              {likes > 0 ? (
-                <View style={styles.engageItem}>
-                  <Ionicons
-                    name="heart"
-                    size={11}
-                    color="#FF2D92"
-                  />
-                  <Text style={styles.engageValue}>
-                    {formatCompact(likes)}
-                  </Text>
+            {isVideoClip ? (
+              <View style={styles.playCenter}>
+                <View style={styles.playCircle}>
+                  <Ionicons name="play" size={16} color="#FFF" />
                 </View>
-              ) : null}
-              {comments > 0 ? (
-                <View style={styles.engageItem}>
-                  <Ionicons
-                    name="chatbubble"
-                    size={10}
-                    color={colors.dark.textMuted}
-                  />
-                  <Text style={styles.engageValue}>
-                    {formatCompact(comments)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : (
-            <Text style={styles.placeholderMeta}>
-              PulseVerse feed clip
-            </Text>
-          )}
+              </View>
+            ) : null}
+
+            {sourcePill}
+          </View>
+
+          {metaBlock}
         </View>
-      </View>
+      )}
     </MyPulseCardShell>
   );
 }
@@ -215,6 +252,29 @@ const styles = StyleSheet.create({
   mediaRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  heroClip: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    maxHeight: 340,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: colors.dark.cardAlt,
+    borderWidth: 1,
+    borderColor: 'rgba(96,165,250,0.18)',
+  },
+  heroClipImg: {
+    width: '100%',
+    height: '100%',
+  },
+  heroScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 56,
+    pointerEvents: 'none',
   },
   thumbWrap: {
     width: 124,
@@ -288,6 +348,14 @@ const styles = StyleSheet.create({
     paddingTop: 1,
     minWidth: 0,
     justifyContent: 'space-between',
+  },
+  /** Full-width image clip: meta sits under the hero instead of beside a narrow thumb. */
+  metaBelowImage: {
+    flex: 0,
+    flexGrow: 0,
+    alignSelf: 'stretch',
+    width: '100%',
+    marginTop: 4,
   },
   title: {
     fontSize: 14.5,

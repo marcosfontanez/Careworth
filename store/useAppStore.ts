@@ -14,6 +14,12 @@ interface AppState {
   /** When true, the beta tester gift modal is visible — monthly celebration waits. */
   betaTesterBorderBlocking: boolean;
   setBetaTesterBorderBlocking: (val: boolean) => void;
+  /** Monthly Pulse celebration modal is visible — other full-screen gift gates wait. */
+  pulseMonthCelebrationBlocking: boolean;
+  setPulseMonthCelebrationBlocking: (val: boolean) => void;
+  /** Team / admin border gift modal is visible — monthly celebration defers. */
+  teamBorderGiftBlocking: boolean;
+  setTeamBorderGiftBlocking: (val: boolean) => void;
   /**
    * Survives screen remounts (e.g. leaving `/auth/legal-ack`). The gate presents the modal once
    * `inAuth` is false and terms are accepted.
@@ -50,11 +56,15 @@ export const useAppStore = create<AppState>((set) => ({
   joinedCommunityIds: new Set(),
 
   betaTesterBorderBlocking: false,
+  pulseMonthCelebrationBlocking: false,
+  teamBorderGiftBlocking: false,
   betaTesterGiftPending: null,
 
   setCurrentUser: (user) => set({ currentUser: user }),
   setAuthenticated: (val) => set({ isAuthenticated: val }),
   setBetaTesterBorderBlocking: (val) => set({ betaTesterBorderBlocking: val }),
+  setPulseMonthCelebrationBlocking: (val) => set({ pulseMonthCelebrationBlocking: val }),
+  setTeamBorderGiftBlocking: (val) => set({ teamBorderGiftBlocking: val }),
   setBetaTesterGiftPending: (v) => set({ betaTesterGiftPending: v }),
   clearBetaTesterGiftPending: () => set({ betaTesterGiftPending: null }),
 

@@ -34,6 +34,7 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import { ReportModal } from '@/components/ui/ReportModal';
+import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { formatCount, timeAgo } from '@/utils/format';
 import {
   anonymousNameOnPost,
@@ -304,6 +305,7 @@ export default function PostDetailScreen() {
    * still show the last-typed draft instead of the current caption.
    */
   const [editCaptionOpen, setEditCaptionOpen] = useState(false);
+  const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
 
   /**
    * Save handler passed into the modal. We optimistically patch the
@@ -458,6 +460,17 @@ export default function PostDetailScreen() {
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.dark.text} />
               </TouchableOpacity>
             )}
+            {!isOwnPost && authUser && !maskIdentity ? (
+              <TouchableOpacity
+                onPress={() => setCreatorGiftOpen(true)}
+                activeOpacity={0.7}
+                hitSlop={10}
+                style={styles.iconBtn}
+                accessibilityLabel="Send creator gift"
+              >
+                <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
+              </TouchableOpacity>
+            ) : null}
             {!isAnonRoom && (
               <TouchableOpacity
                 onPress={() => sharePostMenu(
@@ -614,6 +627,14 @@ export default function PostDetailScreen() {
               tint={liked ? '#EF4444' : colors.dark.textSecondary}
               onPress={handleToggleLike}
             />
+            {!isOwnPost && authUser && !maskIdentity ? (
+              <ActionButton
+                icon="gift-outline"
+                label="Gift"
+                tint={colors.primary.teal}
+                onPress={() => setCreatorGiftOpen(true)}
+              />
+            ) : null}
             {!openedFromCircle ? (
               <ActionButton
                 icon={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -702,6 +723,18 @@ export default function PostDetailScreen() {
           accent={accent.color}
           onSave={handleEditCaption}
           onClose={() => setEditCaptionOpen(false)}
+        />
+      ) : null}
+      {!isOwnPost && authUser && !maskIdentity ? (
+        <SendCreatorGiftTray
+          visible={creatorGiftOpen}
+          onClose={() => setCreatorGiftOpen(false)}
+          creatorUserId={post.creatorId}
+          creatorDisplayName={post.creator.displayName}
+          creatorHandle={post.creator.username}
+          creatorAvatarUrl={post.creator.avatarUrl}
+          contextType="post"
+          contextId={post.id}
         />
       ) : null}
     </KeyboardAvoidingView>

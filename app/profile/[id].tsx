@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
-import { useUser, useUserPosts, useProfileUpdates } from '@/hooks/useQueries';
+import { useUser, useUserPosts, useProfileUpdates, useCreatorPostNotifications } from '@/hooks/useQueries';
+import { useMutation } from '@tanstack/react-query';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { MyPageContent } from '@/components/mypage/MyPageContent';
 import { useToast } from '@/components/ui/Toast';
@@ -12,6 +13,7 @@ import { messagesService } from '@/services/supabase/messages';
 import { profilesService } from '@/services/supabase';
 import { queryClient } from '@/lib/queryClient';
 import { userKeys } from '@/lib/queryKeys';
+import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 
 /**
  * Public profile uses the same layout as My Pulse (`MyPageContent`).
@@ -28,10 +30,41 @@ export default function ProfileByIdScreen() {
   const followedIds = useAppStore((s) => s.followedCreatorIds);
   const setCreatorFollowed = useAppStore((s) => s.setCreatorFollowed);
   const toast = useToast();
+  const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
 
-  const { data: user, isLoading } = useUser(id);
-  const { data: posts } = useUserPosts(id);
-  const { data: profileUpdates = [] } = useProfileUpdates(id);
+  const profileUserId = typeof id === 'string' ? id : Array.isArray(id) ? id[0] : '';
+  const { data: user, isLoading } = useUser(profileUserId);
+  const { data: posts } = useUserPosts(profileUserId);
+  const { data: profileUpdates = [] } = useProfileUpdates(profileUserId);
+  const { data: creatorPostNotifyOn = false, isLoading: creatorPostNotifyLoading } =
+    useCreatorPostNotifications(profileUserId || undefined, authUser?.id);
+
+  const creatorPostNotifyMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!authUser?.id || !profileUserId) throw new Error('missing');
+      await profilesService.setCreatorPostNotifications(authUser.id, profileUserId, next);
+    },
+    onSuccess: (_data, next) => {
+      queryClient.setQueryData(
+        ['creatorPostNotifications', authUser?.id ?? '', profileUserId],
+        next,
+      );
+      toast.show(
+        next
+          ? 'You will receive notifications when this user posts new content.'
+          : 'You will no longer receive notifications for this user’s new content.',
+        'success',
+      );
+    },
+    onError: () => {
+      toast.show('Could not update notifications', 'error');
+    },
+  });
+
+  const handleToggleCreatorPostNotify = () => {
+    if (!authUser?.id || !profileUserId || creatorPostNotifyLoading) return;
+    creatorPostNotifyMutation.mutate(!creatorPostNotifyOn);
+  };
 
   if (isLoading || !user) return <LoadingState />;
 
@@ -105,17 +138,39 @@ export default function ProfileByIdScreen() {
   };
 
   return (
-    <MyPageContent
-      user={user}
-      profileUpdates={profileUpdates}
-      userPosts={posts}
-      isOwner={false}
-      isFollowing={isFollowing}
-      onToggleFollow={handleToggleFollow}
-      onMessage={handleMessage}
-      onBlock={handleBlock}
-      initialOpenPulseHistory={openPulseHistory === '1'}
-      highlightShareTier={tierUp === '1'}
-    />
+    <>
+      <MyPageContent
+        user={user}
+        profileUpdates={profileUpdates}
+        userPosts={posts}
+        isOwner={false}
+        isFollowing={isFollowing}
+        onToggleFollow={handleToggleFollow}
+        onMessage={handleMessage}
+        onBlock={handleBlock}
+        initialOpenPulseHistory={openPulseHistory === '1'}
+        highlightShareTier={tierUp === '1'}
+        creatorPostNotificationsOn={creatorPostNotifyOn}
+        onToggleCreatorPostNotifications={
+          authUser ? handleToggleCreatorPostNotify : undefined
+        }
+        creatorPostNotificationsBusy={
+          creatorPostNotifyMutation.isPending || creatorPostNotifyLoading
+        }
+        onOpenCreatorGifts={authUser?.id ? () => setCreatorGiftOpen(true) : undefined}
+      />
+      {authUser?.id ? (
+        <SendCreatorGiftTray
+          visible={creatorGiftOpen}
+          onClose={() => setCreatorGiftOpen(false)}
+          creatorUserId={user.id}
+          creatorDisplayName={user.displayName}
+          creatorHandle={user.username ?? undefined}
+          creatorAvatarUrl={user.avatarUrl ?? undefined}
+          contextType="profile"
+          contextId={user.id}
+        />
+      ) : null}
+    </>
   );
 }

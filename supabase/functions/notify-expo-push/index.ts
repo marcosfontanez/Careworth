@@ -136,6 +136,9 @@ Deno.serve(async (req) => {
     } else {
       data.url = `${site}/post/${targetId}`;
     }
+  } else if (type === "creator_new_post" && targetId) {
+    data.postId = targetId;
+    data.url = `${site}/post/${targetId}`;
   } else if (type === "community_invite" && targetId) {
     const { data: comm } = await supabase
       .from("communities")

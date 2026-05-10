@@ -233,7 +233,7 @@ export default function CreatorVideosGridScreen() {
               </View>
               <View style={styles.sortRow}>
                 <TopSegmentTabs
-                  light
+                  appearance="onLight"
                   tabs={[
                     { key: 'newest', label: 'Newest' },
                     { key: 'popular', label: 'Most popular' },

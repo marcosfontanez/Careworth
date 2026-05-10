@@ -1,5 +1,6 @@
 /** Consistent touch targets and icon sizes — use instead of ad-hoc literals */
 export const iconSize = {
+  xs: 14,
   sm: 18,
   md: 22,
   lg: 24,

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { borderRadius, colors, shadows, spacing, typography } from '@/theme';
+import { borderRadius, colors, shadows, spacing, typography, semantic } from '@/theme';
 
 type IonName = ComponentProps<typeof Ionicons>['name'];
 
@@ -25,10 +25,14 @@ type IonName = ComponentProps<typeof Ionicons>['name'];
  * "primary CTA" surfaces, then sweep the rest opportunistically.
  *
  * Variants
- * - `primary`     brand teal fill, white text, CTA glow      (hero CTAs)
+ * - `primary`     brand teal fill, white text, soft CTA glow   (hero CTAs)
+ * - `success`     teal-green confirm / positive outcome
  * - `secondary`   dark card fill, white text, subtle border  (supporting actions)
  * - `ghost`       transparent, teal text + border            (tertiary / "See …")
- * - `destructive` red tint, white text                       (delete / remove)
+ * - `destructive` red tint, white text                          (delete / remove)
+ *
+ * Shapes
+ * - `pill` — fully rounded (filters, compact toggles)
  *
  * Sizes
  * - `md` (default) — standard 44pt touch target
@@ -40,8 +44,9 @@ type IonName = ComponentProps<typeof Ionicons>['name'];
  * layout doesn't shift while a mutation runs.
  */
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'success';
 type Size = 'sm' | 'md' | 'lg';
+type ButtonShape = 'default' | 'pill';
 
 export interface ButtonProps {
   label: string;
@@ -61,6 +66,8 @@ export interface ButtonProps {
   style?: StyleProp<ViewStyle>;
   /** Extra label style (rarely needed — variant already picks the color). */
   textStyle?: StyleProp<TextStyle>;
+  /** Pill = full rounding for filters / toggles. */
+  shape?: ButtonShape;
   /** A11y. */
   accessibilityLabel?: string;
 }
@@ -77,6 +84,7 @@ export function Button({
   fullWidth = false,
   style,
   textStyle,
+  shape = 'default',
   accessibilityLabel,
 }: ButtonProps) {
   const v = VARIANT_STYLES[variant];
@@ -92,10 +100,11 @@ export function Button({
 
   const resolveStyle = ({ pressed: isPressed }: PressableStateCallbackType) => [
     styles.base,
+    shape === 'pill' && styles.pillShape,
     s.container,
     v.container,
     fullWidth && styles.fullWidth,
-    variant === 'primary' && !disabled && !loading && shadows.cta,
+    (variant === 'primary' || variant === 'success') && !disabled && !loading && shadows.ctaSoft,
     disabled && styles.disabled,
     isPressed ? pressed : null,
     style,
@@ -141,6 +150,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
   },
+  pillShape: { borderRadius: borderRadius.full },
   fullWidth: { alignSelf: 'stretch' },
   content: {
     flexDirection: 'row',
@@ -200,6 +210,11 @@ const VARIANT_STYLES: Record<Variant, VariantStyle> = {
   },
   destructive: {
     container: { backgroundColor: colors.status.error },
+    text: { color: '#FFFFFF' },
+    iconColor: '#FFFFFF',
+  },
+  success: {
+    container: { backgroundColor: semantic.success },
     text: { color: '#FFFFFF' },
     iconColor: '#FFFFFF',
   },

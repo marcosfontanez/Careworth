@@ -641,14 +641,24 @@ export default function AdminPanel() {
           <Ionicons name="arrow-back" size={24} color={colors.dark.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Admin Panel</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/admin/sound-catalog')}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Curated sounds"
-          activeOpacity={0.7}
-        >
-          <Ionicons name="musical-notes" size={22} color={colors.dark.text} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/admin/border-catalog')}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Border catalog"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="sparkles-outline" size={22} color={colors.primary.teal} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/admin/sound-catalog')}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Curated sounds"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="musical-notes" size={22} color={colors.dark.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabRow}>

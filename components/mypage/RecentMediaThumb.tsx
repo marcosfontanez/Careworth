@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,65 +14,201 @@ import { Ionicons } from '@expo/vector-icons';
 import { trySignedUrlFromPostMediaPublicUrl, mediaThumb } from '@/lib/storage';
 import { colors } from '@/theme';
 import type { Post } from '@/types';
-import { postStaticImagePreviewUri, postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
+import { pickAbCoverUrl } from '@/lib/coverAbPoster';
+import {
+  isDemoCatalogMediaUrl,
+  postStaticImagePreviewUri,
+  postHasDemoCatalogMedia,
+} from '@/utils/postPreviewMedia';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 type ThumbStyle = StyleProp<ImageStyle | ViewStyle>;
 
-function SignedThumbImage({
+/** Default tile aspect (Media Hub card) until `onLayout` supplies real pixels. */
+const FALLBACK_THUMB_CSS = { w: 118, h: 168 };
+
+export type HubTileLayoutCss = { w: number; h: number };
+
+/**
+ * Grid tile image: prefer Supabase **transform** URLs (correct size + `resize=cover`
+ * for the tile). We only swap to a **signed** full-size URL on load error (e.g. private
+ * bucket) so we don't skip transforms on every signed-in session.
+ */
+export function HubTileImage({
   uri,
   style,
   contentFit = 'cover',
+  layoutSizeCss,
 }: {
   uri: string;
-  style: StyleProp<ImageStyle>;
+  style: ThumbStyle;
   contentFit?: ImageContentFit;
+  /** Optional fixed tile size (e.g. Media Hub) so thumbs don't wait on `onLayout`. */
+  layoutSizeCss?: HubTileLayoutCss;
 }) {
-  /**
-   * Recent-media grid cells render at ~120–160 px wide. Asking Supabase for
-   * a 320-px-wide WebP via the image-transform endpoint cuts the typical
-   * payload from ~400 KB (full-res phone photo) to ~15 KB. Falls back to
-   * the original URL transparently for non-Supabase / signed sources.
-   */
-  const [displayUri, setDisplayUri] = useState(() => mediaThumb(uri, 160));
+  const [layout, setLayout] = useState<{ w: number; h: number } | null>(() =>
+    layoutSizeCss
+      ? { w: layoutSizeCss.w, h: layoutSizeCss.h }
+      : null,
+  );
+  const w = layout?.w ?? FALLBACK_THUMB_CSS.w;
+  const h = layout?.h ?? FALLBACK_THUMB_CSS.h;
+
+  const transformUri = useMemo(() => mediaThumb(uri, w, h), [uri, w, h]);
+  const [displayUri, setDisplayUri] = useState(transformUri);
+  const [effectiveFit, setEffectiveFit] = useState<ImageContentFit>(contentFit);
+  const signedFallbackTried = useRef(false);
+  const triedRawPublicFallback = useRef(false);
 
   useEffect(() => {
-    let alive = true;
-    setDisplayUri(mediaThumb(uri, 160));
+    signedFallbackTried.current = false;
+    triedRawPublicFallback.current = false;
+    setDisplayUri(transformUri);
+    setEffectiveFit(contentFit);
+  }, [transformUri, contentFit]);
+
+  const onImageError = () => {
+    const raw = uri.trim();
+    if (!triedRawPublicFallback.current && raw && transformUri !== raw) {
+      triedRawPublicFallback.current = true;
+      setDisplayUri(raw);
+      setEffectiveFit(contentFit);
+      return;
+    }
+    if (signedFallbackTried.current) return;
+    signedFallbackTried.current = true;
     void trySignedUrlFromPostMediaPublicUrl(uri).then((signed) => {
-      // Signed URLs bypass the public render endpoint — accept them as-is
-      // (no transform), the bandwidth win is only for public-bucket reads.
-      if (alive && signed) setDisplayUri(signed);
+      if (signed) {
+        setDisplayUri(signed);
+        setEffectiveFit('contain');
+      }
     });
-    return () => {
-      alive = false;
-    };
-  }, [uri]);
+  };
 
   return (
-    <Image
-      source={{ uri: displayUri }}
+    <View
       style={style}
-      contentFit={contentFit}
-      {...pulseImageListThumbProps}
-    />
+      onLayout={(e) => {
+        if (layoutSizeCss) return;
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 2 && height > 2) {
+          setLayout((prev) => {
+            if (
+              prev &&
+              Math.abs(prev.w - width) < 0.5 &&
+              Math.abs(prev.h - height) < 0.5
+            ) {
+              return prev;
+            }
+            return { w: width, h: height };
+          });
+        }
+      }}
+    >
+      <Image
+        source={{ uri: displayUri }}
+        style={StyleSheet.absoluteFillObject}
+        contentFit={effectiveFit}
+        onError={onImageError}
+        {...pulseImageListThumbProps}
+      />
+    </View>
   );
 }
 
-function PausedVideoFrame({ publicUrl, style }: { publicUrl: string; style: ThumbStyle }) {
-  const [uri, setUri] = useState(publicUrl);
-  const sought = useRef(false);
+/**
+ * `expo-video` grid previews are unreliable on web (wrong scale / “corner” of the frame).
+ * Native `<video>` + `object-fit: contain` matches browser behavior.
+ */
+function WebVideoGridPoster({ publicUrl }: { publicUrl: string }) {
+  const [src, setSrc] = useState(publicUrl);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const signAttempted = useRef(false);
 
   useEffect(() => {
-    sought.current = false;
-    setUri(publicUrl);
+    setSrc(publicUrl);
+    signAttempted.current = false;
+  }, [publicUrl]);
+
+  /** Signing is a Storage POST — only after the public URL fails (matches main feed players). */
+  const onVideoError = useCallback(() => {
+    if (signAttempted.current) return;
+    signAttempted.current = true;
+    void trySignedUrlFromPostMediaPublicUrl(publicUrl).then((signed) => {
+      if (signed) setSrc(signed);
+    });
   }, [publicUrl]);
 
   useEffect(() => {
-    void trySignedUrlFromPostMediaPublicUrl(publicUrl).then((signed) => {
-      if (signed) setUri(signed);
-    });
+    const el = videoRef.current;
+    if (!el) return;
+
+    const onMeta = () => {
+      try {
+        const d = el.duration;
+        const t =
+          Number.isFinite(d) && d > 0
+            ? Math.min(Math.max(0.08, d * 0.1), 1.0)
+            : 0.35;
+        el.currentTime = t;
+      } catch {
+        /* noop */
+      }
+      try {
+        el.pause();
+      } catch {
+        /* noop */
+      }
+    };
+
+    el.muted = true;
+    el.defaultMuted = true;
+    el.playsInline = true;
+    el.setAttribute('playsinline', 'true');
+    el.preload = 'metadata';
+    el.addEventListener('loadedmetadata', onMeta);
+    return () => el.removeEventListener('loadedmetadata', onMeta);
+  }, [src]);
+
+  return createElement('video', {
+    key: src,
+    ref: videoRef,
+    src,
+    muted: true,
+    playsInline: true,
+    preload: 'metadata',
+    tabIndex: -1,
+    onError: onVideoError,
+    style: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      backgroundColor: '#0a0b0f',
+    },
+  });
+}
+
+function PausedVideoFrame({
+  publicUrl,
+  style,
+  contentFit = 'contain',
+}: {
+  publicUrl: string;
+  style: ThumbStyle;
+  contentFit?: 'cover' | 'contain' | 'fill';
+}) {
+  const [uri, setUri] = useState(publicUrl);
+  const sought = useRef(false);
+  const signAttempted = useRef(false);
+
+  useEffect(() => {
+    sought.current = false;
+    signAttempted.current = false;
+    setUri(publicUrl);
   }, [publicUrl]);
 
   useEffect(() => {
@@ -87,25 +223,54 @@ function PausedVideoFrame({ publicUrl, style }: { publicUrl: string; style: Thum
     p.loop = false;
   });
 
-  useEventListener(player, 'statusChange', ({ status }) => {
+  useEventListener(player, 'statusChange', ({ status, error }) => {
+    if (status === 'error' && error && !signAttempted.current) {
+      signAttempted.current = true;
+      void trySignedUrlFromPostMediaPublicUrl(publicUrl).then((signed) => {
+        if (signed) setUri(signed);
+      });
+      return;
+    }
     if (status === 'readyToPlay' && !sought.current) {
       sought.current = true;
-      try {
-        player.currentTime = 0;
-        player.pause();
-      } catch {
-        /* noop */
-      }
+      const seekPreviewFrame = () => {
+        try {
+          const d =
+            typeof player.duration === 'number' && Number.isFinite(player.duration)
+              ? player.duration
+              : 0;
+          const t =
+            d > 0 ? Math.min(Math.max(0.08, d * 0.1), 1.0) : 0.35;
+          player.currentTime = t;
+          player.pause();
+        } catch {
+          /* noop */
+        }
+      };
+      seekPreviewFrame();
+      setTimeout(seekPreviewFrame, 140);
     }
   });
 
-  return <VideoView player={player} style={style} contentFit="cover" nativeControls={false} />;
+  return <VideoView player={player} style={style} contentFit={contentFit} nativeControls={false} />;
 }
 
 /**
- * Grid / carousel preview: image URL when available; otherwise a paused first-frame video on native.
+ * Grid / carousel preview: poster image when available (incl. A/B cover + `coverAltUrl`);
+ * otherwise a paused video frame (native `expo-video`, web HTML5).
  */
-export function RecentMediaThumb({ post, style }: { post: Post; style: ThumbStyle }) {
+export function RecentMediaThumb({
+  post,
+  style,
+  hubTileCss,
+  hubImageContentFit = 'cover',
+}: {
+  post: Post;
+  style: ThumbStyle;
+  hubTileCss?: HubTileLayoutCss;
+  /** Use `contain` for profile Media Hub so full stills aren't cropped in the tile. */
+  hubImageContentFit?: ImageContentFit;
+}) {
   if (postHasDemoCatalogMedia(post)) {
     return (
       <View style={[style, styles.ph]}>
@@ -114,9 +279,26 @@ export function RecentMediaThumb({ post, style }: { post: Post; style: ThumbStyl
     );
   }
 
+  if (post.type === 'video') {
+    const poster = pickAbCoverUrl(post);
+    if (poster && !isDemoCatalogMediaUrl(poster)) {
+      return <HubTileImage uri={poster} style={style} layoutSizeCss={hubTileCss} contentFit={hubImageContentFit} />;
+    }
+  }
+
   const staticUri = postStaticImagePreviewUri(post);
   if (staticUri) {
-    return <SignedThumbImage uri={staticUri} style={style as StyleProp<ImageStyle>} />;
+    return <HubTileImage uri={staticUri} style={style} layoutSizeCss={hubTileCss} contentFit={hubImageContentFit} />;
+  }
+
+  if (post.type === 'image') {
+    const candidates = [post.mediaUrl, ...(post.additionalMedia ?? [])];
+    for (const raw of candidates) {
+      const m = raw?.trim();
+      if (m && !isDemoCatalogMediaUrl(m)) {
+        return <HubTileImage uri={m} style={style} layoutSizeCss={hubTileCss} contentFit={hubImageContentFit} />;
+      }
+    }
   }
 
   if (post.type === 'text' || post.type === 'discussion' || post.type === 'confession') {
@@ -132,10 +314,18 @@ export function RecentMediaThumb({ post, style }: { post: Post; style: ThumbStyl
   }
 
   const v = post.mediaUrl?.trim();
-  if (post.type === 'video' && v && Platform.OS !== 'web') {
+  if (post.type === 'video' && v) {
+    if (Platform.OS === 'web') {
+      return (
+        <View style={[style, styles.videoTile]}>
+          <WebVideoGridPoster publicUrl={v} />
+          <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
+        </View>
+      );
+    }
     return (
-      <View style={style}>
-        <PausedVideoFrame publicUrl={v} style={StyleSheet.absoluteFillObject} />
+      <View style={[style, styles.videoTile]}>
+        <PausedVideoFrame publicUrl={v} style={StyleSheet.absoluteFillObject} contentFit="contain" />
         <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
       </View>
     );
@@ -153,5 +343,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark.cardAlt,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoTile: {
+    backgroundColor: '#0a0b0f',
+    overflow: 'hidden',
   },
 });

@@ -5,6 +5,9 @@ export const layout = {
   screenPadding: spacing.lg,
   /** My Pulse main content band (historically ~18px) */
   screenPaddingWide: spacing.lg + 2,
-  sectionGap: spacing.md,
+  /** Space between labeled sections inside a scroll (headers, cards groups). */
+  sectionGap: spacing.lg,
+  /** Breathing room between major vertical blocks (hub cards → leaderboard). */
+  sectionGapLarge: spacing['2xl'],
   cardPadding: spacing.md,
 } as const;

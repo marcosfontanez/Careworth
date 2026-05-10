@@ -11,7 +11,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { colors, spacing } from '@/theme';
+import {
+  colors,
+  gradients,
+  iconSize,
+  semantic,
+  shadows,
+  spacing,
+} from '@/theme';
 import { pulseScoresService } from '@/services/supabase';
 import {
   formatPulseStat,
@@ -96,7 +103,7 @@ export function PulseLeaderboards({ limit = 5 }: Props) {
 
   return (
     <LinearGradient
-      colors={['rgba(32,26,52,0.97)', 'rgba(14,20,38,0.99)', '#0B1220']}
+      colors={[...gradients.leaderboardCard]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.cardGradient}
@@ -104,13 +111,13 @@ export function PulseLeaderboards({ limit = 5 }: Props) {
       <View style={styles.cardInner}>
         <View style={styles.headerRow}>
           <LinearGradient
-            colors={['rgba(251,191,36,0.45)', 'rgba(168,85,247,0.35)', 'rgba(20,184,166,0.35)']}
+            colors={[...gradients.leaderboardHeaderRing]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.headerIconRing}
           >
             <View style={styles.headerIconCore}>
-              <Ionicons name="trophy" size={18} color="#FCD34D" />
+              <Ionicons name="trophy" size={iconSize.sm} color={semantic.premiumGoldSoft} />
             </View>
           </LinearGradient>
           <View style={styles.headerTextCol}>
@@ -143,7 +150,7 @@ export function PulseLeaderboards({ limit = 5 }: Props) {
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.primary.teal} size="small" />
+            <ActivityIndicator color={semantic.accentTeal} size="small" />
             <Text style={styles.loadingText}>Loading podium…</Text>
           </View>
         ) : tab === 'current' ? (
@@ -169,14 +176,14 @@ function MonthlyBorderPrizePreview() {
   return (
     <View style={styles.prizePreviewSection}>
       <LinearGradient
-        colors={['rgba(251,191,36,0.12)', 'rgba(20,184,166,0.06)', 'rgba(99,102,241,0.08)']}
+        colors={[...gradients.leaderboardPrizePreview]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.prizePreviewInner}>
         <View style={styles.prizePreviewTitleRow}>
-          <Ionicons name="sparkles" size={16} color="#FBBF24" />
+          <Ionicons name="sparkles" size={iconSize.sm} color={semantic.warning} />
           <Text style={styles.prizePreviewKicker}>
             {solstice ? 'Summer Solstice Collection' : 'Monthly prize drop'}
           </Text>
@@ -578,7 +585,7 @@ function RunnerCard({
       accessibilityLabel={`${ordinal(rank)} — ${name}, open My Pulse`}
     >
       <LinearGradient
-        colors={['rgba(255,255,255,0.09)', 'rgba(255,255,255,0.02)']}
+        colors={[...gradients.cardRowSheen]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -630,7 +637,7 @@ function ordinal(n: number): string {
 function EmptyBoard({ message }: { message: string }) {
   return (
     <View style={styles.emptyWrap}>
-      <Ionicons name="podium-outline" size={28} color={colors.dark.textMuted} />
+      <Ionicons name="podium-outline" size={iconSize.xl} color={semantic.textMuted} />
       <Text style={styles.emptyText}>{message}</Text>
     </View>
   );
@@ -641,28 +648,20 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 1,
     borderWidth: 1,
-    borderColor: 'rgba(252,211,77,0.22)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 14 },
-        shadowOpacity: 0.45,
-        shadowRadius: 22,
-      },
-      android: { elevation: 14 },
-    }),
+    borderColor: 'rgba(252,211,77,0.16)',
+    ...shadows.lifted,
   },
   cardInner: {
     borderRadius: 21,
     backgroundColor: 'rgba(8,12,24,0.94)',
     padding: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.lg,
     overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 14,
   },
   headerIconRing: {
     width: 44,
@@ -692,12 +691,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: colors.dark.text,
+    color: semantic.textPrimary,
     letterSpacing: -0.6,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: colors.dark.textSecondary,
+    color: semantic.textSecondary,
     marginTop: 4,
     lineHeight: 17,
   },
@@ -706,7 +705,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.dark.borderSubtle,
+    borderColor: semantic.borderSubtle,
     overflow: 'hidden',
     minHeight: 52,
   },
@@ -720,13 +719,13 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 13,
     fontWeight: '800',
-    color: colors.dark.textMuted,
+    color: semantic.textMuted,
   },
-  tabLabelActive: { color: colors.dark.text },
-  tabSub: { fontSize: 10, fontWeight: '600', color: colors.dark.textQuiet, marginTop: 2 },
-  tabSubActive: { color: colors.dark.textSecondary },
+  tabLabelActive: { color: semantic.textPrimary },
+  tabSub: { fontSize: 10, fontWeight: '600', color: semantic.textQuiet, marginTop: 2 },
+  tabSubActive: { color: semantic.textSecondary },
   loadingWrap: { paddingVertical: 32, alignItems: 'center', gap: 10 },
-  loadingText: { fontSize: 12, color: colors.dark.textMuted },
+  loadingText: { fontSize: 12, color: semantic.textMuted },
   podiumSection: { gap: 18, marginTop: 4 },
   podiumRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
   standCol: { flex: 1, alignItems: 'center', minWidth: 0, maxWidth: 120 },
@@ -736,14 +735,14 @@ const styles = StyleSheet.create({
   standName: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: colors.dark.text,
+    color: semantic.textPrimary,
     marginTop: 6,
     textAlign: 'center',
     paddingHorizontal: 2,
   },
   standHandle: {
     fontSize: 10,
-    color: colors.dark.textMuted,
+    color: semantic.textMuted,
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -751,19 +750,19 @@ const styles = StyleSheet.create({
   scoreHero: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#FFF',
+    color: semantic.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
   },
   scoreHeroLifetime: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#FCD34D',
+    color: semantic.premiumGoldSoft,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.4,
   },
-  lifetimeUnit: { fontSize: 9, fontWeight: '800', color: colors.dark.textMuted, letterSpacing: 0.8 },
-  bestTierHint: { fontSize: 9, color: colors.dark.textSecondary, fontWeight: '600' },
+  lifetimeUnit: { fontSize: 9, fontWeight: '800', color: semantic.textMuted, letterSpacing: 0.8 },
+  bestTierHint: { fontSize: 9, color: semantic.textSecondary, fontWeight: '600' },
   tierChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -794,7 +793,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: colors.dark.textMuted,
+    color: semantic.textMuted,
   },
   runnersRow: { gap: 8 },
   runnerCard: {
@@ -818,18 +817,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-  runnerRankText: { fontSize: 12, fontWeight: '900', color: colors.dark.text },
+  runnerRankText: { fontSize: 12, fontWeight: '900', color: semantic.textPrimary },
   runnerMeta: { flex: 1, minWidth: 0 },
-  runnerName: { fontSize: 14, fontWeight: '800', color: colors.dark.text },
+  runnerName: { fontSize: 14, fontWeight: '800', color: semantic.textPrimary },
   runnerRight: { alignItems: 'flex-end' },
-  runnerScore: { fontSize: 18, fontWeight: '900', color: colors.dark.text, fontVariant: ['tabular-nums'] },
-  runnerScoreGold: { fontSize: 17, fontWeight: '900', color: '#FBBF24', fontVariant: ['tabular-nums'] },
+  runnerScore: { fontSize: 18, fontWeight: '900', color: semantic.textPrimary, fontVariant: ['tabular-nums'] },
+  runnerScoreGold: { fontSize: 17, fontWeight: '900', color: semantic.warning, fontVariant: ['tabular-nums'] },
   runnerTier: { fontSize: 9, fontWeight: '800' },
-  runnerSub: { fontSize: 9, fontWeight: '800', color: colors.dark.textMuted, letterSpacing: 0.5 },
+  runnerSub: { fontSize: 9, fontWeight: '800', color: semantic.textMuted, letterSpacing: 0.5 },
   emptyWrap: { paddingVertical: 28, alignItems: 'center', gap: 10 },
   emptyText: {
     fontSize: 12,
-    color: colors.dark.textMuted,
+    color: semantic.textMuted,
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 8,
@@ -838,7 +837,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(252,211,77,0.2)',
+    borderColor: 'rgba(252,211,77,0.14)',
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -868,17 +867,17 @@ const styles = StyleSheet.create({
   prizePreviewHeadline: {
     fontSize: 17,
     fontWeight: '900',
-    color: colors.dark.text,
+    color: semantic.textPrimary,
     letterSpacing: -0.4,
   },
   prizePreviewBody: {
     fontSize: 12.5,
     lineHeight: 19,
-    color: colors.dark.textSecondary,
+    color: semantic.textSecondary,
   },
   prizePreviewBold: {
     fontWeight: '800',
-    color: colors.dark.text,
+    color: semantic.textPrimary,
   },
   prizeSampleRowLabel: {
     marginTop: 4,
@@ -886,7 +885,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1.1,
     textTransform: 'uppercase',
-    color: colors.dark.textMuted,
+    color: semantic.textMuted,
   },
   prizeSampleRow: {
     flexDirection: 'row',
@@ -898,7 +897,7 @@ const styles = StyleSheet.create({
   prizePreviewMicro: {
     fontSize: 10.5,
     lineHeight: 15,
-    color: colors.dark.textQuiet,
+    color: semantic.textQuiet,
     fontStyle: 'italic',
   },
   neonSampleCol: { flex: 1, alignItems: 'center', minWidth: 0 },
@@ -913,13 +912,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 11,
     fontWeight: '800',
-    color: colors.dark.text,
+    color: semantic.textPrimary,
     textAlign: 'center',
   },
   neonSampleRank: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: colors.dark.textMuted,
+    color: semantic.textMuted,
     marginTop: 2,
     textAlign: 'center',
   },

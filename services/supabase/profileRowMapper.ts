@@ -10,7 +10,7 @@ export const PROFILE_SELECT_CREATOR_SUMMARY_BASE =
 
 /** Must match `profiles.selected_pulse_avatar_frame_id` FK hint. */
 export const PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED =
-  'selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption)';
+  'selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)';
 
 export const PROFILE_SELECT_CREATOR_WITH_FRAME = `${PROFILE_SELECT_CREATOR_SUMMARY_BASE}, ${PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED}`;
 

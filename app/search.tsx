@@ -22,6 +22,7 @@ import { analytics } from '@/lib/analytics';
 import { getSearchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory } from '@/lib/searchHistory';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { usePersistedCommunityJoinToggle } from '@/hooks/usePersistedCommunityJoinToggle';
 import { useAuth } from '@/contexts/AuthContext';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
@@ -47,7 +48,7 @@ export default function SearchScreen() {
   const [tab, setTab] = useState<SearchTab>(() =>
     params.q?.startsWith('#') ? 'Hashtags' : 'All',
   );
-  const toggleJoinCommunity = useAppStore((s) => s.toggleJoinCommunity);
+  const persistToggleJoin = usePersistedCommunityJoinToggle();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
   const debouncedQuery = useDebouncedValue(query, 400);
@@ -417,7 +418,7 @@ export default function SearchScreen() {
                       }, user?.id ?? null);
                       router.push(`/communities/${community.slug}`);
                     }}
-                    onJoin={() => toggleJoinCommunity(community.id)}
+                    onJoin={() => void persistToggleJoin(community.id)}
                   />
                 </View>
               );

@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { streaksService } from '@/services/social/streaks';
 import { streamsService } from '@/services/streams';
 import type { FeedType } from '@/types';
-import { postsService } from '@/services/supabase';
+import { postsService, profilesService } from '@/services/supabase';
 import {
   circleContentKeys,
   commentKeys,
@@ -414,6 +414,21 @@ export function useUser(id: string) {
     enabled: !!id,
     staleTime: 45_000,
     gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
+  });
+}
+
+/** Opt-in: notify viewer when `creatorId` publishes a new live post (see `creator_post_subscribers`). */
+export function useCreatorPostNotifications(
+  creatorId: string | undefined,
+  viewerId: string | undefined,
+) {
+  return useQuery({
+    queryKey: ['creatorPostNotifications', viewerId ?? '', creatorId ?? ''] as const,
+    queryFn: () => profilesService.isSubscribedToCreatorPosts(viewerId!, creatorId!),
+    enabled: Boolean(viewerId && creatorId && viewerId !== creatorId),
+    staleTime: 60_000,
+    gcTime: 1000 * 60 * 15,
     refetchOnMount: false,
   });
 }

@@ -181,9 +181,17 @@ const PUBLIC_POST_MEDIA_MARKER = '/object/public/post-media/';
 /**
  * If playback fails on a public URL (e.g. bucket not public), try a time-limited signed URL
  * when the path is under `post-media` and the user may read the object per RLS.
+ *
+ * Callers sometimes pass a missing URL during mount / hydration — treat as no-op (Sentry:
+ * `Cannot read properties of undefined (reading 'trim')`).
  */
-export async function trySignedUrlFromPostMediaPublicUrl(publicUrl: string): Promise<string | null> {
+export async function trySignedUrlFromPostMediaPublicUrl(
+  publicUrl: string | null | undefined,
+): Promise<string | null> {
+  if (publicUrl == null) return null;
+  if (typeof publicUrl !== 'string') return null;
   const u = publicUrl.trim();
+  if (!u) return null;
   const idx = u.indexOf(PUBLIC_POST_MEDIA_MARKER);
   if (idx === -1) return null;
   const rawPath = u.slice(idx + PUBLIC_POST_MEDIA_MARKER.length).split('?')[0];
@@ -200,8 +208,8 @@ export async function trySignedUrlFromPostMediaPublicUrl(publicUrl: string): Pro
  * Use for downloads / `FileSystem.downloadAsync` when a public object URL may 403 but the user can read via RLS.
  * Falls back to the original string when signing does not apply or fails.
  */
-export async function resolvePostMediaDownloadUrl(url: string): Promise<string> {
-  const trimmed = url.trim();
+export async function resolvePostMediaDownloadUrl(url: string | null | undefined): Promise<string> {
+  const trimmed = (url == null ? '' : String(url)).trim();
   if (!trimmed) return trimmed;
   const signed = await trySignedUrlFromPostMediaPublicUrl(trimmed);
   return signed ?? trimmed;

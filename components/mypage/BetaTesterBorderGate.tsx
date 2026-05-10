@@ -61,6 +61,8 @@ export function BetaTesterBorderGate() {
 
   const { user, profile, isAuthenticated, betaGiftCheckNonce } = useAuth();
 
+  const teamBorderGiftBlocking = useAppStore((s) => s.teamBorderGiftBlocking);
+
   /** Segments alone can lag behind navigation; pathname reflects the focused route more reliably. */
   const inAuth = segments.some((s) => s === 'auth') || pathname.startsWith('/auth');
   const termsComplete = useMemo(
@@ -76,7 +78,8 @@ export function BetaTesterBorderGate() {
     Boolean(user?.id) &&
     termsComplete &&
     !inAuth &&
-    onFeed;
+    onFeed &&
+    !teamBorderGiftBlocking;
 
   const canShowModalRef = useRef(canShowGiftUi);
   canShowModalRef.current = canShowGiftUi;

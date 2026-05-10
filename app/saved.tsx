@@ -141,7 +141,7 @@ export default function SavedScreen() {
     <View style={styles.container}>
       <StackScreenHeader insetTop={insets.top} title="Saved" onPressLeft={() => router.back()} />
 
-      <TopSegmentTabs tabs={TABS} activeKey={tab} onSelect={setTab} light />
+      <TopSegmentTabs tabs={TABS} activeKey={tab} onSelect={setTab} appearance="onLight" />
 
       {tab === 'posts' ? (
         savedPosts.length === 0 ? (

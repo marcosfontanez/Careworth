@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFeed, useFeaturedCommunities, useFeaturedJobs } from '@/hooks/useQueries';
+import { usePersistedCommunityJoinToggle } from '@/hooks/usePersistedCommunityJoinToggle';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, borderRadius, iconSize, layout, spacing, typography } from '@/theme';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
@@ -59,7 +60,7 @@ export default function DiscoverScreen() {
   const { data: featuredCommunities } = useFeaturedCommunities();
   const { data: featuredJobs } = useFeaturedJobs();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
-  const toggleJoin = useAppStore((s) => s.toggleJoinCommunity);
+  const persistToggleJoin = usePersistedCommunityJoinToggle();
   const [refreshing, setRefreshing] = useState(false);
   const [trendingTags, setTrendingTags] = useState(FALLBACK_TAGS);
   const [suggestedCreators, setSuggestedCreators] = useState<UserProfile[]>([]);
@@ -378,7 +379,7 @@ export default function DiscoverScreen() {
                     <Text style={styles.communityMembers}>{formatCount(item.memberCount)} members</Text>
                     <TouchableOpacity
                       style={[styles.joinBtn, isJoined && styles.joinedBtn]}
-                      onPress={() => toggleJoin(item.id)}
+                      onPress={() => void persistToggleJoin(item.id)}
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.joinText, isJoined && styles.joinedText]}>

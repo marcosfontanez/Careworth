@@ -96,7 +96,7 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
               <option value="">Select a border…</option>
               {options.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.label} · {f.prize_tier} · {f.monthLabel} · {f.slug}
+                  {f.label} · {f.prize_tier} · {f.rarity_tier} · {f.monthLabel} · {f.slug}
                 </option>
               ))}
             </select>
@@ -109,10 +109,21 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
                   label={selected.label}
                   sizePx={56}
                 />
-                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-                  {selected.subtitle || "—"}
-                  {selected.ring_caption ? ` · Caption: ${selected.ring_caption}` : ""}
-                </p>
+                <div className="min-w-0 flex-1 space-y-1 text-xs text-muted-foreground">
+                  <p>
+                    {selected.subtitle || "—"}
+                    {selected.ring_caption ? ` · Caption: ${selected.ring_caption}` : ""}
+                  </p>
+                  <p>
+                    <span className="font-medium capitalize text-foreground">Rarity:</span> {selected.rarity_tier}
+                    {selected.acquisition_tag ? (
+                      <>
+                        {" "}
+                        · <span className="font-medium text-foreground">Tag:</span> {selected.acquisition_tag}
+                      </>
+                    ) : null}
+                  </p>
+                </div>
               </div>
             ) : null}
           </div>
@@ -171,7 +182,8 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
           <CardTitle>Catalog ({frames.length})</CardTitle>
           <p className="text-xs text-muted-foreground">
             Every row in <code className="rounded bg-muted px-1">pulse_avatar_frames</code>. Add new designs via SQL
-            migrations so releases stay reproducible.
+            migrations so releases stay reproducible. <strong>Rarity</strong> uses the same tiers as Pulse Shop (
+            <code className="rounded bg-muted px-1">rarity_tier</code>) — see migration 132 for the default policy.
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -181,6 +193,8 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
                 <TableHead>Label</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead>Tier</TableHead>
+                <TableHead>Rarity</TableHead>
+                <TableHead>Tag</TableHead>
                 <TableHead>Month</TableHead>
                 <TableHead>Ring</TableHead>
                 <TableHead>Glow</TableHead>
@@ -197,6 +211,10 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
                 </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{f.slug}</TableCell>
                   <TableCell>{f.prize_tier}</TableCell>
+                  <TableCell className="capitalize">{f.rarity_tier}</TableCell>
+                  <TableCell className="max-w-[200px] text-xs text-muted-foreground">
+                    {f.acquisition_tag ?? "—"}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{formatMonth(f.month_start)}</TableCell>
                   <TableCell>
                     <span className="font-mono text-xs" style={{ color: f.ring_color }}>

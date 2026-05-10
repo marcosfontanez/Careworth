@@ -86,6 +86,8 @@ export interface Database {
           label: string;
           subtitle: string | null;
           prize_tier: string;
+          rarity_tier: 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
+          acquisition_tag: string | null;
           month_start: string;
           ring_color: string;
           glow_color: string;
@@ -99,6 +101,8 @@ export interface Database {
           label: string;
           subtitle?: string | null;
           prize_tier: string;
+          rarity_tier?: 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
+          acquisition_tag?: string | null;
           month_start: string;
           ring_color: string;
           glow_color: string;
@@ -482,6 +486,19 @@ export interface Database {
           following_id: string;
         };
         Update: Partial<Database['public']['Tables']['follows']['Insert']>;
+        Relationships: [];
+      };
+      creator_post_subscribers: {
+        Row: {
+          subscriber_id: string;
+          creator_id: string;
+          created_at: string;
+        };
+        Insert: {
+          subscriber_id: string;
+          creator_id: string;
+        };
+        Update: Partial<Database['public']['Tables']['creator_post_subscribers']['Insert']>;
         Relationships: [];
       };
       post_likes: {

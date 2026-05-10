@@ -75,6 +75,8 @@ export function PulseMonthCelebrationGate() {
   const segments = useSegments();
   const { user, profile, isAuthenticated, isLoading } = useAuth();
   const betaTesterBorderBlocking = useAppStore((s) => s.betaTesterBorderBlocking);
+  const teamBorderGiftBlocking = useAppStore((s) => s.teamBorderGiftBlocking);
+  const setPulseMonthCelebrationBlocking = useAppStore((s) => s.setPulseMonthCelebrationBlocking);
   const inAuth = segments[0] === 'auth';
   const enabled = isAuthenticated && !isLoading && !inAuth && Boolean(user?.id);
 
@@ -97,13 +99,18 @@ export function PulseMonthCelebrationGate() {
   }, [celebration?.monthStart]);
 
   useEffect(() => {
-    if (betaTesterBorderBlocking) {
-      setOpen(false);
-    }
-  }, [betaTesterBorderBlocking]);
+    setPulseMonthCelebrationBlocking(open);
+    return () => setPulseMonthCelebrationBlocking(false);
+  }, [open, setPulseMonthCelebrationBlocking]);
 
   useEffect(() => {
-    if (!celebration?.monthStart || !isFetched || betaTesterBorderBlocking) return;
+    if (betaTesterBorderBlocking || teamBorderGiftBlocking) {
+      setOpen(false);
+    }
+  }, [betaTesterBorderBlocking, teamBorderGiftBlocking]);
+
+  useEffect(() => {
+    if (!celebration?.monthStart || !isFetched || betaTesterBorderBlocking || teamBorderGiftBlocking) return;
     let cancelled = false;
     (async () => {
       const seen = await hasSeenPulseMonthCelebration(celebration.monthStart);
@@ -112,7 +119,7 @@ export function PulseMonthCelebrationGate() {
     return () => {
       cancelled = true;
     };
-  }, [celebration?.monthStart, isFetched, betaTesterBorderBlocking]);
+  }, [celebration?.monthStart, isFetched, betaTesterBorderBlocking, teamBorderGiftBlocking]);
 
   useEffect(() => {
     if (!open || giftOpened || !celebration?.isTop5) return;

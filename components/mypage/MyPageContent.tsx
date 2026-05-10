@@ -7,8 +7,9 @@
  *   3. PulseStatsRow — three boxed cards (Followers · Following · Pulse Score)
  *   4. Visitor actions (Follow / Message / Share) — visitors only
  *   5. Current Vibe music player
- *   6. Media Hub (videos / favorites / photos strip)
- *   7. My Pulse (composer chips + rolling 5 cards)
+ *   6. My Pulse (composer chips + rolling 5 cards)
+ *   7. Media Hub (videos / favorites / photos strip) — last, so visitors scroll
+ *      through your story before browsing media.
  */
 import React, { useMemo, useCallback } from 'react';
 import {
@@ -21,6 +22,7 @@ import {
   Alert,
   ActionSheetIOS,
   Platform,
+  Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +36,7 @@ import {
   layout,
   touchTarget,
   shadows,
+  pulseverse,
 } from '@/theme';
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { profileHandleDisplay } from '@/utils/profileHandle';
@@ -80,6 +83,12 @@ export type MyPageContentProps = {
    * just open the sheet without the celebration card.
    */
   highlightShareTier?: boolean;
+  /** Visitor: opt-in bell under portrait — notify when this user posts new content. */
+  creatorPostNotificationsOn?: boolean;
+  onToggleCreatorPostNotifications?: () => void;
+  creatorPostNotificationsBusy?: boolean;
+  /** Visitor: open Pulse Shop creator gifts (Sparks) for this profile. */
+  onOpenCreatorGifts?: () => void;
 };
 
 export function MyPageContent({
@@ -93,6 +102,10 @@ export function MyPageContent({
   onBlock,
   initialOpenPulseHistory = false,
   highlightShareTier = false,
+  creatorPostNotificationsOn = false,
+  onToggleCreatorPostNotifications,
+  creatorPostNotificationsBusy = false,
+  onOpenCreatorGifts,
 }: MyPageContentProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -320,54 +333,92 @@ export function MyPageContent({
         <View
           style={[styles.profileRow, { paddingHorizontal: layout.screenPadding }]}
         >
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={
-              isOwner ? () => router.push('/my-pulse-appearance') : undefined
-            }
-            disabled={!isOwner}
-            style={styles.avatarCol}
-          >
-            <View style={styles.avatarInner}>
-              <AvatarDisplay
-                size={MY_PULSE_AVATAR_SIZE}
-                avatarUrl={user.avatarUrl}
-                prioritizeRemoteAvatar
-                showEdit={false}
-                ringColor={colors.primary.teal}
-                pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
-                showOnlineDot={isOwner}
-              />
-              {isOwner ? (
-                <View style={styles.cameraFab}>
-                  <Ionicons name="camera" size={15} color="#FFF" />
-                </View>
-              ) : onToggleFollow ? (
-                /* Visitor: quick follow / unfollow FAB pinned to the bottom
-                   of the avatar circle. Mirrors TikTok's "+ follow" badge
-                   that sits at the bottom of the profile picture. */
-                <TouchableOpacity
-                  style={[
-                    styles.followFab,
-                    isFollowing ? styles.followFabFollowing : styles.followFabIdle,
-                  ]}
-                  onPress={onToggleFollow}
-                  activeOpacity={0.85}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    isFollowing ? `Unfollow ${user.displayName}` : `Follow ${user.displayName}`
-                  }
-                >
-                  <Ionicons
-                    name={isFollowing ? 'checkmark' : 'add'}
-                    size={16}
-                    color="#FFF"
+          <View style={styles.avatarStack}>
+            {isOwner ? (
+              <Pressable
+                onPress={() => router.push('/my-pulse-appearance' as any)}
+                onLongPress={() => router.push({ pathname: '/my-pulse-appearance', params: { focus: 'borders' } } as any)}
+                delayLongPress={380}
+                style={styles.avatarPressable}
+                accessibilityRole="button"
+                accessibilityHint="Customize your My Pulse look. Long press to jump to Pulse Shop borders."
+              >
+                <View style={styles.avatarInner}>
+                  <AvatarDisplay
+                    size={MY_PULSE_AVATAR_SIZE}
+                    avatarUrl={user.avatarUrl}
+                    prioritizeRemoteAvatar
+                    showEdit={false}
+                    ringColor={colors.primary.teal}
+                    pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
+                    showOnlineDot={isOwner}
                   />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </TouchableOpacity>
+                  <View style={styles.cameraFab}>
+                    <Ionicons name="camera" size={15} color="#FFF" />
+                  </View>
+                </View>
+              </Pressable>
+            ) : (
+              <View style={styles.avatarInner}>
+                <AvatarDisplay
+                  size={MY_PULSE_AVATAR_SIZE}
+                  avatarUrl={user.avatarUrl}
+                  prioritizeRemoteAvatar
+                  showEdit={false}
+                  ringColor={colors.primary.teal}
+                  pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
+                  showOnlineDot={false}
+                />
+                {onToggleFollow ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.followFab,
+                      isFollowing ? styles.followFabFollowing : styles.followFabIdle,
+                    ]}
+                    onPress={onToggleFollow}
+                    activeOpacity={0.85}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isFollowing ? `Unfollow ${user.displayName}` : `Follow ${user.displayName}`
+                    }
+                  >
+                    <Ionicons
+                      name={isFollowing ? 'checkmark' : 'add'}
+                      size={16}
+                      color="#FFF"
+                    />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
+            {!isOwner && onToggleCreatorPostNotifications ? (
+              <TouchableOpacity
+                style={[
+                  styles.portraitNotifyBell,
+                  creatorPostNotificationsBusy ? styles.portraitNotifyBellDisabled : null,
+                ]}
+                onPress={onToggleCreatorPostNotifications}
+                disabled={creatorPostNotificationsBusy}
+                activeOpacity={0.85}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  creatorPostNotificationsOn
+                    ? 'Stop notifications for new posts from this user'
+                    : 'Get notifications when this user posts new content'
+                }
+              >
+                <Ionicons
+                  name={creatorPostNotificationsOn ? 'notifications' : 'notifications-outline'}
+                  size={20}
+                  color={
+                    creatorPostNotificationsOn ? colors.primary.teal : colors.dark.textMuted
+                  }
+                />
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
           <View style={styles.infoCol}>
             <View style={styles.nameRow}>
@@ -386,6 +437,20 @@ export function MyPageContent({
               {profileHandleDisplay(user)}
             </Text>
             <ProfileNeonPills tags={neonPillTags} />
+            {isOwner ? (
+              <TouchableOpacity
+                style={styles.bordersChip}
+                onPress={() =>
+                  router.push({ pathname: '/my-pulse-appearance', params: { focus: 'borders' } } as any)
+                }
+                activeOpacity={0.88}
+                accessibilityRole="button"
+                accessibilityLabel="Pulse Shop borders in Customize My Pulse"
+              >
+                <Ionicons name="ribbon-outline" size={15} color="#22D3EE" style={{ marginRight: 6 }} />
+                <Text style={styles.bordersChipText}>My borders</Text>
+              </TouchableOpacity>
+            ) : null}
             {(user.bio?.trim() || isOwner) ? (
               <View style={styles.pageIntroWrap}>
                 <Text
@@ -463,6 +528,16 @@ export function MyPageContent({
               />
               <Text style={styles.msgBtnText}>Message</Text>
             </TouchableOpacity>
+            {onOpenCreatorGifts ? (
+              <TouchableOpacity
+                style={styles.shareIconBtn}
+                onPress={onOpenCreatorGifts}
+                activeOpacity={0.85}
+                accessibilityLabel="Send a gift with Sparks"
+              >
+                <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
               style={styles.shareIconBtn}
               onPress={() => shareProfile(user.id, user.displayName)}
@@ -484,7 +559,7 @@ export function MyPageContent({
           {/* Current Vibe (mini music player) */}
           <FeaturedSoundCard
             user={user}
-            accent={colors.primary.teal}
+            accent={pulseverse.electric}
             profileViewAutoplay
             alwaysShow={isOwner}
             onCustomize={
@@ -494,19 +569,19 @@ export function MyPageContent({
             }
           />
 
-          <MediaHubSection
-            userId={user.id}
-            userPosts={postsVisibleOnProfile}
-            profileUpdates={profileUpdates}
-            isOwner={isOwner}
-          />
-
           {/* My Pulse (rolling 5) */}
           <MyPulseSection
             updates={profileUpdates}
             userId={user.id}
             readOnly={!isOwner}
             resolveLinkedPost={resolveLinkedPost}
+          />
+
+          <MediaHubSection
+            userId={user.id}
+            userPosts={postsVisibleOnProfile}
+            profileUpdates={profileUpdates}
+            isOwner={isOwner}
           />
         </View>
       </ScrollView>
@@ -650,8 +725,25 @@ const styles = StyleSheet.create({
     marginTop: -56,
     marginBottom: spacing.sm,
   },
-  avatarCol: {},
+  /** Column: avatar + optional bell under portrait (visitor). */
+  avatarStack: {
+    alignItems: 'center',
+  },
   avatarInner: { position: 'relative' },
+  avatarPressable: { alignSelf: 'flex-start' },
+  bordersChip: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: pulseverse.sparksPillBorder,
+    backgroundColor: 'rgba(34,211,238,0.08)',
+  },
+  bordersChipText: { fontSize: 12, fontWeight: '800', color: pulseverse.electric, letterSpacing: 0.2 },
   cameraFab: {
     position: 'absolute',
     bottom: 2,
@@ -691,6 +783,20 @@ const styles = StyleSheet.create({
   followFabFollowing: {
     // Muted teal when already following — still tappable to unfollow.
     backgroundColor: 'rgba(20,184,166,0.55)',
+  },
+  portraitNotifyBell: {
+    marginTop: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  portraitNotifyBellDisabled: {
+    opacity: 0.45,
   },
   /** Starts at the avatar's TOP — name aligns with the top of the photo */
   infoCol: {
@@ -788,5 +894,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: { paddingTop: spacing.sm },
+  body: { paddingTop: layout.sectionGapLarge },
 });

@@ -60,6 +60,7 @@ export default function AdminLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="sound-catalog" />
+      <Stack.Screen name="border-catalog" />
     </Stack>
   );
 }

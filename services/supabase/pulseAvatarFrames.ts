@@ -42,7 +42,9 @@ export const pulseAvatarFramesService = {
 
     const { data: catalog, error: catErr } = await supabase
       .from('pulse_avatar_frames')
-      .select('id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption')
+      .select(
+        'id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption',
+      )
       .in('id', frameIds);
 
     if (catErr || !catalog?.length) {
@@ -116,7 +118,9 @@ export const pulseAvatarFramesService = {
         if (!frame && fid) {
           const { data: cat, error: catErr } = await supabase
             .from('pulse_avatar_frames')
-            .select('id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption')
+            .select(
+              'id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption',
+            )
             .eq('id', fid)
             .maybeSingle();
           if (!catErr && cat) frame = mapPulseAvatarFrameEmbed(cat) ?? null;

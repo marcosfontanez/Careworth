@@ -11,10 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
-  Modal,
-  Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +21,6 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   pickAvatarImageRawFromGallery,
   pickBannerImageFromGallery,
@@ -31,17 +28,16 @@ import {
   type MediaAsset,
 } from '@/lib/media';
 import { storageService } from '@/lib/storage';
-import { profilesService, pulseAvatarFramesService } from '@/services/supabase';
+import { profilesService } from '@/services/supabase';
 import { supabaseMessage } from '@/utils/supabaseErrors';
-import { userKeys } from '@/lib/queryKeys';
 import { profileNeedsPublicNameReview } from '@/lib/oauthProfilePlaceholders';
 import { SongPickerModal, type PickedSong } from '@/components/mypage/SongPickerModal';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { CircularAvatarCropModal } from '@/components/profile/CircularAvatarCropModal';
 import {
   CustomizeMoreTabs,
   type CustomizeMoreTabsHandle,
 } from '@/components/mypage/CustomizeMoreTabs';
+import { MyBordersScreen } from '@/components/borders/inventory/MyBordersScreen';
 import { useProfileCustomization } from '@/store/useProfileCustomization';
 
 const DEFAULT_BANNER =
@@ -79,25 +75,28 @@ function tagsCharCount(tags: string[]): number {
 
 export default function MyPageAppearanceScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ focus?: string; collectionId?: string }>();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
   const { user, profile, refreshProfile } = useAuth();
   const { accentColor } = useProfileCustomization();
   const moreRef = useRef<CustomizeMoreTabsHandle>(null);
+  const lookScrollRef = useRef<ScrollView>(null);
+  const didScrollToBorders = useRef(false);
   const [mainTab, setMainTab] = useState<'look' | 'more'>('look');
+
+  const focusBorders =
+    params.focus === 'borders' || (Array.isArray(params.focus) && params.focus[0] === 'borders');
+
+  useEffect(() => {
+    didScrollToBorders.current = false;
+  }, [focusBorders]);
+
+  useEffect(() => {
+    if (focusBorders) setMainTab('look');
+  }, [focusBorders]);
 
   const uid = user?.id ?? '';
 
-  const { data: earnedFrames = [] } = useQuery({
-    queryKey: ['pulseAvatarFramesEarned', uid],
-    queryFn: () => pulseAvatarFramesService.listEarned(uid),
-    enabled: !!uid,
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
-  });
-
-  const [borderPickerOpen, setBorderPickerOpen] = useState(false);
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
   const [songUrl, setSongUrl] = useState('');
@@ -134,24 +133,6 @@ export default function MyPageAppearanceScreen() {
     setPageIntroLine(profile.bio?.trim() ? profile.bio : '');
     setHideRecentPostsStrip(Boolean(profile.hideRecentPostsOnMyPage));
   }, [profile]);
-
-  const [applyingBorder, setApplyingBorder] = useState(false);
-
-  const applyPulseBorder = async (frameId: string | null) => {
-    if (!uid) return;
-    setApplyingBorder(true);
-    try {
-      await pulseAvatarFramesService.setSelected(frameId);
-      await refreshProfile();
-      await queryClient.invalidateQueries({ queryKey: userKeys.detail(uid) });
-      await queryClient.invalidateQueries({ queryKey: ['pulseAvatarFramesEarned', uid] });
-      setBorderPickerOpen(false);
-    } catch (e: unknown) {
-      Alert.alert('Could not update border', supabaseMessage(e));
-    } finally {
-      setApplyingBorder(false);
-    }
-  };
 
   if (!uid || !profile) {
     return (
@@ -317,7 +298,11 @@ export default function MyPageAppearanceScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={lookScrollRef}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         {mainTab === 'look' ? (
           <>
         {profileNeedsPublicNameReview(profile, user?.email) ? (
@@ -383,50 +368,6 @@ export default function MyPageAppearanceScreen() {
             )}
           </TouchableOpacity>
         </View>
-
-        <Text style={styles.sectionLabel}>Profile border</Text>
-        <Text style={styles.hint}>
-          Each month, the top five on the <Text style={styles.hintBold}>global Pulse leaderboard</Text> win tiered frames
-          (1st · gold tier, 2nd–3rd · silver tier, 4th–5th · bronze tier).{' '}
-          <Text style={styles.hintBold}>The design is new every month</Text> — exclusive to that month, then it&apos;s yours to
-          keep. Pick any unlocked frame here or stay on the classic teal ring.
-        </Text>
-        <TouchableOpacity
-          style={styles.borderPickerCard}
-          onPress={() => {
-            void queryClient.invalidateQueries({ queryKey: ['pulseAvatarFramesEarned', uid] });
-            setBorderPickerOpen(true);
-          }}
-          activeOpacity={0.88}
-          disabled={applyingBorder}
-        >
-          <AvatarDisplay
-            size={48}
-            avatarUrl={avatarPreview ?? profile.avatarUrl}
-            prioritizeRemoteAvatar
-            ringColor={colors.primary.teal}
-            pulseFrame={pulseFrameFromUser(profile.pulseAvatarFrame)}
-          />
-          <View style={styles.borderPickerMeta}>
-            <Text style={styles.borderPickerTitle}>
-              {profile.pulseAvatarFrame?.label ?? 'Classic teal'}
-            </Text>
-            <Text style={styles.borderPickerSub} numberOfLines={2}>
-              {profile.pulseAvatarFrame?.subtitle ??
-                'Default outline. Earn themed borders by placing top 5 for the month.'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.primary.teal} />
-        </TouchableOpacity>
-        {earnedFrames.length === 0 ? (
-          <Text style={styles.borderEmptyHint}>
-            No prize borders yet — check the leaderboards and keep your Pulse score climbing this month.
-          </Text>
-        ) : (
-          <Text style={styles.borderOwnedHint}>
-            {earnedFrames.length} collectible{earnedFrames.length === 1 ? '' : 's'} unlocked — tap the card to equip one.
-          </Text>
-        )}
 
         <Text style={styles.sectionLabel}>Neon tags</Text>
         <Text style={styles.hint}>
@@ -577,6 +518,24 @@ export default function MyPageAppearanceScreen() {
           />
         </View>
 
+        <View
+          onLayout={(e) => {
+            if (!focusBorders || didScrollToBorders.current) return;
+            const y = e.nativeEvent.layout.y;
+            didScrollToBorders.current = true;
+            requestAnimationFrame(() => {
+              lookScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+            });
+          }}
+        >
+          <Text style={styles.sectionLabel}>Profile borders</Text>
+          <Text style={styles.hint}>
+            Shop purchases, gifts, leaderboard prizes, beta rewards, and events — equip anything you&apos;ve unlocked.
+            Top-five monthly Pulse winners get exclusive rings; those live here alongside Pulse Shop borders.
+          </Text>
+          <MyBordersScreen embedded onInventoryChanged={() => void refreshProfile()} />
+        </View>
+
         <View style={{ height: 40 }} />
           </>
         ) : (
@@ -591,85 +550,6 @@ export default function MyPageAppearanceScreen() {
           />
         )}
       </ScrollView>
-
-      <Modal
-        visible={borderPickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => !applyingBorder && setBorderPickerOpen(false)}
-      >
-        <View style={styles.borderModalRoot}>
-          <Pressable
-            style={styles.borderModalBackdrop}
-            onPress={() => !applyingBorder && setBorderPickerOpen(false)}
-          />
-          <View style={[styles.borderSheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
-            <View style={styles.borderSheetHeader}>
-              <Text style={styles.borderSheetTitle}>Choose a border</Text>
-              <TouchableOpacity onPress={() => !applyingBorder && setBorderPickerOpen(false)} hitSlop={12}>
-                <Ionicons name="close" size={26} color={colors.dark.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.borderSheetScroll} keyboardShouldPersistTaps="handled">
-              <TouchableOpacity
-                style={[
-                  styles.borderOption,
-                  !profile.selectedPulseAvatarFrameId && styles.borderOptionOn,
-                ]}
-                onPress={() => void applyPulseBorder(null)}
-                disabled={applyingBorder}
-                activeOpacity={0.85}
-              >
-                <AvatarDisplay
-                  size={44}
-                  avatarUrl={avatarPreview ?? profile.avatarUrl}
-                  prioritizeRemoteAvatar
-                  ringColor={colors.primary.teal}
-                />
-                <View style={styles.borderOptionText}>
-                  <Text style={styles.borderOptionTitle}>Classic teal</Text>
-                  <Text style={styles.borderOptionSub}>Default ring for every profile</Text>
-                </View>
-                {!profile.selectedPulseAvatarFrameId ? (
-                  <Ionicons name="checkmark-circle" size={24} color={colors.primary.teal} />
-                ) : null}
-              </TouchableOpacity>
-              {earnedFrames.map(({ frame }) => (
-                <TouchableOpacity
-                  key={frame.id}
-                  style={[
-                    styles.borderOption,
-                    profile.selectedPulseAvatarFrameId === frame.id && styles.borderOptionOn,
-                  ]}
-                  onPress={() => void applyPulseBorder(frame.id)}
-                  disabled={applyingBorder}
-                  activeOpacity={0.85}
-                >
-                  <AvatarDisplay
-                    size={44}
-                    avatarUrl={avatarPreview ?? profile.avatarUrl}
-                    prioritizeRemoteAvatar
-                    ringColor={colors.primary.teal}
-                    pulseFrame={pulseFrameFromUser(frame)}
-                  />
-                  <View style={styles.borderOptionText}>
-                    <Text style={styles.borderOptionTitle}>{frame.label}</Text>
-                    <Text style={styles.borderOptionSub} numberOfLines={2}>
-                      {frame.subtitle ?? 'Monthly Pulse prize border'}
-                    </Text>
-                  </View>
-                  {profile.selectedPulseAvatarFrameId === frame.id ? (
-                    <Ionicons name="checkmark-circle" size={24} color={colors.primary.teal} />
-                  ) : null}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            {applyingBorder ? (
-              <ActivityIndicator style={{ marginTop: 10 }} color={colors.primary.teal} />
-            ) : null}
-          </View>
-        </View>
-      </Modal>
 
       <SongPickerModal
         visible={pickerOpen}
@@ -965,82 +845,4 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     letterSpacing: 0.2,
   },
-  borderPickerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 14,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(20,184,166,0.45)',
-    backgroundColor: 'rgba(20,184,166,0.08)',
-    marginBottom: 8,
-  },
-  borderPickerMeta: { flex: 1, minWidth: 0 },
-  borderPickerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.dark.text,
-    letterSpacing: -0.2,
-  },
-  borderPickerSub: {
-    marginTop: 4,
-    fontSize: 12.5,
-    lineHeight: 17,
-    color: colors.dark.textMuted,
-  },
-  borderEmptyHint: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    color: colors.dark.textQuiet,
-    marginBottom: 8,
-    fontStyle: 'italic',
-  },
-  borderOwnedHint: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    color: colors.dark.textSecondary,
-    marginBottom: 8,
-  },
-  borderModalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  borderModalBackdrop: { ...StyleSheet.absoluteFillObject },
-  borderSheet: {
-    backgroundColor: colors.dark.bg,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingTop: 10,
-    paddingHorizontal: 16,
-    maxHeight: '72%',
-    borderTopWidth: 1,
-    borderColor: colors.dark.border,
-  },
-  borderSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  borderSheetTitle: { fontSize: 18, fontWeight: '800', color: colors.dark.text },
-  borderSheetScroll: { paddingBottom: 24, gap: 10 },
-  borderOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.dark.border,
-    backgroundColor: colors.dark.card,
-  },
-  borderOptionOn: {
-    borderColor: colors.primary.teal,
-    backgroundColor: 'rgba(20,184,166,0.10)',
-  },
-  borderOptionText: { flex: 1, minWidth: 0 },
-  borderOptionTitle: { fontSize: 15, fontWeight: '800', color: colors.dark.text },
-  borderOptionSub: { marginTop: 2, fontSize: 12.5, color: colors.dark.textMuted, lineHeight: 17 },
 });

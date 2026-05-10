@@ -9,6 +9,8 @@ export type AdminPulseAvatarFrameRow = {
   label: string;
   subtitle: string | null;
   prize_tier: string;
+  rarity_tier: string;
+  acquisition_tag: string | null;
   month_start: string;
   ring_color: string;
   glow_color: string;
@@ -24,7 +26,9 @@ export async function loadPulseAvatarFrameCatalog(): Promise<AdminPulseAvatarFra
     const supabase = await createAdminDataSupabaseClient();
     const { data, error } = await supabase
       .from("pulse_avatar_frames")
-      .select("id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption, sort_order, created_at")
+      .select(
+        "id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption, sort_order, created_at",
+      )
       .order("month_start", { ascending: false })
       .order("sort_order", { ascending: true })
       .order("label", { ascending: true });

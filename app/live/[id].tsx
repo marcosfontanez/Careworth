@@ -27,6 +27,7 @@ import { GiftLeaderboard } from '@/components/live/GiftLeaderboard';
 import { PollWidget } from '@/components/live/PollWidget';
 import { HostPollCreator } from '@/components/live/HostPollCreator';
 import { CoinShopModal } from '@/components/live/CoinShopModal';
+import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { RoleBadge } from '@/components/ui/RoleBadge';
 import { SpecialtyBadge } from '@/components/ui/SpecialtyBadge';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
@@ -131,6 +132,7 @@ function StreamViewerScreenContent() {
 
   /* ---------------- Gifts / coins / leaderboard -------------------------- */
   const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [sparkGiftOpen, setSparkGiftOpen] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [coinBalance, setCoinBalance] = useState(0);
   const [giftSending, setGiftSending] = useState(false);
@@ -830,17 +832,36 @@ function StreamViewerScreenContent() {
                   <Ionicons name="stats-chart-outline" size={18} color={colors.primary.teal} />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  style={styles.giftBtn}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowGiftPicker(true);
-                  }}
-                  activeOpacity={0.75}
-                  accessibilityLabel="Send a gift"
-                >
-                  <Ionicons name="gift-outline" size={18} color={colors.dark.textMuted} />
-                </TouchableOpacity>
+                <View style={styles.viewerGiftBtns}>
+                  <TouchableOpacity
+                    style={styles.giftBtn}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      if (!user?.id) {
+                        showToast('Sign in to send Sparks gifts', 'error');
+                        return;
+                      }
+                      setSparkGiftOpen(true);
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityLabel="Send a Sparks gift to the host"
+                  >
+                    <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
+                  </TouchableOpacity>
+                  {coinWallet ? (
+                    <TouchableOpacity
+                      style={styles.giftBtn}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setShowGiftPicker(true);
+                      }}
+                      activeOpacity={0.75}
+                      accessibilityLabel="Send a coin gift"
+                    >
+                      <Ionicons name="logo-bitcoin" size={18} color={colors.status.premium} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               )}
 
               <AccentComposerFrame
@@ -876,6 +897,19 @@ function StreamViewerScreenContent() {
           </View>
         )}
       </View>
+
+      {stream && user?.id && !isHost ? (
+        <SendCreatorGiftTray
+          visible={sparkGiftOpen}
+          onClose={() => setSparkGiftOpen(false)}
+          creatorUserId={stream.host.id}
+          creatorDisplayName={stream.host.displayName}
+          creatorHandle={stream.host.username ?? null}
+          creatorAvatarUrl={stream.host.avatarUrl ?? null}
+          contextType="live"
+          contextId={stream.id}
+        />
+      ) : null}
 
       <GiftPicker
         visible={showGiftPicker}
@@ -1057,6 +1091,11 @@ const styles = StyleSheet.create({
     borderColor: colors.dark.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  viewerGiftBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chatInputPlain: {
     paddingHorizontal: 4,

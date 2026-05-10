@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -16,11 +15,15 @@ import { postsService } from '@/services/supabase/posts';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius, spacing } from '@/theme';
-import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
-import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
-import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { HubTileImage, RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import type { Post, ProfileUpdate } from '@/types';
+import { getMyPulseDisplayType, resolvePicsUrls } from '@/utils/myPulseDisplayType';
+
+/** Same physical size as `styles.card` — thumbs use this for Supabase transform + layout. */
+const CARD_WIDTH = 118;
+const CARD_HEIGHT = 168;
+const MEDIA_HUB_THUMB_CSS = { w: CARD_WIDTH, h: CARD_HEIGHT };
 
 type TabKey = 'recent' | 'favorites' | 'photos';
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -135,8 +138,9 @@ export function MediaHubSection({
     }
 
     for (const update of profileUpdates ?? []) {
-      if (update.type !== 'pics') continue;
-      const urls = update.picsUrls ?? [];
+      /** Match My Pulse card routing: `media_note` photo-only rows are **pics** in the UI but not always `type === 'pics'` in the DB. */
+      if (getMyPulseDisplayType(update) !== 'pics') continue;
+      const urls = resolvePicsUrls(update);
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i]?.trim();
         if (!url || seen.has(url)) continue;
@@ -428,7 +432,12 @@ function MediaThumbCard({
       delayLongPress={320}
     >
       {item.kind === 'post' ? (
-        <RecentMediaThumb post={item.post} style={styles.cardImage} />
+        <RecentMediaThumb
+          post={item.post}
+          style={styles.cardImage}
+          hubTileCss={MEDIA_HUB_THUMB_CSS}
+          hubImageContentFit={item.post.type === 'image' ? 'contain' : 'cover'}
+        />
       ) : (
         <PulsePicThumb imageUrl={item.imageUrl} style={styles.cardImage} />
       )}
@@ -474,36 +483,14 @@ function MediaThumbCard({
   );
 }
 
-/**
- * Renders a raw image URL (as used by My Pulse pics) through a signed-URL
- * swap so private storage paths display correctly.
- */
-function PulsePicThumb({
-  imageUrl,
-  style,
-}: {
-  imageUrl: string;
-  style: any;
-}) {
-  const [displayUri, setDisplayUri] = useState(imageUrl);
-
-  useEffect(() => {
-    let alive = true;
-    setDisplayUri(imageUrl);
-    void trySignedUrlFromPostMediaPublicUrl(imageUrl).then((signed) => {
-      if (alive && signed) setDisplayUri(signed);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [imageUrl]);
-
+/** My Pulse `pics` URLs: same layout-aware signed + Supabase thumb path as feed images. */
+function PulsePicThumb({ imageUrl, style }: { imageUrl: string; style: any }) {
   return (
-    <Image
-      source={{ uri: displayUri }}
+    <HubTileImage
+      uri={imageUrl}
       style={style}
-      contentFit="cover"
-      {...pulseImageListThumbProps}
+      layoutSizeCss={MEDIA_HUB_THUMB_CSS}
+      contentFit="contain"
     />
   );
 }
@@ -571,9 +558,6 @@ function MediaHubEmpty({
     </View>
   );
 }
-
-const CARD_WIDTH = 118;
-const CARD_HEIGHT = 168;
 
 const styles = StyleSheet.create({
   root: {

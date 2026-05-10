@@ -27,6 +27,7 @@ import { initPushNotifications } from '@/lib/notifications';
 import { initMonitoring } from '@/lib/monitoring';
 import { PulseMonthCelebrationGate } from '@/components/mypage/PulseMonthCelebrationGate';
 import { BetaTesterBorderGate } from '@/components/mypage/BetaTesterBorderGate';
+import { PulseVerseTeamBorderGiftGate } from '@/components/mypage/PulseVerseTeamBorderGiftGate';
 import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
 import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
 import { attachSupabaseAuthAutoRefreshToAppState } from '@/lib/supabaseAuthLifecycle';
@@ -297,6 +298,8 @@ function AppShell() {
         <Stack.Screen name="change-password" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="apply/[jobId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="my-posts" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="pulse-shop" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="my-borders" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="my-pulse-appearance" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="innovation" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="hashtag/[tag]" options={{ animation: 'slide_from_right' }} />
@@ -308,6 +311,7 @@ function AppShell() {
       <MediaExportOverlay />
       <BetaTesterBorderGate />
       <PulseMonthCelebrationGate />
+      <PulseVerseTeamBorderGiftGate />
     </>
   );
 }

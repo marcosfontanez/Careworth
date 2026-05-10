@@ -26,3 +26,17 @@ Apple Music developer token (Edge Function: apple-music-developer-token)
 4) Test in app: Edit Profile > Status > Apple Music search (catalog).
 
 Spotify (client-only): add EXPO_PUBLIC_SPOTIFY_CLIENT_ID to EAS Environment Variables or local .env; Spotify Dashboard redirect URI: pulseverse://spotify
+
+---
+
+Pulse Shop fulfillment (Edge Function: pulse-shop-fulfillment)
+
+1) Deploy (JWT required — user Bearer token):
+   npx supabase functions deploy pulse-shop-fulfillment
+
+2) Set secrets:
+   npx supabase secrets set APPLE_IAP_SHARED_SECRET=xxxxxxxx
+   npx supabase secrets set GOOGLE_PLAY_PACKAGE_NAME=com.your.app
+   npx supabase secrets set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+
+3) App: call via `lib/pulseShopFulfillment.ts` — see supabase/functions/pulse-shop-fulfillment/README.md

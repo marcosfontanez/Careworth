@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
-import type { Community, CircleReply, CircleThread, CircleThreadKind, CreatorSummary, TrendingTopic24h } from '@/types';
+import type { Community, CircleReply, CircleThread, CircleThreadKind, CreatorSummary, RecentCircleActivity, TrendingTopic24h } from '@/types';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
+import { isDemoCatalogMediaUrl } from '@/utils/postPreviewMedia';
 import { communitiesService, rowToCommunity } from './communities';
 import { profileRowToCreatorSummary, PROFILE_SELECT_CREATOR_WITH_FRAME } from './profileRowMapper';
 
@@ -15,12 +16,33 @@ function authorFromRow(a: any): CreatorSummary | undefined {
   return profileRowToCreatorSummary(a);
 }
 
+function firstTaggedCommunityId(communities: unknown): string | null {
+  if (!Array.isArray(communities) || communities.length === 0) return null;
+  const raw = String(communities[0]).trim();
+  return raw || null;
+}
+
+function postListPreviewThumb(row: {
+  thumbnail_url?: string | null;
+  cover_alt_url?: string | null;
+  media_url?: string | null;
+}): string | undefined {
+  const t = row.thumbnail_url?.trim();
+  if (t && !isDemoCatalogMediaUrl(t)) return t;
+  const c = row.cover_alt_url?.trim();
+  if (c && !isDemoCatalogMediaUrl(c)) return c;
+  const m = row.media_url?.trim();
+  if (m && !isDemoCatalogMediaUrl(m) && /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(m)) return m;
+  return undefined;
+}
+
 function rowToThread(row: any): CircleThread {
   const c = row.communities;
   return {
     id: row.id,
     circleId: row.community_id,
     circleSlug: c?.slug ?? '',
+    circleName: typeof c?.name === 'string' ? c.name : undefined,
     authorId: row.author_id,
     author: authorFromRow(row.author),
     kind: row.kind as CircleThreadKind,
@@ -104,6 +126,210 @@ export const circleThreadsDb = {
 
     if (error) throw error;
     return (data ?? []).map(rowToReply);
+  },
+
+  /**
+   * Threads the user started or replied to, **plus** circle wall posts they
+   * commented on (or created) in a community — merged by recency.
+   */
+  async listRecentInvolvingUser(userId: string, limit = 5): Promise<RecentCircleActivity[]> {
+    const uid = (userId ?? '').trim();
+    if (!uid) return [];
+
+    const [{ data: authored }, { data: threadReplies }, { data: commentRows }, { data: authoredPosts }] =
+      await Promise.all([
+        supabase.from('circle_threads').select('id, created_at, updated_at').eq('author_id', uid),
+        supabase
+          .from('circle_replies')
+          .select('thread_id, created_at')
+          .eq('author_id', uid)
+          .order('created_at', { ascending: false })
+          .limit(400),
+        supabase
+          .from('comments')
+          .select(
+            'post_id, created_at, posts!inner(id, caption, comment_count, communities, thumbnail_url, cover_alt_url, media_url)',
+          )
+          .eq('author_id', uid)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(400),
+        supabase
+          .from('posts')
+          .select('id, caption, comment_count, communities, created_at, edited_at, thumbnail_url, cover_alt_url, media_url')
+          .eq('creator_id', uid)
+          .limit(200),
+      ]);
+
+    const threadLastMs = new Map<string, number>();
+    for (const row of authored ?? []) {
+      const id = String(row.id);
+      const t = Math.max(
+        new Date(row.created_at).getTime(),
+        new Date(row.updated_at).getTime(),
+      );
+      threadLastMs.set(id, Math.max(threadLastMs.get(id) ?? 0, t));
+    }
+    for (const row of threadReplies ?? []) {
+      const tid = String(row.thread_id);
+      const t = new Date(row.created_at).getTime();
+      threadLastMs.set(tid, Math.max(threadLastMs.get(tid) ?? 0, t));
+    }
+
+    type WallEv = {
+      ms: number;
+      communityId: string;
+      title: string;
+      commentCount: number;
+      previewThumbUrl?: string;
+    };
+    const wallByPost = new Map<string, WallEv>();
+
+    const touchWall = (postId: string, ms: number, ev: Omit<WallEv, 'ms'>) => {
+      const prev = wallByPost.get(postId);
+      if (!prev || ms > prev.ms) {
+        wallByPost.set(postId, {
+          ms,
+          communityId: ev.communityId,
+          title: ev.title,
+          commentCount: ev.commentCount,
+          previewThumbUrl: ev.previewThumbUrl ?? prev?.previewThumbUrl,
+        });
+      }
+    };
+
+    for (const row of commentRows ?? []) {
+      const p = row.posts as {
+        caption?: string | null;
+        comment_count?: number;
+        communities?: string[];
+        thumbnail_url?: string | null;
+        cover_alt_url?: string | null;
+        media_url?: string | null;
+      } | null;
+      if (!p) continue;
+      const cid = firstTaggedCommunityId(p.communities);
+      if (!cid) continue;
+      const pid = String(row.post_id);
+      const ms = new Date(row.created_at).getTime();
+      const title = (p.caption ?? '').trim() || 'Circle post';
+      touchWall(pid, ms, {
+        communityId: cid,
+        title,
+        commentCount: typeof p.comment_count === 'number' ? p.comment_count : 0,
+        previewThumbUrl: postListPreviewThumb(p),
+      });
+    }
+
+    for (const row of authoredPosts ?? []) {
+      const cid = firstTaggedCommunityId(row.communities);
+      if (!cid) continue;
+      const ms = Math.max(
+        new Date(row.created_at).getTime(),
+        row.edited_at ? new Date(row.edited_at).getTime() : 0,
+      );
+      const pid = String(row.id);
+      const title = (row.caption ?? '').trim() || 'Your circle post';
+      touchWall(pid, ms, {
+        communityId: cid,
+        title,
+        commentCount: typeof row.comment_count === 'number' ? row.comment_count : 0,
+        previewThumbUrl: postListPreviewThumb(row),
+      });
+    }
+
+    type MergeRow =
+      | { kind: 'thread'; ms: number; threadId: string }
+      | {
+          kind: 'wall_post';
+          ms: number;
+          postId: string;
+          communityId: string;
+          title: string;
+          commentCount: number;
+          previewThumbUrl?: string;
+        };
+
+    const threadCandidates: MergeRow[] = [...threadLastMs.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 36)
+      .map(([threadId, ms]) => ({ kind: 'thread' as const, threadId, ms }));
+
+    const wallCandidates: MergeRow[] = [...wallByPost.entries()]
+      .sort((a, b) => b[1].ms - a[1].ms)
+      .slice(0, 36)
+      .map(([postId, v]) => ({
+        kind: 'wall_post' as const,
+        postId,
+        ms: v.ms,
+        communityId: v.communityId,
+        title: v.title,
+        commentCount: v.commentCount,
+        previewThumbUrl: v.previewThumbUrl,
+      }));
+
+    const merged = [...threadCandidates, ...wallCandidates].sort((a, b) => b.ms - a.ms).slice(0, limit);
+
+    if (merged.length === 0) return [];
+
+    const threadIdsToLoad = merged.filter((m): m is Extract<MergeRow, { kind: 'thread' }> => m.kind === 'thread').map(
+      (m) => m.threadId,
+    );
+    const wallCommunityIds = [
+      ...new Set(
+        merged
+          .filter((m): m is Extract<MergeRow, { kind: 'wall_post' }> => m.kind === 'wall_post')
+          .map((m) => m.communityId),
+      ),
+    ];
+
+    const [threadFetch, commFetch] = await Promise.all([
+      threadIdsToLoad.length
+        ? supabase.from('circle_threads').select(THREAD_SELECT).in('id', threadIdsToLoad)
+        : Promise.resolve({ data: [] as unknown[], error: null as null }),
+      wallCommunityIds.length
+        ? supabase.from('communities').select('id, slug, name').in('id', wallCommunityIds)
+        : Promise.resolve({ data: [] as unknown[], error: null as null }),
+    ]);
+
+    if (threadFetch.error) throw threadFetch.error;
+    if (commFetch.error) throw commFetch.error;
+
+    const threadById = new Map<string, CircleThread>();
+    for (const raw of threadFetch.data ?? []) {
+      threadById.set(String((raw as { id: string }).id), rowToThread(raw));
+    }
+
+    const commById = new Map<string, { slug: string; name: string }>();
+    for (const raw of commFetch.data ?? []) {
+      const r = raw as { id: string; slug: string; name: string };
+      commById.set(String(r.id), { slug: r.slug, name: r.name });
+    }
+
+    const out: RecentCircleActivity[] = [];
+    for (const m of merged) {
+      if (m.kind === 'thread') {
+        const thread = threadById.get(m.threadId);
+        if (!thread) continue;
+        out.push({ kind: 'thread', thread, lastInvolvedAt: new Date(m.ms).toISOString() });
+      } else {
+        const comm = commById.get(m.communityId);
+        if (!comm?.slug) continue;
+        const preview = m.title.slice(0, 100);
+        out.push({
+          kind: 'wall_post',
+          postId: m.postId,
+          communitySlug: comm.slug,
+          communityName: comm.name,
+          title: m.title,
+          preview: preview.length >= 100 ? `${preview}…` : preview,
+          commentCount: m.commentCount,
+          lastInvolvedAt: new Date(m.ms).toISOString(),
+          previewThumbUrl: m.previewThumbUrl,
+        });
+      }
+    }
+    return out;
   },
 
   async addReply(threadId: string, body: string): Promise<void> {

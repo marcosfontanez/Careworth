@@ -202,7 +202,7 @@ export default function FollowersScreen() {
     <View style={styles.container}>
       <StackScreenHeader insetTop={insets.top} title={headerTitle} onPressLeft={() => router.back()} />
 
-      <TopSegmentTabs tabs={TABS} activeKey={tab} onSelect={setTab} light />
+      <TopSegmentTabs tabs={TABS} activeKey={tab} onSelect={setTab} appearance="onLight" />
 
       {loading ? (
         <LoadingState />

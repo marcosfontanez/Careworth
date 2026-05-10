@@ -275,7 +275,7 @@ const POST_SELECT = [
   'mood_preset',
   // Joined creator profile — explicit columns to avoid shipping email,
   // push tokens, role_admin flag, identity_tags, etc. to the client.
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption))',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /**
@@ -318,7 +318,7 @@ const POST_SELECT_FEED = [
   'scheduled_status',
   'cover_alt_url',
   'mood_preset',
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, month_start, ring_color, glow_color, ring_caption))',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */

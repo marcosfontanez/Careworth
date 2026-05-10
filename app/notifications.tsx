@@ -97,6 +97,7 @@ export default function NotificationsScreen() {
           'badge_earned',
           'tier_up',
           'circle_new_post',
+          'creator_new_post',
         ].includes(n.type),
       );
     }
@@ -193,6 +194,8 @@ export default function NotificationsScreen() {
           if (c?.slug) qs = `?circle=${encodeURIComponent(c.slug)}`;
         }
         router.push(`/post/${notification.targetId}${qs}` as any);
+      } else if (notification.type === 'creator_new_post' && notification.targetId) {
+        router.push(`/post/${notification.targetId}` as any);
       } else if (notification.type === 'tier_up') {
         // Tier promotions send the recipient to their own profile so the
         // history sheet (tap the pill) is one tap away. We include:

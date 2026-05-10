@@ -1,4 +1,5 @@
 import type { PulseAvatarFrame } from '@/types';
+import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
 
 export function mapPulseAvatarFrameEmbed(raw: unknown): PulseAvatarFrame | null | undefined {
   if (raw == null) return raw === null ? null : undefined;
@@ -21,6 +22,21 @@ export function mapPulseAvatarFrameEmbed(raw: unknown): PulseAvatarFrame | null 
     tier === 'campaign'
       ? tier
       : 'gold';
+  const rawTier = o.rarity_tier != null ? String(o.rarity_tier).toLowerCase().trim() : '';
+  const rarityTier: BorderRarityTier =
+    rawTier === 'mythic' ||
+    rawTier === 'legendary' ||
+    rawTier === 'epic' ||
+    rawTier === 'rare' ||
+    rawTier === 'common'
+      ? rawTier
+      : prizeTierFallbackRarity(tier);
+
+  const acquisitionTag =
+    o.acquisition_tag != null && String(o.acquisition_tag).trim()
+      ? String(o.acquisition_tag).trim()
+      : null;
+
   return {
     id,
     slug: String(o.slug ?? ''),
@@ -31,8 +47,17 @@ export function mapPulseAvatarFrameEmbed(raw: unknown): PulseAvatarFrame | null 
         ? String(o.ring_caption).trim()
         : null,
     prizeTier,
+    rarityTier,
+    acquisitionTag,
     monthStart: String(o.month_start ?? ''),
     ringColor: String(o.ring_color ?? '#FFFFFF'),
     glowColor: String(o.glow_color ?? '#FFFFFF'),
   };
+}
+
+function prizeTierFallbackRarity(prizeTier: string): BorderRarityTier {
+  if (prizeTier === 'gold' || prizeTier === 'silver' || prizeTier === 'bronze') return 'mythic';
+  if (prizeTier === 'exclusive' || prizeTier === 'legacy') return 'legendary';
+  if (prizeTier === 'campaign') return 'rare';
+  return 'common';
 }

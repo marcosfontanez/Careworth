@@ -1,3 +1,5 @@
+import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
+
 export type Role =
   | 'RN'
   | 'CNA'
@@ -65,6 +67,7 @@ export type NotificationType =
   | 'mention'
   | 'community_invite'
   | 'circle_new_post'
+  | 'creator_new_post'
   | 'job_alert'
   | 'badge_earned'
   | 'tier_up';
@@ -90,6 +93,10 @@ export interface PulseAvatarFrame {
   /** Shown on a circular path in the band inside the neon ring (not over the photo). */
   ringCaption?: string | null;
   prizeTier: 'gold' | 'silver' | 'bronze' | 'exclusive' | 'legacy' | 'campaign';
+  /** Catalog rarity aligned with Pulse Shop tiers (migration 132+). */
+  rarityTier: BorderRarityTier;
+  /** Short vault chip, e.g. "Monthly top 5 · global". */
+  acquisitionTag?: string | null;
   monthStart: string;
   ringColor: string;
   glowColor: string;
@@ -527,6 +534,8 @@ export interface CircleThread {
   id: string;
   circleId: string;
   circleSlug: string;
+  /** Room display name when `communities` join is present */
+  circleName?: string;
   authorId: string;
   /** Present when loaded from API with author join */
   author?: CreatorSummary;
@@ -551,6 +560,22 @@ export interface CircleReply {
   createdAt: string;
   reactionCount?: number;
 }
+
+/** Circles tab "Your conversations": thread discussions or comments on circle wall posts. */
+export type RecentCircleActivity =
+  | { kind: 'thread'; thread: CircleThread; lastInvolvedAt: string }
+  | {
+      kind: 'wall_post';
+      postId: string;
+      communitySlug: string;
+      communityName?: string;
+      title: string;
+      preview: string;
+      commentCount: number;
+      lastInvolvedAt: string;
+      /** Post cover / thumbnail for list preview (when available). */
+      previewThumbUrl?: string;
+    };
 
 /** Circles home — top items across all rooms in the last 24h (threads and/or community posts). */
 export interface TrendingTopic24h {

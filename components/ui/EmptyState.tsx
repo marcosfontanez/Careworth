@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, typography, spacing, borderRadius, shadows } from '@/theme';
+import { colors, typography, spacing, borderRadius, shadows, pulseverse } from '@/theme';
 
 type IonName = ComponentProps<typeof Ionicons>['name'];
 
@@ -29,7 +29,7 @@ const ICON_NAME_RE = /^[a-z0-9-]+$/i;
  * instead of a lonely emoji on a black background.
  */
 export function EmptyState({ icon, title, subtitle, accent, ctaLabel, onCtaPress }: Props) {
-  const accentColor = accent ?? colors.primary.teal;
+  const accentColor = accent ?? pulseverse.electric;
   const isIconName = ICON_NAME_RE.test(icon);
 
   return (
@@ -70,18 +70,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl + spacing.lg,
   },
   halo: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   emoji: { fontSize: 36 },
   title: {
     ...typography.h3,
     fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.25,
     color: colors.dark.text,
     textAlign: 'center',
   },

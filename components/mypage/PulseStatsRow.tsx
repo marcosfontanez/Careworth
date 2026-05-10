@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { colors, spacing, borderRadius } from '@/theme';
+import { colors, spacing, borderRadius, shadows } from '@/theme';
 import { formatPulseStat } from '@/utils/pulseScore';
 import { hasSeenPulseTooltip, markPulseTooltipSeen } from '@/lib/pulseTooltipSeen';
 import { PulseHistorySheet } from './PulseHistorySheet';
@@ -254,7 +254,7 @@ function PulseScoreCard({
             backgroundColor: tierGlow,
             opacity: glow.interpolate({
               inputRange: [0.45, 1],
-              outputRange: [0.25, 0.6],
+              outputRange: [0.18, 0.42],
             }),
           },
         ]}
@@ -329,8 +329,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 10,
-    paddingVertical: spacing.sm,
+    gap: 12,
+    paddingVertical: spacing.md,
   },
   miniCardOuter: {
     flex: 1,
@@ -342,11 +342,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'rgba(13,21,36,0.92)',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 118,
+    minHeight: 122,
+    ...shadows.subtle,
   },
   iconWell: {
     width: 36,
@@ -385,10 +386,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     overflow: 'hidden',
     minHeight: 118,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
     shadowRadius: 10,
-    elevation: 8,
+    elevation: 5,
   },
   pulseCardHalo: {
     ...StyleSheet.absoluteFillObject,
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     textShadowColor: colors.primary.teal,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+    textShadowRadius: 8,
   },
   pulseTick: {
     marginLeft: -4,
@@ -454,12 +455,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
     backgroundColor: colors.dark.cardAlt,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    ...shadows.card,
   },
   tooltipIconCircle: {
     width: 22,

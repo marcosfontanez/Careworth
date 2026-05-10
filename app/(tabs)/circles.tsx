@@ -15,14 +15,16 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useCirclesHome, useUnreadCount } from '@/hooks/useQueries';
+import { usePersistedCommunityJoinToggle } from '@/hooks/usePersistedCommunityJoinToggle';
 import { useAppStore } from '@/store/useAppStore';
 import { circleContentService } from '@/services/circleContent';
-import { communitiesService } from '@/services/supabase';
+import { communitiesService, circleThreadsDb } from '@/services/supabase';
 import { CirclesTabHeading } from '@/components/circles/CirclesTabHeading';
 import { CircleSearchBar } from '@/components/circles/CircleSearchBar';
 import { CircleCardFeatured } from '@/components/circles/CircleCardFeatured';
 import { CircleCardCompact } from '@/components/circles/CircleCardCompact';
 import { TrendingTopicCard } from '@/components/circles/TrendingTopicCard';
+import { RecentCircleConversationCard } from '@/components/circles/RecentCircleConversationCard';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { colors, typography, touchTarget, spacing } from '@/theme';
@@ -32,7 +34,7 @@ import {
   clearRecentCircleSearches,
   getRecentCircleSearches,
 } from '@/lib/circleExperience';
-import { hrefCommunity, hrefCommunityThread, hrefPost } from '@/lib/communityRoutes';
+import { hrefCommunity, hrefCommunityThread, hrefCommunityWallPost, hrefPost } from '@/lib/communityRoutes';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { addSearchQuery } from '@/lib/searchHistory';
@@ -51,7 +53,7 @@ export default function CirclesScreen() {
   const { user } = useAuth();
   const { data, isLoading, isError, refetch, isFetching } = useCirclesHome();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
-  const toggleJoin = useAppStore((s) => s.toggleJoinCommunity);
+  const persistToggleJoin = usePersistedCommunityJoinToggle();
   const [search, setSearch] = useState('');
   const [searchGrouped, setSearchGrouped] = useState<{
     directory: Community[];
@@ -89,6 +91,13 @@ export default function CirclesScreen() {
     staleTime: 60_000,
   });
 
+  const { data: recentInvolved = [], isLoading: recentInvolvedLoading } = useQuery({
+    queryKey: ['circleThreads', 'recentInvolving', user?.id ?? ''],
+    queryFn: () => circleThreadsDb.listRecentInvolvingUser(user!.id, 5),
+    enabled: Boolean(user?.id),
+    staleTime: 45_000,
+  });
+
   const resetCirclesHome = useCallback(() => {
     Keyboard.dismiss();
     setSearch('');
@@ -114,8 +123,11 @@ export default function CirclesScreen() {
     if (joinedIds.size > 0) {
       await queryClient.invalidateQueries({ queryKey: ['communities', 'joinedDetail'] });
     }
+    if (user?.id) {
+      await queryClient.invalidateQueries({ queryKey: ['circleThreads', 'recentInvolving', user.id] });
+    }
     setRefreshing(false);
-  }, [refetch, queryClient, joinedIds.size]);
+  }, [refetch, queryClient, joinedIds.size, user?.id]);
 
   const onClearCircleSearchHistory = useCallback(() => {
     void clearRecentCircleSearches().then(() => setRecentCircleSearches([]));
@@ -125,7 +137,10 @@ export default function CirclesScreen() {
     useCallback(() => {
       void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
       void getRecentCircleSearches().then(setRecentCircleSearches);
-    }, [queryClient]),
+      if (user?.id) {
+        void queryClient.invalidateQueries({ queryKey: ['circleThreads', 'recentInvolving', user.id] });
+      }
+    }, [queryClient, user?.id]),
   );
 
   useEffect(() => {
@@ -243,7 +258,7 @@ export default function CirclesScreen() {
           discovery={discovery}
           activityHint={hint}
           onPress={() => openCommunity(c)}
-          onToggleJoin={() => toggleJoin(c.id)}
+          onToggleJoin={() => void persistToggleJoin(c.id)}
         />
       );
     });
@@ -434,25 +449,49 @@ export default function CirclesScreen() {
                 renderCompactList(joinedCommunities, '', false, activityByCircleId)
               )}
             </View>
-            {trending.length > 0 ? (
+            {user?.id ? (
               <View style={styles.section}>
-                <Text style={styles.sectionKicker}>Trending now</Text>
-                <Text style={styles.sectionLede}>Still catching heat across PulseVerse.</Text>
-                <View style={styles.trendStack}>
-                  {trending.map((t, i) => (
-                    <TrendingTopicCard
-                      key={t.id}
-                      topic={t}
-                      rank={(i + 1) as 1 | 2 | 3}
-                      accent={colors.primary.teal}
-                      onPress={() => {
-                        if (t.postId) router.push(hrefPost(t.postId, t.circleSlug));
-                        else if (t.threadId) router.push(hrefCommunityThread(t.circleSlug, t.threadId));
-                        else router.push(hrefCommunity(t.circleSlug));
-                      }}
-                    />
-                  ))}
-                </View>
+                <Text style={styles.sectionKicker}>Your conversations</Text>
+                <Text style={styles.sectionLede}>
+                  Discussions you joined and circle wall posts you commented on — open returns you to that spot.
+                </Text>
+                {recentInvolvedLoading && recentInvolved.length === 0 ? (
+                  <View style={styles.emptyInline}>
+                    <Text style={styles.emptyText}>Loading your conversations…</Text>
+                  </View>
+                ) : recentInvolved.length === 0 ? (
+                  <View style={styles.emptyInline}>
+                    <Ionicons name="chatbubbles-outline" size={40} color={colors.dark.textMuted} />
+                    <Text style={styles.emptyText}>
+                      No circle discussions yet. Join a room above and join a thread to see it here.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.trendStack}>
+                    {recentInvolved.map((item) => {
+                      const slug =
+                        item.kind === 'thread' ? item.thread.circleSlug : item.communitySlug;
+                      const accent = getCircleAccent(slug).color;
+                      const key = item.kind === 'thread' ? `t-${item.thread.id}` : `p-${item.postId}`;
+                      return (
+                        <RecentCircleConversationCard
+                          key={key}
+                          item={item}
+                          accent={accent}
+                          onPress={() => {
+                            if (item.kind === 'thread') {
+                              if (item.thread.circleSlug) {
+                                router.push(hrefCommunityThread(item.thread.circleSlug, item.thread.id));
+                              }
+                            } else {
+                              router.push(hrefCommunityWallPost(item.communitySlug, item.postId));
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             ) : null}
           </>

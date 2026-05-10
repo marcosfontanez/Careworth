@@ -43,6 +43,7 @@ import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import type { ProfileUpdateComment } from '@/types';
+import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { MY_PULSE_VISUALS } from '@/components/mypage/cards/MyPulseCardShell';
 import { CirclesOrbitIcon } from '@/components/mypage/cards/icons/CirclesOrbitIcon';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
@@ -117,6 +118,19 @@ export default function MyPulseDetailScreen() {
 
   const isOwner = !!viewerId && !!update && update.userId === viewerId;
   const displayType = update ? getMyPulseDisplayType(update) : 'thought';
+
+  const giftContext = useMemo(() => {
+    if (!update || !author?.id) return null;
+    if (update.linkedPostId) return { type: 'post' as const, id: update.linkedPostId };
+    return { type: 'profile' as const, id: author.id };
+  }, [update, author?.id]);
+
+  const showCreatorGift =
+    !!authUser?.id &&
+    !!author?.id &&
+    author.id !== authUser.id &&
+    !isOwner &&
+    !!giftContext;
   const visuals = MY_PULSE_VISUALS[displayType];
 
   // ─── Like toggle ───────────────────────────────────────────────────
@@ -209,6 +223,7 @@ export default function MyPulseDetailScreen() {
    * leaking a prior draft into the next session.
    */
   const [editOpen, setEditOpen] = useState(false);
+  const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
 
   /**
    * Owner-only body update. We patch the single-pulse + owner feed
@@ -452,6 +467,7 @@ export default function MyPulseDetailScreen() {
         <Header
           onBack={() => router.back()}
           onShare={onShare}
+          onCreatorGift={showCreatorGift ? () => setCreatorGiftOpen(true) : undefined}
           onDelete={isOwner ? confirmDelete : undefined}
           onEdit={canEditBody ? () => setEditOpen(true) : undefined}
           onTogglePin={isOwner ? onTogglePinDetail : undefined}
@@ -748,6 +764,7 @@ function Header({
   onTogglePin,
   isPinned,
   pinBusy,
+  onCreatorGift,
 }: {
   onBack: () => void;
   onShare?: () => void;
@@ -764,6 +781,8 @@ function Header({
   onTogglePin?: () => void;
   isPinned?: boolean;
   pinBusy?: boolean;
+  /** Viewer: open Sparks gift tray for the pulse author. */
+  onCreatorGift?: () => void;
 }) {
   const openOwnerMenu = useCallback(() => {
     const buttons: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [];
@@ -790,6 +809,16 @@ function Header({
       </TouchableOpacity>
       <Text style={styles.topTitle}>Pulse post</Text>
       <View style={styles.headerRight}>
+        {onCreatorGift ? (
+          <TouchableOpacity
+            onPress={onCreatorGift}
+            hitSlop={10}
+            style={styles.iconBtn}
+            accessibilityLabel="Send creator gift with Sparks"
+          >
+            <Ionicons name="gift-outline" size={20} color={colors.primary.teal} />
+          </TouchableOpacity>
+        ) : null}
         {onShare ? (
           <TouchableOpacity onPress={onShare} hitSlop={10} style={styles.iconBtn}>
             <Ionicons name="share-outline" size={20} color={colors.dark.text} />

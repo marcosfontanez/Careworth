@@ -114,7 +114,7 @@ function PicsStrip({ urls }: { urls: string[] }) {
         <ExpoImage
           source={{ uri: urls[0] }}
           style={styles.fill}
-          contentFit="cover"
+          contentFit="contain"
           {...pulseImageFeedHeroProps}
         />
         <LinearGradient
@@ -147,7 +147,7 @@ function PicsStrip({ urls }: { urls: string[] }) {
           <ExpoImage
             source={{ uri: url }}
             style={styles.fill}
-            contentFit="cover"
+            contentFit="contain"
             {...pulseImageListThumbProps}
           />
           {/* subtle inner border so each tile feels distinct */}
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   heroSingle: {
     width: '100%',
     aspectRatio: 4 / 3,
-    maxHeight: 220,
+    maxHeight: 360,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
     backgroundColor: colors.dark.cardAlt,

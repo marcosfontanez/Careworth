@@ -15,7 +15,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, borderRadius, spacing } from '@/theme';
+import { colors, borderRadius, spacing, shadows } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile } from '@/types';
 import { isLikelyDirectAudioUrl } from '@/lib/profileAudio';
@@ -431,18 +431,11 @@ export function FeaturedSoundCard({
       style={[
         styles.card,
         { borderColor: 'rgba(255,255,255,0.09)' },
-        Platform.OS === 'ios'
-          ? {
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.22,
-              shadowRadius: 20,
-            }
-          : { elevation: 6 },
+        shadows.card,
       ]}
     >
       <LinearGradient
-        colors={['rgba(20,184,166,0.10)', 'rgba(15,28,48,0.96)', colors.dark.card]}
+        colors={['rgba(20,184,166,0.06)', 'rgba(15,28,48,0.96)', colors.dark.card]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.inner}
@@ -458,8 +451,8 @@ export function FeaturedSoundCard({
               style={[
                 styles.loopBtn,
                 looping && {
-                  backgroundColor: accent + '22',
-                  borderColor: accent + '88',
+                  backgroundColor: accent + '18',
+                  borderColor: accent + '55',
                 },
               ]}
               onPress={() => setLooping((v) => !v)}
@@ -495,7 +488,7 @@ export function FeaturedSoundCard({
             <View
               style={[
                 styles.artworkHalo,
-                { backgroundColor: accent + '22', shadowColor: accent },
+                { backgroundColor: accent + '16', shadowColor: accent },
               ]}
             />
             <View style={styles.artwork}>
@@ -522,7 +515,7 @@ export function FeaturedSoundCard({
               )}
               {/* Subtle sheen overlay for premium feel */}
               <LinearGradient
-                colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0)']}
+                colors={['rgba(255,255,255,0.11)', 'rgba(255,255,255,0)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.artSheen}
@@ -681,7 +674,7 @@ function Waveform({
                       ios: {
                         shadowColor: accent,
                         shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.55,
+                        shadowOpacity: 0.28,
                         shadowRadius: 3,
                       },
                       android: { elevation: 0 },
@@ -699,20 +692,20 @@ function Waveform({
 const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.lg,
-    borderRadius: borderRadius['3xl'],
+    borderRadius: borderRadius.card,
     borderWidth: 1,
     overflow: 'hidden',
   },
   inner: {
-    paddingHorizontal: 14,
-    paddingTop: 11,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
   headRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   kickerChip: {
     flexDirection: 'row',
@@ -753,7 +746,7 @@ const styles = StyleSheet.create({
   mainRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   artworkWrap: {
     position: 'relative',
@@ -767,14 +760,7 @@ const styles = StyleSheet.create({
     right: -1,
     bottom: -1,
     borderRadius: borderRadius.xl,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.45,
-        shadowRadius: 18,
-      },
-      android: { elevation: 8 },
-    }),
+    ...shadows.card,
   },
   artwork: {
     width: 74,
@@ -814,7 +800,7 @@ const styles = StyleSheet.create({
   },
   placeholderText: { opacity: 0.85 },
   artist: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 12,
     fontWeight: '600',
     color: colors.dark.textSecondary,
@@ -840,14 +826,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.45,
-        shadowRadius: 10,
-      },
-      android: { elevation: 6 },
-    }),
+    ...shadows.ctaSoft,
   },
   playBtnInner: {
     width: '100%',

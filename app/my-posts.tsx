@@ -201,7 +201,7 @@ export default function MyPostsScreen() {
             ]}
             activeKey={section}
             onSelect={(k) => setSection(k as Section)}
-            light
+            appearance="onLight"
           />
         </View>
       ) : null}
