@@ -13,6 +13,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  ShoppingBag,
   Sparkles,
   TrendingUp,
   Users,
@@ -39,6 +40,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { href: "/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/admin/platform", label: "Platform", icon: Layers },
+      { href: "/admin/shop-catalog", label: "Shop catalog", icon: ShoppingBag },
       { href: "/admin/avatar-borders", label: "Avatar borders", icon: Frame },
     ],
   },

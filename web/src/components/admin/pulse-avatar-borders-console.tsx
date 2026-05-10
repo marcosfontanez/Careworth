@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PulseAvatarFrameThumb } from "@/components/admin/pulse-avatar-frame-thumb";
 import type { AdminPulseAvatarFrameRow } from "@/lib/admin/pulse-avatar-frames-queries";
 import { cn } from "@/lib/utils";
 
@@ -100,10 +101,19 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
               ))}
             </select>
             {selected ? (
-              <p className="max-w-xl text-xs text-muted-foreground">
-                {selected.subtitle || "—"}
-                {selected.ring_caption ? ` · Caption: ${selected.ring_caption}` : ""}
-              </p>
+              <div className="flex max-w-xl items-start gap-3">
+                <PulseAvatarFrameThumb
+                  slug={selected.slug}
+                  prizeTier={selected.prize_tier}
+                  ringColor={selected.ring_color}
+                  label={selected.label}
+                  sizePx={56}
+                />
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  {selected.subtitle || "—"}
+                  {selected.ring_caption ? ` · Caption: ${selected.ring_caption}` : ""}
+                </p>
+              </div>
             ) : null}
           </div>
 
@@ -179,7 +189,12 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
             <TableBody>
               {frames.map((f) => (
                 <TableRow key={f.id} className="border-border">
-                  <TableCell className="font-medium">{f.label}</TableCell>
+                  <TableCell className="font-medium">
+                  <div className="flex items-center gap-3">
+                    <PulseAvatarFrameThumb slug={f.slug} prizeTier={f.prize_tier} ringColor={f.ring_color} label={f.label} />
+                    <span>{f.label}</span>
+                  </div>
+                </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{f.slug}</TableCell>
                   <TableCell>{f.prize_tier}</TableCell>
                   <TableCell className="text-muted-foreground">{formatMonth(f.month_start)}</TableCell>
