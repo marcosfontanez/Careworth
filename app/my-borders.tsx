@@ -1,21 +1,14 @@
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { MyBordersScreen } from '@/components/borders/inventory/MyBordersScreen';
 
 /**
- * Legacy route: deep links and older screens may still open `/my-borders`.
- * Borders UI now lives at the bottom of Customize My Pulse (Look tab).
+ * Dedicated full-screen Border Vault.
+ *
+ * The Customize → Look surface ships a simplified `BordersCollectionStrip`
+ * (3 sort modes + horizontal carousel) so creators can equip in two taps
+ * without leaving the customize flow. This route is the rich deep-dive:
+ * the full vault with collection filters, rarity/source/availability
+ * facets, sort options, and the "Live on your pulse" hero.
  */
 export default function MyBordersRoute() {
-  const params = useLocalSearchParams<{ collectionId?: string }>();
-  const raw = params.collectionId;
-  const collectionId =
-    typeof raw === 'string'
-      ? raw.trim()
-      : Array.isArray(raw) && raw[0]
-        ? String(raw[0]).trim()
-        : '';
-
-  const qs = new URLSearchParams({ focus: 'borders' });
-  if (collectionId) qs.set('collectionId', collectionId);
-
-  return <Redirect href={`/my-pulse-appearance?${qs.toString()}` as any} />;
+  return <MyBordersScreen />;
 }
