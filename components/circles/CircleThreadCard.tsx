@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
@@ -92,22 +92,22 @@ export function CircleThreadCard({
               <Text style={styles.anonGlyph}>?</Text>
             </View>
           ) : onProfile ? (
-            <TouchableOpacity onPress={onProfile} activeOpacity={0.85} accessibilityLabel="Open profile">
-              <AvatarDisplay
-                size={34}
-                avatarUrl={author.avatarUrl}
-                prioritizeRemoteAvatar
-                ringColor={colors.dark.border}
-                pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
-              />
-            </TouchableOpacity>
-          ) : (
-            <AvatarDisplay
+            <BorderedAvatar
               size={34}
               avatarUrl={author.avatarUrl}
-              prioritizeRemoteAvatar
               ringColor={colors.dark.border}
-              pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+              pulseAvatarFrame={author.pulseAvatarFrame}
+              ownerDisplayName={displayName}
+              onPress={onProfile}
+            />
+          ) : (
+            <BorderedAvatar
+              size={34}
+              avatarUrl={author.avatarUrl}
+              ringColor={colors.dark.border}
+              pulseAvatarFrame={author.pulseAvatarFrame}
+              ownerDisplayName={displayName}
+              disableLongPressInfo={isAnonymousRoom}
             />
           )}
           <View style={styles.topMid}>

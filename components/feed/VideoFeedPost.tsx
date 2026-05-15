@@ -26,7 +26,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
 import { trySignedUrlFromPostMediaPublicUrl, avatarThumb } from '@/lib/storage';
 import { pickAbCoverUrl } from '@/lib/coverAbPoster';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { usePostCoverAbImpression } from '@/hooks/usePostCoverAbImpression';
 import { usePost } from '@/hooks/useQueries';
@@ -349,15 +349,16 @@ function VideoFeedPostInner({
 
         {!isAnon && (
           <View style={styles.identityRow}>
-            <TouchableOpacity onPress={onProfile} activeOpacity={0.85} style={styles.avatarTouch}>
-              <AvatarDisplay
+            <View style={styles.avatarTouch}>
+              <BorderedAvatar
                 size={32}
                 avatarUrl={avatarThumb(post.creator.avatarUrl, 36)}
-                prioritizeRemoteAvatar
                 ringColor={colors.onVideo.borderAvatar}
-                pulseFrame={pulseFrameFromUser(post.creator.pulseAvatarFrame)}
+                pulseAvatarFrame={post.creator.pulseAvatarFrame}
+                ownerDisplayName={post.creator.displayName}
+                onPress={onProfile}
               />
-            </TouchableOpacity>
+            </View>
             <View style={styles.identityText}>
               <View style={styles.nameLine}>
                 <TouchableOpacity onPress={onProfile} activeOpacity={0.85}>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius } from '@/theme';
 import { timeAgo } from '@/utils/format';
@@ -46,14 +46,14 @@ export function NotificationRow({ notification, onPress, onAvatarPress }: Props)
 
   const avatarBlock = (
     <View style={styles.avatarWrap}>
-      <AvatarDisplay
+      <BorderedAvatar
         size={46}
         avatarUrl={avatarThumb(notification.actor.avatarUrl, 48)}
-        prioritizeRemoteAvatar
         ringColor={colors.dark.border}
-        pulseFrame={pulseFrameFromUser(notification.actor.pulseAvatarFrame)}
+        pulseAvatarFrame={notification.actor.pulseAvatarFrame}
+        ownerDisplayName={notification.actor.displayName}
       />
-      <View style={[styles.typeBadge, { backgroundColor: cfg.color }]}>
+      <View style={[styles.typeBadge, { backgroundColor: cfg.color }]} pointerEvents="none">
         <Ionicons name={cfg.name as any} size={10} color={colors.dark.text} />
       </View>
     </View>

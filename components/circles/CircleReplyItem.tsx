@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { timeAgo } from '@/utils/format';
@@ -59,27 +59,22 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
           <Ionicons name="eye-off-outline" size={18} color={colors.dark.textMuted} />
         </View>
       ) : author.id ? (
-        <TouchableOpacity
-          onPress={() => router.push(`/profile/${author.id}` as never)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Open profile"
-        >
-          <AvatarDisplay
-            size={32}
-            avatarUrl={author.avatarUrl}
-            prioritizeRemoteAvatar
-            ringColor={colors.dark.border}
-            pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
-          />
-        </TouchableOpacity>
-      ) : (
-        <AvatarDisplay
+        <BorderedAvatar
           size={32}
           avatarUrl={author.avatarUrl}
-          prioritizeRemoteAvatar
           ringColor={colors.dark.border}
-          pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+          pulseAvatarFrame={author.pulseAvatarFrame}
+          ownerDisplayName={displayName}
+          onPress={() => router.push(`/profile/${author.id}` as never)}
+        />
+      ) : (
+        <BorderedAvatar
+          size={32}
+          avatarUrl={author.avatarUrl}
+          ringColor={colors.dark.border}
+          pulseAvatarFrame={author.pulseAvatarFrame}
+          ownerDisplayName={displayName}
+          disableLongPressInfo={isAnonRoom}
         />
       )}
       <View style={styles.main}>

@@ -11,7 +11,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import { anonymousDisplayName } from '@/lib/anonymousCircle';
@@ -124,27 +124,22 @@ export const CirclePostCard = React.memo(function CirclePostCard({
                 <Text style={styles.anonGlyph}>?</Text>
               </View>
             ) : onProfile ? (
-              <Pressable
-                onPress={() => onProfile()}
-                hitSlop={4}
-                accessibilityRole="button"
-                accessibilityLabel="Open profile"
-              >
-                <AvatarDisplay
-                  size={32}
-                  avatarUrl={post.creator?.avatarUrl}
-                  prioritizeRemoteAvatar
-                  ringColor={colors.dark.border}
-                  pulseFrame={pulseFrameFromUser(post.creator?.pulseAvatarFrame)}
-                />
-              </Pressable>
-            ) : (
-              <AvatarDisplay
+              <BorderedAvatar
                 size={32}
                 avatarUrl={post.creator?.avatarUrl}
-                prioritizeRemoteAvatar
                 ringColor={colors.dark.border}
-                pulseFrame={pulseFrameFromUser(post.creator?.pulseAvatarFrame)}
+                pulseAvatarFrame={post.creator?.pulseAvatarFrame}
+                ownerDisplayName={displayName}
+                onPress={() => onProfile()}
+              />
+            ) : (
+              <BorderedAvatar
+                size={32}
+                avatarUrl={post.creator?.avatarUrl}
+                ringColor={colors.dark.border}
+                pulseAvatarFrame={post.creator?.pulseAvatarFrame}
+                ownerDisplayName={displayName}
+                disableLongPressInfo={isAnonymousRoom}
               />
             )}
             <View style={{ flex: 1, minWidth: 0 }}>
