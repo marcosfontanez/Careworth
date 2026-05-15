@@ -38,7 +38,7 @@
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "app.pulseverse.app",
+      "package": "com.pulseverse.app",
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",

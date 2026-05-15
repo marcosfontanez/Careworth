@@ -2,7 +2,7 @@
  * Google Play in-app product validation (purchases.products.get).
  * Secret: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON — full JSON string of a service account with
  *         "Google Play Android Developer" / Android Publisher API access.
- * Secret: GOOGLE_PLAY_PACKAGE_NAME — Android applicationId (e.g. app.pulseverse.app)
+ * Secret: GOOGLE_PLAY_PACKAGE_NAME — Android applicationId (e.g. com.pulseverse.app)
  */
 
 import { SignJWT, importPKCS8 } from "npm:jose@5";

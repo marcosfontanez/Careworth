@@ -5,7 +5,7 @@ const HEADERS = {
   "Cache-Control": "public, max-age=3600",
 } as const;
 
-const PACKAGE = "app.pulseverse.app";
+const PACKAGE = "com.pulseverse.app";
 
 /**
  * Android Digital Asset Links — must return 200 + JSON array when fingerprints are configured,

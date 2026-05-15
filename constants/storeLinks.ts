@@ -21,6 +21,6 @@ export function getStoreUrlForPlatform(): string {
   }
   return (
     e.storeAndroidUrl?.trim() ||
-    'https://play.google.com/store/apps/details?id=app.pulseverse.app'
+    'https://play.google.com/store/apps/details?id=com.pulseverse.app'
   );
 }
