@@ -7,35 +7,28 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "ios": {
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://sakrlbmzmfvdywqgyqxh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNha3JsYm16bWZ2ZHl3cWd5cXhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTA3OTksImV4cCI6MjA5MjA2Njc5OX0.8a18YImHtTQw_DPK8jPvKvJCU7fJCB9-OGZ-1kBnH2c",
-        "EXPO_PUBLIC_BETA_TESTER_BORDER": "1",
-        "EXPO_PUBLIC_APPLE_MUSIC_STOREFRONT": "us",
-        "EXPO_PUBLIC_VIDEO_EXPORT_URL": "https://pulseverse-export.fly.dev",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "development-simulator": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "ios": {
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://sakrlbmzmfvdywqgyqxh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNha3JsYm16bWZ2ZHl3cWd5cXhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTA3OTksImV4cCI6MjA5MjA2Njc5OX0.8a18YImHtTQw_DPK8jPvKvJCU7fJCB9-OGZ-1kBnH2c",
-        "EXPO_PUBLIC_BETA_TESTER_BORDER": "1",
-        "EXPO_PUBLIC_APPLE_MUSIC_STOREFRONT": "us",
-        "EXPO_PUBLIC_VIDEO_EXPORT_URL": "https://pulseverse-export.fly.dev",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "ios": {
         "simulator": false
       },
@@ -43,15 +36,11 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://sakrlbmzmfvdywqgyqxh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNha3JsYm16bWZ2ZHl3cWd5cXhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTA3OTksImV4cCI6MjA5MjA2Njc5OX0.8a18YImHtTQw_DPK8jPvKvJCU7fJCB9-OGZ-1kBnH2c",
-        "EXPO_PUBLIC_BETA_TESTER_BORDER": "1",
-        "EXPO_PUBLIC_APPLE_MUSIC_STOREFRONT": "us",
-        "EXPO_PUBLIC_VIDEO_EXPORT_URL": "https://pulseverse-export.fly.dev",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
+      "channel": "production",
       "node": "20.19.4",
       "autoIncrement": true,
       "ios": {
@@ -61,11 +50,6 @@
         "image": "latest"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://sakrlbmzmfvdywqgyqxh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNha3JsYm16bWZ2ZHl3cWd5cXhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTA3OTksImV4cCI6MjA5MjA2Njc5OX0.8a18YImHtTQw_DPK8jPvKvJCU7fJCB9-OGZ-1kBnH2c",
-        "EXPO_PUBLIC_BETA_TESTER_BORDER": "1",
-        "EXPO_PUBLIC_APPLE_MUSIC_STOREFRONT": "us",
-        "EXPO_PUBLIC_VIDEO_EXPORT_URL": "https://pulseverse-export.fly.dev",
         "NODE_OPTIONS": "--max-old-space-size=8192",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }

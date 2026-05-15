@@ -1,14 +1,17 @@
-const appJson = require('./app.json');
+const { NON_STANDARD_SYMBOL } = require('@expo/config/build/environment');
 
 /**
+ * Dynamic Expo config — `config` is the merged `expo` object from app.json (see @expo/config getContextConfig).
+ * Mark merged static config usage so expo-doctor does not flag app.json as unused.
+ *
  * Sentry Expo plugin reads organization + project at prebuild.
  * Set in EAS: Project → Environment variables → SENTRY_ORG, SENTRY_PROJECT
- * (or export locally before `npx expo prebuild`).
  */
 function patchPlugins(plugins) {
   const org = process.env.SENTRY_ORG ?? '';
   const project = process.env.SENTRY_PROJECT ?? '';
-  return plugins.map((entry) => {
+  const list = Array.isArray(plugins) ? plugins : [];
+  return list.map((entry) => {
     if (Array.isArray(entry) && entry[0] === '@sentry/react-native') {
       const prev = entry[1] && typeof entry[1] === 'object' ? entry[1] : {};
       return [
@@ -24,15 +27,12 @@ function patchPlugins(plugins) {
   });
 }
 
-module.exports = {
+module.exports = ({ config }) => ({
+  [NON_STANDARD_SYMBOL]: true,
   expo: {
-    ...appJson.expo,
-    plugins: patchPlugins(appJson.expo.plugins),
-    /**
-     * Bare workflow: `runtimeVersion` must be a string. Policy objects like
-     * `{ policy: "appVersion" }` are managed-workflow only.
-     * Keep aligned with native-compatible releases (bump when you ship a new binary).
-     */
-    runtimeVersion: String(appJson.expo.version),
+    ...config,
+    plugins: patchPlugins(config.plugins ?? []),
+    /** Bare workflow: string required; `{ policy: "appVersion" }` is managed-only. */
+    runtimeVersion: String(config.version),
   },
-};
+});
