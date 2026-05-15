@@ -6,19 +6,29 @@ import type {
   DiamondWalletRow,
   PurchaseReceiptRow,
 } from '@/lib/shop/types';
+import type { BorderCollectionType } from '@/lib/shop/borderCatalogTaxonomy';
 
+/**
+ * Lite border-collection projection used by client surfaces (vault filter,
+ * shop hero rail, detail modal). Includes `collection_type` so the new
+ * Border System (`lib/borders/category.ts`) can derive a stable category
+ * without re-fetching the full row.
+ */
 export type BorderCollectionSummary = {
   id: string;
   slug: string;
   name: string;
   description: string | null;
+  collection_type: BorderCollectionType | null;
+  release_at: string | null;
+  expires_at: string | null;
 };
 
 export const shopQueriesService = {
   async getBorderCollections(): Promise<BorderCollectionSummary[]> {
     const { data, error } = await supabase
       .from('border_collections' as any)
-      .select('id, slug, name, description')
+      .select('id, slug, name, description, collection_type, release_at, expires_at')
       .order('name', { ascending: true });
     if (error) throw error;
     return (data ?? []) as unknown as BorderCollectionSummary[];
