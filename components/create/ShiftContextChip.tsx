@@ -14,7 +14,7 @@ interface Props {
   autoSuggest?: boolean;
 }
 
-const ENTRIES: Array<{ id: Exclude<ShiftContext, ''>; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+const ENTRIES: { id: Exclude<ShiftContext, ''>; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'day',     label: 'Day',     icon: 'sunny-outline' },
   { id: 'night',   label: 'Night',   icon: 'moon-outline' },
   { id: 'weekend', label: 'Weekend', icon: 'calendar-outline' },

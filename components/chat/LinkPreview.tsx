@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { colors } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 
 interface LinkMeta {
   url: string;
@@ -63,7 +64,7 @@ export function LinkPreview({ url }: { url: string }) {
   return (
     <TouchableOpacity
       style={styles.container}
-      onPress={() => Linking.openURL(url)}
+      onPress={() => openWebUrlSafely(url)}
       activeOpacity={0.7}
     >
       {meta.image && (

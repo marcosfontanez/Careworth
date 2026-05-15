@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Platform,
   Pressable,
-  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -17,11 +16,13 @@ import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import { anonymousDisplayName } from '@/lib/anonymousCircle';
 import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
-import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import type { CircleAccent } from '@/lib/circleAccents';
 import type { Post, PostReactionKind } from '@/types';
-import { pulseImageListThumbProps } from '@/lib/pulseImage';
-import { POST_REACTION_EMOJI, POST_REACTION_ORDER, emptyPostReactionCounts } from '@/lib/postReactions';
+import { pulseImageCircleWallProps } from '@/lib/pulseImage';
+import { emptyPostReactionCounts } from '@/lib/postReactions';
+import { ReactionChainWithPicker } from '@/components/reactions/ReactionChainWithPicker';
 
 type Props = {
   post: Post;
@@ -45,7 +46,7 @@ type Props = {
 
 /**
  * Circle wall card: header, body, media, then a horizontal reaction strip
- * (heart / laugh / wow / sad / angry / clap) with per-type counts — one pick
+ * (heart / laugh / cry / anger / surprise) with per-type counts — one pick
  * per viewer, same row as `post_likes` + migration 115 counters.
  */
 export const CirclePostCard = React.memo(function CirclePostCard({
@@ -84,11 +85,12 @@ export const CirclePostCard = React.memo(function CirclePostCard({
     return Math.min((contentW * photoIntrinsic.h) / photoIntrinsic.w, maxImagePreviewH);
   }, [showFullPhoto, photoLayoutW, photoIntrinsic, winW, maxImagePreviewH]);
 
+  const mediaUri = post.thumbnailUrl ?? post.mediaUrl ?? '';
+  const imageRecyclingKey = `${post.id}:${mediaUri}`;
+
   const displayName = isAnonymousRoom
     ? anonymousDisplayName(post.creatorId, post.id)
     : post.creator?.displayName ?? 'Member';
-  const role = post.creator?.role;
-  const specialty = post.creator?.specialty;
   const caption = post.caption ?? '';
   const isTitled = caption.startsWith('**');
   const titleLine = isTitled ? caption.split('\n')[0].replace(/\*\*/g, '').trim() : '';
@@ -153,28 +155,15 @@ export const CirclePostCard = React.memo(function CirclePostCard({
                 {!isAnonymousRoom && post.creator?.isVerified && (
                   <Ionicons name="checkmark-circle" size={13} color={colors.primary.teal} />
                 )}
-                {role && (
-                  <View
-                    style={[
-                      styles.rolePill,
-                      { backgroundColor: `${accent.color}20`, borderColor: `${accent.color}55` },
-                    ]}
-                  >
-                    <Text style={[styles.rolePillText, { color: accent.color }]}>{role}</Text>
-                  </View>
-                )}
-                {!isAnonymousRoom ? (
-                  <PulseTierBadge
-                    tier={post.creator?.pulseTier ?? null}
-                    size="xs"
-                    hideMurmur
-                    showIcon={false}
-                  />
-                ) : null}
               </View>
+              {!isAnonymousRoom && post.creator ? (
+                <ProfileNeonPills
+                  tags={buildNeonPillTags(post.creator)}
+                  style={styles.neonPillsInCard}
+                />
+              ) : null}
               <Text style={styles.metaLine} numberOfLines={1}>
                 {timeAgo(post.createdAt)}
-                {specialty ? ` · ${specialty}` : ''}
               </Text>
             </View>
           </View>
@@ -214,11 +203,12 @@ export const CirclePostCard = React.memo(function CirclePostCard({
           isVideoPost ? (
             <View style={styles.mediaWrapVideo}>
               <Image
-                source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
+                recyclingKey={imageRecyclingKey}
+                source={{ uri: mediaUri }}
                 style={styles.media}
                 contentFit="cover"
                 transition={120}
-                {...pulseImageListThumbProps}
+                {...pulseImageCircleWallProps}
               />
               <View style={styles.playOverlay}>
                 <Ionicons name="play-circle" size={38} color="#FFFFFFE6" />
@@ -234,11 +224,12 @@ export const CirclePostCard = React.memo(function CirclePostCard({
               }
             >
               <Image
-                source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
+                recyclingKey={imageRecyclingKey}
+                source={{ uri: mediaUri }}
                 style={styles.mediaPhotoContain}
                 contentFit="contain"
                 transition={120}
-                {...pulseImageListThumbProps}
+                {...pulseImageCircleWallProps}
                 onLoad={
                   showFullPhoto
                     ? (e) => {
@@ -268,32 +259,12 @@ export const CirclePostCard = React.memo(function CirclePostCard({
       </Pressable>
 
       <View style={styles.reactionsSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.reactionsScroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          {POST_REACTION_ORDER.map((kind) => {
-            const n = counts[kind] ?? 0;
-            const active = viewerReaction === kind;
-            return (
-              <TouchableOpacity
-                key={kind}
-                onPress={() => onReactionPress(kind)}
-                activeOpacity={0.75}
-                style={[styles.reactionChip, active && { borderColor: accent.color, backgroundColor: `${accent.color}22` }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${POST_REACTION_EMOJI[kind]} reaction${n > 0 ? `, ${n}` : ''}`}
-              >
-                <Text style={styles.reactionEmoji}>{POST_REACTION_EMOJI[kind]}</Text>
-                {n > 0 ? (
-                  <Text style={[styles.reactionCount, active && { color: accent.color }]}>{formatCount(n)}</Text>
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <ReactionChainWithPicker
+          counts={counts}
+          viewerReaction={viewerReaction}
+          accentColor={accent.color}
+          onPick={onReactionPress}
+        />
       </View>
 
       <View style={styles.actions}>
@@ -408,13 +379,7 @@ const styles = StyleSheet.create({
   anonGlyph: { fontSize: 15, fontWeight: '900', color: colors.dark.textSecondary },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   name: { fontSize: 13.5, fontWeight: '800', color: colors.dark.text, letterSpacing: -0.2 },
-  rolePill: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  rolePillText: { fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 },
+  neonPillsInCard: { marginTop: 0, marginBottom: 2, alignSelf: 'flex-start' },
   metaLine: { fontSize: 11, color: colors.dark.textMuted, marginTop: 1 },
   moreBtn: { padding: 4 },
 
@@ -455,26 +420,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
   },
-  reactionsScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 2,
-    paddingRight: 4,
-  },
-  reactionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-    backgroundColor: colors.dark.cardAlt,
-  },
-  reactionEmoji: { fontSize: 16, lineHeight: 20 },
-  reactionCount: { fontSize: 12, fontWeight: '800', color: colors.dark.textMuted },
 
   actions: {
     flexDirection: 'row',

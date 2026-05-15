@@ -1,8 +1,11 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, roleColor } from '@/theme';
 import type { StreamMessage, StreamPinnedMessage, Role } from '@/types';
+import { getThreadListWindow } from '@/lib/feedVideoListWindow';
+
+const LIVE_CHAT_LIST_WINDOW = getThreadListWindow('liveChatBottom');
 
 /**
  * Live chat role chips previously shipped a parallel color map that
@@ -147,11 +150,11 @@ export function LiveChatList({
         ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
-        initialNumToRender={16}
-        maxToRenderPerBatch={12}
-        windowSize={11}
+        initialNumToRender={LIVE_CHAT_LIST_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={LIVE_CHAT_LIST_WINDOW.maxToRenderPerBatch}
+        windowSize={LIVE_CHAT_LIST_WINDOW.windowSize}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews={false}
         renderItem={({ item }) => (
           <ChatMessage
             message={item}

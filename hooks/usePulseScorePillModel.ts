@@ -29,7 +29,7 @@ export function usePulseScorePillModel(
     staleTime: 120_000,
     gcTime: 1000 * 60 * 20,
     retry: 1,
-    refetchOnMount: false,
+    refetchOnMount: true,
     placeholderData:
       Number.isFinite(initialScore) && initialScore != null
         ? {

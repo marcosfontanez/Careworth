@@ -136,7 +136,7 @@ npm run db:types:check
 
 - **RLS / admin**: Moderation and admin RPCs gate on `profiles.role_admin` (e.g. migrations `002_reporting_analytics.sql`, `066_moderation_staff_notes_and_admin_delete.sql`, `149_profiles_lock_privilege_columns.sql`). Re-review when adding tables or client-callable RPCs.
 - **Clients**: Only the **anon** Supabase key belongs in the mobile app; never ship `service_role` in client bundles.
-- **Economy**: Production IAP flows use Edge fulfillment (`pulse-shop-fulfillment`); mock live-coin purchases are **dev-only** (`services/live/coinPurchase.ts`).
+- **Economy**: Production IAP flows use Edge fulfillment (`pulse-shop-fulfillment`). Live gifts debit **Sparks** (Pulse Shop balance).
 
 ## Dependencies
 

@@ -1,6 +1,31 @@
 import { supabase } from '@/lib/supabase';
 import type { Json } from '@/lib/database.types';
 
+/**
+ * Worker contract (implemented in `scripts/creator-media-worker.mjs` when `ffmpeg` is on PATH).
+ * Storage paths are bucket-relative (e.g. `post-media`). Every path must start with `<user_id>/`.
+ */
+
+/** Concatenate clips in order → one MP4 (`kind: 'stitch'`). */
+export interface CreatorMediaStitchInput {
+  /** Defaults to `post-media` / `CREATOR_MEDIA_BUCKET`. */
+  bucket?: string;
+  clipPaths: string[];
+  /** Defaults to `<user_id>/exports/<job_id>.mp4`. */
+  outputPath?: string;
+}
+
+/**
+ * A-roll then cutaways concatenated back-to-back (`kind: 'broll'`).
+ * Not PiP — same as stitch with main first. Interleaved edits need a future schema/worker.
+ */
+export interface CreatorMediaBrollInput {
+  bucket?: string;
+  mainPath: string;
+  cutawayPaths: string[];
+  outputPath?: string;
+}
+
 export type CreatorMediaJobKind =
   | 'trim'
   | 'timelapse'
@@ -29,10 +54,12 @@ export interface CreatorMediaJobRow {
 /**
  * Enqueue work for an external ffmpeg / ML worker (poll `creator_media_jobs` where status=queued).
  *
- * `input` contract (examples):
+ * Fully specified in-repo:
+ * - **stitch** / **broll**: see {@link CreatorMediaStitchInput}, {@link CreatorMediaBrollInput} and `scripts/creator-media-worker.mjs`.
+ *
+ * Still roadmap in worker (rows fail with guidance until implemented):
  * - trim: { storagePathIn, trimStartSec, trimEndSec }
  * - timelapse: { imagePaths[], fps, crossfadeSec, audioPath? }
- * - stitch: { clipPaths[] }
  * - face_blur: { storagePathIn, regions[] | "auto" }
  */
 export async function enqueueCreatorMediaJob(input: {

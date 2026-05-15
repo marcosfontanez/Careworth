@@ -53,6 +53,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  */
 const PROFILE_HYDRATE_TIMEOUT_MS = 18_000;
 
+/**
+ * After the critical `profiles` row loads, bound how long we wait on the parallel
+ * badge / community / follows / saved bundle. A pathological `saved_posts` or `follows`
+ * scan should not erase the whole profile when the outer {@link PROFILE_HYDRATE_TIMEOUT_MS}
+ * race fires — we prefer a usable profile with empty side lists until the user refreshes.
+ */
+const PROFILE_SATELLITE_BUDGET_MS = 12_000;
+
 async function fetchProfileWithTimeout(
   fetchProfile: (userId: string) => Promise<UserProfile | null>,
   userId: string,
@@ -100,7 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const emailPasswordHydrateLockRef = useRef(false);
 
+  /** Set in {@link fetchProfile} when satellite queries hit {@link PROFILE_SATELLITE_BUDGET_MS}; hydrate retries lists once. */
+  const profileSatelliteMissRef = useRef(false);
+
   const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
+    profileSatelliteMissRef.current = false;
     /**
      * Cold-boot parallelization: the original code ran 5 sequential
      * round-trips (profile → badges → interests → communities → follows),
@@ -113,20 +125,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * typically the profile row itself), saving ~300–500ms on cold boot
      * on a typical mobile network.
      *
-     * We still await the bundle before returning the `UserProfile`
-     * because every consumer of `useAuth().profile` expects the
-     * communities + follows + badges to be present, so the auth shell
-     * can route correctly on first paint.
+     * Load `profiles` first, then parallel “satellite” reads with a bounded wait so one slow
+     * list query cannot force the outer {@link PROFILE_HYDRATE_TIMEOUT_MS} timeout.
      */
-    const [
-      profileRes,
-      badgeRes,
-      interestRes,
-      communityRes,
-      followsRes,
-      savedRes,
-    ] = await Promise.all([
-      supabase.from('profiles').select(PROFILE_SELECT_WITH_AVATAR_FRAME).eq('id', userId).single(),
+    const profileRes = await supabase
+      .from('profiles')
+      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
+      .eq('id', userId)
+      .single();
+
+    const { data, error } = profileRes;
+    if (error || !data) return null;
+
+    const satellitesPromise = Promise.all([
       supabase
         .from('user_badges')
         .select('badge_id, badges(id, name, description, icon, color, category)')
@@ -136,6 +147,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       supabase.from('follows').select('following_id').eq('follower_id', userId).limit(2000),
       supabase.from('saved_posts').select('post_id').eq('user_id', userId).limit(2000),
     ]);
+
+    const satelliteRace = await Promise.race([
+      satellitesPromise.then((r) => ({ ok: true as const, r })),
+      new Promise<{ ok: false }>((resolve) =>
+        setTimeout(() => resolve({ ok: false }), PROFILE_SATELLITE_BUDGET_MS),
+      ),
+    ]);
+
+    let badgeRes: any;
+    let interestRes: any;
+    let communityRes: any;
+    let followsRes: any;
+    let savedRes: any;
+
+    if (satelliteRace.ok) {
+      [badgeRes, interestRes, communityRes, followsRes, savedRes] = satelliteRace.r;
+    } else {
+      if (__DEV__) {
+        console.warn(
+          `[auth] Profile satellite queries exceeded ${PROFILE_SATELLITE_BUDGET_MS}ms — continuing with empty side lists (badges, communities, follows, saved). Open Profile or retry login if lists look wrong.`,
+        );
+      }
+      profileSatelliteMissRef.current = true;
+      badgeRes = { data: null, error: null } as any;
+      interestRes = { data: null, error: null } as any;
+      communityRes = { data: null, error: { message: 'satellite_deadline' } as any } as any;
+      followsRes = { data: null, error: null } as any;
+      savedRes = { data: null, error: null } as any;
+      useAppStore.getState().setJoinedCommunityIdsFromServer([]);
+      useAppStore.getState().setFollowedCreatorIdsFromServer([]);
+      useAppStore.getState().setSavedPostIdsFromServer([]);
+    }
 
     const badgeRows = badgeRes.data;
     const interestRows = interestRes.data;
@@ -147,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       useAppStore.getState().setJoinedCommunityIdsFromServer(
         (communityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
       );
-    } else if (__DEV__) {
+    } else if (__DEV__ && (communityRes.error as any)?.message !== 'satellite_deadline') {
       console.warn('[auth] community_members hydrate failed', communityRes.error.message);
     }
 
@@ -160,9 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useAppStore.getState().setSavedPostIdsFromServer(
       (savedRows ?? []).map((r: { post_id: string }) => String(r.post_id)),
     );
-
-    const { data, error } = profileRes;
-    if (error || !data) return null;
 
     const row = data as Record<string, unknown> & {
       id: string;
@@ -304,6 +344,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error('[auth] hydrateAuthenticatedSession profile bundle', e);
       }
+      if (!profile) {
+        profileSatelliteMissRef.current = false;
+      }
 
       setState((prev) => {
         if (!prev.session?.user || prev.session.user.id !== userId) {
@@ -319,6 +362,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           betaGiftCheckNonce: bumpBetaNonce ? prev.betaGiftCheckNonce + 1 : prev.betaGiftCheckNonce,
         };
       });
+
+      if (profile && profileSatelliteMissRef.current) {
+        profileSatelliteMissRef.current = false;
+        setTimeout(() => {
+          void (async () => {
+            try {
+              const p = await fetchProfileWithTimeout(fetchProfile, userId);
+              if (!p) return;
+              setState((prev) => {
+                if (!prev.session?.user || prev.session.user.id !== userId) return prev;
+                return { ...prev, profile: p };
+              });
+            } catch {
+              /* non-fatal */
+            }
+          })();
+        }, 750);
+      }
 
       return { error: null };
     },

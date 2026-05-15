@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import { HubTileImage, RecentMediaThumb } from '@/components/mypage/RecentMediaT
 import { profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import type { Post, ProfileUpdate } from '@/types';
 import { getMyPulseDisplayType, resolvePicsUrls } from '@/utils/myPulseDisplayType';
+import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 
 /** Same physical size as `styles.card` — thumbs use this for Supabase transform + layout. */
 const CARD_WIDTH = 118;
@@ -289,27 +291,28 @@ export function MediaHubSection({
 
   return (
     <View style={styles.root}>
-      <View style={styles.head}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleIcon}>
-            <Ionicons name="film" size={14} color={colors.primary.teal} />
-          </View>
-          <View>
-            <Text style={styles.title}>Media Hub</Text>
-            <Text style={styles.subtitle}>Your library at a glance</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={onViewAll}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="View all media"
-          style={styles.viewAllBtn}
-        >
-          <Text style={styles.viewAll}>View all</Text>
-          <Ionicons name="chevron-forward" size={12} color={colors.primary.teal} />
-        </TouchableOpacity>
-      </View>
+      <PVSectionHeader
+        kicker="Library"
+        title="Media Hub"
+        subtitle={
+          isOwner
+            ? 'Your videos, saves, and photos in one strip.'
+            : 'Videos, favorites, and photos they share.'
+        }
+        rightSlot={
+          <TouchableOpacity
+            onPress={onViewAll}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="View all media"
+            style={styles.viewAllBtn}
+          >
+            <Text style={styles.viewAll}>View all</Text>
+            <Ionicons name="chevron-forward" size={12} color={colors.primary.teal} />
+          </TouchableOpacity>
+        }
+        style={{ marginBottom: spacing.sm }}
+      />
 
       <View style={styles.segmented}>
         {TABS.map((t) => {
@@ -437,6 +440,7 @@ function MediaThumbCard({
           style={styles.cardImage}
           hubTileCss={MEDIA_HUB_THUMB_CSS}
           hubImageContentFit={item.post.type === 'image' ? 'contain' : 'cover'}
+          preferStaticAndroidVideoTile={Platform.OS === 'android'}
         />
       ) : (
         <PulsePicThumb imageUrl={item.imageUrl} style={styles.cardImage} />
@@ -561,42 +565,8 @@ function MediaHubEmpty({
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  titleIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 9,
-    backgroundColor: 'rgba(20,184,166,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(20,184,166,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.dark.text,
-    letterSpacing: -0.2,
-  },
-  subtitle: {
-    marginTop: 1,
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.dark.textMuted,
-    letterSpacing: 0.2,
+    marginTop: 0,
+    marginBottom: 0,
   },
   viewAllBtn: {
     flexDirection: 'row',

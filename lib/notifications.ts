@@ -32,19 +32,23 @@ if (Platform.OS === 'android') {
     lightColor: '#14B8A6',
   });
 
-  Notifications.setNotificationChannelAsync('jobs', {
-    name: 'Jobs',
-    description: 'Job alerts and application updates',
-    importance: Notifications.AndroidImportance.DEFAULT,
-    lightColor: '#D4A63A',
-  });
-
   Notifications.setNotificationChannelAsync('default', {
     name: 'General',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#1E4ED8',
   });
+}
+
+/** Expo push service occasionally returns 503 / connection timeouts — retry briefly, then fail soft (no throw). */
+function isTransientExpoPushError(message: string): boolean {
+  return /503|502|504|timeout|upstream connect|disconnect\/reset|ECONNRESET|network request failed/i.test(
+    message,
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
 }
 
 export async function registerForPushNotifications(): Promise<string | null> {
@@ -67,9 +71,27 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
-  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+  const maxAttempts = 4;
 
-  return tokenData.data;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+      return tokenData.data;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const retry = isTransientExpoPushError(msg) && attempt < maxAttempts;
+      if (retry) {
+        await sleep(400 * 2 ** (attempt - 1));
+        continue;
+      }
+      if (__DEV__) {
+        console.warn('[PulseVerse] Expo push token unavailable (remote pushes disabled until next launch):', msg);
+      }
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export async function savePushToken(userId: string, token: string) {
@@ -90,7 +112,12 @@ export async function clearPushToken(userId: string) {
 }
 
 export async function initPushNotifications(userId: string) {
-  const token = await registerForPushNotifications();
+  let token: string | null = null;
+  try {
+    token = await registerForPushNotifications();
+  } catch {
+    token = null;
+  }
   if (token) {
     await savePushToken(userId, token);
   } else if (__DEV__ && Device.isDevice) {
@@ -108,7 +135,6 @@ export async function initPushNotifications(userId: string) {
             postId?: string;
             chatId?: string;
             profileId?: string;
-            jobId?: string;
             circleSlug?: string;
             threadId?: string;
             url?: string;
@@ -124,8 +150,6 @@ export async function initPushNotifications(userId: string) {
         router.push(`/messages/${data.chatId}`);
       } else if (data?.profileId) {
         router.push(`/profile/${data.profileId}`);
-      } else if (data?.jobId) {
-        router.push(`/jobs/${data.jobId}`);
       } else {
         router.push('/notifications');
       }

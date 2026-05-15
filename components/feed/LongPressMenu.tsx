@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { copyTextWithFallback } from '@/lib/copyLink';
 import { colors } from '@/theme';
@@ -23,11 +24,24 @@ interface Props {
   onHideCreator?: () => void;
 }
 
+function remixActionsForPost(post: Post) {
+  if (post.isAnonymous) return [] as const;
+  if (post.type !== 'video') return [] as const;
+  const hasMedia = Boolean(post.mediaUrl?.trim() || post.thumbnailUrl?.trim());
+  if (!hasMedia) return [] as const;
+  return [
+    { icon: 'musical-notes' as const, label: 'Use sound', key: 'useSound' as const, color: colors.primary.gold },
+    { icon: 'git-branch-outline' as const, label: 'Duet', key: 'duet' as const, color: colors.primary.teal },
+    { icon: 'film-outline' as const, label: 'Video composer', key: 'composer' as const, color: '#FFF' },
+  ] as const;
+}
+
 const ACTIONS = (post: Post, isSaved: boolean) => {
   const download = postHasDownloadableMedia(post)
     ? [{ icon: 'download-outline' as const, label: 'Download', key: 'download' as const, color: '#FFF' }]
     : [];
   return [
+    ...remixActionsForPost(post),
     { icon: isSaved ? ('bookmark' as const) : ('bookmark-outline' as const), label: isSaved ? 'Unsave' : 'Save', key: 'save' as const, color: isSaved ? colors.primary.gold : '#FFF' },
     // Primary "pin to profile" action — surfaces the clip on the viewer's My Pulse 5.
     { icon: 'albums-outline' as const, label: 'Pin to My Pulse', key: 'pin' as const, color: colors.primary.teal },
@@ -43,6 +57,7 @@ const ACTIONS = (post: Post, isSaved: boolean) => {
 export function LongPressMenu({
   post, onClose, onReport, onSave, isSaved, onNotInterested, onHideCreator,
 }: Props) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast((s) => s.show);
 
@@ -51,6 +66,20 @@ export function LongPressMenu({
   const handleAction = async (key: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     switch (key) {
+      case 'useSound': {
+        const soundPageId = post.soundSourcePostId?.trim() || post.id;
+        onClose();
+        router.push(`/create/video?soundPostId=${encodeURIComponent(soundPageId)}`);
+        break;
+      }
+      case 'duet':
+        onClose();
+        router.push(`/create/video-camera?duetPostId=${encodeURIComponent(post.id)}`);
+        break;
+      case 'composer':
+        onClose();
+        router.push('/create/video');
+        break;
       case 'save':
         onSave();
         break;

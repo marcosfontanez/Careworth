@@ -73,11 +73,10 @@ Replace placeholders in root `eas.json` under `submit.production`:
 - `appleId`, `ascAppId`, `appleTeamId`
 - Android: service account JSON path and desired `track`
 
-## 5. Live / coins (post–v1)
+## 5. Live / Sparks (post–v1)
 
 Feature flags default **off** in `lib/featureFlags.ts`:
 
 - `liveStreaming` — Live tab, `/live/*`, Create → Go Live
-- `coinWallet` — Buy coins from live gift UI
 
 Admins can toggle these in **Admin → feature flags** once real providers ship.

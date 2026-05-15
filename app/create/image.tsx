@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Image, Dimensions,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,18 +18,20 @@ import { storageService } from '@/lib/storage';
 import { postsService } from '@/services/supabase';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
 import { useToast } from '@/components/ui/Toast';
-import { saveDraft, loadDraft, clearDraft } from '@/lib/drafts';
+import { saveDraft, loadDraft, clearDraft, type DraftData } from '@/lib/drafts';
+import { subscribeComposerDraftFlush } from '@/lib/draftAppStateFlush';
 import type { MediaAsset } from '@/lib/media';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { communityKeys } from '@/lib/queryKeys';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
 import { loadBrandKit, saveBrandKit, type BrandKit, withAlpha } from '@/lib/brandKit';
 import { tintForUri, type PaletteKey } from '@/lib/colorAnalysis';
-import { type MoodPreset, type MoodPresetId } from '@/lib/moodPresets';
+import { MOOD_PRESETS, type MoodPreset, type MoodPresetId } from '@/lib/moodPresets';
 import { appendHashtag } from '@/lib/hashtagStudio';
 import type { SeriesSelection } from '@/lib/seriesMode';
-import type { PhotoFrameId } from '@/lib/photoFrames';
+import { PHOTO_FRAMES, type PhotoFrameId } from '@/lib/photoFrames';
 
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { EducationModeToggle, type EducationCitation } from '@/components/create/EducationModeToggle';
@@ -47,6 +50,10 @@ const SCREEN_W = Dimensions.get('window').width;
 const SLIDE_W = SCREEN_W - 32;
 const MAX_IMAGES = 10;
 
+const PHOTO_LAYOUT_IDS = new Set<string>(['carousel', 'filmstrip', 'grid2', 'stack', 'row3']);
+const PHOTO_FRAME_IDS = new Set<string>(PHOTO_FRAMES.map((f) => f.id));
+const MOOD_IDS = new Set<string>(MOOD_PRESETS.map((p) => p.id));
+
 function buildSourcesBlock(citations: EducationCitation[]): string {
   if (citations.length === 0) return '';
   const lines = citations.map((c) => {
@@ -60,6 +67,7 @@ function buildSourcesBlock(citations: EducationCitation[]): string {
 
 export default function CreateImageScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ communityId?: string; communityName?: string; communitySlug?: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -91,6 +99,8 @@ export default function CreateImageScreen() {
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [layoutPreset, setLayoutPreset] = useState<PhotoLayoutPreset>('carousel');
   const [brandBackdrop, setBrandBackdrop] = useState(false);
+  /** Avoid autosave / clearDraft races before `loadDraft('image')` finishes. */
+  const [draftBootstrapped, setDraftBootstrapped] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -98,33 +108,176 @@ export default function CreateImageScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    loadDraft('image').then((draft) => {
+    let cancelled = false;
+    setDraftBootstrapped(false);
+    (async () => {
+      const draft = await loadDraft('image');
+      if (cancelled) return;
       if (draft) {
-        setHeadline((draft as { headline?: string }).headline ?? '');
+        setHeadline(draft.headline ?? '');
         setCaption(draft.caption ?? '');
         setHashtags(draft.hashtags ?? '');
-        setOverlayLine((draft as { overlayLine?: string }).overlayLine ?? '');
+        setOverlayLine(draft.overlayLine ?? '');
         if (draft.mediaUris?.length) {
-          setImages(draft.mediaUris.map((uri: string, i: number) => ({
-            uri, type: 'image' as const, mimeType: 'image/jpeg',
-            fileName: `draft_${i}.jpg`,
-          })));
+          setImages(
+            draft.mediaUris.map((uri: string, i: number) => ({
+              uri,
+              type: 'image' as const,
+              mimeType: 'image/jpeg',
+              fileName: `draft_${i}.jpg`,
+            })),
+          );
         }
+        if (draft.seriesSelection?.seriesId) setSeriesSelection(draft.seriesSelection);
+        if (draft.scheduledAtIso) {
+          const d = new Date(draft.scheduledAtIso);
+          if (!Number.isNaN(d.getTime())) setScheduledAt(d);
+        }
+        if (typeof draft.educationOnDraft === 'boolean') setEducationOn(draft.educationOnDraft);
+        if (draft.educationCitationsDraft?.length) {
+          setCitations(draft.educationCitationsDraft as EducationCitation[]);
+        }
+        const lp = draft.imageLayoutPreset;
+        if (lp && PHOTO_LAYOUT_IDS.has(lp)) setLayoutPreset(lp as PhotoLayoutPreset);
+        const pf = draft.imagePhotoFrame;
+        if (pf && PHOTO_FRAME_IDS.has(pf)) setPhotoFrame(pf as PhotoFrameId);
+        if (typeof draft.imageBrandBackdrop === 'boolean') setBrandBackdrop(draft.imageBrandBackdrop);
+        if (typeof draft.imageColorMatch === 'boolean') setColorMatchOn(draft.imageColorMatch);
+        if (typeof draft.imageBeforeAfter === 'boolean') setBeforeAfter(draft.imageBeforeAfter);
+        const mid = draft.imageMoodId;
+        if (mid === null) setMoodId(null);
+        else if (typeof mid === 'string' && MOOD_IDS.has(mid)) setMoodId(mid as MoodPresetId);
+        if (draft.privacyPhoto === 'public' || draft.privacyPhoto === 'followers') {
+          setPrivacy(draft.privacyPhoto);
+        }
+        if (typeof draft.commentsOnPhoto === 'boolean') setCommentsOn(draft.commentsOnPhoto);
       }
-    });
+      if (!cancelled) setDraftBootstrapped(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  const hasComposerDraft = useMemo(() => {
+    if (caption.trim() || hashtags.trim() || headline.trim() || overlayLine.trim()) return true;
+    if (images.length > 0) return true;
+    if (privacy === 'followers') return true;
+    if (!commentsOn) return true;
+    if (scheduledAt) return true;
+    if (educationOn || citations.length > 0) return true;
+    if (seriesSelection) return true;
+    if (layoutPreset !== 'carousel') return true;
+    if (photoFrame !== 'none') return true;
+    if (brandBackdrop) return true;
+    if (colorMatchOn) return true;
+    if (beforeAfter) return true;
+    if (moodId) return true;
+    return false;
+  }, [
+    caption,
+    hashtags,
+    headline,
+    overlayLine,
+    images.length,
+    privacy,
+    commentsOn,
+    scheduledAt,
+    educationOn,
+    citations.length,
+    seriesSelection,
+    layoutPreset,
+    photoFrame,
+    brandBackdrop,
+    colorMatchOn,
+    beforeAfter,
+    moodId,
+  ]);
+
+  const unsavedLeaveRef = useRef(hasComposerDraft);
+  unsavedLeaveRef.current = hasComposerDraft;
+
+  const buildImageDraftData = useCallback((): DraftData => {
+    const payload: DraftData = {
+      caption,
+      hashtags,
+      headline,
+      overlayLine,
+      mediaUris: images.length > 0 ? images.map((m) => m.uri) : undefined,
+      seriesSelection: seriesSelection ?? undefined,
+      privacyPhoto: privacy,
+      commentsOnPhoto: commentsOn,
+      educationOnDraft: educationOn,
+      imageLayoutPreset: layoutPreset,
+      imagePhotoFrame: photoFrame,
+      imageBrandBackdrop: brandBackdrop,
+      imageColorMatch: colorMatchOn,
+      imageBeforeAfter: beforeAfter,
+      imageMoodId: moodId,
+    };
+    if (scheduledAt) payload.scheduledAtIso = scheduledAt.toISOString();
+    if (citations.length > 0) payload.educationCitationsDraft = citations;
+    return payload;
+  }, [
+    caption,
+    hashtags,
+    headline,
+    overlayLine,
+    images,
+    seriesSelection,
+    privacy,
+    commentsOn,
+    scheduledAt,
+    educationOn,
+    citations,
+    layoutPreset,
+    photoFrame,
+    brandBackdrop,
+    colorMatchOn,
+    beforeAfter,
+    moodId,
+  ]);
+
   useEffect(() => {
-    if (caption || hashtags || images.length > 0 || headline || overlayLine) {
-      saveDraft('image', {
-        caption,
-        hashtags,
-        headline,
-        overlayLine,
-        mediaUris: images.map((m) => m.uri),
-      });
+    if (!draftBootstrapped) return;
+    if (!hasComposerDraft) {
+      void clearDraft('image');
+      return;
     }
-  }, [caption, hashtags, images, headline, overlayLine]);
+    saveDraft('image', buildImageDraftData());
+  }, [draftBootstrapped, hasComposerDraft, buildImageDraftData]);
+
+  useEffect(() => {
+    return subscribeComposerDraftFlush(() => {
+      if (!draftBootstrapped || !hasComposerDraft) return null;
+      return { ready: true, type: 'image', data: buildImageDraftData() };
+    });
+  }, [draftBootstrapped, hasComposerDraft, buildImageDraftData]);
+
+  useEffect(() => {
+    if (!draftBootstrapped) return;
+    const sub = navigation.addListener('beforeRemove', (e) => {
+      if (posting || showSuccess) return;
+      if (!unsavedLeaveRef.current) return;
+      e.preventDefault();
+      Alert.alert(
+        'Leave composer?',
+        'You have unsaved work (photos, caption, or other edits). Discard and leave?',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              void clearDraft('image');
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ],
+      );
+    });
+    return sub;
+  }, [navigation, draftBootstrapped, posting, showSuccess]);
 
   const phiFindings = useMemo(
     () => scanForPhi(caption, headline, overlayLine, hashtags),
@@ -264,14 +417,15 @@ export default function CreateImageScreen() {
       return;
     }
 
+    if (!checkRateLimit('post')) return;
+
+    if (!user) {
+      toast.show('Not signed in', 'error');
+      return;
+    }
+
     setPosting(true);
     try {
-      if (!user) {
-        toast.show('Not signed in', 'error');
-        setPosting(false);
-        return;
-      }
-
       let tags = hashtags.split(/[\s,]+/).filter((t) => t.startsWith('#')).map((t) => t.slice(1));
       let cap = caption.trim();
       let head = headline.trim();

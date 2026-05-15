@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import type { SponsorInfo } from '@/types';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 
 interface Props {
   sponsor: SponsorInfo;
@@ -19,7 +20,9 @@ export function SponsoredBadge({ sponsor }: Props) {
       {sponsor.ctaUrl && (
         <TouchableOpacity
           style={styles.ctaBtn}
-          onPress={() => Linking.openURL(sponsor.ctaUrl)}
+          onPress={() => {
+            if (sponsor.ctaUrl) openWebUrlSafely(sponsor.ctaUrl);
+          }}
           activeOpacity={0.7}
         >
           <Text style={styles.ctaText}>{sponsor.ctaLabel || 'Learn More'}</Text>

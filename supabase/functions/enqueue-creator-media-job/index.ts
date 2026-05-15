@@ -3,10 +3,11 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+
+const corsHeaders = edgeCorsHeaders({
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+});
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -53,6 +54,23 @@ Deno.serve(async (req) => {
     "parallax_export",
   ];
   if (!kind || !allowed.includes(kind)) return json({ error: "invalid_kind" }, 400);
+
+  const input = body.input ?? {};
+  if (kind === "stitch") {
+    const clipPaths = input.clipPaths;
+    if (!Array.isArray(clipPaths) || clipPaths.length === 0 || !clipPaths.every((x: unknown) => typeof x === "string")) {
+      return json({ error: "stitch requires input.clipPaths as non-empty string[]" }, 400);
+    }
+  }
+  if (kind === "broll") {
+    if (typeof input.mainPath !== "string" || !input.mainPath.trim()) {
+      return json({ error: "broll requires input.mainPath string" }, 400);
+    }
+    const cut = input.cutawayPaths;
+    if (!Array.isArray(cut) || !cut.every((x: unknown) => typeof x === "string")) {
+      return json({ error: "broll requires input.cutawayPaths as string[]" }, 400);
+    }
+  }
 
   const { data: row, error } = await supabase
     .from("creator_media_jobs")

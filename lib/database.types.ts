@@ -459,6 +459,13 @@ export interface Database {
           edited_at: string | null;
           deleted_at: string | null;
           created_at: string;
+          media_url: string | null;
+          reaction_heart_count: number;
+          reaction_haha_count: number;
+          reaction_wow_count: number;
+          reaction_sad_count: number;
+          reaction_angry_count: number;
+          reaction_clap_count: number;
         };
         Insert: {
           id?: string;
@@ -469,6 +476,7 @@ export interface Database {
           is_pinned?: boolean;
           edited_at?: string | null;
           deleted_at?: string | null;
+          media_url?: string | null;
         };
         Update: Partial<Database['public']['Tables']['comments']['Insert']>;
         Relationships: [];
@@ -694,6 +702,21 @@ export interface Database {
         Relationships: [];
       };
 
+      app_client_config: {
+        Row: {
+          id: number;
+          min_app_version: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          min_app_version?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['app_client_config']['Insert']>;
+        Relationships: [];
+      };
+
       analytics_events: {
         Row: {
           id: string;
@@ -817,11 +840,13 @@ export interface Database {
           comment_id: string;
           user_id: string;
           created_at: string;
+          reaction: string;
         };
         Insert: {
           id?: string;
           comment_id: string;
           user_id: string;
+          reaction?: string;
         };
         Update: Partial<Database['public']['Tables']['comment_likes']['Insert']>;
         Relationships: [];
@@ -1217,6 +1242,7 @@ export interface Database {
           author_id: string;
           parent_id: string | null;
           content: string;
+          media_url: string | null;
           edited_at: string | null;
           created_at: string;
         };
@@ -1226,6 +1252,7 @@ export interface Database {
           author_id: string;
           parent_id?: string | null;
           content: string;
+          media_url?: string | null;
           edited_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['profile_update_comments']['Insert']>;
@@ -1619,10 +1646,6 @@ export interface Database {
       };
       increment_poll_vote: {
         Args: { p_poll_id: string; p_option_id: string };
-        Returns: undefined;
-      };
-      increment_comment_likes: {
-        Args: { comment_id: string };
         Returns: undefined;
       };
       pin_profile_update: {

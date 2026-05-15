@@ -3,8 +3,8 @@
  * Uses 8-connected flood fill so diagonal checker tiles connect; then cleans
  * remaining light pixels inside the estimated inner circle.
  */
-import sharp from 'sharp';
 import { readFileSync, writeFileSync } from 'fs';
+import { loadSharp } from './load-sharp.mjs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -148,6 +148,7 @@ function measureInnerOpeningFrac(buf, w, h) {
 }
 
 async function main() {
+  const sharp = await loadSharp();
   const { data, info } = await sharp(readFileSync(TARGET))
     .ensureAlpha()
     .resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: 'fill', kernel: sharp.kernel.lanczos3 })

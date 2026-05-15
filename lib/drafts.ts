@@ -7,11 +7,37 @@ export interface DraftData {
   hashtags?: string;
   headline?: string;
   overlayLine?: string;
+  /** Shorts-style headline on the video composer (distinct from photo `headline` when both exist). */
+  shortTitle?: string;
   /** Optional creator-set name for an original sound (video upload screen). */
   soundTitle?: string;
   mediaUris?: string[];
+  /** Queued follow-up clips (series or B-roll flow) — URIs only; may be stale after OS cache eviction. */
+  followUpClipUris?: string[];
+  clipQueueVariant?: 'series' | 'broll';
+  seriesSelection?: { seriesId: string; seriesPart: number; seriesTotal: number };
   content?: string;
   updatedAt?: string;
+  /** Video composer trim sliders (seconds); upload still sends full file until server trim. */
+  trimStartSec?: number;
+  trimEndSec?: number;
+  /** Video composer — borrowed sound beat/hook planner marker on waveform (seconds). */
+  soundAnchorSec?: number;
+  privacyVideo?: 'public' | 'followers';
+  commentsOnVideo?: boolean;
+  /** Photo composer (`saveDraft('image', …)`) — kept separate from video fields. */
+  privacyPhoto?: 'public' | 'followers';
+  commentsOnPhoto?: boolean;
+  /** Photo composer extras (crash restore). */
+  scheduledAtIso?: string;
+  educationOnDraft?: boolean;
+  educationCitationsDraft?: Array<{ label: string; url: string; doi?: string; lastReviewed?: string }>;
+  imageLayoutPreset?: string;
+  imagePhotoFrame?: string;
+  imageBrandBackdrop?: boolean;
+  imageColorMatch?: boolean;
+  imageBeforeAfter?: boolean;
+  imageMoodId?: string | null;
 }
 
 export async function saveDraft(type: string, data: DraftData): Promise<void> {

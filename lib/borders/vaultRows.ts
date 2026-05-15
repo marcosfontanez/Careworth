@@ -1,5 +1,6 @@
 import type { OwnedBorderEntry } from '@/lib/borders/ownedTypes';
 import type { EarnedPulseAvatarFrame } from '@/services/supabase/pulseAvatarFrames';
+import type { PulseAvatarFrame } from '@/types';
 import {
   filterOwnedBorderEntries,
   inventoryCollectionStats,
@@ -52,6 +53,54 @@ export function buildVaultRows(
   const shop = shopEntries.map((entry) => ({ kind: 'shop' as const, entry }));
   const pulse = pulseEarned.map((earned) => ({ kind: 'pulse' as const, earned }));
   return [...shop, ...pulse];
+}
+
+/**
+ * Matches `border_catalog_leaderboard_rank_defaults` / shop `prestige_score` scale so
+ * prize rows sort with Shop borders under **Prestige**.
+ */
+function pulseEarnedPrestige(earned: EarnedPulseAvatarFrame): number {
+  const r = earned.leaderboardRank;
+  if (r === 1) return 100;
+  if (r === 2 || r === 3) return 85;
+  if (r === 4) return 60;
+  if (r === 5) return 50;
+  const t = earned.frame.prizeTier;
+  if (t === 'gold') return 100;
+  if (t === 'silver') return 85;
+  if (t === 'bronze') return 55;
+  if (t === 'exclusive' || t === 'legacy') return 45;
+  if (t === 'campaign') return 40;
+  return Math.max(0, rarityTierSortKey(earned.frame.rarityTier) * 12);
+}
+
+function vaultRowPrestigeScore(row: VaultRow): number {
+  if (row.kind === 'shop') return row.entry.item.prestige_score ?? 0;
+  return pulseEarnedPrestige(row.earned);
+}
+
+/** Podium / rank ordering for tie-breaks (gold > silver > bronze). */
+function prizeTierOrder(t: PulseAvatarFrame['prizeTier'] | undefined): number {
+  if (t === 'gold') return 4;
+  if (t === 'silver') return 3;
+  if (t === 'bronze') return 2;
+  if (t === 'exclusive' || t === 'legacy') return 1;
+  if (t === 'campaign') return 0;
+  return 0;
+}
+
+function vaultRowPrizeTierOrder(row: VaultRow): number {
+  if (row.kind === 'shop') {
+    const rp = row.entry.item.rank_place;
+    if (typeof rp === 'number' && rp >= 1 && rp <= 5) return 6 - rp;
+    return prizeTierOrder(undefined);
+  }
+  const r = row.earned.leaderboardRank;
+  if (r === 1) return 5;
+  if (r === 2 || r === 3) return 4;
+  if (r === 4) return 2;
+  if (r === 5) return 1;
+  return prizeTierOrder(row.earned.frame.prizeTier);
 }
 
 export function filterVaultRows(
@@ -109,12 +158,22 @@ export function sortVaultRows(
         return recentTs(b) - recentTs(a);
       });
     case 'rarity_desc':
-      return copy.sort((a, b) => rowRaritySortKey(b) - rowRaritySortKey(a));
+      return copy.sort((a, b) => {
+        const ra = rowRaritySortKey(a);
+        const rb = rowRaritySortKey(b);
+        if (ra !== rb) return rb - ra;
+        const pa = vaultRowPrizeTierOrder(a);
+        const pb = vaultRowPrizeTierOrder(b);
+        if (pa !== pb) return pb - pa;
+        return recentTs(b) - recentTs(a);
+      });
     case 'prestige_desc':
       return copy.sort((a, b) => {
-        if (a.kind === 'shop' && b.kind === 'shop') {
-          return (b.entry.item.prestige_score ?? 0) - (a.entry.item.prestige_score ?? 0);
-        }
+        const diff = vaultRowPrestigeScore(b) - vaultRowPrestigeScore(a);
+        if (diff !== 0) return diff;
+        const pa = vaultRowPrizeTierOrder(a);
+        const pb = vaultRowPrizeTierOrder(b);
+        if (pa !== pb) return pb - pa;
         return recentTs(b) - recentTs(a);
       });
     case 'collection_az': {

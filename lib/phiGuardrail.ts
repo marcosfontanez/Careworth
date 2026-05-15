@@ -15,7 +15,7 @@ export interface PhiFinding {
   match: string;
 }
 
-const HIGH_RULES: Array<{ re: RegExp; reason: string }> = [
+const HIGH_RULES: { re: RegExp; reason: string }[] = [
   { re: /\b(MRN|MR#|MR ID)\s*[:#]?\s*\d{4,}\b/i, reason: 'Looks like a medical record number (MRN).' },
   { re: /\b\d{3}-\d{2}-\d{4}\b/, reason: 'Looks like a Social Security number.' },
   { re: /\bDOB\s*[:#]?\s*(0?[1-9]|1[0-2])[\/\-](0?[1-9]|[12]\d|3[01])[\/\-](19|20)?\d{2}\b/i, reason: 'Date of birth detected.' },
@@ -24,7 +24,7 @@ const HIGH_RULES: Array<{ re: RegExp; reason: string }> = [
   { re: /\bRoom\s*204\b/i, reason: 'Specific room number called out — high re-identification risk.' },
 ];
 
-const MEDIUM_RULES: Array<{ re: RegExp; reason: string }> = [
+const MEDIUM_RULES: { re: RegExp; reason: string }[] = [
   { re: /\bRoom\s*\d{2,4}\b/i, reason: 'Specific room number — could identify a patient.' },
   { re: /\b(Unit|Floor)\s*[A-Z]?\d{1,2}\b/i, reason: 'Unit/floor combo can narrow location.' },
   { re: /\bbed\s*\d{1,3}\b/i, reason: 'Specific bed number.' },
@@ -32,12 +32,12 @@ const MEDIUM_RULES: Array<{ re: RegExp; reason: string }> = [
   { re: /\b(diagnosed with|admitted for|came in for)\b.*\b(today|this morning|tonight|last night)\b/i, reason: 'Diagnosis + recent timeframe combo.' },
 ];
 
-const LOW_RULES: Array<{ re: RegExp; reason: string }> = [
+const LOW_RULES: { re: RegExp; reason: string }[] = [
   { re: /\b(my patient|the patient|this patient)\b/i, reason: 'Talking about a specific patient — make sure no detail identifies them.' },
   { re: /\b(family|husband|wife|son|daughter|mom|dad)\s+(was|came|said|asked|cried)/i, reason: 'Patient family detail mentioned.' },
 ];
 
-export function scanForPhi(...inputs: Array<string | null | undefined>): PhiFinding[] {
+export function scanForPhi(...inputs: (string | null | undefined)[]): PhiFinding[] {
   const text = inputs.filter(Boolean).join(' \n ').trim();
   if (!text) return [];
   const findings: PhiFinding[] = [];

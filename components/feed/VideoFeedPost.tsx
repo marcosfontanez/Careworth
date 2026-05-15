@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo, memo } from 'react';
 import {
   View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform,
-  Pressable, ActivityIndicator, Linking, ScrollView,
+  Pressable, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -9,9 +9,8 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { GradientOverlay } from '@/components/ui/GradientOverlay';
-import { RoleBadge } from '@/components/ui/RoleBadge';
-import { SpecialtyBadge } from '@/components/ui/SpecialtyBadge';
-import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { HeartBurst } from '@/components/ui/SuccessAnimation';
 import { SponsoredBadge } from './SponsoredBadge';
 import { FeedActionRail } from './FeedActionRail';
@@ -33,6 +32,7 @@ import { usePostCoverAbImpression } from '@/hooks/usePostCoverAbImpression';
 import { usePost } from '@/hooks/useQueries';
 import { useRouter } from 'expo-router';
 import { DuetParentPreview } from '@/components/feed/DuetParentPreview';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SCRUB_HIT_SLOP = 24;
@@ -221,7 +221,18 @@ function VideoFeedPostInner({
       onPressOut={handlePressOut}
       delayLongPress={400}
     >
-      {duetParentId ? <DuetParentPreview parentPostId={duetParentId} pageHeight={pageH} /> : null}
+      {duetParentId ? (
+        <DuetParentPreview
+          parentPostId={duetParentId}
+          pageHeight={pageH}
+          layoutMode="strip"
+          enablePlayback={hasVideo && isActive}
+          paused={paused}
+          isActive={isActive}
+          referenceMuted
+          playbackRate={speedUp ? 2 : 1}
+        />
+      ) : null}
 
       {post.evidenceUrl?.trim() ? (
         <TouchableOpacity
@@ -229,7 +240,7 @@ function VideoFeedPostInner({
           activeOpacity={0.85}
           onPress={() => {
             const u = post.evidenceUrl!.trim();
-            void Linking.openURL(u.startsWith('http') ? u : `https://${u}`);
+            openWebUrlSafely(u);
           }}
           accessibilityRole="link"
           accessibilityLabel={post.evidenceLabel?.trim() || 'Open evidence link'}
@@ -361,15 +372,10 @@ function VideoFeedPostInner({
               <Text style={styles.creatorHandle} numberOfLines={1}>
                 {profileHandleLineForCreator(post.creator)}
               </Text>
-              <View style={styles.badgeRow}>
-                <RoleBadge role={post.creator.role} variant="overlay" />
-                {post.creator.specialty ? <SpecialtyBadge specialty={post.creator.specialty} /> : null}
-                <PulseTierBadge
-                  tier={post.creator.pulseTier ?? null}
-                  size="xs"
-                  hideMurmur
-                />
-              </View>
+              <ProfileNeonPills
+                tags={buildNeonPillTags(post.creator)}
+                style={styles.neonPillsCompact}
+              />
               {[post.creator.city, post.creator.state].filter(Boolean).length > 0 ? (
                 <Text style={[styles.location, typography.overlayQuiet]} numberOfLines={1}>
                   {[post.creator.city, post.creator.state].filter(Boolean).join(', ')}
@@ -414,7 +420,7 @@ function VideoFeedPostInner({
                 activeOpacity={0.85}
                 onPress={() => {
                   const u = post.educationCitations?.find((c) => c.url?.trim())?.url?.trim();
-                  if (u) void Linking.openURL(u.startsWith('http') ? u : `https://${u}`);
+                  if (u) openWebUrlSafely(u);
                 }}
                 accessibilityRole="link"
                 accessibilityLabel="Open citation source"
@@ -573,7 +579,8 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.commentCount !== n.commentCount ||
     p.shareCount !== n.shareCount ||
     p.viewCount !== n.viewCount ||
-    p.saveCount !== n.saveCount
+    p.saveCount !== n.saveCount ||
+    (p.duetParentId ?? '') !== (n.duetParentId ?? '')
   ) {
     return false;
   }
@@ -625,7 +632,7 @@ function FeedAttributedSoundPlayer({
   onFailed: () => void;
 }) {
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
-  const sourcePhase = useRef<'public' | 'signed'>('public');
+  const sourcePhase = useRef<'public' | 'signed' | 'failed'>('public');
   const publicFallbackInFlight = useRef(false);
 
   useEffect(() => {
@@ -651,6 +658,8 @@ function FeedAttributedSoundPlayer({
       onFailed();
       return;
     }
+    /** Signing failed or public URL is unusable — do not retry on every native error tick (Storage spam + main-thread churn). */
+    if (sourcePhase.current === 'failed') return;
     if (publicFallbackInFlight.current) return;
     publicFallbackInFlight.current = true;
     void trySignedUrlFromPostMediaPublicUrl(publicUri).then((signed) => {
@@ -659,6 +668,7 @@ function FeedAttributedSoundPlayer({
         sourcePhase.current = 'signed';
         setFallbackUri(signed);
       } else {
+        sourcePhase.current = 'failed';
         onFailed();
       }
     });
@@ -727,7 +737,7 @@ function FeedVideoPlayer({
 }) {
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const sourcePhase = useRef<'public' | 'signed'>('public');
+  const sourcePhase = useRef<'public' | 'signed' | 'failed'>('public');
   const publicFallbackInFlight = useRef(false);
 
   useEffect(() => {
@@ -754,6 +764,7 @@ function FeedVideoPlayer({
       setLoadError(true);
       return;
     }
+    if (sourcePhase.current === 'failed') return;
     if (publicFallbackInFlight.current) return;
     publicFallbackInFlight.current = true;
     void trySignedUrlFromPostMediaPublicUrl(uri).then((signed) => {
@@ -762,6 +773,7 @@ function FeedVideoPlayer({
         sourcePhase.current = 'signed';
         setFallbackUri(signed);
       } else {
+        sourcePhase.current = 'failed';
         setLoadError(true);
       }
     });
@@ -1083,7 +1095,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
+  neonPillsCompact: { marginTop: 4, flexWrap: 'wrap' },
   displayName: {
     color: colors.onVideo.primary,
     flexShrink: 1,

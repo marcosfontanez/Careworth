@@ -29,6 +29,9 @@ import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { TopSegmentTabs } from '@/components/ui/TopSegmentTabs';
 import { sharePostLink, shareDownloadedPostMedia } from '@/lib/postMediaActions';
+import { getProfileTwoColumnMediaGridWindow } from '@/lib/feedVideoListWindow';
+
+const MY_POSTS_GRID_WINDOW = getProfileTwoColumnMediaGridWindow('myPosts');
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PAD = 16;
@@ -243,12 +246,11 @@ export default function MyPostsScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: GAP, paddingHorizontal: PAD }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24, gap: GAP }}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
+          initialNumToRender={MY_POSTS_GRID_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={MY_POSTS_GRID_WINDOW.maxToRenderPerBatch}
+          windowSize={MY_POSTS_GRID_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          /** Android virtualization win — see app/followers.tsx for rationale. */
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={colors.primary.teal} />
           }
@@ -264,7 +266,11 @@ export default function MyPostsScreen() {
                   onPress={() => router.push(`/feed/${p.id}`)}
                   activeOpacity={0.85}
                 >
-                  <RecentMediaThumb post={p} style={styles.thumb} />
+                  <RecentMediaThumb
+                    post={p}
+                    style={styles.thumb}
+                    preferStaticAndroidVideoTile={Platform.OS === 'android'}
+                  />
                   <LinearGradient
                     colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.9)']}
                     style={styles.thumbGrad}

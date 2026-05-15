@@ -20,7 +20,7 @@ interface Props {
   onClose: () => void;
   onSubmit: (input: {
     question: string;
-    options: Array<{ id: string; text: string }>;
+    options: { id: string; text: string }[];
     durationSec: number;
   }) => Promise<void> | void;
 }

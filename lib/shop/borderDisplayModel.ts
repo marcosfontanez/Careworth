@@ -81,8 +81,13 @@ export function resolveBorderLockReason(
 }
 
 export type BorderPrimaryCta =
-  | { kind: 'equipped' }
-  | { kind: 'owned_equip'; inventoryRowId: string }
+  /** Owned shop / giftable border: Owned badge + Equip / Buy again / Gift */
+  | {
+      kind: 'owned_retail';
+      equipped: boolean;
+      inventoryRowId?: string;
+      showRepurchase: boolean;
+    }
   /** Free-in-shop border (metadata.free_in_shop); self-claim only */
   | { kind: 'free_claim' }
   /** Paid shop border on native: user picks self vs gift before checkout */
@@ -97,10 +102,29 @@ export function resolveBorderPrimaryCta(
 ): BorderPrimaryCta {
   if (item.type !== 'border') return { kind: 'locked', reason: 'unavailable' };
 
-  if (ownership.equipped) return { kind: 'equipped' };
+  const inShopRetail =
+    (item.is_shop_item === true || isFreeShopBorder(item)) && item.is_active;
+  const showRepurchase = inShopRetail && !isFreeShopBorder(item) && !isWeb;
+
+  if (ownership.equipped) {
+    return {
+      kind: 'owned_retail',
+      equipped: true,
+      inventoryRowId: ownership.inventoryRowId,
+      showRepurchase,
+    };
+  }
+
+  if (ownership.owned && ownership.inventoryRowId) {
+    return {
+      kind: 'owned_retail',
+      equipped: false,
+      inventoryRowId: ownership.inventoryRowId,
+      showRepurchase,
+    };
+  }
 
   if (ownership.owned) {
-    if (ownership.inventoryRowId) return { kind: 'owned_equip', inventoryRowId: ownership.inventoryRowId };
     return { kind: 'locked', reason: 'unavailable' };
   }
 
@@ -111,7 +135,7 @@ export function resolveBorderPrimaryCta(
   if (lock === 'web_store') return { kind: 'locked', reason: 'web_store' };
   if (lock === 'unavailable') return { kind: 'locked', reason: 'unavailable' };
 
-  if (item.is_shop_item && item.is_active) {
+  if (inShopRetail) {
     if (isFreeShopBorder(item)) return { kind: 'free_claim' };
     return { kind: 'iap_choose_recipient' };
   }
@@ -123,8 +147,47 @@ export function resolveBorderPrimaryCta(
   return { kind: 'locked', reason: 'unavailable' };
 }
 
+/** Single-line CTA copy for compact shop grid cards (price/sparks where relevant). */
+export function borderShopCardPurchaseLabel(
+  item: ShopItemRow,
+  cta: BorderPrimaryCta,
+  isWeb: boolean,
+): string | null {
+  if (item.type !== 'border') return null;
+  switch (cta.kind) {
+    case 'free_claim':
+      return 'Claim free';
+    case 'iap_choose_recipient':
+      if (isWeb) return null;
+      {
+        const p = item.real_money_display_price?.trim();
+        return p ? `Buy · ${p}` : 'Buy in app';
+      }
+    case 'gift_only':
+      if (isWeb) return null;
+      {
+        const sp = item.spark_price;
+        if (sp != null && Number(sp) > 0) return `Gift · ${Number(sp).toLocaleString()} Sparks`;
+        return 'Send as gift';
+      }
+    default:
+      return null;
+  }
+}
+
 export function shouldShowOwnedGiftAction(item: ShopItemRow, ownership: BorderOwnership): boolean {
   return item.type === 'border' && item.is_giftable === true && ownership.owned;
+}
+
+/**
+ * Web-only shop borders: IAP runs in native stores. Surfaces display price from
+ * `real_money_display_price` when the catalog row has it (see shop migrations).
+ */
+export function borderWebStoreStatusLabel(item: ShopItemRow): string {
+  if (item.type !== 'border') return 'App store';
+  const p = item.real_money_display_price?.trim();
+  if (p) return `App store · ${p}`;
+  return 'App store';
 }
 
 export function lockReasonDisplay(reason: BorderUiLockReason): string {
@@ -263,10 +326,11 @@ export function filterBorderItems(
   return items.filter((b) => {
     if (filter.ownedOnly && !ownsBorder(b.id)) return false;
     if (filter.acquisition === 'shop') {
-      if (b.is_shop_item !== true) return false;
+      if (b.is_shop_item !== true && !isFreeShopBorder(b)) return false;
     }
     if (filter.acquisition === 'earned') {
-      const earnedPath = b.is_earned_only === true || b.is_shop_item === false;
+      const earnedPath =
+        b.is_earned_only === true || (b.is_shop_item === false && !isFreeShopBorder(b));
       if (!earnedPath) return false;
     }
     return true;

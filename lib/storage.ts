@@ -184,6 +184,10 @@ const PUBLIC_POST_MEDIA_MARKER = '/object/public/post-media/';
  *
  * Callers sometimes pass a missing URL during mount / hydration — treat as no-op (Sentry:
  * `Cannot read properties of undefined (reading 'trim')`).
+ *
+ * Returns `null` when the URL isn’t a public post-media link, or signing fails (missing object,
+ * RLS, etc.). Video players must **not** retry this in a tight loop — Storage will 400/403 and
+ * native playback may spam `statusChange`, worsening hangs.
  */
 export async function trySignedUrlFromPostMediaPublicUrl(
   publicUrl: string | null | undefined,

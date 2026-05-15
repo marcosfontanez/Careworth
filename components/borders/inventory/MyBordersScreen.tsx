@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { colors, borderRadius, layout, typography, pulseverse, semantic, spacing, gradients, shadows } from '@/theme';
+import { colors, borderRadius, layout, typography, pulseverse, semantic, gradients, shadows } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -257,7 +257,9 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
   };
 
   const hasAnyBorders = entries.length > 0 || pulseEarned.length > 0;
-  const showPulseHero = !equippedEntry && Boolean(selectedPulseFrameId && profile?.pulseAvatarFrame);
+  /** Selected catalog frame drives the live ring; prefer it over a stale shop "equipped" row. */
+  const pulseShowcaseActive = Boolean(selectedPulseFrameId && profile?.pulseAvatarFrame);
+  const showPulseHero = pulseShowcaseActive;
 
   const headerBlock = (
     <>
@@ -271,7 +273,42 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
           <View style={styles.heroGlow} pointerEvents="none" />
           <Text style={styles.heroKicker}>Showcase</Text>
           <Text style={styles.heroEyebrow}>Live on your pulse</Text>
-          {equippedEntry ? (
+          {showPulseHero && profile?.pulseAvatarFrame ? (
+            <>
+              <AvatarDisplay
+                size={108}
+                avatarUrl={avatarUrlForVault}
+                prioritizeRemoteAvatar
+                ringColor={colors.primary.teal}
+                pulseFrame={pulseFrameFromUser(profile.pulseAvatarFrame)}
+              />
+              <Text style={[styles.heroName, { marginTop: 14 }]}>{profile.pulseAvatarFrame.label}</Text>
+              {profile.pulseAvatarFrame.subtitle ? (
+                <Text style={styles.heroCollection}>{profile.pulseAvatarFrame.subtitle}</Text>
+              ) : null}
+              <View style={{ alignItems: 'center', marginTop: 10 }}>
+                <RarityTierBadge tier={profile.pulseAvatarFrame.rarityTier} emphasized />
+              </View>
+              {profile.pulseAvatarFrame.acquisitionTag ? (
+                <Text style={[styles.heroCollection, { marginTop: 8, fontSize: 13 }]}>
+                  {profile.pulseAvatarFrame.acquisitionTag}
+                </Text>
+              ) : (
+                <Text style={[styles.heroCollectionLabel, { marginTop: 12 }]}>Prize / reward ring</Text>
+              )}
+              <TouchableOpacity
+                style={styles.heroCta}
+                onPress={() => {
+                  setFilter((f) => ({ ...f, ownership: 'all' }));
+                  void Haptics.selectionAsync();
+                }}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.heroCtaText}>Change active border</Text>
+                <Ionicons name="swap-horizontal" size={18} color="#A5F3FC" />
+              </TouchableOpacity>
+            </>
+          ) : equippedEntry ? (
             <>
               <BorderPreviewPlate
                 ringColor={ringPreviewColor(equippedEntry.item)}
@@ -306,41 +343,6 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
                 style={styles.heroCta}
                 onPress={() => {
                   setFilter((f) => ({ ...f, ownership: 'unequipped' }));
-                  void Haptics.selectionAsync();
-                }}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.heroCtaText}>Change active border</Text>
-                <Ionicons name="swap-horizontal" size={18} color="#A5F3FC" />
-              </TouchableOpacity>
-            </>
-          ) : showPulseHero && profile?.pulseAvatarFrame ? (
-            <>
-              <AvatarDisplay
-                size={108}
-                avatarUrl={avatarUrlForVault}
-                prioritizeRemoteAvatar
-                ringColor={colors.primary.teal}
-                pulseFrame={pulseFrameFromUser(profile.pulseAvatarFrame)}
-              />
-              <Text style={[styles.heroName, { marginTop: 14 }]}>{profile.pulseAvatarFrame.label}</Text>
-              {profile.pulseAvatarFrame.subtitle ? (
-                <Text style={styles.heroCollection}>{profile.pulseAvatarFrame.subtitle}</Text>
-              ) : null}
-              <View style={{ alignItems: 'center', marginTop: 10 }}>
-                <RarityTierBadge tier={profile.pulseAvatarFrame.rarityTier} emphasized />
-              </View>
-              {profile.pulseAvatarFrame.acquisitionTag ? (
-                <Text style={[styles.heroCollection, { marginTop: 8, fontSize: 13 }]}>
-                  {profile.pulseAvatarFrame.acquisitionTag}
-                </Text>
-              ) : (
-                <Text style={[styles.heroCollectionLabel, { marginTop: 12 }]}>Prize / reward ring</Text>
-              )}
-              <TouchableOpacity
-                style={styles.heroCta}
-                onPress={() => {
-                  setFilter((f) => ({ ...f, ownership: 'all' }));
                   void Haptics.selectionAsync();
                 }}
                 activeOpacity={0.88}

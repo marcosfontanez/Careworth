@@ -1,18 +1,25 @@
 // @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
+import { edgeCorsHeaders } from '../_shared/edgeCors.ts';
+
+const transcribeCors = () =>
+  edgeCorsHeaders({
+    'Access-Control-Allow-Headers': 'authorization, content-type',
+  });
+
+const jsonHeaders = () => ({
+  'Content-Type': 'application/json',
+  ...transcribeCors(),
+});
+
 /**
  * Placeholder: wire OPENAI_API_KEY (or similar) and accept uploaded audio/video URL.
  * Client currently calls with { stub: true } — returns guidance until keys exist.
  */
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
-      },
-    });
+    return new Response(null, { headers: transcribeCors() });
   }
   try {
     const key = Deno.env.get('OPENAI_API_KEY');
@@ -22,7 +29,7 @@ serve(async (req: Request) => {
           text: '',
           message: 'Transcription not configured. Add OPENAI_API_KEY to this function.',
         }),
-        { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+        { headers: jsonHeaders() },
       );
     }
     return new Response(
@@ -31,12 +38,12 @@ serve(async (req: Request) => {
         message:
           'OPENAI_API_KEY present — next step: upload short audio extract from client and call Whisper here.',
       }),
-      { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+      { headers: jsonHeaders() },
     );
   } catch (e) {
     return new Response(JSON.stringify({ text: '', message: String(e) }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
     });
   }
 });

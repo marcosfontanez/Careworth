@@ -18,6 +18,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MyPulseItemCard } from './MyPulseItemCard';
 import { MyPulseComposerChips } from './MyPulseComposerChips';
 import { profileUpdateKeys } from '@/lib/queryKeys';
+import { hrefPostFocusComments } from '@/lib/communityRoutes';
+import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 import type { Post, ProfileUpdate } from '@/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -229,17 +231,22 @@ export function MyPulseSection({
   );
 
   /**
-   * Comment handler — always routes to the pulse detail view. Even when
-   * the update is a pinned feed post we land on the Pulse detail first:
-   * it's a more focused surface and its "Open original post" button
-   * forwards the user to the real post detail when they actually want
-   * to engage the source thread.
+   * Comment handler — My Pulse row comments stay on `/my-pulse/[id]`.
+   * When the row bookmarks a feed post (`linkedPostId`), open that post’s
+   * thread with the composer focused instead.
    */
   const onComment = useCallback(
     (id: string) => {
+      const row = updates.find((u) => u.id === id);
+      if (row?.linkedPostId) {
+        router.push(
+          hrefPostFocusComments(row.linkedPostId, row.linkedCircleSlug?.trim() || undefined) as any,
+        );
+        return;
+      }
       router.push(`/my-pulse/${id}` as any);
     },
-    [router],
+    [router, updates],
   );
 
   /**
@@ -259,25 +266,22 @@ export function MyPulseSection({
 
   return (
     <View style={styles.root}>
-      <View style={styles.head}>
-        <View style={styles.headTitleRow}>
-          <View style={styles.titleIcon}>
-            <Ionicons name="pulse" size={14} color={colors.primary.teal} />
+      <PVSectionHeader
+        kicker="Activity"
+        title="My Pulse"
+        subtitle={
+          readOnly
+            ? 'Their latest 5 updates. Always fresh.'
+            : 'Your latest 5 updates. Always fresh.'
+        }
+        rightSlot={
+          <View style={styles.countPill}>
+            <Text style={styles.countText}>{count}</Text>
+            <Text style={styles.countTotal}>/5</Text>
           </View>
-          <View style={styles.headTextCol}>
-            <Text style={styles.title}>My Pulse</Text>
-            <Text style={styles.subtitle}>
-              {readOnly
-                ? 'Their latest 5 updates. Always fresh.'
-                : 'Your latest 5 updates. Always fresh.'}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.countPill}>
-          <Text style={styles.countText}>{count}</Text>
-          <Text style={styles.countTotal}>/5</Text>
-        </View>
-      </View>
+        }
+        style={{ marginBottom: spacing.md }}
+      />
 
       <MyPulseComposerChips isOwner={!readOnly} />
 
@@ -322,48 +326,8 @@ export function MyPulseSection({
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  headTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
-  },
-  titleIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 9,
-    backgroundColor: 'rgba(20,184,166,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(20,184,166,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.dark.text,
-    letterSpacing: -0.35,
-  },
-  subtitle: {
-    marginTop: 1,
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: colors.dark.textMuted,
-    letterSpacing: 0.15,
+    marginTop: 0,
+    marginBottom: 0,
   },
   countPill: {
     flexDirection: 'row',
@@ -375,7 +339,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20,184,166,0.14)',
     borderWidth: 1,
     borderColor: 'rgba(20,184,166,0.35)',
-    marginLeft: spacing.sm,
   },
   countText: {
     fontSize: 13,

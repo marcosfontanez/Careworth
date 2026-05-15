@@ -7,13 +7,21 @@ export const PROFILE_SELECT_WITH_AVATAR_FRAME =
   '*, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)';
 
 function rowToProfile(row: any): UserProfile {
+  const dn =
+    (typeof row.display_name === 'string' && row.display_name.trim()) ||
+    (typeof row.first_name === 'string' && row.first_name.trim()) ||
+    (typeof row.username === 'string' && row.username.trim()) ||
+    '';
   return {
     id: row.id,
-    displayName: row.display_name,
-    firstName: row.first_name,
+    displayName: dn || 'Someone',
+    firstName:
+      (typeof row.first_name === 'string' && row.first_name.trim()) ||
+      (typeof row.username === 'string' && row.username.trim()) ||
+      '',
     lastName: row.last_name ?? undefined,
-    role: row.role,
-    specialty: row.specialty,
+    role: (String(row.role ?? '').trim() || '') as UserProfile['role'],
+    specialty: (String(row.specialty ?? '').trim() || '') as UserProfile['specialty'],
     city: row.city,
     state: row.state,
     yearsExperience: row.years_experience,

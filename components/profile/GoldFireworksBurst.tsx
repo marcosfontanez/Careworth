@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Platform, StyleSheet, View } from 'react-native';
+import { coerceCssColor } from '@/lib/coerceCssColor';
 
 const USE_NATIVE = Platform.OS !== 'web';
 
@@ -23,7 +24,10 @@ type SparkSpec = {
 };
 
 function tierPalette(tier: PrizeFireworksTier, custom?: string[]): string[] {
-  if (custom?.length) return custom;
+  if (custom?.length) {
+    const fallback = tier === 'silver' ? DEFAULT_SILVER : tier === 'bronze' ? DEFAULT_BRONZE : DEFAULT_GOLD;
+    return custom.map((c, i) => coerceCssColor(c, fallback[i % fallback.length]!));
+  }
   if (tier === 'silver') return DEFAULT_SILVER;
   if (tier === 'bronze') return DEFAULT_BRONZE;
   return DEFAULT_GOLD;

@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { colors } from '@/theme';
-import { RoleBadge } from '@/components/ui/RoleBadge';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
-import { timeAgo, formatCount } from '@/utils/format';
-import { commentService } from '@/services/comment';
+import { timeAgo } from '@/utils/format';
 import { anonymousNameOnPost } from '@/lib/anonymousCircle';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
@@ -15,13 +16,20 @@ import { COMMENT_DELETED_TOMBSTONE } from '@/constants';
 import { analytics } from '@/lib/analytics';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { CommentRichText } from '@/components/ui/CommentRichText';
+import { CommentReactionStrip } from '@/components/comments/CommentReactionStrip';
 import { commentKeys } from '@/lib/queryKeys';
+import { emptyPostReactionCounts } from '@/lib/postReactions';
+import { pickCommentReaction } from '@/lib/commentReactionPick';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { avatarThumb } from '@/lib/storage';
-import type { Comment } from '@/types';
+import { commentService } from '@/services/comment';
+import type { Comment , PostReactionKind } from '@/types';
 
 interface Props {
   comment: Comment;
   depth?: number;
+  /** Accent for reaction chips (circle teal, etc.). */
+  accentColor?: string;
   /** When true, show stable pseudonyms and hide role / real avatars (anonymous circle posts). */
   anonymousMode?: boolean;
   /** Required when `anonymousMode` — same id as parent post for stable names. */
@@ -34,12 +42,12 @@ interface Props {
 export function CommentItem({
   comment,
   depth = 0,
+  accentColor = colors.primary.teal,
   anonymousMode,
   saltPostId,
   onReply,
   onReport,
 }: Props) {
-  const [liked, setLiked] = useState(false);
   const [showReplies, setShowReplies] = useState(depth === 0 && comment.replies.length > 0);
   /**
    * When `editing` is true we show {@link CommentEditComposer} as a
@@ -65,20 +73,13 @@ export function CommentItem({
   const isAuthor = !!user?.id && comment.author.id === user.id;
   const wasEdited = !!comment.editedAt;
 
-  const handleLike = async () => {
-    setLiked(!liked);
-    try {
-      if (!liked) await commentService.likeComment(comment.id);
-    } catch {}
-  };
-
   /**
    * Cache key used by both delete (tombstone patch) and edit (in-place
    * content/editedAt patch). Centralised here so the optimistic patch
-   * helpers below stay consistent with the feed's `['comments', postId]`
+   * helpers below stay consistent with the feed's `['comments', postId, viewerId]`
    * query contract.
    */
-  const postCacheKey = comment.postId ? commentKeys.byPost(comment.postId) : null;
+  const postCacheKey = comment.postId ? commentKeys.byPost(comment.postId, user?.id ?? null) : null;
 
   /** Recursive cache patch used by both delete and edit flows. */
   const patchTree = useCallback(
@@ -89,6 +90,26 @@ export function CommentItem({
           : { ...n, replies: patchTree(n.replies, next) },
       ),
     [comment.id],
+  );
+
+  const onReactionPick = useCallback(
+    async (kind: PostReactionKind) => {
+      if (!user?.id || !comment.postId) {
+        Alert.alert('Sign in required', 'Log in to react to comments.');
+        return;
+      }
+      try {
+        await pickCommentReaction({
+          postId: comment.postId,
+          viewerId: user.id,
+          comment,
+          kind,
+        });
+      } catch {
+        Alert.alert('Couldn’t update reaction', 'Try again in a moment.');
+      }
+    },
+    [comment, user?.id],
   );
 
   /**
@@ -129,13 +150,9 @@ export function CommentItem({
                 postId: comment.postId,
                 commentId: comment.id,
               });
-              // Scope to this post only. Previously this invalidated
-              // every `['comments', …]` entry (one line, huge
-              // consequence: every open post re-fetched its comment
-              // tree on every delete).
               if (comment.postId) {
                 await queryClient.invalidateQueries({
-                  queryKey: commentKeys.byPost(comment.postId),
+                  queryKey: commentKeys.byPostPrefix(comment.postId),
                 });
               }
             } catch {
@@ -175,11 +192,6 @@ export function CommentItem({
 
       try {
         const updated = await commentService.updateComment(comment.id, nextContent);
-        /**
-         * Reconcile with the server's authoritative timestamp. We keep
-         * the rest of the cached node (author, likes, replies) intact
-         * — only the edited body + new editedAt need to sync.
-         */
         if (postCacheKey) {
           const fresh = queryClient.getQueryData<Comment[]>(postCacheKey);
           if (fresh) {
@@ -215,6 +227,8 @@ export function CommentItem({
       { text: 'Cancel', style: 'cancel' },
     ]);
   }, [handleDelete]);
+
+  const showTextRow = isDeleted || !!comment.content.trim();
 
   return (
     <View style={[styles.container, depth > 0 && styles.reply]}>
@@ -261,9 +275,8 @@ export function CommentItem({
           ) : (
             <Text style={styles.name}>{isDeleted ? 'Removed' : displayName}</Text>
           )}
-          {!anonymousMode && !isDeleted ? <RoleBadge role={comment.author.role} size="sm" /> : null}
           {/*
-            Pulse tier chip next to role. Hides for Murmur (0–19) so new
+            Pulse tier chip beside name. Hides for Murmur (0–19) so new
             accounts don't get a visual penalty, and stays invisible in
             anonymous mode so nothing can be used to deanonymise the
             author. Reads the denormalized column — no extra fetch.
@@ -307,46 +320,66 @@ export function CommentItem({
             </TouchableOpacity>
           ) : null}
         </View>
+        {!anonymousMode && !isDeleted && buildNeonPillTags(comment.author).length > 0 ? (
+          <ProfileNeonPills tags={buildNeonPillTags(comment.author)} style={{ marginTop: 4 }} />
+        ) : null}
         {editing && !isDeleted ? (
           <CommentEditComposer
             initialContent={comment.content}
             onSave={handleEditSave}
             onCancel={() => setEditing(false)}
           />
-        ) : (
+        ) : showTextRow ? (
           <CommentRichText
             text={comment.content}
             style={[styles.content, isDeleted && styles.contentDeleted]}
             mentionsInteractive={!anonymousMode}
             linksInteractive={!anonymousMode}
           />
-        )}
+        ) : null}
+
+        {!isDeleted && !editing && comment.mediaUrl?.trim() ? (
+          <TouchableOpacity
+            onPress={() =>
+              router.push(`/image-viewer?uri=${encodeURIComponent(comment.mediaUrl!.trim())}` as never)
+            }
+            activeOpacity={0.9}
+            style={styles.imageTouch}
+          >
+            <Image
+              source={{ uri: comment.mediaUrl!.trim() }}
+              style={styles.attachedImage}
+              contentFit="contain"
+              {...pulseImageFeedHeroProps}
+            />
+          </TouchableOpacity>
+        ) : null}
 
         {/* Suppress reaction / reply controls on tombstones — there's
             nothing to act on, and showing them would hint that the
             comment "really" still exists under the hood. Also hidden
             during edit so the composer can own the full action row. */}
         {!isDeleted && !editing ? (
-          <View style={styles.actions}>
+          <View style={styles.footerBlock}>
             <Text style={styles.time}>
               {timeAgo(comment.createdAt)}
               {wasEdited ? <Text style={styles.editedTag}> · edited</Text> : null}
             </Text>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleLike} activeOpacity={0.7}>
-              <Ionicons
-                name={liked ? 'heart' : 'heart-outline'}
-                size={14}
-                color={liked ? colors.status.error : colors.dark.textMuted}
-              />
-              <Text style={styles.actionText}>{formatCount(comment.likeCount + (liked ? 1 : 0))}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              activeOpacity={0.7}
-              onPress={() => onReply?.(comment.id, displayName)}
-            >
-              <Text style={styles.actionText}>Reply</Text>
-            </TouchableOpacity>
+            <CommentReactionStrip
+              counts={comment.reactionCounts ?? emptyPostReactionCounts()}
+              viewerReaction={comment.viewerReaction ?? null}
+              accentColor={accentColor}
+              onPick={onReactionPick}
+            />
+            <View style={styles.replyRow}>
+              <TouchableOpacity
+                style={styles.replyBtn}
+                activeOpacity={0.7}
+                onPress={() => onReply?.(comment.id, displayName)}
+              >
+                <Text style={styles.replyText}>Reply</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : !editing ? (
           <Text style={styles.time}>{timeAgo(comment.createdAt)}</Text>
@@ -365,6 +398,7 @@ export function CommentItem({
             key={reply.id}
             comment={reply}
             depth={depth + 1}
+            accentColor={accentColor}
             anonymousMode={anonymousMode}
             saltPostId={saltPostId}
             onReply={onReply}
@@ -401,14 +435,17 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: colors.dark.textMuted,
   },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 6 },
+  imageTouch: { marginTop: 8, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.dark.cardAlt },
+  attachedImage: { width: '100%', height: 200, backgroundColor: colors.dark.cardAlt },
+  footerBlock: { marginTop: 6, gap: 6 },
   time: { fontSize: 12, color: colors.dark.textMuted },
   editedTag: {
     fontSize: 11,
     fontStyle: 'italic',
     color: colors.dark.textMuted,
   },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  actionText: { fontSize: 12, color: colors.dark.textMuted, fontWeight: '600' },
+  replyRow: { flexDirection: 'row', alignItems: 'center' },
+  replyBtn: { alignSelf: 'flex-start' },
+  replyText: { fontSize: 12, color: colors.primary.royal, fontWeight: '600' },
   toggleReplies: { fontSize: 12, color: colors.primary.royal, fontWeight: '600', marginTop: 8 },
 });

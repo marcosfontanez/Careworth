@@ -252,7 +252,15 @@ function PausedVideoFrame({
     }
   });
 
-  return <VideoView player={player} style={style} contentFit={contentFit} nativeControls={false} />;
+  return (
+    <VideoView
+      player={player}
+      style={style}
+      contentFit={contentFit}
+      nativeControls={false}
+      {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
+    />
+  );
 }
 
 /**
@@ -264,12 +272,15 @@ export function RecentMediaThumb({
   style,
   hubTileCss,
   hubImageContentFit = 'cover',
+  /** Android: in dense lists/grids, skip `expo-video` first-frame decode when a real thumbnail URL exists. */
+  preferStaticAndroidVideoTile = false,
 }: {
   post: Post;
   style: ThumbStyle;
   hubTileCss?: HubTileLayoutCss;
   /** Use `contain` for profile Media Hub so full stills aren't cropped in the tile. */
   hubImageContentFit?: ImageContentFit;
+  preferStaticAndroidVideoTile?: boolean;
 }) {
   if (postHasDemoCatalogMedia(post)) {
     return (
@@ -319,6 +330,25 @@ export function RecentMediaThumb({
       return (
         <View style={[style, styles.videoTile]}>
           <WebVideoGridPoster publicUrl={v} />
+          <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
+        </View>
+      );
+    }
+    const androidThumb = post.thumbnailUrl?.trim();
+    if (
+      Platform.OS === 'android' &&
+      preferStaticAndroidVideoTile &&
+      androidThumb &&
+      !isDemoCatalogMediaUrl(androidThumb)
+    ) {
+      return (
+        <View style={[style, styles.videoTile]}>
+          <HubTileImage
+            uri={androidThumb}
+            style={StyleSheet.absoluteFillObject}
+            layoutSizeCss={hubTileCss}
+            contentFit={hubImageContentFit}
+          />
           <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );

@@ -7,7 +7,6 @@ interface AppState {
   isAuthenticated: boolean;
   feedTab: FeedType;
   savedPostIds: Set<string>;
-  savedJobIds: Set<string>;
   followedCreatorIds: Set<string>;
   joinedCommunityIds: Set<string>;
 
@@ -32,7 +31,6 @@ interface AppState {
   setAuthenticated: (val: boolean) => void;
   setFeedTab: (tab: FeedType) => void;
   toggleSavePost: (id: string) => void;
-  toggleSaveJob: (id: string) => void;
   toggleFollowCreator: (id: string) => void;
   toggleJoinCommunity: (id: string) => void;
   /** Replace local joined set from server (e.g. after profile load). */
@@ -51,7 +49,6 @@ export const useAppStore = create<AppState>((set) => ({
   isAuthenticated: false,
   feedTab: 'forYou',
   savedPostIds: new Set(),
-  savedJobIds: new Set(),
   followedCreatorIds: new Set(),
   joinedCommunityIds: new Set(),
 
@@ -76,14 +73,6 @@ export const useAppStore = create<AppState>((set) => ({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return { savedPostIds: next };
-    }),
-
-  toggleSaveJob: (id) =>
-    set((state) => {
-      const next = new Set(state.savedJobIds);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return { savedJobIds: next };
     }),
 
   toggleFollowCreator: (id) =>

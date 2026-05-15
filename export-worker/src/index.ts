@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifySupabaseJwt, AuthError } from './auth.js';
-import { createJob, getJob } from './jobs.js';
+import { createJob, createDuetMuxJob, getJob, getDuetMuxJob } from './jobs.js';
 import type { VideoExportJobRequestBody } from './types.js';
 
 const app = express();
@@ -76,6 +76,70 @@ app.get('/v1/video-export/jobs/:jobId', async (req, res) => {
       return;
     }
     console.error('[export] GET job', e);
+    res.status(500).json({ error: 'Status failed' });
+  }
+});
+
+app.post('/v1/duet-mux', async (req, res) => {
+  try {
+    const { sub } = await verifySupabaseJwt(req.headers.authorization);
+    const body = req.body as { leftVideoUrl?: string; rightVideoUrl?: string; clientRef?: string };
+    if (!body?.leftVideoUrl?.trim() || !body?.rightVideoUrl?.trim()) {
+      res.status(400).json({ error: 'leftVideoUrl and rightVideoUrl required' });
+      return;
+    }
+    const job = createDuetMuxJob(sub, {
+      leftVideoUrl: body.leftVideoUrl.trim(),
+      rightVideoUrl: body.rightVideoUrl.trim(),
+      clientRef: body.clientRef?.trim(),
+    });
+    res.status(200).json({ jobId: job.id });
+  } catch (e) {
+    if (e instanceof AuthError) {
+      res.status(e.status).json({ error: e.message });
+      return;
+    }
+    const status = typeof (e as { status?: number })?.status === 'number' ? (e as { status: number }).status : 500;
+    const msg = e instanceof Error ? e.message : 'Duet mux failed';
+    if (status === 429) {
+      res.status(429).json({ error: msg });
+      return;
+    }
+    console.error('[duet-mux] POST', e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.get('/v1/duet-mux/jobs/:jobId', async (req, res) => {
+  try {
+    const { sub } = await verifySupabaseJwt(req.headers.authorization);
+    const job = getDuetMuxJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+    if (job.userId !== sub) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    if (job.status === 'completed') {
+      res.json({ status: 'completed', outputUrl: job.outputUrl, progress: 1 });
+      return;
+    }
+    if (job.status === 'failed') {
+      res.json({ status: 'failed', error: job.error ?? 'Unknown error' });
+      return;
+    }
+    res.json({
+      status: job.status === 'queued' ? 'queued' : 'processing',
+      progress: job.progress,
+    });
+  } catch (e) {
+    if (e instanceof AuthError) {
+      res.status(e.status).json({ error: e.message });
+      return;
+    }
+    console.error('[duet-mux] GET job', e);
     res.status(500).json({ error: 'Status failed' });
   }
 });

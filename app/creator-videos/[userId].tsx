@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -33,6 +34,9 @@ import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { avatarThumb } from '@/lib/storage';
 import { usePulseScorePillModel } from '@/hooks/usePulseScorePillModel';
 import { userKeys } from '@/lib/queryKeys';
+import { getCreatorVideosGridListWindow } from '@/lib/feedVideoListWindow';
+
+const CREATOR_VIDEOS_GRID_WINDOW = getCreatorVideosGridListWindow();
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PAD = 16;
@@ -45,7 +49,11 @@ const AVATAR_SIZE = 88;
 
 type VideoSort = 'newest' | 'popular';
 
-function filterCreatorVideos(posts: Post[] | undefined, isOwner: boolean, viewedProfile: UserProfile | undefined) {
+function filterCreatorVideos(
+  posts: Post[] | undefined,
+  isOwner: boolean,
+  viewedProfile: UserProfile | null | undefined,
+) {
   const list = posts ?? [];
   if (isOwner) {
     return list.filter(
@@ -55,7 +63,8 @@ function filterCreatorVideos(posts: Post[] | undefined, isOwner: boolean, viewed
         Boolean(p.mediaUrl?.trim() || p.thumbnailUrl?.trim()),
     );
   }
-  if (!viewedProfile || viewedProfile.privacyMode === 'private') return [];
+  /** Only hide when we know the profile is private — not while `useUser` is still resolving (was emptying the grid). */
+  if (viewedProfile?.privacyMode === 'private') return [];
   return list.filter(
     (p) =>
       !postHasDemoCatalogMedia(p) &&
@@ -86,12 +95,25 @@ export default function CreatorVideosGridScreen() {
   const jumpPromptShown = useRef(false);
 
   const isOwner = !!authUser?.id && creatorId === authUser.id;
-  const { data: profile, isPending: profilePending } = useUser(creatorId);
+  const { data: profile, isLoading: profileLoading } = useUser(creatorId);
 
   const { data: posts, isLoading: postsLoading } = useUserPosts(creatorId);
 
   const privateBlocked = !isOwner && profile?.privacyMode === 'private';
-  const privacyGateLoading = !isOwner && profilePending;
+  /** Only block public surfaces until we know we're not looking at a cached-empty first paint — not for every background refetch. */
+  const privacyGateLoading = !isOwner && profile === undefined && profileLoading;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!creatorId.trim()) return;
+      void queryClient.invalidateQueries({ queryKey: userKeys.detail(creatorId) });
+      void queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey) && q.queryKey[0] === 'userPosts' && q.queryKey[1] === creatorId,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['pulseScoreCurrent', creatorId] });
+    }, [creatorId, queryClient]),
+  );
 
   const { overall, tier } = usePulseScorePillModel(
     creatorId || null,
@@ -194,7 +216,7 @@ export default function CreatorVideosGridScreen() {
 
       {!privateBlocked && creatorId ? (
         <View style={styles.hero}>
-          {profilePending && !profile ? (
+          {profileLoading && profile === undefined ? (
             <View style={styles.heroLoading}>
               <ActivityIndicator color={colors.primary.teal} />
             </View>
@@ -261,10 +283,10 @@ export default function CreatorVideosGridScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: GAP, paddingHorizontal: PAD }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24, gap: GAP }}
-          removeClippedSubviews={Platform.OS === 'android'}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
+          removeClippedSubviews={false}
+          initialNumToRender={CREATOR_VIDEOS_GRID_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={CREATOR_VIDEOS_GRID_WINDOW.maxToRenderPerBatch}
+          windowSize={CREATOR_VIDEOS_GRID_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={colors.primary.teal} />
@@ -279,7 +301,11 @@ export default function CreatorVideosGridScreen() {
                 onPress={() => router.push(`/feed/${p.id}` as any)}
                 activeOpacity={0.85}
               >
-                <RecentMediaThumb post={p} style={styles.thumb} />
+                <RecentMediaThumb
+                  post={p}
+                  style={styles.thumb}
+                  preferStaticAndroidVideoTile={Platform.OS === 'android'}
+                />
                 <LinearGradient
                   colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.9)']}
                   style={styles.thumbGrad}

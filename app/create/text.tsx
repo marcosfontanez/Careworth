@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert,
@@ -15,6 +15,8 @@ import { analytics } from '@/lib/analytics';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
 import { useToast } from '@/components/ui/Toast';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
+import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 
 export default function CreateTextScreen() {
   const router = useRouter();
@@ -24,27 +26,44 @@ export default function CreateTextScreen() {
   const [hashtags, setHashtags] = useState('');
   const [posting, setPosting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [phiAck, setPhiAck] = useState(false);
   const toast = useToast();
+
+  const phiFindings = useMemo(
+    () => scanForPhi(content, hashtags),
+    [content, hashtags],
+  );
+  const phiSev = highestSeverity(phiFindings);
 
   const handlePost = async () => {
     if (!content.trim()) {
       Alert.alert('Add content', 'Please write something before posting.');
       return;
     }
+    if (!user) {
+      toast.show('Sign in to post', 'error');
+      return;
+    }
+    if (phiSev === 'high') {
+      toast.show('High-risk privacy pattern — remove or reword before posting', 'error');
+      return;
+    }
+    if (phiFindings.length > 0 && !phiAck) {
+      toast.show('Review the privacy banner and confirm before posting', 'error');
+      return;
+    }
     if (!checkRateLimit('post')) return;
 
     setPosting(true);
     try {
-      if (user) {
-        const tags = hashtags.split(/[\s,]+/).filter((t) => t.startsWith('#')).map((t) => t.slice(1));
-        await postsService.create({
-          creator_id: user.id,
-          type: 'discussion',
-          caption: content.trim(),
-          hashtags: tags,
-          feed_type_eligible: ['forYou', 'following'],
-        });
-      }
+      const tags = hashtags.split(/[\s,]+/).filter((t) => t.startsWith('#')).map((t) => t.slice(1));
+      await postsService.create({
+        creator_id: user.id,
+        type: 'discussion',
+        caption: content.trim(),
+        hashtags: tags,
+        feed_type_eligible: ['forYou', 'following'],
+      });
 
       analytics.track('post_created', { type: 'discussion' });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -75,7 +94,14 @@ export default function CreateTextScreen() {
         leftIcon="close"
         leftAccessibilityLabel="Close"
         right={
-          <TouchableOpacity onPress={handlePost} activeOpacity={0.7} disabled={posting || !canPost} hitSlop={12}>
+          <TouchableOpacity
+            onPress={handlePost}
+            activeOpacity={0.7}
+            disabled={posting || !canPost}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Post discussion"
+          >
             {posting ? (
               <ActivityIndicator size="small" color={colors.primary.teal} />
             ) : (
@@ -111,6 +137,8 @@ export default function CreateTextScreen() {
             maxLength={MAX_CHARS}
           />
         </AccentComposerFrame>
+
+        <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
 
         <AccentComposerFrame
           accentColor={colors.primary.teal}

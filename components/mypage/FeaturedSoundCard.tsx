@@ -20,6 +20,7 @@ import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile } from '@/types';
 import { isLikelyDirectAudioUrl } from '@/lib/profileAudio';
 import { searchITunesSongs } from '@/lib/music/itunesSearch';
+import { normalizeWebUrl } from '@/lib/safeExternalLink';
 
 const SKIP_MS = 15_000;
 const WAVE_BAR_COUNT = 44;
@@ -342,10 +343,14 @@ export function FeaturedSoundCard({
 
   const openExternalListen = useCallback(async () => {
     if (!listenUrl) return;
-    const u = listenUrl.startsWith('http') ? listenUrl : `https://${listenUrl}`;
+    const normalized = normalizeWebUrl(listenUrl);
+    if (!normalized) {
+      Alert.alert('Cannot open link', 'Enter a valid http(s) URL in Customize My Pulse.');
+      return;
+    }
     try {
-      const ok = await Linking.canOpenURL(u);
-      if (ok) await Linking.openURL(u);
+      const ok = await Linking.canOpenURL(normalized);
+      if (ok) await Linking.openURL(normalized);
       else Alert.alert('Cannot open link', 'Check the listen URL in Customize My Pulse.');
     } catch {
       Alert.alert('Cannot open link', 'Check the listen URL in Customize My Pulse.');
@@ -430,12 +435,15 @@ export function FeaturedSoundCard({
     <View
       style={[
         styles.card,
-        { borderColor: 'rgba(255,255,255,0.09)' },
-        shadows.card,
+        { borderColor: 'rgba(255,255,255,0.12)' },
       ]}
     >
       <LinearGradient
-        colors={['rgba(20,184,166,0.06)', 'rgba(15,28,48,0.96)', colors.dark.card]}
+        colors={[
+          'rgba(20,184,166,0.07)',
+          'rgba(15,28,48,0.38)',
+          'rgba(6,12,22,0.18)',
+        ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.inner}
@@ -691,7 +699,6 @@ function Waveform({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.lg,
     borderRadius: borderRadius.card,
     borderWidth: 1,
     overflow: 'hidden',

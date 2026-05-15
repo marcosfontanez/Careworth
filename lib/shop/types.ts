@@ -90,6 +90,16 @@ export type SparkWalletRow = {
   updated_at: string;
 };
 
+/** Creator earning balance (from Sparks gifts). Row exists after `economy_create_or_get_wallets` when profile is creator. */
+export type DiamondWalletRow = {
+  creator_id: string;
+  diamonds_pending: number;
+  diamonds_available: number;
+  diamonds_paid_out: number;
+  total_diamonds_earned: number;
+  updated_at: string;
+};
+
 export type PurchaseReceiptRow = {
   id: string;
   user_id: string;
@@ -106,4 +116,10 @@ export type PurchaseReceiptRow = {
 export function totalSparkBalance(w: SparkWalletRow | null | undefined): number {
   if (!w) return 0;
   return Number(w.paid_sparks_balance ?? 0) + Number(w.promo_sparks_balance ?? 0);
+}
+
+/** All Diamonds credited (pending release + already available). */
+export function totalDiamondBalance(w: DiamondWalletRow | null | undefined): number {
+  if (!w) return 0;
+  return Number(w.diamonds_pending ?? 0) + Number(w.diamonds_available ?? 0);
 }

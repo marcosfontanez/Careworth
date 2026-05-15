@@ -8,7 +8,8 @@ import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
 import { ShareToMyPulseButton } from './ShareToMyPulseButton';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
-import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
+import { pulseImageCircleWallProps } from '@/lib/pulseImage';
 
 const KIND_SHORT: Record<CircleThread['kind'], string> = {
   question: 'Ask',
@@ -50,8 +51,8 @@ export function CircleThreadCard({
         id: thread.authorId,
         displayName: 'Member',
         avatarUrl: '',
-        role: 'RN',
-        specialty: 'General',
+        role: '',
+        specialty: '',
         city: '',
         state: '',
         isVerified: false,
@@ -119,7 +120,9 @@ export function CircleThreadCard({
               ) : null}
             </View>
             <Text style={styles.subtle} numberOfLines={1}>
-              {isAnonymousRoom ? 'Anonymous' : `${author.role}${author.specialty ? ` · ${author.specialty}` : ''}`}
+              {isAnonymousRoom
+                ? 'Anonymous'
+                : buildNeonPillTags(author).join(' · ') || '\u00a0'}
             </Text>
           </View>
           <Text style={styles.time}>{timeAgo(thread.createdAt)}</Text>
@@ -140,10 +143,11 @@ export function CircleThreadCard({
 
         {thread.mediaThumbUrl ? (
           <Image
+            recyclingKey={`${thread.id}:${thread.mediaThumbUrl}`}
             source={{ uri: thread.mediaThumbUrl }}
             style={styles.thumb}
             contentFit="cover"
-            {...pulseImageListThumbProps}
+            {...pulseImageCircleWallProps}
           />
         ) : null}
 

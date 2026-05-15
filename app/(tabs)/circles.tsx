@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,14 +21,20 @@ import { useAppStore } from '@/store/useAppStore';
 import { circleContentService } from '@/services/circleContent';
 import { communitiesService, circleThreadsDb } from '@/services/supabase';
 import { CirclesTabHeading } from '@/components/circles/CirclesTabHeading';
-import { CircleSearchBar } from '@/components/circles/CircleSearchBar';
+import { CirclesCosmicBackdrop } from '@/components/circles/CirclesCosmicBackdrop';
+import { JoinButton } from '@/components/circles/JoinButton';
 import { CircleCardFeatured } from '@/components/circles/CircleCardFeatured';
-import { CircleCardCompact } from '@/components/circles/CircleCardCompact';
-import { TrendingTopicCard } from '@/components/circles/TrendingTopicCard';
 import { RecentCircleConversationCard } from '@/components/circles/RecentCircleConversationCard';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { colors, typography, touchTarget, spacing } from '@/theme';
+import { colors, touchTarget, spacing, pulseverse, pvKit, layout, tabBarScrollPaddingBottom } from '@/theme';
+import { borderRadius } from '@/theme/spacing';
+import { PVPageBackground } from '@/components/pv/PVPageBackground';
+import { PVSegmentedTabs } from '@/components/pv/PVSegmentedTabs';
+import { PVSearchBar } from '@/components/pv/PVSearchBar';
+import { PVCircleCard } from '@/components/pv/PVCircleCard';
+import { PVTrendingTopicCard } from '@/components/pv/PVTrendingTopicCard';
+import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 import { getCircleAccent } from '@/lib/circleAccents';
 import {
   addRecentCircleSearch,
@@ -39,15 +46,23 @@ import { prefetchCircleRoom } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { addSearchQuery } from '@/lib/searchHistory';
 import { FEATURED_CIRCLE_SLUGS_ORDER } from '@/constants/circleDiscovery';
-import { timeAgo } from '@/utils/format';
+import { formatCount, timeAgo } from '@/utils/format';
 import type { Community } from '@/types';
 
 type DiscoverScope = 'discover' | 'yours';
+
+function compactDesc(s: string, max = 80) {
+  const t = s.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max).trim()}…`;
+}
 
 export default function CirclesScreen() {
   const router = useRouter();
   const { scope: scopeParam } = useLocalSearchParams<{ scope?: string }>();
   const navigation = useNavigation();
+  const { width: windowWidth } = useWindowDimensions();
+  const circlesTwinRowWidth = Math.max(240, Math.floor(windowWidth - spacing.lg * 2));
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -249,85 +264,96 @@ export default function CirclesScreen() {
       const accent = getCircleAccent(c.slug, c.accentColor).color;
       const isJoined = joinedIds.has(c.id);
       const hint = activityFromTopics?.get(c.id) ?? null;
+      const secondaryParts: string[] = [];
+      if (typeof c.postCount === 'number' && c.postCount > 0) {
+        secondaryParts.push(`${formatCount(c.postCount)} posts`);
+      }
+      if (typeof c.onlineCount === 'number' && c.onlineCount > 0) {
+        secondaryParts.push(`${c.onlineCount} online`);
+      }
+      if (discovery) secondaryParts.push('explore');
       return (
-        <CircleCardCompact
+        <PVCircleCard
           key={c.id}
-          community={c}
+          leading={<Text style={styles.compactEmoji}>{c.icon}</Text>}
+          badge={
+            discovery ? (
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>New</Text>
+              </View>
+            ) : undefined
+          }
+          title={c.name}
+          subtitle={compactDesc(c.description)}
+          meta={`${formatCount(c.memberCount)} members`}
+          metaSecondary={secondaryParts.length > 0 ? secondaryParts.join(' · ') : undefined}
+          footerHint={hint ?? undefined}
           accent={accent}
-          joined={isJoined}
-          discovery={discovery}
-          activityHint={hint}
+          trailing={<JoinButton joined={isJoined} onToggle={() => void persistToggleJoin(c.id)} compact />}
           onPress={() => openCommunity(c)}
-          onToggleJoin={() => void persistToggleJoin(c.id)}
         />
       );
     });
   };
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerBrand}>
-          <CirclesTabHeading onPress={resetCirclesHome} />
+    <PVPageBackground>
+      <View style={styles.pageInner}>
+        <CirclesCosmicBackdrop />
+        <View style={[styles.top, { paddingTop: insets.top + spacing.sm }]}>
+          <View style={styles.headerBrand}>
+            <CirclesTabHeading onPress={resetCirclesHome} />
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push('/notifications')}
+            style={styles.bellBtn}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Notifications${bellCount > 0 ? `, ${bellCount} unread` : ''}`}
+          >
+            <Ionicons name="notifications-outline" size={22} color={colors.dark.text} />
+            {bellCount > 0 ? (
+              <View style={styles.bellDot}>
+                <Text style={styles.bellDotText}>{bellCount > 9 ? '9+' : bellCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push('/notifications')}
-          style={styles.bellBtn}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel={`Notifications${bellCount > 0 ? `, ${bellCount} unread` : ''}`}
-        >
-          <Ionicons name="notifications-outline" size={22} color={colors.dark.text} />
-          {bellCount > 0 ? (
-            <View style={styles.bellDot}>
-              <Text style={styles.bellDotText}>{bellCount > 9 ? '9+' : bellCount}</Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
-      </View>
 
-      <ScrollView
-        ref={mainScrollRef}
-        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
+        <ScrollView
+          ref={mainScrollRef}
+          style={styles.mainScroll}
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingBottom: tabBarScrollPaddingBottom(insets.bottom),
+              /** Scroll content shrink-wraps by default; without this, `%` widths on children collapse to intrinsic size. */
+              minWidth: windowWidth,
+            },
+          ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing || (!!isFetching && !refreshing)}
             onRefresh={onRefresh}
-            tintColor={colors.primary.teal}
+            tintColor={pulseverse.electric}
             title={refreshing || isFetching ? 'Updating Circles…' : undefined}
             titleColor={colors.dark.textMuted}
           />
         }
       >
         {showFullLanding ? (
-          <View style={styles.scopeRow}>
-            <TouchableOpacity
-              style={[styles.scopeChip, scope === 'discover' && styles.scopeChipOn]}
-              onPress={() => setScope('discover')}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: scope === 'discover' }}
-            >
-              <Ionicons
-                name="compass-outline"
-                size={16}
-                color={scope === 'discover' ? colors.primary.teal : colors.dark.textMuted}
-              />
-              <Text style={[styles.scopeChipText, scope === 'discover' && styles.scopeChipTextOn]}>Discover</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.scopeChip, scope === 'yours' && styles.scopeChipOn]}
-              onPress={() => setScope('yours')}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: scope === 'yours' }}
-            >
-              <Ionicons
-                name="people-outline"
-                size={16}
-                color={scope === 'yours' ? colors.primary.teal : colors.dark.textMuted}
-              />
-              <Text style={[styles.scopeChipText, scope === 'yours' && styles.scopeChipTextOn]}>Your circles</Text>
-            </TouchableOpacity>
+          <View style={styles.scopeTabsShell}>
+            <PVSegmentedTabs
+              variant="twin"
+              trackWidth={circlesTwinRowWidth}
+              items={[
+                { key: 'discover', label: 'Discover', icon: 'compass-outline' },
+                { key: 'yours', label: 'Your circles', icon: 'people-outline' },
+              ]}
+              selected={scope}
+              onSelect={(k) => setScope(k as DiscoverScope)}
+            />
           </View>
         ) : (
           <TouchableOpacity
@@ -337,12 +363,32 @@ export default function CirclesScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back to Circles home"
           >
-            <Ionicons name="chevron-back" size={22} color={colors.primary.teal} />
+            <Ionicons name="chevron-back" size={22} color={pulseverse.electric} />
             <Text style={styles.searchBackText}>Back to Circles</Text>
           </TouchableOpacity>
         )}
 
-        <CircleSearchBar value={search} onChangeText={setSearch} />
+        <PVSearchBar
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search circles, circle posts, topics, keywords…"
+          accessibilityLabel="Search circles and topics"
+          style={styles.searchBar}
+          endSlot={
+            <>
+              <View style={[styles.searchDivider, { backgroundColor: pvKit.circles.search.divider }]} />
+              <TouchableOpacity
+                onPress={() => router.push('/search')}
+                hitSlop={12}
+                style={styles.filterHit}
+                accessibilityRole="button"
+                accessibilityLabel="Search filters"
+              >
+                <Ionicons name="options-outline" size={22} color={pulseverse.electricSoft} />
+              </TouchableOpacity>
+            </>
+          }
+        />
 
         {showFullLanding && recentCircleSearches.length > 0 ? (
           <View style={styles.recentsWrap}>
@@ -380,8 +426,10 @@ export default function CirclesScreen() {
 
         {!showFullLanding ? (
           <View style={styles.section}>
-            <Text style={styles.sectionKicker}>Results</Text>
-            <Text style={styles.sectionLede}>Directory matches vs discussions that mention your keywords.</Text>
+            <PVSectionHeader
+              title="Results"
+              subtitle="Directory matches vs discussions that mention your keywords."
+            />
             {searchGrouped ? (
               <>
                 {searchDidYouMean &&
@@ -438,8 +486,7 @@ export default function CirclesScreen() {
         ) : scope === 'yours' ? (
           <>
             <View style={styles.section}>
-              <Text style={styles.sectionKicker}>Your circles</Text>
-              <Text style={styles.sectionLede}>Rooms you’ve joined — jump back in anytime.</Text>
+              <PVSectionHeader title="Your circles" subtitle="Rooms you’ve joined — jump back in anytime." />
               {joinedCommunities.length === 0 ? (
                 <View style={styles.emptyInline}>
                   <Ionicons name="people-outline" size={40} color={colors.dark.textMuted} />
@@ -451,10 +498,10 @@ export default function CirclesScreen() {
             </View>
             {user?.id ? (
               <View style={styles.section}>
-                <Text style={styles.sectionKicker}>Your conversations</Text>
-                <Text style={styles.sectionLede}>
-                  Discussions you joined and circle wall posts you commented on — open returns you to that spot.
-                </Text>
+                <PVSectionHeader
+                  title="Your conversations"
+                  subtitle="Discussions you joined and circle wall posts you commented on — open returns you to that spot."
+                />
                 {recentInvolvedLoading && recentInvolved.length === 0 ? (
                   <View style={styles.emptyInline}>
                     <Text style={styles.emptyText}>Loading your conversations…</Text>
@@ -498,19 +545,21 @@ export default function CirclesScreen() {
         ) : (
           <>
             <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.featuredTitle}>Popular Circles</Text>
-                <TouchableOpacity
-                  onPress={() => router.push('/circles-featured')}
-                  hitSlop={8}
-                  style={styles.seeAllHit}
-                  accessibilityRole="button"
-                  accessibilityLabel="See all circles, alphabetical list"
-                >
-                  <Text style={styles.seeAll}>See all</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.sectionLede}>Explore Circles that match your interests.</Text>
+              <PVSectionHeader
+                title="Popular Circles"
+                subtitle="Explore Circles that match your interests."
+                rightSlot={
+                  <TouchableOpacity
+                    onPress={() => router.push('/circles-featured')}
+                    hitSlop={8}
+                    style={styles.seeAllHit}
+                    accessibilityRole="button"
+                    accessibilityLabel="See all circles, alphabetical list"
+                  >
+                    <Text style={styles.seeAll}>See all</Text>
+                  </TouchableOpacity>
+                }
+              />
               {featuredForScope.length === 0 ? (
                 <View style={styles.emptyInline}>
                   <Text style={styles.emptyText}>
@@ -525,13 +574,14 @@ export default function CirclesScreen() {
                   decelerationRate="normal"
                   contentContainerStyle={styles.featuredScroll}
                 >
-                  {featuredForScope.map((c) => {
+                  {featuredForScope.map((c, carouselIndex_) => {
                     const accent = getCircleAccent(c.slug, c.accentColor).color;
                     return (
                       <CircleCardFeatured
                         key={c.id}
                         community={c}
                         accent={accent}
+                        carouselIndex={carouselIndex_}
                         onPress={() => openCommunity(c)}
                       />
                     );
@@ -542,33 +592,39 @@ export default function CirclesScreen() {
 
             {trending.length > 0 ? (
               <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionKicker}>Trending topics</Text>
-                </View>
-                <Text style={styles.sectionLede}>The top 3 most engaged conversations right now.</Text>
+                <PVSectionHeader
+                  title="Trending topics"
+                  subtitle="The top 3 most engaged conversations right now."
+                />
                 <View style={styles.trendStack}>
-                  {trending.map((t, i) => (
-                    <TrendingTopicCard
-                      key={t.id}
-                      topic={t}
-                      rank={(i + 1) as 1 | 2 | 3}
-                      accent={colors.primary.teal}
-                      onPress={() => {
-                        if (t.postId) router.push(hrefPost(t.postId, t.circleSlug));
-                        else if (t.threadId) router.push(hrefCommunityThread(t.circleSlug, t.threadId));
-                        else router.push(hrefCommunity(t.circleSlug));
-                      }}
-                    />
-                  ))}
+                  {trending.map((t, i) => {
+                    const isPost = Boolean(t.postId);
+                    const engagementLabel = isPost ? 'comments' : 'replies';
+                    return (
+                      <PVTrendingTopicCard
+                        key={t.id}
+                        topic={t.title}
+                        topicMode="plain"
+                        rank={(i + 1) as 1 | 2 | 3}
+                        categoryLabel={t.circleName}
+                        statLabel={`${formatCount(t.replyCount)} ${engagementLabel}`}
+                        timeLabel={timeAgo(t.lastActiveAt)}
+                        preview={t.preview}
+                        accentColor={pulseverse.electric}
+                        onPress={() => {
+                          if (t.postId) router.push(hrefPost(t.postId, t.circleSlug));
+                          else if (t.threadId) router.push(hrefCommunityThread(t.circleSlug, t.threadId));
+                          else router.push(hrefCommunity(t.circleSlug));
+                        }}
+                      />
+                    );
+                  })}
                 </View>
               </View>
             ) : null}
 
             <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionKicker}>New circles</Text>
-              </View>
-              <Text style={styles.sectionLede}>The three newest spotlight rooms.</Text>
+              <PVSectionHeader title="New circles" subtitle="The three newest spotlight rooms." />
               {renderCompactList(
                 newCirclesSpotlight,
                 'Nothing new here yet — try search or browse all circles.',
@@ -578,21 +634,24 @@ export default function CirclesScreen() {
             </View>
           </>
         )}
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </PVPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.bg },
-  scroll: { paddingHorizontal: 0, paddingBottom: 24 },
+  pageInner: { flex: 1, position: 'relative' },
+  mainScroll: { flex: 1, zIndex: 1 },
+  scroll: { paddingHorizontal: 0, alignItems: 'stretch', width: '100%' },
   top: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 10,
+    paddingHorizontal: layout.screenPadding,
+    paddingBottom: spacing.sm + 2,
+    gap: spacing.sm + 2,
+    zIndex: 2,
   },
   headerBrand: {
     flex: 1,
@@ -600,18 +659,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     /** Stretch so the Circles lockup gets a real width (`width: '100%'` on the image). */
     alignItems: 'stretch',
-    marginRight: 6,
-    paddingRight: 4,
+    marginRight: spacing.sm,
+    paddingRight: spacing.xs,
   },
   bellBtn: {
     width: touchTarget.min,
     height: touchTarget.min,
     borderRadius: 22,
-    backgroundColor: colors.dark.card,
+    backgroundColor: pvKit.circles.chromeBell.fill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.dark.border,
+    borderColor: pvKit.circles.chromeBell.border,
   },
   bellDot: {
     position: 'absolute',
@@ -627,74 +686,63 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.dark.bg,
   },
-  bellDotText: { fontSize: 10, fontWeight: '800', color: '#0A0C10' },
-  scopeRow: {
-    flexDirection: 'row',
-    gap: 10,
+  bellDotText: { fontSize: 10, fontWeight: '800', color: pulseverse.onElectric },
+  scopeTabsShell: {
+    width: '100%',
+    alignSelf: 'stretch',
     paddingHorizontal: spacing.lg,
-    marginBottom: 8,
+    marginBottom: spacing.lg,
+    zIndex: 2,
   },
-  scopeChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 44,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.dark.borderSubtle,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+  searchBar: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
   },
-  scopeChipOn: {
-    borderColor: 'rgba(20,184,166,0.45)',
-    backgroundColor: 'rgba(20,184,166,0.12)',
+  searchDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginVertical: 12,
+    marginRight: 6,
   },
-  scopeChipText: { fontSize: 13, fontWeight: '700', color: colors.dark.textMuted },
-  scopeChipTextOn: { color: colors.primary.teal, fontWeight: '800' },
+  filterHit: { padding: 6, borderRadius: 12 },
+  compactEmoji: { fontSize: 28, lineHeight: 32 },
+  newBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(34,211,238,0.55)',
+    backgroundColor: 'rgba(34,211,238,0.12)',
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: pulseverse.electricSoft,
+    letterSpacing: 1,
+  },
   searchBackRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.lg,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     minHeight: touchTarget.min,
   },
-  searchBackText: { fontSize: 16, fontWeight: '600', color: colors.primary.teal },
-  searchBlock: { marginBottom: 16 },
+  searchBackText: { fontSize: 16, fontWeight: '600', color: pulseverse.electric },
+  searchBlock: { marginBottom: spacing.lg },
   searchBlockLabel: {
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: colors.dark.textMuted,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  section: { marginBottom: spacing.sm, paddingHorizontal: spacing.lg },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  featuredTitle: {
-    ...typography.sectionTitle,
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.dark.text,
-    letterSpacing: -0.3,
-  },
-  sectionKicker: {
-    ...typography.sectionTitle,
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.dark.text,
-    letterSpacing: -0.3,
-  },
+  section: { marginBottom: pvKit.circles.sectionGap, paddingHorizontal: spacing.lg },
   seeAll: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.primary.teal,
+    color: pulseverse.electric,
   },
   seeAllHit: {
     minHeight: 44,
@@ -703,26 +751,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 4,
   },
-  sectionLede: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.dark.textMuted,
-    marginTop: 6,
-    marginBottom: 14,
-  },
   featuredScroll: {
-    gap: 12,
-    paddingBottom: 8,
-    paddingLeft: 2,
-    paddingRight: 20,
+    gap: pvKit.circles.carouselGap,
+    paddingBottom: spacing.sm + 2,
+    paddingLeft: spacing.xs / 2,
+    paddingRight: spacing.xl,
   },
-  trendStack: { gap: 8 },
-  recentsWrap: { paddingHorizontal: spacing.lg, marginBottom: 8 },
+  trendStack: { gap: spacing.lg },
+  recentsWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   recentsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   recentsTitle: {
     fontSize: 11,
@@ -731,25 +772,25 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: colors.dark.textMuted,
   },
-  recentsClear: { fontSize: 13, fontWeight: '700', color: colors.primary.teal, paddingVertical: 6 },
-  chipRowScroll: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 4 },
+  recentsClear: { fontSize: 13, fontWeight: '700', color: pulseverse.electric, paddingVertical: 6 },
+  chipRowScroll: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingBottom: spacing.xs },
   searchChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
     borderRadius: 20,
-    backgroundColor: 'rgba(20,184,166,0.12)',
+    backgroundColor: 'rgba(34,211,238,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(20,184,166,0.35)',
+    borderColor: 'rgba(34,211,238,0.38)',
     maxWidth: 220,
   },
-  searchChipText: { fontSize: 13, fontWeight: '600', color: colors.primary.teal },
+  searchChipText: { fontSize: 13, fontWeight: '600', color: pulseverse.electricSoft },
   didYouMeanBanner: {
-    backgroundColor: 'rgba(20,184,166,0.08)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: 'rgba(34,211,238,0.08)',
+    borderRadius: borderRadius.md + 2,
+    padding: spacing.md + 2,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(20,184,166,0.22)',
+    borderColor: 'rgba(34,211,238,0.22)',
   },
   didYouMeanText: { fontSize: 13, lineHeight: 18, color: colors.dark.textMuted },
   tryChipsLede: {
@@ -758,10 +799,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: colors.dark.textMuted,
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
     alignSelf: 'flex-start',
   },
-  emptyInline: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyInline: { alignItems: 'center', paddingVertical: spacing['3xl'], gap: spacing.sm },
   emptyText: { fontSize: 14, color: colors.dark.textMuted, textAlign: 'center' },
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,8 +15,9 @@ import { colors, iconSize, layout, spacing, typography } from '@/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { formatCount } from '@/utils/format';
 import { profileHandleDisplay } from '@/utils/profileHandle';
-import { RoleBadge } from '@/components/ui/RoleBadge';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { profilesService, communitiesService, postsService } from '@/services/supabase';
 import { analytics } from '@/lib/analytics';
 import { getSearchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory } from '@/lib/searchHistory';
@@ -27,6 +28,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile, Community, SoundLibraryRow, ViralSoundRow } from '@/types';
+import { getUniversalSearchListWindow } from '@/lib/feedVideoListWindow';
+
+const SEARCH_RESULTS_WINDOW = getUniversalSearchListWindow();
 
 const SEARCH_TABS = ['All', 'Creators', 'Sounds', 'Viral Songs', 'Communities', 'Hashtags'] as const;
 type SearchTab = (typeof SEARCH_TABS)[number];
@@ -59,7 +63,6 @@ export default function SearchScreen() {
   const [liveSounds, setLiveSounds] = useState<SoundLibraryRow[]>([]);
   const [viralSounds, setViralSounds] = useState<ViralSoundRow[]>([]);
   const [searching, setSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
 
   useEffect(() => {
@@ -86,7 +89,6 @@ export default function SearchScreen() {
     async function run() {
       if (tab === 'Viral Songs') {
         setSearching(true);
-        setHasSearched(true);
         try {
           const filter = query.trim().length >= 2 ? query.trim() : undefined;
           const v = await postsService.getViralSoundsThisWeek({ limit: 10, titleFilter: filter });
@@ -132,7 +134,6 @@ export default function SearchScreen() {
        */
       if (browseAll) {
         setSearching(true);
-        setHasSearched(true);
         try {
           if (tab === 'Creators' || tab === 'All') {
             const creators = await profilesService.getPopularCreators(20);
@@ -154,9 +155,6 @@ export default function SearchScreen() {
             if (!cancelled) setLiveHashtags(tags);
           } else if (!cancelled) setLiveHashtags([]);
 
-          if (!cancelled) {
-            setHasSearched(false);
-          }
         } finally {
           if (!cancelled) setSearching(false);
         }
@@ -175,7 +173,6 @@ export default function SearchScreen() {
       }
 
       setSearching(true);
-      setHasSearched(true);
       try {
         const tasks: Promise<void>[] = [];
 
@@ -347,11 +344,11 @@ export default function SearchScreen() {
       ) : (
         <FlatList
           data={listData}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={8}
+          initialNumToRender={SEARCH_RESULTS_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={SEARCH_RESULTS_WINDOW.maxToRenderPerBatch}
+          windowSize={SEARCH_RESULTS_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           keyExtractor={(item, i) => {
             if (item.type === 'creator') return `c-${item.data.id}`;
             if (item.type === 'community') return `co-${item.data.id}`;
@@ -362,19 +359,22 @@ export default function SearchScreen() {
           renderItem={({ item }) => {
             if (item.type === 'creator') {
               const user = item.data;
+              const neonTags = buildNeonPillTags({ identityTags: user.identityTags });
               return (
                 <TouchableOpacity
                   style={styles.creatorRow}
                   onPress={() => router.push(`/profile/${user.id}`)}
                   activeOpacity={0.7}
                 >
-                  <AvatarDisplay
-                    size={48}
-                    avatarUrl={user.avatarUrl}
-                    prioritizeRemoteAvatar
-                    ringColor={colors.dark.border}
-                    pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
-                  />
+                  <View style={styles.creatorAvatarCell}>
+                    <AvatarDisplay
+                      size={48}
+                      avatarUrl={user.avatarUrl}
+                      prioritizeRemoteAvatar
+                      ringColor={colors.dark.border}
+                      pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
+                    />
+                  </View>
                   <View style={styles.creatorBody}>
                     <View style={styles.creatorNameRow}>
                       <Text style={styles.creatorName} numberOfLines={1}>
@@ -388,20 +388,24 @@ export default function SearchScreen() {
                       {user.displayName}
                     </Text>
                     <Text style={styles.creatorMeta}>
-                      {user.role} · {user.specialty} · {formatCount(user.followerCount)} followers
+                      {formatCount(user.followerCount)} followers
                     </Text>
-                    {user.pulseTier && user.pulseTier !== 'murmur' ? (
-                      <View style={styles.creatorTierRow}>
-                        <PulseTierBadge
-                          tier={user.pulseTier}
-                          score={user.pulseScoreCurrent}
-                          size="xs"
-                          hideMurmur
-                        />
-                      </View>
+                    {neonTags.length > 0 ? (
+                      <ProfileNeonPills tags={neonTags} style={styles.creatorNeonPills} />
                     ) : null}
                   </View>
-                  <RoleBadge role={user.role} />
+                  {user.pulseTier && user.pulseTier !== 'murmur' ? (
+                    <View style={styles.creatorRail}>
+                      <PulseTierBadge
+                        tier={user.pulseTier}
+                        score={user.pulseScoreCurrent}
+                        size="xs"
+                        hideMurmur
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.creatorRail} />
+                  )}
                 </TouchableOpacity>
               );
             }
@@ -576,19 +580,27 @@ const styles = StyleSheet.create({
   },
   creatorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.dark.border,
   },
   avatar: { width: 44, height: 44, borderRadius: 22 },
-  creatorBody: { flex: 1, minWidth: 0 },
+  /** Keeps neon rings / fireworks under the text column (same row). */
+  creatorAvatarCell: { flexShrink: 0, zIndex: 0 },
+  creatorBody: { flex: 1, minWidth: 0, zIndex: 1 },
   creatorNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   creatorName: { ...typography.body, fontWeight: '700', color: colors.dark.text },
   creatorDisplay: { ...typography.metadata, color: colors.dark.textSecondary, marginTop: 2 },
   creatorMeta: { ...typography.metadata, color: colors.dark.textMuted, marginTop: 2 },
-  creatorTierRow: { flexDirection: 'row', marginTop: 6 },
+  creatorNeonPills: { marginTop: 6, alignSelf: 'flex-start' },
+  creatorRail: {
+    minWidth: 52,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingTop: 4,
+  },
   cardWrap: { marginVertical: spacing.sm - 2 },
   hashtagRow: {
     flexDirection: 'row',

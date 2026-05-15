@@ -13,10 +13,12 @@ import {
   useProfileCustomization,
   DICEBEAR_STYLES, DICEBEAR_BG_COLORS, buildDiceBearUrl,
 } from '@/store/useProfileCustomization';
-import { rasterRingOuterBoxSide, resolvePulseRingRaster } from '@/lib/pulseRingRasterAssets';
+import { rasterRingOuterBoxSide, resolvePulseRingRaster, isEmeraldRenewalMay2026PulseFrameSlug } from '@/lib/pulseRingRasterAssets';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { coerceCssColor } from '@/lib/coerceCssColor';
 import type { AvatarType, PulseAvatarFrame } from '@/types';
 import type { PrizeFireworksTier } from './GoldFireworksBurst';
+import { EmeraldRenewalRingMotion } from '@/components/profile/EmeraldRenewalRingMotion';
 
 const AVATAR_TYPES: { key: AvatarType; label: string; icon: string }[] = [
   { key: 'illustrated', label: 'Illustrated', icon: 'sparkles' },
@@ -70,8 +72,8 @@ export type PulseAvatarRingStyle = {
 export function pulseFrameFromUser(frame: PulseAvatarFrame | null | undefined): PulseAvatarRingStyle | null {
   if (!frame) return null;
   return {
-    ringColor: frame.ringColor,
-    glowColor: frame.glowColor,
+    ringColor: coerceCssColor(frame.ringColor, '#FFFFFF'),
+    glowColor: coerceCssColor(frame.glowColor, '#FFFFFF'),
     borderWidth: prizeTierIsGoldLike(frame.prizeTier) ? 4 : 3,
     ringCaption: frame.ringCaption ?? null,
     prizeTier: frame.prizeTier,
@@ -134,18 +136,28 @@ export function AvatarDisplay({
     ? rasterRingOuterBoxSide(size, innerOpeningFrac) + captionBand
     : size + outerPadLegacy + captionBand;
   const captionFont = Math.max(5, Math.min(9, Math.round(size * 0.092)));
+  const showEmeraldRenewalMotion = Boolean(
+    useRasterRing && size >= 22 && pulseFrame && isEmeraldRenewalMay2026PulseFrameSlug(pulseFrame.slug),
+  );
   const burstTier: PrizeFireworksTier | null = prizeTierToFireworksTier(pulseFrame?.prizeTier);
   const showRasterGoldFireworks = Boolean(
     useRasterRing && size >= 22 && pulseFrame?.prizeTier === 'gold',
   );
+  /** Monthly podium / Solstice silver & bronze PNG rings — light looping sparkles (gold uses heavier burst above). */
+  const showRasterSilverBronzeSparkle = Boolean(
+    useRasterRing &&
+      size >= 22 &&
+      (pulseFrame?.prizeTier === 'silver' || pulseFrame?.prizeTier === 'bronze'),
+  );
   const showProceduralFireworks = Boolean(!useRasterRing && burstTier && size >= 22);
   const fireworksPalette =
-    (showProceduralFireworks || showRasterGoldFireworks) && pulseFrame
-      ? burstTier === 'gold' || pulseFrame.prizeTier === 'gold'
-        ? [strokeColor, glowColor ?? '#FF9100', '#FFEA00', '#FFFEF0', '#FFD700', '#FFFFFF']
-        : burstTier === 'silver'
-          ? [strokeColor, glowColor ?? '#94A3B8', '#F1F5F9', '#E2E8F0', '#FFFFFF']
-          : [strokeColor, glowColor ?? '#EA580C', '#FDBA74', '#FDE68A', '#FFF7ED']
+    (showProceduralFireworks || showRasterGoldFireworks || showRasterSilverBronzeSparkle) && pulseFrame
+      ? (burstTier === 'gold' || pulseFrame.prizeTier === 'gold'
+          ? [strokeColor, glowColor ?? '#FF9100', '#FFEA00', '#FFFEF0', '#FFD700', '#FFFFFF']
+          : burstTier === 'silver'
+            ? [strokeColor, glowColor ?? '#94A3B8', '#F1F5F9', '#E2E8F0', '#FFFFFF']
+            : [strokeColor, glowColor ?? '#EA580C', '#FDBA74', '#FDE68A', '#FFF7ED']
+        ).map((c) => coerceCssColor(c, '#FFFFFF'))
       : undefined;
 
   const content = (() => {
@@ -182,9 +194,11 @@ export function AvatarDisplay({
       );
     }
     if (avatarType === 'gradient') {
+      const [c0, c1] = gradientAvatar.colors;
+      const gc = [coerceCssColor(c0, '#14B8A6'), coerceCssColor(c1, '#1E4ED8')] as [string, string];
       return (
         <LinearGradient
-          colors={gradientAvatar.colors}
+          colors={gc}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}
@@ -269,10 +283,20 @@ export function AvatarDisplay({
             {...pulseImageListThumbProps}
           />
         ) : null}
+        {showEmeraldRenewalMotion ? (
+          <EmeraldRenewalRingMotion ringDiameter={outerBox} active />
+        ) : null}
         {showRasterGoldFireworks && pulseFrame ? (
           <GoldFireworksBurst
             ringDiameter={outerBox}
             tier="gold"
+            sparkColors={fireworksPalette}
+          />
+        ) : null}
+        {showRasterSilverBronzeSparkle && pulseFrame && fireworksPalette ? (
+          <GoldFireworksBurst
+            ringDiameter={outerBox}
+            tier={pulseFrame.prizeTier === 'silver' ? 'silver' : 'bronze'}
             sparkColors={fireworksPalette}
           />
         ) : null}
@@ -313,7 +337,7 @@ export function AvatarBuilderModal({ visible, onClose, avatarUrl, onPickPhoto }:
   const [customSeed, setCustomSeed] = useState(illustratedAvatar.seed);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
@@ -537,6 +561,7 @@ export function AvatarBuilderModal({ visible, onClose, avatarUrl, onPickPhoto }:
 const styles = StyleSheet.create({
   avatarTap: { position: 'relative' },
   avatarOuter: {
+    position: 'relative',
     borderWidth: 3, alignItems: 'center', justifyContent: 'center',
   },
   fallbackCircle: { alignItems: 'center', justifyContent: 'center' },

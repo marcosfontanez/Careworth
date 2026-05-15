@@ -1,10 +1,10 @@
 import React, { useCallback } from 'react';
-import { Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Post, ProfileUpdate } from '@/types';
-import { hrefCommunityWallPost } from '@/lib/communityRoutes';
+import { hrefPostFocusComments } from '@/lib/communityRoutes';
 import { getMyPulseDisplayType } from '@/utils/myPulseDisplayType';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { MyPulseThoughtCard } from './cards/MyPulseThoughtCard';
 import { MyPulseClipCard } from './cards/MyPulseClipCard';
 import { MyPulseLinkCard } from './cards/MyPulseLinkCard';
@@ -109,20 +109,9 @@ export function MyPulseItemCard({
 
   const openSource = useCallback(() => {
     if (u.linkedPostId) {
-      /**
-       * Circle pins: open that room’s wall scrolled to the original post
-       * so context matches “I saved this from a Circle” — not the isolated
-       * fullscreen `/feed/[id]` viewer.
-       *
-       * Feed-only pins (no `linkedCircleSlug`): keep the fullscreen feed
-       * shell for the main For You / Following experience.
-       */
-      const circle = u.linkedCircleSlug?.trim();
-      if (circle) {
-        router.push(hrefCommunityWallPost(circle, u.linkedPostId));
-        return;
-      }
-      router.push(`/feed/${u.linkedPostId}` as any);
+      router.push(
+        hrefPostFocusComments(u.linkedPostId, u.linkedCircleSlug?.trim() || undefined) as any,
+      );
       return;
     }
     /**
@@ -145,9 +134,7 @@ export function MyPulseItemCard({
       return;
     }
     if (u.linkedUrl?.trim()) {
-      const raw = u.linkedUrl.trim();
-      const href = raw.startsWith('http') ? raw : `https://${raw}`;
-      Linking.openURL(href).catch(() => undefined);
+      openWebUrlSafely(u.linkedUrl.trim());
       return;
     }
     router.push(`/my-pulse/${u.id}` as any);

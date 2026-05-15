@@ -299,9 +299,10 @@ export const circleContentService = {
     return circleThreadsDb.listBySlug(slug);
   },
 
-  async getThreadById(id: string): Promise<CircleThread | undefined> {
+  /** Use `null` when missing — TanStack Query must not settle `undefined` from `queryFn`. */
+  async getThreadById(id: string): Promise<CircleThread | null> {
     const t = await circleThreadsDb.getById(id);
-    return t ?? undefined;
+    return t ?? null;
   },
 
   async getRepliesForThread(threadId: string) {

@@ -8,7 +8,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing } from '@/theme';
 import { COMMENT_MAX_LENGTH } from '@/constants';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { MentionAutocomplete, type MentionRef } from '@/components/ui/MentionAutocomplete';
 
 const WIN = Dimensions.get('window');
 /** Fixed pixel height — multiline TextInputs must not rely on minHeight inside keyboards/modals or they often measure as 0. */
@@ -45,12 +45,12 @@ export function CommentEditComposer({
   accent = colors.primary.teal,
   disabled = false,
   maxLength = COMMENT_MAX_LENGTH,
-  placeholder = 'Edit your comment…',
+  placeholder = 'Edit your comment — @ to mention.',
 }: Props) {
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(initialContent);
   const [saving, setSaving] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<MentionRef>(null);
 
   useEffect(() => {
     setText(initialContent);
@@ -60,9 +60,7 @@ export function CommentEditComposer({
     const len = initialContent.length;
     const t = setTimeout(() => {
       inputRef.current?.focus();
-      inputRef.current?.setNativeProps({
-        selection: { start: len, end: len },
-      });
+      inputRef.current?.setSelection(len, len);
     }, 150);
     return () => clearTimeout(t);
   }, []);
@@ -121,15 +119,17 @@ export function CommentEditComposer({
 
             <AccentComposerFrame
               accentColor={accent}
-              hint="Your comment"
+              allowOverflow
+              hint="Your comment — @ mentions whoever you pick."
               compact
               noShadow
               footer={
                 <AccentCharCount length={text.length} max={maxLength} accentColor={accent} warnWithin={30} hideWhenEmpty={false} />
               }
             >
-              <TextInput
+              <MentionAutocomplete
                 ref={inputRef}
+                wrapperStyle={styles.mentionWrap}
                 value={text}
                 onChangeText={setText}
                 multiline
@@ -226,6 +226,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.dark.text,
     textAlign: 'center',
+  },
+  mentionWrap: {
+    width: '100%',
   },
   textField: {
     width: '100%',

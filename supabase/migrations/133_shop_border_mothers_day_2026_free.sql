@@ -701,7 +701,8 @@ values (
   'direct_purchase',
   false,
   true,
-  true,
+  -- Free-in-shop: no App Store / Play SKUs — must be false per shop_items_border_rules (migration 123).
+  false,
   false,
   'direct_purchase',
   false,

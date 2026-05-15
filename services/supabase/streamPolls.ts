@@ -6,7 +6,7 @@ interface StreamPollRow {
   id: string;
   stream_id: string;
   question: string;
-  options: Array<{ id: string; text: string; votes: number }>;
+  options: { id: string; text: string; votes: number }[];
   total_votes: number;
   ends_at: string;
   is_active: boolean;
@@ -119,7 +119,7 @@ export const streamPollsService = {
   async create(input: {
     streamId: string;
     question: string;
-    options: Array<{ id: string; text: string }>;
+    options: { id: string; text: string }[];
     durationSec?: number;
   }): Promise<StreamPoll | null> {
     const { streamId, question, options } = input;

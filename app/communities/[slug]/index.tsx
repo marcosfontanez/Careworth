@@ -9,7 +9,6 @@ import {
   Alert,
   InteractionManager,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -47,6 +46,9 @@ import {
 } from '@/lib/circleExperience';
 import type { CircleThread, Post, PostReactionKind } from '@/types';
 import { feedPerfEnabled, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
+import { getCommunityWallFeedListWindow } from '@/lib/feedVideoListWindow';
+
+const COMMUNITY_WALL_LIST_WINDOW = getCommunityWallFeedListWindow();
 
 function prettySlugLabel(raw: string) {
   const s = raw.trim();
@@ -808,11 +810,12 @@ export default function CommunityDetailScreen() {
         ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={6}
-        maxToRenderPerBatch={8}
-        windowSize={7}
+        initialNumToRender={COMMUNITY_WALL_LIST_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={COMMUNITY_WALL_LIST_WINDOW.maxToRenderPerBatch}
+        windowSize={COMMUNITY_WALL_LIST_WINDOW.windowSize}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        /* Android + expo-image: clipping off-screen rows often clears visible textures on scroll. */
+        removeClippedSubviews={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

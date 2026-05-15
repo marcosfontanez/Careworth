@@ -11,30 +11,41 @@ import {
   RefreshControl,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius, layout, typography, pulseverse, gradients, semantic, spacing, shadows } from '@/theme';
+import { colors, borderRadius, layout, typography, pulseverse, gradients, semantic, rarity, spacing, shadows } from '@/theme';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { ShopHighlightNeonChip } from '@/components/shop/ShopHighlightNeonChip';
 import { useToast } from '@/components/ui/Toast';
 import { analytics } from '@/lib/analytics';
 import { useAuth } from '@/contexts/AuthContext';
+import { PROFILE_NEON_BORDER_PRESETS } from '@/components/mypage/ProfileNeonPills';
 import {
   useShopCatalog,
   useSparkWallet,
+  useDiamondWallet,
   useShopInventoryState,
   useShopDerived,
   useEnsureShopWallets,
   useShopRefetchers,
   useSparkBalanceNumber,
+  useDiamondBalanceNumber,
   usePurchaseReceipts,
 } from '@/hooks/useShopEconomy';
 import { purchaseService } from '@/services/shop/purchaseService';
 import type { PurchaseReceiptRow, ShopItemRow } from '@/lib/shop/types';
-import { ringPreviewColor, sparkPackLabel, giftIconFromItem, isFreeShopBorder } from '@/lib/shop/catalogUtils';
+import { ringPreviewColor, sparkPackLabel, isFreeShopBorder } from '@/lib/shop/catalogUtils';
+import {
+  CREATOR_GIFT_TIER_META,
+  CREATOR_GIFT_TIER_ORDER,
+  type GiftTierFilter,
+  creatorGiftTierForItem,
+  groupGiftsByTier,
+} from '@/lib/shop/creatorGiftTiers';
+import { CreatorGiftOrb } from '@/components/shop/CreatorGiftOrb';
 import {
   BorderBuyConfirmModal,
   BorderGiftRecipientModal,
@@ -46,15 +57,22 @@ import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
 import { CompactMetaChipPills } from '@/components/shop/border/BorderCompactMetaRow';
 import { buildCompactMetaChips } from '@/lib/shop/borderDisplayModel';
 import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
+import { FeaturedShopHero } from '@/components/shop/premium/FeaturedShopHero';
+import { PremiumCardSparkBorder } from '@/components/shop/premium/PremiumCardSparkBorder';
 import { BorderCard } from '@/components/shop/border/BorderCard';
 import { BorderDetailModal } from '@/components/shop/border/BorderDetailModal';
 import { useBorderCollectionsMap } from '@/hooks/useBorderCollectionsMap';
 import { useBorderCatalogLists } from '@/hooks/useBorderCatalogFilters';
 import { ShopResultModal } from '@/components/shop/ShopResultModal';
 import { ShopCatalogSkeleton } from '@/components/shop/ShopLoadingSkeleton';
+import { DiamondsInfoModal } from '@/components/shop/DiamondsInfoModal';
 import { queryClient } from '@/lib/queryClient';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { shopQueriesService } from '@/services/shop/shopQueries';
+
+/** Shown as native browser tooltip on web when hovering the Diamonds balance pill. */
+const DIAMONDS_PILL_TOOLTIP_WEB =
+  'Diamonds are what you earn when someone sends you a Sparks gift (live, on a post, or from your profile). Some may show as pending for a short hold, then move to available. Cashout will use available Diamonds when we turn that on.';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = layout.screenPadding;
@@ -63,7 +81,7 @@ type ShopTabKey = 'borders' | 'credits' | 'gifts' | 'more';
 
 const TABS: { key: ShopTabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'borders', label: 'Borders', icon: 'sparkles-outline' },
-  { key: 'credits', label: 'Credits', icon: 'wallet-outline' },
+  { key: 'credits', label: 'Sparks', icon: 'flash-outline' },
   { key: 'gifts', label: 'Gifts', icon: 'gift-outline' },
   { key: 'more', label: 'More', icon: 'ellipsis-horizontal' },
 ];
@@ -79,6 +97,7 @@ type Celebration =
 
 export default function PulseShopScreen() {
   const router = useRouter();
+  const shopScreenFocused = useIsFocused();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const insets = useSafeAreaInsets();
   const showToast = useToast((s) => s.show);
@@ -87,6 +106,7 @@ export default function PulseShopScreen() {
 
   const initialTab = useMemo((): ShopTabKey => {
     const t = typeof tabParam === 'string' ? tabParam.toLowerCase() : '';
+    if (t === 'sparks') return 'credits';
     if (t === 'credits' || t === 'gifts' || t === 'more' || t === 'borders') return t;
     return 'borders';
   }, [tabParam]);
@@ -104,13 +124,17 @@ export default function PulseShopScreen() {
 
   const catalogQ = useShopCatalog();
   const walletQ = useSparkWallet(userId);
+  const diamondQ = useDiamondWallet(userId);
   const sparkBalance = useSparkBalanceNumber(walletQ.data);
+  const diamondBalanceTotal = useDiamondBalanceNumber(diamondQ.data);
   const invState = useShopInventoryState(userId);
   const { refreshAfterPurchase } = useShopRefetchers(userId);
   const receiptsQ = usePurchaseReceipts(userId);
   const shopReceipts: PurchaseReceiptRow[] = (receiptsQ.data ?? []) as PurchaseReceiptRow[];
 
   const { borders, packs, gifts, featured, browseBorders } = useShopDerived(catalogQ.data);
+
+  const giftsByTier = useMemo(() => groupGiftsByTier(gifts), [gifts]);
 
   const collectionsQ = useBorderCollectionsMap();
 
@@ -122,6 +146,8 @@ export default function PulseShopScreen() {
   const [creditItem, setCreditItem] = useState<ShopItemRow | null>(null);
   const [celebration, setCelebration] = useState<Celebration>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [giftTierFilter, setGiftTierFilter] = useState<GiftTierFilter>('all');
+  const [diamondsInfoOpen, setDiamondsInfoOpen] = useState(false);
 
   const browseTileW = useMemo(
     () => Math.min(154, Math.max(132, (SCREEN_W - H_PAD * 2 - 40) / 2.4)),
@@ -156,6 +182,7 @@ export default function PulseShopScreen() {
       await Promise.all([
         catalogQ.refetch(),
         walletQ.refetch(),
+        diamondQ.refetch(),
         invState.refetch(),
         receiptsQ.refetch(),
         collectionsQ.refetch(),
@@ -163,7 +190,7 @@ export default function PulseShopScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [catalogQ, walletQ, invState, receiptsQ, collectionsQ]);
+  }, [catalogQ, walletQ, diamondQ, invState, receiptsQ, collectionsQ]);
 
   const handleEquip = useCallback(
     async (rowId: string) => {
@@ -192,15 +219,29 @@ export default function PulseShopScreen() {
       openBorderBuy(b);
       return;
     }
-    if (Platform.OS !== 'web') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      analytics.track('border_purchase_started', { shop_item_id: b.id, surface: 'shop' });
-      analytics.track('border_viewed', { shop_item_id: b.id, name: b.name });
-      setPurchaseChoiceItem(b);
+    if (Platform.OS === 'web') {
+      const p = b.real_money_display_price?.trim();
+      showToast(
+        p
+          ? `Paid borders are purchased in the PulseVerse iOS/Android app (${p} in the catalog — charged by your app store).`
+          : 'Paid borders are purchased in the PulseVerse iOS/Android app.',
+        'info',
+      );
+      return;
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    analytics.track('border_purchase_started', { shop_item_id: b.id, surface: 'shop' });
+    analytics.track('border_viewed', { shop_item_id: b.id, name: b.name });
+    setPurchaseChoiceItem(b);
   };
 
   const feat = featured ?? browseBorders[0] ?? null;
+  const [featuredSparkBox, setFeaturedSparkBox] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    setFeaturedSparkBox({ w: 0, h: 0 });
+  }, [feat?.id]);
+
   const browseList = featured ? browseBorders : borders;
 
   const { processed: browseProcessed, filter: borderFilter, setFilter: setBorderFilter, sort: borderSort, setSort: setBorderSort } =
@@ -235,22 +276,55 @@ export default function PulseShopScreen() {
           subtitle="Borders checkout in your app store · Sparks for gifts & creator support"
           layout="split"
           trailing={
-            <View style={styles.sparksPill}>
-              <Ionicons name="flash" size={15} color={pulseverse.electricSoft} style={{ marginRight: 6 }} />
-              {walletQ.isLoading && !walletQ.data ? (
-                <ActivityIndicator size="small" color={pulseverse.electricSoft} />
-              ) : !userId ? (
-                <Text style={styles.sparksSignedOut}>Sign in for balance</Text>
-              ) : (
-                <View style={styles.sparksPillInner}>
-                  <Text style={styles.sparksText}>
-                    {sparkBalance.toLocaleString()} <Text style={styles.sparksLabel}>Sparks</Text>
-                  </Text>
-                  {walletQ.isFetching ? (
-                    <ActivityIndicator size="small" color={pulseverse.electricSoft} style={{ marginLeft: 8 }} />
+            <View style={styles.headerWalletStack}>
+              <View style={styles.sparksPill}>
+                <Ionicons name="flash" size={15} color={pulseverse.electricSoft} style={{ marginRight: 6 }} />
+                {walletQ.isLoading && !walletQ.data ? (
+                  <ActivityIndicator size="small" color={pulseverse.electricSoft} />
+                ) : !userId ? (
+                  <Text style={styles.sparksSignedOut}>Sign in for balance</Text>
+                ) : (
+                  <View style={styles.sparksPillInner}>
+                    <Text style={styles.sparksText}>
+                      {sparkBalance.toLocaleString()} <Text style={styles.sparksLabel}>Sparks</Text>
+                    </Text>
+                    {walletQ.isFetching ? (
+                      <ActivityIndicator size="small" color={pulseverse.electricSoft} style={{ marginLeft: 8 }} />
+                    ) : null}
+                  </View>
+                )}
+              </View>
+              {userId ? (
+                <TouchableOpacity
+                  style={styles.diamondsPill}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Diamonds ${diamondBalanceTotal.toLocaleString()}. Tap for details.`}
+                  onPress={() => setDiamondsInfoOpen(true)}
+                  activeOpacity={0.85}
+                  {...(Platform.OS === 'web'
+                    ? ({ title: DIAMONDS_PILL_TOOLTIP_WEB } as object)
+                    : {})}
+                >
+                  <Ionicons name="diamond-outline" size={15} color={colors.primary.gold} style={{ marginRight: 6 }} />
+                  {diamondQ.isLoading && !diamondQ.isFetched ? (
+                    <ActivityIndicator size="small" color={colors.primary.gold} />
+                  ) : (
+                    <Text style={styles.diamondsPillText}>
+                      {diamondBalanceTotal.toLocaleString()}{' '}
+                      <Text style={styles.diamondsPillLabel}>Diamonds</Text>
+                    </Text>
+                  )}
+                  {diamondQ.isFetching && diamondQ.isFetched ? (
+                    <ActivityIndicator size="small" color={colors.primary.gold} style={{ marginLeft: 8 }} />
                   ) : null}
-                </View>
-              )}
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={colors.primary.gold}
+                    style={{ marginLeft: 6, opacity: 0.85 }}
+                  />
+                </TouchableOpacity>
+              ) : null}
             </View>
           }
         />
@@ -267,7 +341,7 @@ export default function PulseShopScreen() {
               >
                 <Ionicons
                   name={t.icon}
-                  size={18}
+                  size={21}
                   color={on ? pulseverse.electric : colors.dark.textMuted}
                   style={on ? styles.tabIconGlow : undefined}
                 />
@@ -286,7 +360,7 @@ export default function PulseShopScreen() {
         ) : catalogQ.isError ? (
           <View style={styles.skeletonPane}>
             <View style={styles.errorCard}>
-              <Ionicons name="cloud-offline-outline" size={36} color="#FB7185" />
+              <Ionicons name="cloud-offline-outline" size={36} color={semantic.danger} />
               <Text style={styles.errorTitle}>Shop unavailable</Text>
               <Text style={styles.errorBanner}>
                 Check your connection, then pull to refresh or try again.
@@ -302,14 +376,28 @@ export default function PulseShopScreen() {
           <>
             {tab === 'borders' && feat ? (
               <View style={styles.tabPane}>
-                <LinearGradient
-                  colors={[...gradients.featuredBorder]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.featuredWrap}
+                <View
+                  style={styles.featuredSparkHost}
+                  collapsable={false}
+                  onLayout={(e) => {
+                    const { width, height } = e.nativeEvent.layout;
+                    if (width < 8 || height < 8) return;
+                    const w = Math.round(width);
+                    const h = Math.round(height);
+                    setFeaturedSparkBox((p) => (p.w !== w || p.h !== h ? { w, h } : p));
+                  }}
                 >
+                  <LinearGradient
+                    colors={[PROFILE_NEON_BORDER_PRESETS[2][0], PROFILE_NEON_BORDER_PRESETS[2][1]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.featuredNeonRing}
+                  >
+                    <FeaturedShopHero motionActive={shopScreenFocused}>
                   <View style={styles.featuredInner}>
-                <Text style={styles.featuredKicker}>Featured border</Text>
+                    <View style={styles.featuredFeaturedPill}>
+                      <Text style={styles.featuredFeaturedPillText}>Featured</Text>
+                    </View>
                     <TouchableOpacity
                       activeOpacity={0.96}
                       onPress={() => setBorderDetailItem(feat)}
@@ -318,7 +406,9 @@ export default function PulseShopScreen() {
                     >
                       <View style={styles.featuredMainRow}>
                         <View style={styles.featuredCopy}>
-                          <Text style={styles.featuredTitle}>{feat.name}</Text>
+                          <Text style={styles.featuredTitleSerif} numberOfLines={2}>
+                            {feat.name}
+                          </Text>
                           {(() => {
                             const cn = collectionNameFor(feat)?.trim() ?? '';
                             const sc = feat.season_code?.trim() ?? '';
@@ -329,7 +419,26 @@ export default function PulseShopScreen() {
                             <BorderRarityBadge item={feat} compact align="start" />
                             <CompactMetaChipPills chips={buildCompactMetaChips(feat, 3)} compact />
                           </View>
-                          <Text style={styles.featuredDesc}>{feat.description}</Text>
+                          <Text style={styles.featuredDesc} numberOfLines={4}>
+                            {feat.description}
+                          </Text>
+                          <View style={styles.featuredSellingRow}>
+                            <ShopHighlightNeonChip
+                              icon="shield-checkmark-outline"
+                              label="Exclusive borders"
+                              labelStyle={styles.featuredSellingLabel}
+                            />
+                            <ShopHighlightNeonChip
+                              icon="gift-outline"
+                              label="Creator rewards"
+                              labelStyle={styles.featuredSellingLabel}
+                            />
+                            <ShopHighlightNeonChip
+                              icon="heart-outline"
+                              label="Premium extras"
+                              labelStyle={styles.featuredSellingLabel}
+                            />
+                          </View>
                           {!isFreeShopBorder(feat) ? (
                             <View style={styles.directPurchaseRow}>
                               <Ionicons name="phone-portrait-outline" size={14} color={colors.dark.textMuted} />
@@ -337,14 +446,18 @@ export default function PulseShopScreen() {
                             </View>
                           ) : (
                             <View style={styles.directPurchaseRow}>
-                              <Ionicons name="gift-outline" size={14} color="#86EFAC" />
-                              <Text style={[styles.directPurchaseText, { color: '#86EFAC' }]}>Free for everyone · tap below</Text>
+                              <Ionicons name="gift-outline" size={14} color={colors.status.online} />
+                              <Text style={[styles.directPurchaseText, { color: colors.status.online }]}>
+                                Free for everyone · tap below
+                              </Text>
                             </View>
                           )}
                         </View>
+                        <View style={styles.featuredPreviewSpotlight}>
                         <BorderPreviewPlate
+                          frame="podium"
                           ringColor={ringPreviewColor(feat)}
-                          size={88}
+                          size={102}
                           rankPlace={feat.rank_place}
                           showMotionHint={
                             feat.visual_tier === 'animated' ||
@@ -353,37 +466,58 @@ export default function PulseShopScreen() {
                           }
                           shopItem={feat}
                         />
+                        </View>
                       </View>
                     </TouchableOpacity>
                     {invState.ownsBorder(feat.id) ? (
-                      <View style={styles.ownedBanner}>
-                        <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
-                        <Text style={styles.ownedBannerText}>
-                          {equipped?.shop_item_id === feat.id ? 'Active on your avatar' : 'In your collection'}
+                      <View style={styles.ownedBannerPremium}>
+                        <View style={styles.ownedBadgeLarge}>
+                          <Ionicons name="checkmark-done" size={20} color={pulseverse.storeAccentSoft} style={{ marginRight: 8 }} />
+                          <Text style={styles.ownedBadgeLargeText}>Owned</Text>
+                        </View>
+                        <Text style={styles.ownedBannerSubtitle}>
+                          {equipped?.shop_item_id === feat.id
+                            ? 'Active on your avatar. You can still buy another copy or gift this border when eligible.'
+                            : 'In your collection — equip when you’re ready.'}
                         </Text>
-                        {equipped?.shop_item_id !== feat.id ? (
-                          <TouchableOpacity
-                            style={styles.giftMiniBtn}
-                            onPress={() => {
-                              const row = invState.inventoryRowForBorder(feat.id);
-                              if (row) void handleEquip(row.id);
-                            }}
-                          >
-                            <Text style={styles.giftMiniBtnText}>Equip</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        {feat.is_giftable ? (
-                          <TouchableOpacity style={styles.giftMiniBtn} onPress={() => setGiftBorderItem(feat)}>
-                            <Text style={styles.giftMiniBtnText}>Gift</Text>
-                          </TouchableOpacity>
-                        ) : null}
+                        <View style={styles.ownedBannerActions}>
+                          {equipped?.shop_item_id !== feat.id ? (
+                            <TouchableOpacity
+                              style={styles.ownedActionPrimary}
+                              onPress={() => {
+                                const row = invState.inventoryRowForBorder(feat.id);
+                                if (row) void handleEquip(row.id);
+                              }}
+                            >
+                              <Text style={styles.ownedActionPrimaryText}>Equip</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          {!isFreeShopBorder(feat) && Platform.OS !== 'web' ? (
+                            <TouchableOpacity
+                              style={styles.ownedActionSecondary}
+                              onPress={() => startBorderShopCheckout(feat)}
+                            >
+                              <Ionicons name="bag-add-outline" size={16} color={pulseverse.electricSoft} style={{ marginRight: 6 }} />
+                              <Text style={styles.ownedActionSecondaryText}>Buy again</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          {feat.is_giftable && Platform.OS !== 'web' ? (
+                            <TouchableOpacity style={styles.giftMiniBtn} onPress={() => setGiftBorderItem(feat)}>
+                              <Text style={styles.giftMiniBtnText}>Gift</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
                       </View>
                     ) : (
                       <>
                         {Platform.OS === 'web' ? (
                           <View style={styles.webIapNote}>
                             <Text style={styles.webIapNoteText}>
-                              Border purchases run in the iOS/Android app with the native store.
+                              {isFreeShopBorder(feat)
+                                ? 'Tap the card to open details and claim this border free.'
+                                : feat.real_money_display_price?.trim()
+                                  ? `Listed at ${feat.real_money_display_price.trim()} in the catalog — purchase in the iOS/Android app with your app store account.`
+                                  : 'Border purchases run in the iOS/Android app with the native store.'}
                             </Text>
                           </View>
                         ) : (
@@ -401,7 +535,7 @@ export default function PulseShopScreen() {
                               <Ionicons
                                 name={isFreeShopBorder(feat) ? 'sparkles-outline' : 'bag-handle-outline'}
                                 size={18}
-                                color="#FFF"
+                                color={colors.dark.text}
                               />
                               <Text style={styles.buyBtnText}>
                                 {isFreeShopBorder(feat) ? 'Claim free' : 'Purchase'}
@@ -412,7 +546,17 @@ export default function PulseShopScreen() {
                       </>
                     )}
                   </View>
-                </LinearGradient>
+                    </FeaturedShopHero>
+                  </LinearGradient>
+                  {featuredSparkBox.w > 8 && featuredSparkBox.h > 8 ? (
+                    <PremiumCardSparkBorder
+                      width={featuredSparkBox.w}
+                      height={featuredSparkBox.h}
+                      borderRadius={borderRadius['2xl'] + 3}
+                      motionActive={shopScreenFocused}
+                    />
+                  ) : null}
+                </View>
 
                 <View style={styles.sectionHead}>
                   <Text style={styles.sectionTitle}>Browse borders</Text>
@@ -510,13 +654,12 @@ export default function PulseShopScreen() {
                       onOpenDetail={() => setBorderDetailItem(b)}
                       onBuy={() => startBorderShopCheckout(b)}
                       onGift={() => setGiftBorderItem(b)}
-                      onEquip={(rowId) => void handleEquip(rowId)}
                     />
                   ))}
                 </ScrollView>
 
                 <View style={styles.footerBannerIap}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color="#E7C975" style={{ marginRight: 10 }} />
+                  <Ionicons name="shield-checkmark-outline" size={20} color={pulseverse.storeAccent} style={{ marginRight: 10 }} />
                   <Text style={styles.footerTextIap}>
                     Charged by your app store. PulseVerse confirms ownership — Sparks are never used for borders here.
                   </Text>
@@ -537,7 +680,7 @@ export default function PulseShopScreen() {
                     end={{ x: 1, y: 0 }}
                     style={styles.economyContextSparksGrad}
                   >
-                    <Ionicons name="flash" size={17} color="#67E8F9" style={{ marginRight: 8 }} />
+                    <Ionicons name="flash" size={17} color={pulseverse.electricSoft} style={{ marginRight: 8 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.economyContextTitleSparks}>Sparks wallet</Text>
                       <Text style={styles.economyContextSubSparks}>
@@ -606,25 +749,24 @@ export default function PulseShopScreen() {
 
             {tab === 'gifts' && (
               <View style={styles.tabPane}>
-                <View style={styles.economyContextSparks}>
-                  <LinearGradient
-                    colors={[...gradients.economyGift]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.economyContextSparksGrad}
-                  >
-                    <Ionicons name="gift-outline" size={17} color="#C4B5FD" style={{ marginRight: 8 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.economyContextTitleSparks}>Creator gifts · Sparks only</Text>
-                      <Text style={styles.economyContextSubSparks}>
-                        Not the app store — these use your Sparks balance. Different from border checkout in the
-                        Borders tab.
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                </View>
+                <LinearGradient
+                  colors={['rgba(167,139,250,0.22)', 'rgba(34,211,238,0.08)', 'rgba(15,23,42,0.95)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.giftsHeroPanel}
+                >
+                  <View style={styles.giftsHeroIconWrap}>
+                    <Ionicons name="gift" size={22} color={rarity.epic.text} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.giftsHeroTitle}>Send a moment</Text>
+                    <Text style={styles.giftsHeroBody}>
+                      Pick a gift, choose a creator, and your Sparks balance handles the rest — no separate checkout.
+                    </Text>
+                  </View>
+                </LinearGradient>
                 <Text style={styles.giftsLede}>
-                  Send from a profile, post, or live stream — browse the catalog here first.
+                  Filter by tier, then tap a gift for details. Send from a profile, post, or live.
                 </Text>
                 {userId ? (
                   <View style={styles.tipBanner}>
@@ -635,46 +777,135 @@ export default function PulseShopScreen() {
                     </Text>
                   </View>
                 ) : null}
-                <View style={styles.giftGridFull}>
-                  {gifts.map((g) => {
-                    const price = g.spark_price ?? 0;
-                    const short = sparkBalance < price;
-                    return (
+                {gifts.length === 0 ? (
+                  <Text style={styles.emptyText}>No gifts in the catalog yet.</Text>
+                ) : (
+                  <>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.giftTierChipsRow}
+                    >
                       <TouchableOpacity
-                        key={g.id}
-                        style={[styles.giftFullCard, styles.giftFullCardSparks]}
-                        activeOpacity={0.9}
+                        style={[styles.giftTierChip, giftTierFilter === 'all' && styles.giftTierChipOn]}
                         onPress={() => {
-                          analytics.track('border_viewed', { shop_item_id: g.id, kind: 'gift', name: g.name });
-                          setPreviewGift(g);
+                          void Haptics.selectionAsync();
+                          setGiftTierFilter('all');
                         }}
+                        activeOpacity={0.88}
                       >
-                        <View style={[styles.giftIconOrb, { borderColor: ringPreviewColor(g) + '55' }]}>
-                          {g.image_url ? (
-                            <Image source={{ uri: g.image_url }} style={styles.giftThumb} {...pulseImageListThumbProps} />
-                          ) : (
-                            <Ionicons name={giftIconFromItem(g) as any} size={26} color={pulseverse.electric} />
-                          )}
-                        </View>
-                        <Text style={styles.giftFullName}>{g.name}</Text>
-                        <Text style={styles.giftFullPrice}>{price.toLocaleString()} Sparks</Text>
-                        <View style={styles.contextRow}>
-                          {(g.gift_contexts ?? []).map((c) => (
-                            <View key={c} style={styles.contextChip}>
-                              <Text style={styles.contextChipText}>
-                                {c === 'post' ? 'Posts' : c === 'live' ? 'Live' : 'Profile'}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                        {short ? (
-                          <Text style={styles.insufficientHint}>Not enough Sparks — top up in Credits.</Text>
-                        ) : null}
+                        <Text style={[styles.giftTierChipText, giftTierFilter === 'all' && styles.giftTierChipTextOn]}>
+                          All
+                        </Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {gifts.length === 0 ? <Text style={styles.emptyText}>No gifts in the catalog yet.</Text> : null}
+                      {CREATOR_GIFT_TIER_ORDER.map((tierId) => {
+                        const meta = CREATOR_GIFT_TIER_META[tierId];
+                        const count = giftsByTier.get(tierId)?.length ?? 0;
+                        if (count === 0) return null;
+                        const on = giftTierFilter === tierId;
+                        return (
+                          <TouchableOpacity
+                            key={tierId}
+                            style={[styles.giftTierChip, on && styles.giftTierChipOn]}
+                            onPress={() => {
+                              void Haptics.selectionAsync();
+                              setGiftTierFilter(tierId);
+                            }}
+                            activeOpacity={0.88}
+                          >
+                            <Ionicons
+                              name={meta.icon}
+                              size={13}
+                              color={on ? pulseverse.onElectric : meta.iconColor}
+                              style={{ marginRight: 5 }}
+                            />
+                            <Text style={[styles.giftTierChipText, on && styles.giftTierChipTextOn]}>{meta.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <View style={styles.giftGridFull}>
+                      {(giftTierFilter === 'all' ? [...CREATOR_GIFT_TIER_ORDER] : [giftTierFilter]).map((tierId) => {
+                        const tierGifts = giftsByTier.get(tierId) ?? [];
+                        if (tierGifts.length === 0) return null;
+                        const headerMeta = CREATOR_GIFT_TIER_META[tierId];
+                        return (
+                          <View key={String(tierId)}>
+                            {giftTierFilter === 'all' ? (
+                              <View style={styles.giftTierSectionHeader}>
+                                <View
+                                  style={[
+                                    styles.giftTierSectionRule,
+                                    { backgroundColor: headerMeta.cardAccent },
+                                  ]}
+                                />
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                  <Text style={styles.giftTierSectionTitle}>{headerMeta.label}</Text>
+                                  <Text style={styles.giftTierSectionTagline}>{headerMeta.tagline}</Text>
+                                </View>
+                              </View>
+                            ) : null}
+                            {tierGifts.map((g) => {
+                              const price = g.spark_price ?? 0;
+                              const short = sparkBalance < price;
+                              const tier = creatorGiftTierForItem(g);
+                              return (
+                                <TouchableOpacity
+                                  key={g.id}
+                                  style={[
+                                    styles.giftRowCard,
+                                    { borderLeftColor: CREATOR_GIFT_TIER_META[tier].cardAccent },
+                                  ]}
+                                  activeOpacity={0.88}
+                                  onPress={() => {
+                                    analytics.track('border_viewed', {
+                                      shop_item_id: g.id,
+                                      kind: 'gift',
+                                      name: g.name,
+                                      gift_tier: tier,
+                                    });
+                                    setPreviewGift(g);
+                                  }}
+                                >
+                                  <View
+                                    style={[
+                                      styles.giftRowOrb,
+                                      { borderColor: ringPreviewColor(g) + '66' },
+                                    ]}
+                                  >
+                                    <CreatorGiftOrb item={g} size={56} />
+                                  </View>
+                                  <View style={styles.giftRowBody}>
+                                    <Text style={styles.giftRowName} numberOfLines={2}>
+                                      {g.name}
+                                    </Text>
+                                    <Text style={styles.giftRowPrice}>{price.toLocaleString()} Sparks</Text>
+                                    <View style={styles.giftRowChips}>
+                                      {(g.gift_contexts ?? []).map((c) => (
+                                        <View key={c} style={styles.contextChip}>
+                                          <Text style={styles.contextChipText}>
+                                            {c === 'post' ? 'Posts' : c === 'live' ? 'Live' : 'Profile'}
+                                          </Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                    {short ? (
+                                      <Text style={styles.insufficientHintSmall}>
+                                        Need more Sparks · Sparks tab
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                  <Ionicons name="chevron-forward" size={20} color={colors.dark.textMuted} />
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
               </View>
             )}
 
@@ -896,6 +1127,8 @@ export default function PulseShopScreen() {
         }
         onClose={() => setCelebration(null)}
       />
+
+      <DiamondsInfoModal visible={diamondsInfoOpen} onClose={() => setDiamondsInfoOpen(false)} />
     </View>
   );
 }
@@ -938,6 +1171,12 @@ const styles = StyleSheet.create({
     ...shadows.ctaSoft,
   },
   retryBtnText: { fontWeight: '900', color: pulseverse.onElectric },
+  headerWalletStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 8,
+    maxWidth: 228,
+  },
   sparksPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -957,36 +1196,50 @@ const styles = StyleSheet.create({
   },
   sparksText: { fontSize: 14, fontWeight: '800', color: colors.dark.text },
   sparksLabel: { fontWeight: '600', color: colors.dark.textSecondary },
+  diamondsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(212,166,58,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,166,58,0.35)',
+  },
+  diamondsPillText: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
+  diamondsPillLabel: { fontWeight: '600', color: colors.dark.textSecondary },
   tabRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: 22,
-    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: spacing.md,
+    marginBottom: 14,
+    paddingHorizontal: 2,
   },
   tabBtn: { flex: 1, alignItems: 'center', minWidth: 0 },
   tabIconGlow: {
     textShadowColor: pulseverse.electric,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 5,
+    textShadowRadius: 6,
     opacity: 1,
   },
   tabLabel: {
-    marginTop: 6,
-    fontSize: 11,
-    fontWeight: '700',
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '800',
     color: colors.dark.textMuted,
-    letterSpacing: 0.15,
+    letterSpacing: 0.02,
   },
   tabLabelActive: { color: pulseverse.electric },
   tabUnderline: {
-    marginTop: 8,
+    marginTop: 6,
     height: 3,
-    width: 28,
+    width: 36,
     borderRadius: 2,
     backgroundColor: pulseverse.electric,
   },
-  tabUnderlinePlaceholder: { marginTop: 8, height: 3, width: 28 },
+  tabUnderlinePlaceholder: { marginTop: 6, height: 3, width: 36 },
   economyContextSparks: {
     marginBottom: 14,
     borderRadius: borderRadius.lg,
@@ -1003,7 +1256,7 @@ const styles = StyleSheet.create({
   economyContextTitleSparks: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#A5F3FC',
+    color: pulseverse.electricSoft,
     letterSpacing: 0.2,
     lineHeight: 18,
   },
@@ -1019,33 +1272,71 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34,211,238,0.045)',
     ...shadows.accentEdge,
   },
-  featuredWrap: {
-    borderRadius: borderRadius.xl + 2,
-    padding: 2,
+  featuredSparkHost: {
+    position: 'relative',
     marginBottom: spacing['2xl'] + 4,
   },
-  featuredInner: {
-    borderRadius: borderRadius.card,
-    backgroundColor: colors.dark.card,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: pulseverse.cardRim,
+  featuredNeonRing: {
+    borderRadius: borderRadius['2xl'] + 3,
+    padding: 1.5,
+    ...Platform.select({
+      ios: {
+        shadowColor: PROFILE_NEON_BORDER_PRESETS[2][0],
+        shadowOpacity: 0.34,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: { elevation: 10 },
+      default: {},
+    }),
   },
-  featuredKicker: {
+  featuredInner: {
+    borderRadius: borderRadius['2xl'],
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+  },
+  featuredPreviewSpotlight: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 6,
+    paddingLeft: 2,
+    overflow: 'visible',
+  },
+  featuredFeaturedPill: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(212,166,58,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,166,58,0.35)',
+    marginBottom: 14,
+  },
+  featuredFeaturedPillText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
     color: pulseverse.storeAccent,
-    letterSpacing: 1.2,
-    marginBottom: 12,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
-  featuredMainRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  featuredMainRow: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+  },
   featuredCopy: { flex: 1, minWidth: 0 },
-  featuredTitle: {
-    fontSize: 22,
-    fontWeight: '900',
+  featuredTitleSerif: {
+    fontSize: 24,
+    fontWeight: '700',
     color: colors.dark.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+    lineHeight: 30,
+    ...(Platform.OS === 'web'
+      ? ({ fontFamily: 'Georgia, serif' } as const)
+      : Platform.OS === 'ios'
+        ? { fontFamily: 'Georgia' }
+        : { fontFamily: 'serif' }),
   },
   featuredCollection: {
     marginTop: 8,
@@ -1068,6 +1359,19 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     fontWeight: '500',
   },
+  featuredSellingRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  featuredSellingLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: pulseverse.electricSoft,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
   legendBadge: {
     marginTop: 10,
     flexDirection: 'row',
@@ -1081,7 +1385,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(212,166,58,0.22)',
   },
-  legendText: { fontSize: 11, fontWeight: '800', color: '#E7C975' },
+  legendText: { fontSize: 11, fontWeight: '800', color: pulseverse.storeAccent },
   directPurchaseRow: {
     marginTop: 12,
     flexDirection: 'row',
@@ -1123,7 +1427,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
   },
-  buyBtnText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
+  buyBtnText: { fontSize: 15, fontWeight: '800', color: colors.dark.text },
   giftOutlineBtn: {
     marginTop: 10,
     flexDirection: 'row',
@@ -1137,19 +1441,56 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34,211,238,0.05)',
   },
   giftOutlineText: { fontSize: 14, fontWeight: '800', color: pulseverse.electric },
-  ownedBanner: {
-    marginTop: 14,
+  ownedBannerPremium: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(212,166,58,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,166,58,0.28)',
+  },
+  ownedBadgeLarge: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  ownedBadgeLargeText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: pulseverse.storeAccentSoft,
+    letterSpacing: 0.2,
+  },
+  ownedBannerSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.dark.textSecondary,
+    fontWeight: '600',
+    marginBottom: 14,
+  },
+  ownedBannerActions: {
+    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    padding: 12,
-    borderRadius: borderRadius.lg,
-    backgroundColor: 'rgba(34,197,94,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.28)',
+    alignItems: 'center',
   },
-  ownedBannerText: { fontSize: 14, fontWeight: '800', color: '#22C55E', flex: 1 },
+  ownedActionPrimary: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: borderRadius.chip,
+    backgroundColor: pulseverse.electric,
+  },
+  ownedActionPrimaryText: { fontSize: 13, fontWeight: '900', color: pulseverse.onElectric },
+  ownedActionSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.chip,
+    backgroundColor: 'rgba(37,99,235,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.45)',
+  },
+  ownedActionSecondaryText: { fontSize: 13, fontWeight: '900', color: pulseverse.electricSoft },
   giftMiniBtn: {
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -1213,7 +1554,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(168,85,247,0.38)',
     zIndex: 2,
   },
-  limitedTagText: { fontSize: 9, fontWeight: '800', color: '#C4B5FD', letterSpacing: 0.35 },
+  limitedTagText: { fontSize: 9, fontWeight: '800', color: rarity.epic.text, letterSpacing: 0.35 },
   giftableTag: {
     position: 'absolute',
     top: 8,
@@ -1226,7 +1567,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(34,211,238,0.28)',
     zIndex: 2,
   },
-  giftableTagText: { fontSize: 9, fontWeight: '800', color: '#7DD3FC' },
+  giftableTagText: { fontSize: 9, fontWeight: '800', color: rarity.rare.text },
   browseName: {
     fontSize: 12,
     fontWeight: '800',
@@ -1251,7 +1592,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(34,197,94,0.28)',
   },
-  ownedPillText: { fontSize: 11, fontWeight: '800', color: '#22C55E' },
+  ownedPillText: { fontSize: 11, fontWeight: '800', color: colors.status.online },
   equippedPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1260,7 +1601,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(56,189,248,0.28)',
   },
-  equippedPillText: { fontSize: 11, fontWeight: '800', color: '#7DD3FC' },
+  equippedPillText: { fontSize: 11, fontWeight: '800', color: rarity.rare.text },
   borderActions: { flexDirection: 'row', gap: 8 },
   borderActionsColumn: { gap: 8, alignItems: 'center' },
   equipChip: {
@@ -1377,8 +1718,69 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: colors.dark.textSecondary,
     fontWeight: '500',
-    marginBottom: 16,
+    marginBottom: 14,
   },
+  giftsHeroPanel: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    padding: 16,
+    borderRadius: borderRadius.xl,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.25)',
+    backgroundColor: 'rgba(15,23,42,0.75)',
+  },
+  giftsHeroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(196,181,253,0.35)',
+  },
+  giftsHeroTitle: { fontSize: 16, fontWeight: '900', color: colors.dark.text, letterSpacing: -0.2 },
+  giftsHeroBody: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.dark.textSecondary,
+    fontWeight: '600',
+  },
+  giftRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(15,23,42,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderLeftWidth: 3,
+    marginBottom: 10,
+  },
+  giftRowOrb: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1.5,
+  },
+  giftRowBody: { flex: 1, minWidth: 0 },
+  giftRowName: { fontSize: 16, fontWeight: '900', color: colors.dark.text, letterSpacing: -0.2 },
+  giftRowPrice: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '800',
+    color: pulseverse.electricSoft,
+  },
+  giftRowChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  insufficientHintSmall: { marginTop: 6, fontSize: 11, fontWeight: '700', color: semantic.danger },
   tipBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1391,6 +1793,39 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   tipBannerText: { flex: 1, fontSize: 13, lineHeight: 18, color: colors.dark.textSecondary, fontWeight: '500' },
+  giftTierChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 14,
+    paddingTop: 4,
+  },
+  giftTierChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+    backgroundColor: 'rgba(15,23,42,0.55)',
+  },
+  giftTierChipOn: {
+    borderColor: 'rgba(34,211,238,0.5)',
+    backgroundColor: 'rgba(34,211,238,0.22)',
+  },
+  giftTierChipText: { fontSize: 12, fontWeight: '800', color: colors.dark.textSecondary },
+  giftTierChipTextOn: { color: pulseverse.onElectric },
+  giftTierSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  giftTierSectionRule: { width: 4, borderRadius: 2, minHeight: 36, marginTop: 2 },
+  giftTierSectionTitle: { fontSize: 15, fontWeight: '900', color: colors.dark.text },
+  giftTierSectionTagline: { fontSize: 12, color: colors.dark.textMuted, marginTop: 2, fontWeight: '600' },
   giftGridFull: { gap: 12 },
   giftFullCard: {
     padding: 16,
@@ -1401,7 +1836,7 @@ const styles = StyleSheet.create({
   },
   giftFullCardSparks: {
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: colors.status.invite,
     borderColor: 'rgba(167,139,250,0.2)',
     backgroundColor: 'rgba(167,139,250,0.04)',
   },
@@ -1416,7 +1851,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
   },
-  giftThumb: { width: 52, height: 52, borderRadius: 26 },
   giftFullName: { fontSize: 17, fontWeight: '900', color: colors.dark.text },
   giftFullPrice: { fontSize: 14, fontWeight: '800', color: pulseverse.electricSoft, marginTop: 4 },
   contextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
@@ -1428,8 +1862,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(56,189,248,0.25)',
   },
-  contextChipText: { fontSize: 10, fontWeight: '800', color: '#7DD3FC' },
-  insufficientHint: { marginTop: 8, fontSize: 12, fontWeight: '700', color: '#F87171' },
+  contextChipText: { fontSize: 10, fontWeight: '800', color: rarity.rare.text },
+  insufficientHint: { marginTop: 8, fontSize: 12, fontWeight: '700', color: semantic.danger },
   emptyText: { color: colors.dark.textMuted, textAlign: 'center', marginVertical: 24, fontWeight: '600' },
   moreHero: {
     padding: 20,

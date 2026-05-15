@@ -22,6 +22,9 @@ import { hrefCommunity } from '@/lib/communityRoutes';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Community } from '@/types';
+import { getCirclesDirectoryListWindow } from '@/lib/feedVideoListWindow';
+
+const CIRCLES_DIRECTORY_WIN = getCirclesDirectoryListWindow();
 
 /**
  * Circles tab "See all" — complete directory sorted A–Z by URL slug
@@ -104,11 +107,11 @@ export default function CirclesDirectoryScreen() {
       <FlatList
         data={list}
         keyExtractor={(c) => c.id}
-        initialNumToRender={16}
-        maxToRenderPerBatch={20}
-        windowSize={10}
+        initialNumToRender={CIRCLES_DIRECTORY_WIN.initialNumToRender}
+        maxToRenderPerBatch={CIRCLES_DIRECTORY_WIN.maxToRenderPerBatch}
+        windowSize={CIRCLES_DIRECTORY_WIN.windowSize}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews={false}
         keyboardShouldPersistTaps="handled"
         renderItem={renderItem}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}

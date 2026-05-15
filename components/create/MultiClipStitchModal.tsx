@@ -1,25 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '@/theme';
 import type { MediaAsset } from '@/lib/media';
 
+export type MultiClipStitchVariant = 'series' | 'broll';
+
 interface Props {
   visible: boolean;
   onClose: () => void;
   primary: MediaAsset | null;
+  /** series = episodic parts; broll = cutaways after main story (same queue semantics). */
+  variant?: MultiClipStitchVariant;
   onConfirm: (clips: MediaAsset[]) => void;
 }
 
+const COPY: Record<
+  MultiClipStitchVariant,
+  { title: string; lede: string; mainLabel: string; extraLabel: (idx: number) => string; confirmCta: string }
+> = {
+  series: {
+    title: 'Multi-part series',
+    lede:
+      'Posts multiple clips one after another — not merged into a single video file yet. Pick up to 4 extra clips, reorder, then post this clip first and Post each follow-up from your queue.',
+    mainLabel: 'Main clip (Part 1)',
+    extraLabel: (idx) => `Part ${idx + 2}`,
+    confirmCta: 'Queue series',
+  },
+  broll: {
+    title: 'B-roll cutaways',
+    lede:
+      'Your upload is the main story (A-roll). Queue B-roll, then post each clip in order — this modal never merges files. After clips are in PulseVerse storage, operators can concat them with stitch/broll jobs (scripts/creator-media-worker.mjs).',
+    mainLabel: 'A-roll (main story)',
+    extraLabel: (idx) => `B-roll ${idx + 1}`,
+    confirmCta: 'Queue cutaways',
+  },
+};
+
 /**
- * Multi-clip stitch — picks 1-4 additional video clips from the gallery and
- * returns them as a queue. The actual stitching into a single mp4 needs
- * server-side ffmpeg; for v1 we hand back the queue and let the parent
- * stage each clip as a sequential draft post (linked to the same series_id).
+ * Picks extra clips for a sequential posting queue. App-side merge into one MP4 is out of scope; worker stitch/broll handles concat after Storage uploads.
  */
-export function MultiClipStitchModal({ visible, onClose, primary, onConfirm }: Props) {
+export function MultiClipStitchModal({
+  visible,
+  onClose,
+  primary,
+  variant = 'series',
+  onConfirm,
+}: Props) {
+  const copy = COPY[variant];
   const [clips, setClips] = useState<MediaAsset[]>([]);
+
+  useEffect(() => {
+    if (!visible) setClips([]);
+  }, [visible]);
 
   const addOne = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -67,14 +101,12 @@ export function MultiClipStitchModal({ visible, onClose, primary, onConfirm }: P
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Stitch clips</Text>
+            <Text style={styles.title}>{copy.title}</Text>
             <TouchableOpacity onPress={onClose} hitSlop={10}>
               <Ionicons name="close" size={22} color={colors.dark.textMuted} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.lede}>
-            Pick up to 4 extra clips. Drag to reorder. We&apos;ll post them as a series after your main clip.
-          </Text>
+          <Text style={styles.lede}>{copy.lede}</Text>
 
           <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: 8 }}>
             <View style={styles.clipRow}>
@@ -82,17 +114,17 @@ export function MultiClipStitchModal({ visible, onClose, primary, onConfirm }: P
                 <Ionicons name="videocam" size={20} color={colors.primary.teal} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.clipText}>Main clip (Part 1)</Text>
+                <Text style={styles.clipText}>{copy.mainLabel}</Text>
                 <Text style={styles.clipSub} numberOfLines={1}>{primary?.fileName ?? 'Your current upload'}</Text>
               </View>
             </View>
             {clips.map((c, idx) => (
               <View key={`${c.uri}_${idx}`} style={styles.clipRow}>
                 <View style={[styles.thumb, { backgroundColor: colors.dark.cardAlt }]}>
-                  <Text style={styles.thumbText}>{idx + 2}</Text>
+                  <Text style={styles.thumbText}>{variant === 'broll' ? String(idx + 1) : String(idx + 2)}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.clipText}>Part {idx + 2}</Text>
+                  <Text style={styles.clipText}>{copy.extraLabel(idx)}</Text>
                   <Text style={styles.clipSub} numberOfLines={1}>{c.fileName}</Text>
                 </View>
                 <TouchableOpacity onPress={() => move(idx, -1)} disabled={idx === 0} hitSlop={6}>
@@ -129,7 +161,9 @@ export function MultiClipStitchModal({ visible, onClose, primary, onConfirm }: P
             activeOpacity={0.85}
           >
             <Ionicons name="git-network" size={16} color="#FFF" />
-            <Text style={styles.primaryText}>Stitch as {clips.length + 1}-part series</Text>
+            <Text style={styles.primaryText}>
+              {copy.confirmCta} · {clips.length + 1} clip{clips.length + 1 === 1 ? '' : 's'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

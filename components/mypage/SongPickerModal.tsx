@@ -28,6 +28,9 @@ import {
   type ITunesArtistHit,
 } from '@/lib/music/itunesSearch';
 import { audioPreview, type AudioPreviewState } from '@/lib/audioPreview';
+import { getSoundRowPickerListWindow } from '@/lib/feedVideoListWindow';
+
+const SONG_PICKER_LIST_WINDOW = getSoundRowPickerListWindow();
 
 export interface PickedSong {
   title: string;
@@ -539,11 +542,11 @@ export function SongPickerModal({ visible, onClose, onSelect, initialQuery }: Pr
         <FlatList
           data={listRows}
           keyExtractor={keyExtractor}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={9}
+          initialNumToRender={SONG_PICKER_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={SONG_PICKER_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={SONG_PICKER_LIST_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderItem={renderRow}
           ListHeaderComponent={listHeader}
           ListHeaderComponentStyle={styles.headerSpacer}

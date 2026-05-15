@@ -21,6 +21,10 @@ import { sendSentryTestEvent } from '@/lib/monitoring';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { userHasEmailPasswordIdentity } from '@/lib/authIdentity';
 import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
+import { purchaseService } from '@/services/shop/purchaseService';
+import { useQueryClient } from '@tanstack/react-query';
+import { useShopRefetchers } from '@/hooks/useShopEconomy';
+import { shopKeys } from '@/lib/shop/queryKeys';
 
 /** After sign-out, jump to login. Avoid `router.dismiss(1)` loops — they dispatch POP and warn when no modal stack exists. */
 function replaceWithLogin(router: Router) {
@@ -37,9 +41,13 @@ export default function SettingsScreen() {
   const creatorTips = useFeatureFlags((s) => s.creatorTips);
   const showChangePassword = userHasEmailPasswordIdentity(user);
 
+  const queryClient = useQueryClient();
+  const { refreshAfterPurchase } = useShopRefetchers(user?.id);
+
   const [privateProfile, setPrivateProfile] = useState(profile?.privacyMode === 'private');
   const [privacySaving, setPrivacySaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [restorePurchasesBusy, setRestorePurchasesBusy] = useState(false);
 
   useEffect(() => {
     setPrivateProfile(profile?.privacyMode === 'private');
@@ -79,6 +87,42 @@ export default function SettingsScreen() {
       toast.show('Sent a test error to Sentry — check Issues in ~30s.', 'success');
     } else {
       toast.show(r.reason, 'error');
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (Platform.OS === 'web') {
+      toast.show('Restore purchases is available in the iOS or Android app.', 'info');
+      return;
+    }
+    if (!user) {
+      toast.show('Sign in to restore purchases.', 'error');
+      return;
+    }
+    setRestorePurchasesBusy(true);
+    try {
+      const outcome = await purchaseService.restoreStorePurchases();
+      if (!outcome.ok) {
+        toast.show(outcome.message, 'error');
+        return;
+      }
+      await refreshAfterPurchase();
+      await queryClient.invalidateQueries({ queryKey: shopKeys.catalog() });
+      const d = outcome.data;
+      const synced = Number(d.border_entitlements_synced ?? 0);
+      const found = Number(d.store_purchases_found ?? 0);
+      if (synced > 0) {
+        toast.show(
+          `Restored ${synced} border purchase${synced === 1 ? '' : 's'}. Spark packs are not restored.`,
+          'success',
+        );
+      } else if (found === 0) {
+        toast.show('No active store purchases found on this device for your account.', 'info');
+      } else {
+        toast.show('Store purchases checked — your border access is up to date.', 'success');
+      }
+    } finally {
+      setRestorePurchasesBusy(false);
     }
   };
 
@@ -254,6 +298,27 @@ export default function SettingsScreen() {
             </>
           ) : null}
         </View>
+
+        {Platform.OS !== 'web' ? (
+          <>
+            <Text style={styles.sectionTitle}>Purchases</Text>
+            <View style={styles.card}>
+              <SettingRow
+                icon="refresh-outline"
+                label="Restore purchases"
+                subtitle="Re-sync border purchases from the App Store or Google Play (required for review)."
+                onPress={restorePurchasesBusy ? undefined : handleRestorePurchases}
+                right={
+                  restorePurchasesBusy ? (
+                    <ActivityIndicator size="small" color={colors.primary.teal} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />
+                  )
+                }
+              />
+            </View>
+          </>
+        ) : null}
 
         <Text style={styles.sectionTitle}>Storage</Text>
         <View style={styles.card}>

@@ -26,18 +26,6 @@ import { analytics } from '@/lib/analytics';
 
 const TEAM_COPY = 'From the PulseVerse team. Enjoy!';
 
-function isFeedPath(pathname: string, segments: string[]): boolean {
-  const p = pathname || '';
-  const norm = p.startsWith('/') || p === '' ? p : `/${p}`;
-
-  if (norm.includes('/feed') || norm.endsWith('feed')) return true;
-  if (segments.some((s) => s === 'feed')) return true;
-
-  if (norm.startsWith('/(tabs)') || norm === '(tabs)' || segments.includes('(tabs)')) return true;
-
-  return false;
-}
-
 let lastTeamGiftGateUserId: string | null = null;
 
 /**
@@ -49,22 +37,19 @@ export function PulseVerseTeamBorderGiftGate() {
   const qc = useQueryClient();
   const segments = useSegments();
   const pathname = usePathname() ?? '';
-
   const { user, profile, isAuthenticated } = useAuth();
   const betaTesterBorderBlocking = useAppStore((s) => s.betaTesterBorderBlocking);
   const pulseMonthCelebrationBlocking = useAppStore((s) => s.pulseMonthCelebrationBlocking);
   const setTeamBorderGiftBlocking = useAppStore((s) => s.setTeamBorderGiftBlocking);
 
-  const inAuth = segments.some((s) => s === 'auth') || pathname.startsWith('/auth');
   const termsComplete = profile != null && !needsLegalAcknowledgment(profile);
-  const onFeed = isFeedPath(pathname, segments);
+  const inAuth = segments.some((s) => s === 'auth') || pathname.startsWith('/auth');
 
   const canShow =
     isAuthenticated &&
     Boolean(user?.id) &&
     termsComplete &&
     !inAuth &&
-    onFeed &&
     !betaTesterBorderBlocking &&
     !pulseMonthCelebrationBlocking;
 

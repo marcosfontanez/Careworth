@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,9 +66,8 @@ export function MyPulseClipCard({
   /**
    * Action-row shell counts mirror the original post's engagement (when we
    * can resolve it) so the pin card reads as a window onto the real feed
-   * post — tapping Pulse / Comment then routes into `/post/[id]` where the
-   * user can actually engage. Without this sync the shell shows `0 / 0`
-   * on fresh pins and it looks like a brand-new, never-engaged post.
+   * post. Card tap and Comment route to `/post/[id]` (composer focused on
+   * Comment); Pulse still toggles the My Pulse pin like.
    */
   const shellLikeCount =
     engagementSummary?.likes ?? u.likeCount ?? 0;
@@ -202,7 +201,11 @@ export function MyPulseClipCard({
                 {...pulseImageListThumbProps}
               />
             ) : showVideoPreview && linkedPost ? (
-              <RecentMediaThumb post={linkedPost} style={styles.thumb} />
+              <RecentMediaThumb
+                post={linkedPost}
+                style={styles.thumb}
+                preferStaticAndroidVideoTile={Platform.OS === 'android'}
+              />
             ) : (
               <LinearGradient
                 colors={['rgba(96,165,250,0.22)', 'rgba(96,165,250,0.05)']}

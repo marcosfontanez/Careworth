@@ -1,6 +1,6 @@
 /**
  * Per-circle visual identity. The Circles brief calls for each room to feel
- * like its own themed space (Funny Memes = warm/playful, ICU = sharper/cool,
+ * like its own themed space (Memes = warm/playful, ICU = sharper/cool,
  * Night Shift = darker/neon, Pharmacy = clinical, Nursing = welcoming).
  *
  * Centralizing this lets every Circle UI surface (room header, highlights,
@@ -62,11 +62,11 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
     motif: ['⚙', '·', '✓', '·'] as const,
   },
 
-  /* Border Envy — flex rare avatar rings; gold + cyan polish (matches DB #CA8A04). */
+  /* Border Envy — cool platinum/silver glass (featured carousel uses same identity). */
   'border-envy': {
-    color: '#CA8A04',
-    colorAlt: '#A16207',
-    gradient: ['#EAB308', '#A16207', '#42200640'] as const,
+    color: '#94A3B8',
+    colorAlt: '#64748B',
+    gradient: ['#CBD5E1', '#64748B', '#1E293B70'] as const,
     vibe: 'playful',
     composerPrompt:
       'Got a fire border equipped? Post a screenshot of your profile (with your border visible) and tell us where it came from — monthly top 5, beta gift, campaign, or classic ring.',
@@ -76,11 +76,11 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
     motif: ['◇', '✦', '◇', '·'] as const,
   },
 
-  /* Funny Medical Memes — warm amber/orange/gold (matches mockup). */
+  /* Memes — coral/rose (distinct from Border Envy silver). */
   'funny-medical-memes': {
-    color: '#F97316',
-    colorAlt: '#7C2D12',
-    gradient: ['#F97316', '#9A3412', '#1F0A0570'] as const,
+    color: '#FB7185',
+    colorAlt: '#BE185D',
+    gradient: ['#FB7185', '#9D174D', '#1F0A0570'] as const,
     vibe: 'playful',
     composerPrompt: 'What’s worth sharing today?',
     etiquette: 'Keep it funny. Keep it kind.',
@@ -89,9 +89,9 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
   },
   /* Legacy / shorter slugs that point at the same room. */
   'memes': {
-    color: '#F97316',
-    colorAlt: '#7C2D12',
-    gradient: ['#F97316', '#9A3412', '#1F0A0570'] as const,
+    color: '#FB7185',
+    colorAlt: '#BE185D',
+    gradient: ['#FB7185', '#9D174D', '#1F0A0570'] as const,
     vibe: 'playful',
     composerPrompt: 'What’s worth sharing today?',
     etiquette: 'Keep it funny. Keep it kind.',
@@ -139,22 +139,21 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
     etiquette: 'We’re all in scrubs. Lift each other up.',
   },
 
-  /* Nurses — DB-stored slug. Royal blue from the seed (`#1E4ED8`) so the
-   *  landing card and the room banner read as the same room. */
+  /* Nurses — royal blue aligned with featured carousel (`featuredCircleSchemes`). */
   'nurses': {
-    color: '#1E4ED8',
-    colorAlt: '#1E3A8A',
-    gradient: ['#1E4ED8', '#1E3A8A', '#0B1F4E70'] as const,
+    color: '#2563EB',
+    colorAlt: '#1E40AF',
+    gradient: ['#2563EB', '#1E3A8A', '#0B1F4E70'] as const,
     vibe: 'welcoming',
     composerPrompt: 'What’s worth sharing today?',
     etiquette: 'We’re all in scrubs. Lift each other up.',
   },
 
-  /* Student Nurses — sky blue (distinct from royal Nurses, teal PCT, ICU cyan). */
+  /* Student Nurses — cyan sky (distinct from royal Nurses blue). */
   'student-nurses': {
-    color: '#0369A1',
-    colorAlt: '#0C4A6E',
-    gradient: ['#0369A1', '#0C4A6E', '#082F4970'] as const,
+    color: '#0891B2',
+    colorAlt: '#0E7490',
+    gradient: ['#0891B2', '#0E7490', '#164E6370'] as const,
     vibe: 'welcoming',
     composerPrompt: 'What are you learning this week?',
     etiquette: 'We were all new once. Be encouraging.',
@@ -174,11 +173,11 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
     motif: ['?', '·', '💬', '·'] as const,
   },
 
-  /* Gaming — deep red (distinct from meme orange / nurse card rose). */
+  /* Gaming — electric violet (featured cards use same hue). */
   'gaming': {
-    color: '#B91C1C',
-    colorAlt: '#7F1D1D',
-    gradient: ['#B91C1C', '#7F1D1D', '#450A0A70'] as const,
+    color: '#8B5CF6',
+    colorAlt: '#5B21B6',
+    gradient: ['#8B5CF6', '#5B21B6', '#2E106570'] as const,
     vibe: 'playful',
     composerPrompt: 'What are you playing — or looking for teammates?',
     etiquette: 'Respect differences in platforms, skill, and spare time.',
@@ -200,17 +199,12 @@ const ACCENT_TABLE: Record<string, CircleAccent> = {
 /**
  * Resolve a circle's accent identity. Strategy:
  *
- *  1. If the slug has a curated entry whose `color` matches the DB color,
- *     use the curated entry verbatim — the gradient was hand-tuned for
- *     that hue.
- *  2. If the slug has a curated entry but the DB color *disagrees*, keep
- *     the curated copy/motif/vibe but rebuild color tokens from the DB
- *     color so the room banner matches the landing card.
- *  3. If the slug has no curated entry, derive everything from the DB
- *     color (or fall back to the teal default if no color is supplied).
- *
- * This guarantees the landing-card hue and the room banner hue stay in
- * lockstep without losing the curated copy/motif for rooms that have it.
+ *  1. If the slug has a **curated** entry in {@link ACCENT_TABLE}, always use that
+ *     palette (banner gradient, chips, copy). This keeps Circles landing cards and
+ *     the room interior visually aligned regardless of stale `communities.accent_color`
+ *     in the database.
+ *  2. If there is no curated entry, derive tokens from `accent_color` when present.
+ *  3. Otherwise fall back to {@link DEFAULTS}.
  */
 export function getCircleAccent(slug?: string | null, fallbackColor?: string | null): CircleAccent {
   const dbHex = (() => {
@@ -221,17 +215,7 @@ export function getCircleAccent(slug?: string | null, fallbackColor?: string | n
   const curated = slug ? ACCENT_TABLE[slug.toLowerCase()] : undefined;
 
   if (curated) {
-    /* DB color absent OR matches curated → trust the curated identity. */
-    if (!dbHex || dbHex.toLowerCase() === curated.color.toLowerCase()) {
-      return curated;
-    }
-    /* DB color overrides — keep curated copy/motif/vibe but recolor. */
-    return {
-      ...curated,
-      color: dbHex,
-      colorAlt: dbHex,
-      gradient: [dbHex, `${dbHex}AA`, `${dbHex}30`] as const,
-    };
+    return curated;
   }
 
   if (dbHex) {

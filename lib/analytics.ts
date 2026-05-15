@@ -19,9 +19,6 @@ type EventName =
   | 'comment_created'
   | 'comment_deleted'
   | 'comment_edited'
-  | 'job_viewed'
-  | 'job_saved'
-  | 'job_applied'
   | 'community_joined'
   | 'community_left'
   | 'profile_viewed'
@@ -46,7 +43,7 @@ type EventName =
 
 class AnalyticsService {
   private userId: string | null = null;
-  private queue: Array<{ event_name: string; event_data: any; screen?: string }> = [];
+  private queue: { event_name: string; event_data: any; screen?: string }[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   setUser(userId: string | null) {

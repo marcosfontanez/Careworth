@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
-  Platform,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -21,6 +20,9 @@ import { messagesService, type Conversation } from '@/services/supabase/messages
 import { timeAgo } from '@/utils/format';
 import { useAuth } from '@/contexts/AuthContext';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { getMessengerInboxListWindow } from '@/lib/feedVideoListWindow';
+
+const INBOX_LIST_WINDOW = getMessengerInboxListWindow();
 
 export type MessengerSortMode = 'recent' | 'unread' | 'name';
 
@@ -217,11 +219,11 @@ export function MessengerInboxPanel({
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.id}
-        initialNumToRender={14}
-        maxToRenderPerBatch={10}
-        windowSize={9}
+        initialNumToRender={INBOX_LIST_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={INBOX_LIST_WINDOW.maxToRenderPerBatch}
+        windowSize={INBOX_LIST_WINDOW.windowSize}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

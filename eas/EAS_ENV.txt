@@ -1,0 +1,15 @@
+EAS Build: set these in Expo (expo.dev → your project → Environment variables)
+
+Apply to the environments you use (development / preview / production) so EAS injects them at build time.
+Previously they lived in eas.json; they are no longer committed.
+
+Required for a working app binary:
+  EXPO_PUBLIC_SUPABASE_URL
+  EXPO_PUBLIC_SUPABASE_ANON_KEY
+
+Recommended (match previous eas.json defaults if you still need them):
+  EXPO_PUBLIC_BETA_TESTER_BORDER
+  EXPO_PUBLIC_APPLE_MUSIC_STOREFRONT
+  EXPO_PUBLIC_VIDEO_EXPORT_URL
+
+Local Expo / Metro: keep using .env or app.config — EAS env only affects cloud builds.

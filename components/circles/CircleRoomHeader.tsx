@@ -202,13 +202,13 @@ export function CircleRoomHeader({
  * avoid colliding with the icon/name on the left. Tiny rotations make them
  * feel hand-placed rather than gridded.
  */
-const MOTIF_POSITIONS: Array<{
+const MOTIF_POSITIONS: {
   top: number;
   right: number;
   fontSize: number;
   opacity: number;
   rotate?: string;
-}> = [
+}[] = [
   { top: 70, right: 18, fontSize: 22, opacity: 0.20, rotate: '8deg' },
   { top: 110, right: 64, fontSize: 14, opacity: 0.24, rotate: '-12deg' },
   { top: 154, right: 28, fontSize: 18, opacity: 0.18, rotate: '20deg' },

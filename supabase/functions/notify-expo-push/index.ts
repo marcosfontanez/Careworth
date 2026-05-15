@@ -6,11 +6,12 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+
+const corsHeaders = edgeCorsHeaders({
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-webhook-secret",
-};
+});
 
 const LEGACY_CIRCLE_THREAD_REPLY_MESSAGE = "New reply in your circle thread";
 

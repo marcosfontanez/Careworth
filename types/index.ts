@@ -1,6 +1,7 @@
 import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
 
 export type Role =
+  | ''
   | 'RN'
   | 'CNA'
   | 'PCT'
@@ -12,6 +13,7 @@ export type Role =
   | 'Nurse Leader';
 
 export type Specialty =
+  | ''
   | 'ICU'
   | 'Emergency'
   | 'Med Surg'
@@ -37,11 +39,11 @@ export type PostType =
 
 export type PrivacyMode = 'public' | 'followers' | 'alias' | 'private';
 
-/** `community` = circle-only surface; excluded from main For You / Following / Friends / Top Today feeds */
-export type FeedType = 'forYou' | 'following' | 'friends' | 'topToday' | 'community';
+/** `community` = circle-only surface; excluded from main For You / Following / Top Today feeds */
+export type FeedType = 'forYou' | 'following' | 'topToday' | 'community';
 
 /** Facepile-style reactions on posts (see `post_likes.reaction`, migration 115). */
-export type PostReactionKind = 'heart' | 'haha' | 'wow' | 'sad' | 'angry' | 'clap';
+export type PostReactionKind = 'heart' | 'haha' | 'wow' | 'sad' | 'angry';
 
 export interface PostReactionCounts {
   heart: number;
@@ -49,7 +51,6 @@ export interface PostReactionCounts {
   wow: number;
   sad: number;
   angry: number;
-  clap: number;
 }
 
 export type ShiftPreference = 'Day' | 'Night' | 'Rotating' | 'No Preference';
@@ -323,6 +324,8 @@ export interface ProfileUpdateComment {
   authorAvatarUrl?: string;
   parentId?: string;
   content: string;
+  /** Optional image (public URL), same bucket pattern as feed comment attachments. */
+  mediaUrl?: string | null;
   createdAt: string;
   /**
    * Server-stamped timestamp of the most recent body edit. Populated by
@@ -415,6 +418,8 @@ export interface CreatorSummary {
   firstName?: string;
   lastName?: string;
   avatarUrl: string;
+  /** Neon identity pills (`profiles.identity_tags`). Legacy `role` / `specialty` columns are deprecated and not shown in UI. */
+  identityTags?: string[];
   role: Role;
   specialty: Specialty;
   city: string;
@@ -479,7 +484,7 @@ export interface Post {
   /** Multi-image carousels: extra image URLs after `mediaUrl` */
   additionalMedia?: string[];
   isEducation?: boolean;
-  educationCitations?: Array<{ label?: string; url?: string; doi?: string; lastReviewed?: string }>;
+  educationCitations?: { label?: string; url?: string; doi?: string; lastReviewed?: string }[];
   seriesId?: string;
   seriesPart?: number;
   seriesTotal?: number;
@@ -596,32 +601,12 @@ export interface TrendingTopic24h {
   lastActiveAt: string;
 }
 
-export interface Job {
-  id: string;
-  title: string;
-  employerName: string;
-  employerLogo?: string;
-  city: string;
-  state: string;
-  role: Role;
-  specialty: Specialty;
-  payMin: number;
-  payMax: number;
-  shift: string;
-  employmentType: EmploymentType;
-  description: string;
-  requirements: string[];
-  benefits: string[];
-  isSaved: boolean;
-  isFeatured: boolean;
-  isNew: boolean;
-  createdAt: string;
-}
-
 export interface Comment {
   id: string;
   postId: string;
   author: CreatorSummary;
+  /** Optional image attached to this comment (public URL). */
+  mediaUrl?: string;
   /**
    * The current body shown to the viewer. When `isDeleted` is true the
    * server `content` will be replaced by the client-rendered tombstone
@@ -630,6 +615,10 @@ export interface Comment {
    */
   content: string;
   likeCount: number;
+  /** Per-emoji totals (same kinds as {@link PostReactionKind}). */
+  reactionCounts?: PostReactionCounts;
+  /** Signed-in viewer’s pick for this comment, when loaded with a viewer id. */
+  viewerReaction?: PostReactionKind | null;
   replyCount: number;
   createdAt: string;
   /**
@@ -750,7 +739,8 @@ export interface LiveGift {
   id: string;
   name: string;
   emoji: string;
-  coinCost: number;
+  /** Sparks charged per unit for this live sticker (persisted server-side; surfaced as `sparkCost` in the client). */
+  sparkCost: number;
   tier: LiveGiftTier;
   animation?: 'float' | 'burst' | 'rain' | 'fullscreen';
   color: string;
@@ -772,7 +762,7 @@ export interface StreamGiftLeaderboard {
   userId: string;
   displayName: string;
   avatarUrl?: string;
-  totalCoins: number;
+  totalSparks: number;
   giftCount: number;
   rank: number;
 }
@@ -824,18 +814,6 @@ export interface SubscriptionPlan {
   interval: 'month' | 'year';
   features: string[];
   revenueCatProductId?: string;
-}
-
-export type JobListingTier = 'basic' | 'standard' | 'premium' | 'featured';
-
-export interface JobListingPricing {
-  tier: JobListingTier;
-  name: string;
-  price: number;
-  durationDays: number;
-  features: string[];
-  maxApplicants?: number;
-  badge?: string;
 }
 
 export type TipAmount = 1 | 5 | 10 | 25 | 50 | 100;

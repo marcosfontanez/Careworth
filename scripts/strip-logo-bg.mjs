@@ -3,7 +3,9 @@
  * 2) Flood from frame edge through {transparent ∪ non-ink pixels}; "ink" = black outlines + saturated
  *    colors. Trapped flat whites (letter counters, inside orbit loops) never get reached → removed.
  */
-import sharp from 'sharp';
+import { loadSharp } from './load-sharp.mjs';
+
+const sharp = await loadSharp();
 
 const src = process.argv[2];
 const dest = process.argv[3];

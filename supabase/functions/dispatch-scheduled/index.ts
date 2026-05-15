@@ -5,11 +5,12 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+
+const corsHeaders = edgeCorsHeaders({
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-cron-secret",
-};
+});
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

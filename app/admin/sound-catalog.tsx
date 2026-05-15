@@ -10,7 +10,6 @@ import {
   RefreshControl,
   Switch,
   Alert,
-  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +18,9 @@ import { colors } from '@/theme';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { useToast } from '@/components/ui/Toast';
 import { soundCatalogService, type SoundCatalogAdminRow } from '@/services/supabase/soundCatalog';
+import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
+
+const SOUND_CATALOG_ADMIN_LIST_WINDOW = getAdminModerationListWindow('soundCatalog');
 
 export default function AdminSoundCatalogScreen() {
   const router = useRouter();
@@ -219,11 +221,11 @@ export default function AdminSoundCatalogScreen() {
           <FlatList
             data={rows}
             keyExtractor={(item) => item.id}
-            initialNumToRender={14}
-            maxToRenderPerBatch={10}
-            windowSize={9}
+            initialNumToRender={SOUND_CATALOG_ADMIN_LIST_WINDOW.initialNumToRender}
+            maxToRenderPerBatch={SOUND_CATALOG_ADMIN_LIST_WINDOW.maxToRenderPerBatch}
+            windowSize={SOUND_CATALOG_ADMIN_LIST_WINDOW.windowSize}
             updateCellsBatchingPeriod={50}
-            removeClippedSubviews={Platform.OS === 'android'}
+            removeClippedSubviews={false}
             ListHeaderComponent={ListHeader}
             refreshControl={(
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />

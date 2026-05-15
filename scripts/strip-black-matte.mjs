@@ -3,7 +3,9 @@
  * New circle lockups are often delivered as “trans” JPEG-style PNGs that are
  * still fully opaque black outside the art.
  */
-import sharp from 'sharp';
+import { loadSharp } from './load-sharp.mjs';
+
+const sharp = await loadSharp();
 
 const src = process.argv[2];
 const dest = process.argv[3];

@@ -9,11 +9,15 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
+  Image as RNImage,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
   type NativeSyntheticEvent,
   type StyleProp,
   type TextInputProps,
@@ -21,9 +25,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { profilesService } from '@/services/supabase/profiles';
-import { colors, borderRadius, shadows, spacing } from '@/theme';
+import { colors, borderRadius, layout, shadows, spacing } from '@/theme';
+import { profileHandleDisplay } from '@/utils/profileHandle';
 import type { UserProfile } from '@/types';
 
 export interface MentionRef {
@@ -31,6 +35,8 @@ export interface MentionRef {
   blur: () => void;
   /** Pulls the uuids of every @handle currently present in the text. */
   getMentionedUserIds: () => string[];
+  /** Sync native + JS selection (e.g. edit composer caret at end on open). */
+  setSelection: (start: number, end: number) => void;
 }
 
 interface Props extends Omit<TextInputProps, 'onChangeText' | 'value' | 'ref'> {
@@ -40,6 +46,11 @@ interface Props extends Omit<TextInputProps, 'onChangeText' | 'value' | 'ref'> {
   onMention?: (user: UserProfile) => void;
   /** When the full set of matched-in-text mentions changes. */
   onMentionsChange?: (users: UserProfile[]) => void;
+  /**
+   * Outer wrapper around the TextInput (popover anchors to this width).
+   * Use `{ flex: 1, minWidth: 0 }` when this sits beside a send button in a row.
+   */
+  wrapperStyle?: StyleProp<ViewStyle>;
   /** Extra wrapper style for the suggestion popover. */
   suggestionsStyle?: StyleProp<ViewStyle>;
   /** Hide the popover entirely (useful when parent manages overlay). */
@@ -68,6 +79,7 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
       onChangeText,
       onMention,
       onMentionsChange,
+      wrapperStyle,
       suggestionsStyle,
       disableSuggestions = false,
       maxSuggestions = 5,
@@ -90,11 +102,23 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
     const activeTokenRef = useRef<{ start: number; end: number; handle: string } | null>(
       null,
     );
+    const [shell, setShell] = useState({ w: 0, h: 0 });
+    const onShellLayout = useCallback((e: LayoutChangeEvent) => {
+      const { width, height } = e.nativeEvent.layout;
+      setShell((prev) => {
+        if (Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1) return prev;
+        return { w: width, h: height };
+      });
+    }, []);
 
     useImperativeHandle(ref, () => ({
       focus: () => inputRef.current?.focus(),
       blur: () => inputRef.current?.blur(),
       getMentionedUserIds: () => collectMentionedIds(value, resolvedCache),
+      setSelection: (start: number, end: number) => {
+        inputRef.current?.setNativeProps?.({ selection: { start, end } });
+        setSelection({ start, end });
+      },
     }));
 
     // Re-emit mentions whenever the text or resolved cache changes.
@@ -140,11 +164,16 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
       setLoading(true);
       const t = setTimeout(async () => {
         try {
-          const results = await profilesService.searchByHandle(
-            activeFragment,
-            maxSuggestions,
-          );
+          const raw = await profilesService.search(activeFragment);
           if (cancelled) return;
+          const frag = activeFragment.toLowerCase();
+          const sorted = [...raw].sort((a, b) => {
+            const ra = mentionRank(a, frag);
+            const rb = mentionRank(b, frag);
+            if (ra !== rb) return ra - rb;
+            return (b.followerCount ?? 0) - (a.followerCount ?? 0);
+          });
+          const results = sorted.slice(0, maxSuggestions);
           setSuggestions(results);
           // Pre-populate the resolvedCache with any match whose handle matches
           // exactly — this lets us report mentions immediately.
@@ -208,6 +237,14 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
       [value, onChangeText, onMention],
     );
 
+    const { width: windowWidth } = useWindowDimensions();
+    const maxScreenPopover = Math.min(windowWidth - layout.screenPadding * 2, 420);
+    /** Match composer width so ancestors with overflow:hidden don't clip the label column. */
+    const popoverWidth =
+      shell.w > 0 ? Math.min(maxScreenPopover, Math.max(Math.round(shell.w), 160)) : maxScreenPopover;
+    /** Anchor bottom edge above the TextInput so the sheet opens upward (keyboard-safe). */
+    const popoverBottomOffset = shell.h > 0 ? shell.h + 8 : 52;
+
     const showSuggestions =
       !disableSuggestions &&
       activeFragment !== null &&
@@ -215,7 +252,7 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
       (loading || suggestions.length > 0);
 
     return (
-      <View style={styles.wrap}>
+      <View style={[styles.wrap, wrapperStyle]} onLayout={onShellLayout}>
         <TextInput
           ref={inputRef}
           {...rest}
@@ -223,10 +260,24 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
           onChangeText={onChangeText}
           onSelectionChange={handleSelectionChange}
           style={style}
+          textAlignVertical={
+            rest.textAlignVertical ??
+            (Platform.OS === 'android' && rest.multiline ? 'top' : undefined)
+          }
         />
 
         {showSuggestions ? (
-          <View style={[styles.popover, suggestionsStyle]}>
+          <View
+            style={[
+              styles.popover,
+              {
+                width: popoverWidth,
+                bottom: popoverBottomOffset,
+              },
+              platformPopoverLift,
+              suggestionsStyle,
+            ]}
+          >
             <View style={styles.popoverHeader}>
               <Ionicons name="at" size={11} color={colors.primary.teal} />
               <Text style={styles.popoverLabel}>
@@ -255,6 +306,33 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
   },
 );
 
+function mentionRank(u: UserProfile, frag: string): number {
+  const au = (u.username ?? '').toLowerCase();
+  const dn = (u.displayName ?? '').toLowerCase();
+  const fn = (u.firstName ?? '').toLowerCase();
+  if (au.startsWith(frag)) return 0;
+  if (dn.startsWith(frag)) return 1;
+  if (fn.startsWith(frag)) return 2;
+  if (dn.includes(frag)) return 3;
+  if (fn.includes(frag)) return 4;
+  return 6;
+}
+
+const platformPopoverLift = Platform.select<ViewStyle>({
+  android: { elevation: 28, zIndex: 500 },
+  ios: { zIndex: 500 },
+  default: { zIndex: 10000 },
+});
+
+function mentionRowPrimaryLabel(user: UserProfile): string {
+  const dn = (user.displayName || '').trim();
+  if (dn) return dn;
+  const fn = (user.firstName || '').trim();
+  if (fn) return fn;
+  const u = (user.username || '').trim();
+  return u ? `@${u}` : 'Someone';
+}
+
 function SuggestionRow({
   user,
   onPick,
@@ -262,39 +340,42 @@ function SuggestionRow({
   user: UserProfile;
   onPick: (u: UserProfile) => void;
 }) {
-  const handle = user.username ?? '';
+  const handle = (user.username ?? '').trim();
+  const primary = mentionRowPrimaryLabel(user);
+  const thumb = user.avatarUrl?.trim();
+  const secondary = profileHandleDisplay(user);
+
   return (
-    <Pressable
+    <TouchableOpacity
+      activeOpacity={0.75}
       onPress={() => onPick(user)}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={styles.rowTouchable}
       accessibilityRole="button"
-      accessibilityLabel={`Mention ${user.displayName}`}
+      accessibilityLabel={handle ? `Mention ${primary}, @${handle}` : `Mention ${primary}`}
     >
-      {user.avatarUrl ? (
-        <AvatarDisplay
-          size={32}
-          avatarUrl={user.avatarUrl}
-          prioritizeRemoteAvatar
-          ringColor={colors.dark.border}
-          pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Ionicons name="person" size={14} color={colors.dark.textMuted} />
+      <View style={styles.rowInner}>
+        <View style={styles.suggestionAvatarWrap}>
+          {thumb ? (
+            <RNImage source={{ uri: thumb }} style={styles.suggestionAvatarImg} resizeMode="cover" />
+          ) : (
+            <View style={[styles.suggestionAvatarImg, styles.avatarPlaceholderFill]}>
+              <Ionicons name="person" size={16} color={colors.dark.textMuted} />
+            </View>
+          )}
         </View>
-      )}
-      <View style={styles.rowMeta}>
-        <Text style={styles.displayName} numberOfLines={1}>
-          {user.displayName}
-        </Text>
-        <Text style={styles.handle} numberOfLines={1}>
-          @{handle}
-        </Text>
+        <View style={styles.rowMeta}>
+          <Text style={styles.displayName} numberOfLines={1} allowFontScaling>
+            {primary}
+          </Text>
+          <Text style={styles.handle} numberOfLines={1} allowFontScaling>
+            {secondary}
+          </Text>
+        </View>
+        {user.isVerified ? (
+          <Ionicons name="checkmark-circle" size={13} color={colors.primary.teal} style={styles.verifiedIcon} />
+        ) : null}
       </View>
-      {user.isVerified ? (
-        <Ionicons name="checkmark-circle" size={13} color={colors.primary.teal} />
-      ) : null}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -344,27 +425,24 @@ export function extractHandles(text: string): string[] {
 const styles = StyleSheet.create({
   wrap: {
     position: 'relative',
+    zIndex: 40,
+    /** Popover is often wider than the TextInput — allow it to extend without clipping. */
+    overflow: 'visible',
   },
   popover: {
     position: 'absolute',
     left: 0,
-    right: 0,
-    bottom: -4,
-    transform: [{ translateY: 0 }],
-    marginTop: 6,
     maxHeight: 240,
     backgroundColor: colors.dark.elevated,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.dark.borderSubtle,
     overflow: 'hidden',
-    zIndex: 20,
     ...shadows.card,
   },
   popoverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -378,49 +456,71 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: colors.primary.teal,
     flex: 1,
+    marginLeft: 6,
   },
   popoverSpinner: {
     marginLeft: 'auto',
   },
   suggestionList: {
     maxHeight: 220,
+    alignSelf: 'stretch',
+    width: '100%',
   },
-  row: {
+  /** TouchableOpacity lays out reliably with row children on iOS; Pressable often shrink-wraps and collapses `flex:1` labels. */
+  rowTouchable: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  rowInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    width: '100%',
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
-  rowPressed: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  /** Keeps mention rows compact — uncapped ring art must not steal row width. */
+  suggestionAvatarWrap: {
+    width: 36,
+    height: 36,
+    flexShrink: 0,
+    marginRight: 12,
+    borderRadius: 18,
+    overflow: 'hidden',
     backgroundColor: colors.dark.cardAlt,
+    zIndex: 1,
   },
-  avatarPlaceholder: {
+  suggestionAvatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarPlaceholderFill: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.dark.cardAlt,
   },
   rowMeta: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'center',
+    zIndex: 2,
   },
   displayName: {
-    fontSize: 13.5,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.dark.text,
-    letterSpacing: -0.1,
+    letterSpacing: -0.15,
   },
   handle: {
-    marginTop: 1,
-    fontSize: 11.5,
+    marginTop: 2,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.primary.teal,
-    letterSpacing: 0.2,
+    letterSpacing: 0.15,
+  },
+  verifiedIcon: {
+    flexShrink: 0,
+    marginLeft: 6,
   },
   emptyText: {
     paddingHorizontal: spacing.md,

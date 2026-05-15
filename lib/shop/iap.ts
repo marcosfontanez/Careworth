@@ -3,4 +3,11 @@
  * This barrel exists so TypeScript can resolve `@/lib/shop/iap`.
  */
 export type { PurchasePlatform, IapPurchaseResult } from './iap.native';
-export { initIapConnection, endIapConnection, platformPrefix, purchaseSku } from './iap.native';
+export {
+  initIapConnection,
+  endIapConnection,
+  platformPrefix,
+  purchaseSku,
+  restorePurchasesFromStore,
+  getIosReceiptBase64,
+} from './iap.native';

@@ -10,7 +10,7 @@ interface Props {
   /** Called once the user confirms; the video file isn't actually re-encoded — we
    * pass back N { startSec, endSec } slices so the parent can stage them as
    * separate drafts later. */
-  onSplit: (slices: Array<{ startSec: number; endSec: number; index: number; total: number }>) => void;
+  onSplit: (slices: { startSec: number; endSec: number; index: number; total: number }[]) => void;
 }
 
 const PRESETS = [2, 3, 4, 5];

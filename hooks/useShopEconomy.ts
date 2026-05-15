@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@/contexts/AuthContext';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { shopQueriesService } from '@/services/shop/shopQueries';
 import { purchaseService } from '@/services/shop/purchaseService';
 import { pickFeaturedBorder } from '@/lib/shop/catalogUtils';
 import type { PurchaseReceiptRow, ShopItemRow, UserInventoryRow } from '@/lib/shop/types';
-import { totalSparkBalance } from '@/lib/shop/types';
+import { totalSparkBalance, totalDiamondBalance } from '@/lib/shop/types';
 
 export function useShopCatalog() {
   return useQuery({
@@ -23,6 +22,19 @@ export function useSparkWallet(userId: string | undefined) {
       if (!userId) return null;
       await shopQueriesService.ensureWallets(userId);
       return shopQueriesService.getSparkWallet(userId);
+    },
+    enabled: !!userId,
+    staleTime: 15_000,
+  });
+}
+
+export function useDiamondWallet(userId: string | undefined) {
+  return useQuery({
+    queryKey: shopKeys.diamondWallet(userId),
+    queryFn: async () => {
+      if (!userId) return null;
+      await shopQueriesService.ensureWallets(userId);
+      return shopQueriesService.getDiamondWallet(userId);
     },
     enabled: !!userId,
     staleTime: 15_000,
@@ -123,6 +135,10 @@ export function useShopRefetchers(userId: string | undefined) {
     return qc.refetchQueries({ queryKey: shopKeys.sparkWallet(userId) });
   }, [qc, userId]);
 
+  const refetchDiamondWallet = useCallback(() => {
+    return qc.refetchQueries({ queryKey: shopKeys.diamondWallet(userId) });
+  }, [qc, userId]);
+
   const refetchInventory = useCallback(() => {
     return qc.refetchQueries({ queryKey: shopKeys.inventory(userId) });
   }, [qc, userId]);
@@ -133,10 +149,21 @@ export function useShopRefetchers(userId: string | undefined) {
 
   /** Await network refetches so success UI shows updated balances/ownership immediately. */
   const refreshAfterPurchase = useCallback(async () => {
-    await Promise.all([refetchWallet(), refetchInventory(), refetchReceipts()]);
-  }, [refetchWallet, refetchInventory, refetchReceipts]);
+    await Promise.all([
+      refetchWallet(),
+      refetchDiamondWallet(),
+      refetchInventory(),
+      refetchReceipts(),
+    ]);
+  }, [refetchWallet, refetchDiamondWallet, refetchInventory, refetchReceipts]);
 
-  return { refetchWallet, refetchInventory, refetchReceipts, refreshAfterPurchase };
+  return {
+    refetchWallet,
+    refetchDiamondWallet,
+    refetchInventory,
+    refetchReceipts,
+    refreshAfterPurchase,
+  };
 }
 
 export function useEquipBorderMutation(userId: string | undefined) {
@@ -151,4 +178,8 @@ export function useEquipBorderMutation(userId: string | undefined) {
 
 export function useSparkBalanceNumber(wallet: ReturnType<typeof useSparkWallet>['data']) {
   return useMemo(() => totalSparkBalance(wallet ?? null), [wallet]);
+}
+
+export function useDiamondBalanceNumber(wallet: ReturnType<typeof useDiamondWallet>['data']) {
+  return useMemo(() => totalDiamondBalance(wallet ?? null), [wallet]);
 }

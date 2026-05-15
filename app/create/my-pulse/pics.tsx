@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   ActivityIndicator,
   Platform,
@@ -91,7 +90,7 @@ export default function MyPulsePicsScreen() {
           ),
         );
       } catch (e) {
-        console.warn('Pics upload failed', e);
+        if (__DEV__) console.warn('Pics upload failed', e);
         setAssets((prev) =>
           prev.map((a) =>
             a.uri === asset.uri

@@ -20,14 +20,9 @@ import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { colors, typography } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
+import { normalizeWebUrl } from '@/lib/safeExternalLink';
 
 const LINK_NOTE_ACCENT = '#60A5FA';
-
-function normalizeUrl(raw: string): string {
-  const t = raw.trim();
-  if (!t) return '';
-  return t.startsWith('http://') || t.startsWith('https://') ? t : `https://${t}`;
-}
 
 /** External link row — maps to `media_note` + `linkedUrl` (blue link style on My Pulse). */
 export default function MyPulseLinkNoteScreen() {
@@ -45,7 +40,8 @@ export default function MyPulseLinkNoteScreen() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error('Not signed in');
-      const href = normalizeUrl(url);
+      const href = normalizeWebUrl(url);
+      if (!href) throw new Error('Enter a valid http or https URL.');
       const line = title.trim();
       return profileUpdatesService.add(user.id, {
         type: 'media_note',
@@ -53,6 +49,10 @@ export default function MyPulseLinkNoteScreen() {
         linkedUrl: href,
         previewText: line.slice(0, 160),
       });
+    },
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : 'Could not save link';
+      showToast(msg, 'error');
     },
     onSuccess: async () => {
       if (user?.id) await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
@@ -90,6 +90,7 @@ export default function MyPulseLinkNoteScreen() {
       <Text style={styles.fieldLbl}>What you&apos;re sharing</Text>
       <AccentComposerFrame
         accentColor={LINK_NOTE_ACCENT}
+        allowOverflow
         hint="Caption"
         compact
         noShadow

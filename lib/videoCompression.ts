@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { isReactNativeCompressorLinked } from '@/lib/compressorAvailability';
 import type { MediaAsset } from '@/lib/media';
 
 /**
@@ -37,6 +38,7 @@ const TARGET_BITRATE_BPS = 1_800_000;
  * pass-through, but a dev client / production build will always have it.
  */
 function loadCompressor(): null | typeof import('react-native-compressor') {
+  if (!isReactNativeCompressorLinked()) return null;
   try {
     return require('react-native-compressor');
   } catch {
@@ -83,7 +85,7 @@ export async function compressVideoIfTooLarge(
   if (!mod) {
     if (__DEV__) {
       console.warn(
-        '[videoCompression] react-native-compressor not available — uploading source as-is. Build a dev client to enable the 720p cap.',
+        '[videoCompression] react-native-compressor not available — uploading source as-is. Use a dev build (not Expo Go), run `npx expo prebuild` / pod install if needed, then rebuild.',
       );
     }
     return asset;

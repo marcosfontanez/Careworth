@@ -27,3 +27,22 @@ export type JobRecord = {
   anonymousExport: boolean;
   request: VideoExportJobRequestBody;
 };
+
+/** Side-by-side duet mux — two fetchable MP4 URLs (signed URLs OK). */
+export type DuetMuxJobRequestBody = {
+  leftVideoUrl: string;
+  rightVideoUrl: string;
+  /** Optional client correlation id for logs */
+  clientRef?: string;
+};
+
+export type DuetMuxJobRecord = {
+  id: string;
+  userId: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  outputUrl?: string;
+  error?: string;
+  createdAt: number;
+  request: DuetMuxJobRequestBody;
+};

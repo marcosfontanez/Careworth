@@ -15,9 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useLiveStreams } from '@/hooks/useQueries';
-import { colors, borderRadius, layout, spacing, typography } from '@/theme';
+import { colors, borderRadius, layout, pulseverse, spacing, typography } from '@/theme';
 import { FeaturedLiveCarousel } from '@/components/live/FeaturedLiveCarousel';
-import { SectionHeader } from '@/components/ui/SectionHeader';
+import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 import { LiveNowCard } from '@/components/live/LiveNowCard';
 import { RisingLiveCard } from '@/components/live/RisingLiveCard';
 import { LiveTopicChip, LIVE_TOPICS, type LiveTopic } from '@/components/live/LiveTopicChip';
@@ -171,13 +171,20 @@ function LiveScreenEnabled() {
             {/* SECTION 1 — Featured Live carousel */}
             {hasLiveStreams && featured.length > 0 ? (
               <View style={styles.section}>
-                <SectionHeader
+                <PVSectionHeader
                   title="Featured Live"
-                  variant="prominent"
-                  icon="star"
-                  iconColor={colors.primary.gold}
-                  actionLabel="See All"
-                  onActionPress={() => router.push('/search')}
+                  leading={<Ionicons name="star" size={16} color={colors.primary.gold} />}
+                  rightSlot={
+                    <TouchableOpacity
+                      onPress={() => router.push('/search')}
+                      hitSlop={12}
+                      accessibilityRole="button"
+                      accessibilityLabel="See all featured live"
+                    >
+                      <Text style={styles.sectionSeeAll}>See All</Text>
+                    </TouchableOpacity>
+                  }
+                  style={styles.pvSectionPad}
                 />
                 <FeaturedLiveCarousel
                   streams={featured}
@@ -190,11 +197,19 @@ function LiveScreenEnabled() {
             {/* SECTION 2 — Top Live Now */}
             {hasLiveStreams && topLiveNow.length > 0 ? (
               <View style={styles.section}>
-                <SectionHeader
+                <PVSectionHeader
                   title="Top Live Now"
-                  variant="prominent"
-                  actionLabel="See All"
-                  onActionPress={() => router.push('/search')}
+                  rightSlot={
+                    <TouchableOpacity
+                      onPress={() => router.push('/search')}
+                      hitSlop={12}
+                      accessibilityRole="button"
+                      accessibilityLabel="See all top live"
+                    >
+                      <Text style={styles.sectionSeeAll}>See All</Text>
+                    </TouchableOpacity>
+                  }
+                  style={styles.pvSectionPad}
                 />
                 <ScrollView
                   horizontal
@@ -216,13 +231,20 @@ function LiveScreenEnabled() {
             {/* SECTION 3 — Rising Lives */}
             {hasLiveStreams && risingLives.length > 0 ? (
               <View style={styles.section}>
-                <SectionHeader
+                <PVSectionHeader
                   title="Rising Lives"
-                  variant="prominent"
-                  icon="trending-up"
-                  iconColor={colors.primary.gold}
-                  actionLabel="See All"
-                  onActionPress={() => router.push('/search')}
+                  leading={<Ionicons name="trending-up" size={16} color={colors.primary.gold} />}
+                  rightSlot={
+                    <TouchableOpacity
+                      onPress={() => router.push('/search')}
+                      hitSlop={12}
+                      accessibilityRole="button"
+                      accessibilityLabel="See all rising lives"
+                    >
+                      <Text style={styles.sectionSeeAll}>See All</Text>
+                    </TouchableOpacity>
+                  }
+                  style={styles.pvSectionPad}
                 />
                 <ScrollView
                   horizontal
@@ -243,11 +265,19 @@ function LiveScreenEnabled() {
 
             {/* SECTION 4 — Browse by Topic */}
             <View style={styles.section}>
-              <SectionHeader
+              <PVSectionHeader
                 title="Browse by Topic"
-                variant="prominent"
-                actionLabel="See All"
-                onActionPress={() => router.push('/search')}
+                rightSlot={
+                  <TouchableOpacity
+                    onPress={() => router.push('/search')}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="See all topics"
+                  >
+                    <Text style={styles.sectionSeeAll}>See All</Text>
+                  </TouchableOpacity>
+                }
+                style={styles.pvSectionPad}
               />
               <View style={styles.topicWrap}>
                 {LIVE_TOPICS.map((topic) => (
@@ -386,6 +416,12 @@ const styles = StyleSheet.create({
 
   /* Sections */
   section: { marginTop: spacing.xl },
+  pvSectionPad: { paddingHorizontal: layout.screenPadding },
+  sectionSeeAll: {
+    ...typography.sectionLabel,
+    color: pulseverse.electric,
+    fontWeight: '700',
+  },
 
   /* Horizontal-scrolling rows (Top Live Now, Rising Lives) */
   hRowScroll: {

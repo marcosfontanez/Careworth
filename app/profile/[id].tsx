@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { useUser, useUserPosts, useProfileUpdates, useCreatorPostNotifications } from '@/hooks/useQueries';
 import { useMutation } from '@tanstack/react-query';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { MyPageContent } from '@/components/mypage/MyPageContent';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
@@ -33,7 +34,7 @@ export default function ProfileByIdScreen() {
   const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
 
   const profileUserId = typeof id === 'string' ? id : Array.isArray(id) ? id[0] : '';
-  const { data: user, isLoading } = useUser(profileUserId);
+  const { data: user, isLoading, isError, refetch } = useUser(profileUserId);
   const { data: posts } = useUserPosts(profileUserId);
   const { data: profileUpdates = [] } = useProfileUpdates(profileUserId);
   const { data: creatorPostNotifyOn = false, isLoading: creatorPostNotifyLoading } =
@@ -66,7 +67,21 @@ export default function ProfileByIdScreen() {
     creatorPostNotifyMutation.mutate(!creatorPostNotifyOn);
   };
 
-  if (isLoading || !user) return <LoadingState />;
+  if (!profileUserId) return <LoadingState />;
+  if (isLoading && user === undefined) return <LoadingState />;
+  if (isError || user == null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+        <EmptyState
+          icon="person-outline"
+          title="Could not load profile"
+          subtitle="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => void refetch()}
+        />
+      </View>
+    );
+  }
 
   if (authUser?.id === user.id) {
     // Preserve the deep-link params when redirecting to My Pulse so the

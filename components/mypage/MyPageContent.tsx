@@ -1,7 +1,11 @@
 /**
  * Single source of truth for PulseVerse My Pulse layout (live profile + posts).
  *
- * Layout (top → bottom, per premium Pulse Page overhaul):
+ * Uses {@link PVPageBackground} for the same screen shell as Circles Discover.
+ * Major blocks (search, stats, visitor CTAs, Current Vibe, My Pulse rail, Media Hub)
+ * sit on {@link MyPulseGlassPanel} frosted glass for consistency with Creator Hub / Shop.
+ *
+ * Layout (top → bottom):
  *   1. Banner + floating back/more
  *   2. Profile Header (avatar, name, handle, neon tags, one-line intro)
  *   3. PulseStatsRow — three boxed cards (Followers · Following · Pulse Score)
@@ -34,12 +38,13 @@ import {
   typography,
   spacing,
   layout,
+  tabBarScrollPaddingBottom,
   touchTarget,
   shadows,
   pulseverse,
 } from '@/theme';
-import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { profileHandleDisplay } from '@/utils/profileHandle';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { shareProfile } from '@/lib/share';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { FeaturedSoundCard } from '@/components/mypage/FeaturedSoundCard';
@@ -48,9 +53,12 @@ import { useUnreadCount, useLinkedPostsMap } from '@/hooks/useQueries';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
 import { MyPulseSection } from '@/components/mypage/MyPulseSection';
 import { PulseStatsRow } from '@/components/mypage/PulseStatsRow';
+import { PVPageBackground } from '@/components/pv/PVPageBackground';
+import { PVSearchBarTrigger } from '@/components/pv/PVSearchBar';
 import type { Post, ProfileUpdate, UserProfile } from '@/types';
 import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
 import { canVisitorSeeProfilePosts } from '@/utils/mypagePosts';
+import { MyPulseGlassPanel } from '@/components/mypage/MyPulseGlassPanel';
 
 /**
  * Compact hero avatar for My Pulse. Deliberately smaller than tab profile so
@@ -58,8 +66,6 @@ import { canVisitorSeeProfilePosts } from '@/utils/mypagePosts';
  * handle / neon pill column to its right (mock-accurate layout).
  */
 const MY_PULSE_AVATAR_SIZE = 88;
-/** Max characters per neon pill — keeps the row to a single line on 390pt-wide devices. */
-const NEON_PILL_MAX_LEN = 14;
 
 export type MyPageContentProps = {
   user: UserProfile;
@@ -161,31 +167,10 @@ export function MyPageContent({
     [userPosts, linkedPostsMap],
   );
 
-  const identityTags = user.identityTags ?? [];
-  // Enforce the total-character budget client-side as a second line of
-  // defense (editor already trims on save, but older profiles may have
-  // more characters saved). We accept tags in order until adding the
-  // next one would exceed the budget, so the row never wraps. Each
-  // individual pill is also hard-capped at NEON_PILL_MAX_LEN chars so a
-  // single freak-long tag can't swallow the entire row.
-  const neonPillTags = useMemo(() => {
-    const raw =
-      identityTags.length > 0
-        ? identityTags
-        : [String(user.role), String(user.specialty)];
-
-    const kept: string[] = [];
-    let used = 0;
-    for (const t of raw) {
-      if (kept.length >= MY_PULSE_MAX_IDENTITY_TAGS) break;
-      const trimmed =
-        t.length > NEON_PILL_MAX_LEN ? `${t.slice(0, NEON_PILL_MAX_LEN - 1)}…` : t;
-      if (used + trimmed.length > MY_PULSE_TAGS_CHAR_BUDGET) break;
-      kept.push(trimmed);
-      used += trimmed.length;
-    }
-    return kept;
-  }, [identityTags, user.role, user.specialty]);
+  const neonPillTags = useMemo(
+    () => buildNeonPillTags({ identityTags: user.identityTags }),
+    [user.identityTags],
+  );
   const hasBanner = Boolean(user.bannerUrl?.trim());
 
   const openPageMenu = useCallback(() => {
@@ -266,11 +251,29 @@ export function MyPageContent({
   const showVisitorBack = !isOwner;
 
   return (
-    <View style={styles.container}>
+    <PVPageBackground style={styles.screen}>
       <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: tabBarScrollPaddingBottom(insets.bottom) }}
       >
+        {isOwner ? (
+          <View
+            style={{
+              paddingHorizontal: layout.screenPadding,
+              paddingTop: insets.top + spacing.sm,
+              paddingBottom: spacing.sm,
+            }}
+          >
+            <MyPulseGlassPanel padding={spacing.sm + 2} blurIntensity={38} cornerRadius={borderRadius.xl + 4}>
+              <PVSearchBarTrigger
+                placeholder="Search creators, circles, tags, sounds…"
+                accessibilityLabel="Open search to find creators and follow"
+                onPress={() => router.push('/search')}
+              />
+            </MyPulseGlassPanel>
+          </View>
+        ) : null}
         {/* Banner: no title header — float back (visitors) + menu only */}
         <View style={styles.coverWrap}>
           {hasBanner ? (
@@ -437,20 +440,6 @@ export function MyPageContent({
               {profileHandleDisplay(user)}
             </Text>
             <ProfileNeonPills tags={neonPillTags} />
-            {isOwner ? (
-              <TouchableOpacity
-                style={styles.bordersChip}
-                onPress={() =>
-                  router.push({ pathname: '/my-pulse-appearance', params: { focus: 'borders' } } as any)
-                }
-                activeOpacity={0.88}
-                accessibilityRole="button"
-                accessibilityLabel="Pulse Shop borders in Customize My Pulse"
-              >
-                <Ionicons name="ribbon-outline" size={15} color="#22D3EE" style={{ marginRight: 6 }} />
-                <Text style={styles.bordersChipText}>My borders</Text>
-              </TouchableOpacity>
-            ) : null}
             {(user.bio?.trim() || isOwner) ? (
               <View style={styles.pageIntroWrap}>
                 <Text
@@ -471,121 +460,127 @@ export function MyPageContent({
           </View>
         </View>
 
-        {/* Flat 3-stat strip (Followers / Following / Pulse Score) */}
+        {/* Flat 3-stat strip — glass panel allows Pulse tooltip to extend upward */}
         <View style={{ paddingHorizontal: layout.screenPadding }}>
-          <PulseStatsRow
-            userId={user.id}
-            displayName={user.displayName ?? user.username ?? undefined}
-            isOwner={isOwner}
-            followers={user.followerCount ?? 0}
-            following={user.followingCount ?? 0}
-            initialScore={user.pulseScoreCurrent ?? null}
-            initialTier={user.pulseTier ?? null}
-            initialHistoryOpen={initialOpenPulseHistory}
-            highlightShareTier={highlightShareTier}
-            onPressFollowers={() =>
-              router.push(`/followers?userId=${user.id}&tab=followers`)
-            }
-            onPressFollowing={() =>
-              router.push(`/followers?userId=${user.id}&tab=following`)
-            }
-          />
+          <MyPulseGlassPanel
+            padding={spacing.sm}
+            blurIntensity={36}
+            overflowVisible
+            style={{ marginBottom: spacing.xs }}
+          >
+            <PulseStatsRow
+              userId={user.id}
+              displayName={user.displayName ?? user.username ?? undefined}
+              isOwner={isOwner}
+              followers={user.followerCount ?? 0}
+              following={user.followingCount ?? 0}
+              initialScore={user.pulseScoreCurrent ?? null}
+              initialTier={user.pulseTier ?? null}
+              initialHistoryOpen={initialOpenPulseHistory}
+              highlightShareTier={highlightShareTier}
+              onPressFollowers={() =>
+                router.push(`/followers?userId=${user.id}&tab=followers`)
+              }
+              onPressFollowing={() =>
+                router.push(`/followers?userId=${user.id}&tab=following`)
+              }
+            />
+          </MyPulseGlassPanel>
         </View>
 
         {!isOwner ? (
-          <View style={styles.visitorActions}>
-            <TouchableOpacity
-              style={[
-                styles.followBtn,
-                isFollowing ? styles.followBtnOutline : styles.followBtnPrimary,
-              ]}
-              onPress={onToggleFollow}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name={isFollowing ? 'checkmark' : 'person-add'}
-                size={17}
-                color={isFollowing ? colors.primary.teal : '#FFF'}
-              />
-              <Text
-                style={[
-                  styles.followBtnText,
-                  isFollowing && { color: colors.primary.teal },
-                ]}
-              >
-                {isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.msgBtn}
-              onPress={onMessage}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="chatbubble-outline"
-                size={17}
-                color={colors.primary.teal}
-              />
-              <Text style={styles.msgBtnText}>Message</Text>
-            </TouchableOpacity>
-            {onOpenCreatorGifts ? (
-              <TouchableOpacity
-                style={styles.shareIconBtn}
-                onPress={onOpenCreatorGifts}
-                activeOpacity={0.85}
-                accessibilityLabel="Send a gift with Sparks"
-              >
-                <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
-              </TouchableOpacity>
-            ) : null}
-            <TouchableOpacity
-              style={styles.shareIconBtn}
-              onPress={() => shareProfile(user.id, user.displayName)}
-              activeOpacity={0.85}
-              accessibilityLabel="Share profile"
-            >
-              <Ionicons
-                name="share-outline"
-                size={18}
-                color={colors.dark.text}
-              />
-            </TouchableOpacity>
+          <View style={{ paddingHorizontal: layout.screenPadding, marginTop: spacing.sm + 2 }}>
+            <MyPulseGlassPanel padding={spacing.sm} blurIntensity={32}>
+              <View style={styles.visitorActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.followBtn,
+                    isFollowing ? styles.followBtnOutline : styles.followBtnPrimary,
+                  ]}
+                  onPress={onToggleFollow}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons
+                    name={isFollowing ? 'checkmark' : 'person-add'}
+                    size={17}
+                    color={isFollowing ? colors.primary.teal : '#FFF'}
+                  />
+                  <Text
+                    style={[
+                      styles.followBtnText,
+                      isFollowing && { color: colors.primary.teal },
+                    ]}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.msgBtn} onPress={onMessage} activeOpacity={0.85}>
+                  <Ionicons name="chatbubble-outline" size={17} color={colors.primary.teal} />
+                  <Text style={styles.msgBtnText}>Message</Text>
+                </TouchableOpacity>
+                {onOpenCreatorGifts ? (
+                  <TouchableOpacity
+                    style={styles.shareIconBtn}
+                    onPress={onOpenCreatorGifts}
+                    activeOpacity={0.85}
+                    accessibilityLabel="Send a gift with Sparks"
+                  >
+                    <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.shareIconBtn}
+                  onPress={() => shareProfile(user.id, user.displayName)}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Share profile"
+                >
+                  <Ionicons name="share-outline" size={18} color={colors.dark.text} />
+                </TouchableOpacity>
+              </View>
+            </MyPulseGlassPanel>
           </View>
         ) : null}
 
         <View
-          style={[styles.body, { paddingHorizontal: layout.screenPaddingWide }]}
+          style={[
+            styles.body,
+            { paddingHorizontal: layout.screenPaddingWide, gap: spacing.lg },
+          ]}
         >
-          {/* Current Vibe (mini music player) */}
-          <FeaturedSoundCard
-            user={user}
-            accent={pulseverse.electric}
-            profileViewAutoplay
-            alwaysShow={isOwner}
-            onCustomize={
-              isOwner
-                ? () => router.push('/my-pulse-appearance?section=sound' as any)
-                : undefined
-            }
-          />
+          <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+            <FeaturedSoundCard
+              user={user}
+              accent={pulseverse.electric}
+              profileViewAutoplay
+              alwaysShow={isOwner}
+              onCustomize={
+                isOwner
+                  ? () => router.push('/my-pulse-appearance?section=sound' as any)
+                  : undefined
+              }
+            />
+          </MyPulseGlassPanel>
 
-          {/* My Pulse (rolling 5) */}
-          <MyPulseSection
-            updates={profileUpdates}
-            userId={user.id}
-            readOnly={!isOwner}
-            resolveLinkedPost={resolveLinkedPost}
-          />
+          <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+            <MyPulseSection
+              updates={profileUpdates}
+              userId={user.id}
+              readOnly={!isOwner}
+              resolveLinkedPost={resolveLinkedPost}
+            />
+          </MyPulseGlassPanel>
 
-          <MediaHubSection
-            userId={user.id}
-            userPosts={postsVisibleOnProfile}
-            profileUpdates={profileUpdates}
-            isOwner={isOwner}
-          />
+          <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+            <MediaHubSection
+              userId={user.id}
+              userPosts={postsVisibleOnProfile}
+              profileUpdates={profileUpdates}
+              isOwner={isOwner}
+            />
+          </MyPulseGlassPanel>
         </View>
       </ScrollView>
-    </View>
+    </PVPageBackground>
   );
 }
 
@@ -667,7 +662,9 @@ function BannerChrome({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.bg },
+  screen: { flex: 1 },
+  /** Web: default scroll view can paint an opaque surface and hide {@link PVPageBackground}. */
+  scrollView: { flex: 1, backgroundColor: 'transparent' },
   coverWrap: { width: '100%', height: 200 },
   coverImg: { flex: 1 },
   coverImgStyle: { width: '100%', height: '100%' },
@@ -731,19 +728,6 @@ const styles = StyleSheet.create({
   },
   avatarInner: { position: 'relative' },
   avatarPressable: { alignSelf: 'flex-start' },
-  bordersChip: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: pulseverse.sparksPillBorder,
-    backgroundColor: 'rgba(34,211,238,0.08)',
-  },
-  bordersChipText: { fontSize: 12, fontWeight: '800', color: pulseverse.electric, letterSpacing: 0.2 },
   cameraFab: {
     position: 'absolute',
     bottom: 2,
@@ -842,8 +826,6 @@ const styles = StyleSheet.create({
   },
   visitorActions: {
     flexDirection: 'row',
-    marginTop: spacing.sm + 2,
-    marginHorizontal: layout.screenPadding,
     gap: spacing.sm,
     alignItems: 'center',
   },

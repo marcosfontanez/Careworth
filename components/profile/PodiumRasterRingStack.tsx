@@ -32,18 +32,34 @@ export function PodiumRasterRingStack({
   if (!raster) return null;
   const outerBox = rasterRingOuterBoxSide(photoDiameter);
   const uri = avatarUrl?.trim() ? avatarThumb(avatarUrl.trim(), Math.round(photoDiameter * 1.5)) : null;
-  const fireworksColors =
+  const fireworksColorsGold =
     prizeTier === 'gold'
       ? ['#FFF176', '#FF9100', '#FFEA00', '#FFFEF0', '#FFD700', '#FFFFFF']
       : undefined;
+  const fireworksColorsSilver = ['#E2E8F0', '#CBD5E1', '#F1F5F9', '#FFFFFF', '#94A3B8'];
+  const fireworksColorsBronze = ['#FDBA74', '#FB923C', '#EA580C', '#FDE68A', '#FFF7ED'];
 
   return (
     <View style={[styles.wrap, { width: outerBox, height: outerBox }]}>
-      {showFireworks ? (
+      {showFireworks && prizeTier === 'gold' ? (
         <GoldFireworksBurst
           ringDiameter={outerBox}
           tier="gold"
-          sparkColors={fireworksColors}
+          sparkColors={fireworksColorsGold}
+        />
+      ) : null}
+      {prizeTier === 'silver' ? (
+        <GoldFireworksBurst
+          ringDiameter={outerBox}
+          tier="silver"
+          sparkColors={fireworksColorsSilver}
+        />
+      ) : null}
+      {prizeTier === 'bronze' ? (
+        <GoldFireworksBurst
+          ringDiameter={outerBox}
+          tier="bronze"
+          sparkColors={fireworksColorsBronze}
         />
       ) : null}
       <View style={[styles.inner, { width: outerBox, height: outerBox }]}>

@@ -54,7 +54,6 @@ export function isFreeShopBorder(item: ShopItemRow): boolean {
 }
 
 export function sparkPackLabel(sparkAmount: number, index: number, total: number): string | undefined {
-  const sorted = [...new Set([500, 1200, 2500, 6500])];
   if (sparkAmount === 6500 || index === total - 1) return 'Best Value';
   if (sparkAmount === 2500 || index === Math.floor(total / 2)) return 'Most Popular';
   return undefined;

@@ -3,12 +3,15 @@ import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-na
 import { LinearGradient } from 'expo-linear-gradient';
 import { borderRadius } from '@/theme';
 
-const BORDER_PRESETS: [string, string][] = [
+/** Diagonal neon ring colors — same as My Pulse profile pills; reuse for shop frames. */
+export const PROFILE_NEON_BORDER_PRESETS: readonly [string, string][] = [
   ['#14B8A6', '#EC4899'],
   ['#A855F7', '#14B8A6'],
   ['#38BDF8', '#EC4899'],
   ['#F472B6', '#22D3EE'],
 ];
+
+const BORDER_PRESETS = PROFILE_NEON_BORDER_PRESETS;
 
 interface Props {
   tags: string[];

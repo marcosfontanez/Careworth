@@ -1,0 +1,58 @@
+---
+description: PulseVerse Visual System — mandatory for all app + web UI
+alwaysApply: true
+---
+
+# PulseVerse Visual System (mandatory)
+
+Full spec: **`docs/UI_VISION.md`** § *PulseVerse Visual System*. Use **`theme/`** + shared primitives; extend tokens before new magic values.
+
+## Brand & look
+
+- **Premium, futuristic, polished, cinematic** — luxury dark; **healthcare-social, elevated** (not sterile).
+- **Neon glass — restrained, expensive.** Navy/near-black **layered** bases; **cyan / teal / electric blue** accents; **gold** for featured / legendary / verified only where appropriate.
+- **Never** flat black; **never** noisy FX. Backgrounds = **rich, dimensional** (gradient + subtle vertical/radial texture); optional **slow** streaks/particles if animated.
+
+## Cards (major)
+
+- Fill band ~ **`rgba(12,18,32,0.82)` → `rgba(18,26,44,0.92)`**; **blur** when possible.
+- **Radius 20–28px**; **~1px** cyan-blue **low-opacity** border.
+- **Layered shadow** + **faint cyan outer glow only** where hierarchy needs it — interior softly **lit**, not flat.
+
+## Glass / glow
+
+- **Subtle** glass — not frosted overload. **No** thick bright rings on everything.
+- **Strong glow:** primary CTAs, **featured** cards, **active** tabs, **premium** icons.
+- **Soft / none:** secondary UI.
+
+## Buttons
+
+- **Primary:** cyan → electric-blue gradient, **white** text, pill or rounded rect, **soft halo + inner highlight**; press = slightly **darker**, glow **tighter**.
+- **Secondary:** dark glass, subtle border, cyan/white text, **minimal** glow.
+- **Danger / low emphasis:** **subdued**.
+
+## Type & space
+
+- Strict **hierarchy:** screen title → section → card title → muted meta. **No** cramped text; meta **never** fights titles.
+- **Generous editorial rhythm**; consistent scale — **no** edge-to-edge packs; **no** crowded chip rows.
+
+## Chips & icons
+
+- **Compact premium capsules**; rarity stands out; supporting chips stay **quiet**.
+- Icons: **clean outlined / soft filled**, **one** style; glow **active-only**; not cartoon.
+
+## Featured heroes
+
+**Stronger** light + gradient than default cards; **spotlight** behind hero object; **clear CTA**; **stronger** badges; **flagship drop** depth.
+
+## Bottom nav
+
+**Darker glass** bar; **subtle** active-tab glow; **premium** center action if used; precise modern icons.
+
+## Do not
+
+Flat generic cards; outline/blur/glow **overuse**; gaming neon; childish gradients; cramming.
+
+## Goal & implementation
+
+Screens = **premium luxury social** + **cinematic neon-glass**. Compose **background → glass/veil → content**; build **reusable** card/button patterns. Document exceptions in `docs/UI_VISION.md`.

@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo } from 'react';
-import { Linking, Text, type StyleProp, type TextStyle } from 'react-native';
+import { Text, type StyleProp, type TextStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/theme';
 import { parseAndNavigate } from '@/lib/deepLink';
 import { parseCommentRichSegments } from '@/lib/commentRichSegments';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 
 interface Props {
   text: string;
@@ -38,7 +39,7 @@ export function CommentRichText({
 
   const onLink = useCallback((url: string) => {
     if (!parseAndNavigate(url)) {
-      void Linking.openURL(url).catch(() => {});
+      openWebUrlSafely(url);
     }
   }, []);
 

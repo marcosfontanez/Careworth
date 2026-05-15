@@ -17,7 +17,7 @@ const PRESET_PRIMARIES: string[] = [
   '#F59E0B', '#22C55E', '#10B981', '#06B6D4', '#8B5CF6', '#F43F5E',
 ];
 
-const PRESET_SCRUBS: Array<{ key: string; color: string; label: string }> = [
+const PRESET_SCRUBS: { key: string; color: string; label: string }[] = [
   { key: 'navy',     color: '#1E3A8A', label: 'Navy' },
   { key: 'ceil',     color: '#7DD3FC', label: 'Ceil blue' },
   { key: 'hunter',   color: '#15803D', label: 'Hunter green' },

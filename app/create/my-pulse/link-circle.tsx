@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
-  Platform,
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +19,9 @@ import { useToast } from '@/components/ui/Toast';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { colors, borderRadius, typography } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
+import { getAvatarSubtitleRowListWindow } from '@/lib/feedVideoListWindow';
+
+const LINK_CIRCLE_LIST_WINDOW = getAvatarSubtitleRowListWindow();
 
 export default function MyPulseLinkCircleScreen() {
   const router = useRouter();
@@ -132,11 +134,11 @@ export default function MyPulseLinkCircleScreen() {
       <FlatList
         data={discussions}
         keyExtractor={(d) => d.id}
-        initialNumToRender={12}
-        maxToRenderPerBatch={10}
-        windowSize={9}
+        initialNumToRender={LINK_CIRCLE_LIST_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={LINK_CIRCLE_LIST_WINDOW.maxToRenderPerBatch}
+        windowSize={LINK_CIRCLE_LIST_WINDOW.windowSize}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews={false}
         renderItem={renderRow}
         style={styles.list}
         contentContainerStyle={{ paddingBottom: 24 }}

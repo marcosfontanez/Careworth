@@ -196,32 +196,32 @@ async function ensurePurchaseReceiptAndFulfill(params: {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return optionsResponse();
+  if (req.method === "OPTIONS") return optionsResponse(req);
 
   const supabaseUrl = requireEnv("SUPABASE_URL");
   const anonKey = requireEnv("SUPABASE_ANON_KEY");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !anonKey || !serviceKey) {
-    return jsonResponse(err("SERVER_MISCONFIGURED", "Missing Supabase environment variables."), 503);
+    return jsonResponse(req, err("SERVER_MISCONFIGURED", "Missing Supabase environment variables."), 503);
   }
 
   const authHeader = req.headers.get("Authorization");
   const user = await getAuthedUser(supabaseUrl, anonKey, authHeader);
   if (!user) {
-    return jsonResponse(err("UNAUTHORIZED", "Valid Authorization Bearer token required."), 401);
+    return jsonResponse(req, err("UNAUTHORIZED", "Valid Authorization Bearer token required."), 401);
   }
 
   let body: RequestBody;
   try {
     body = (await req.json()) as RequestBody;
   } catch {
-    return jsonResponse(err("INVALID_INPUT", "JSON body required."), 400);
+    return jsonResponse(req, err("INVALID_INPUT", "JSON body required."), 400);
   }
 
   const { action, shop_item_id: shopItemIdRaw } = body;
   if (!action || !shopItemIdRaw) {
-    return jsonResponse(err("INVALID_INPUT", "action and shop_item_id are required."), 400);
+    return jsonResponse(req, err("INVALID_INPUT", "action and shop_item_id are required."), 400);
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
@@ -231,11 +231,11 @@ Deno.serve(async (req: Request) => {
 
   const item = await loadShopItem(admin, shopItemIdRaw);
   if (!item) {
-    return jsonResponse(err("INVALID_INPUT", "Unknown shop_item_id."), 400);
+    return jsonResponse(req, err("INVALID_INPUT", "Unknown shop_item_id."), 400);
   }
 
   if (!item.is_active) {
-    return jsonResponse(err("ITEM_INACTIVE", "This item is not available."), 422);
+    return jsonResponse(req, err("ITEM_INACTIVE", "This item is not available."), 422);
   }
 
   /* ─── IAP actions ─── */
@@ -246,28 +246,28 @@ Deno.serve(async (req: Request) => {
   ) {
     const platform = body.platform;
     if (platform !== "ios" && platform !== "android") {
-      return jsonResponse(err("INVALID_INPUT", "platform must be ios or android."), 400);
+      return jsonResponse(req, err("INVALID_INPUT", "platform must be ios or android."), 400);
     }
 
     if (action === "fulfill_spark_pack" && item.type !== "spark_pack") {
-      return jsonResponse(err("ITEM_TYPE_MISMATCH", "shop_item must be a spark_pack."), 400);
+      return jsonResponse(req, err("ITEM_TYPE_MISMATCH", "shop_item must be a spark_pack."), 400);
     }
     if (
       (action === "fulfill_border_self" || action === "fulfill_border_gift") &&
       item.type !== "border"
     ) {
-      return jsonResponse(err("ITEM_TYPE_MISMATCH", "shop_item must be a border."), 400);
+      return jsonResponse(req, err("ITEM_TYPE_MISMATCH", "shop_item must be a border."), 400);
     }
     if (action === "fulfill_border_gift") {
       const h = body.border_gift?.recipient_handle?.trim();
       if (!h) {
-        return jsonResponse(err("INVALID_INPUT", "border_gift.recipient_handle is required."), 400);
+        return jsonResponse(req, err("INVALID_INPUT", "border_gift.recipient_handle is required."), 400);
       }
     }
 
     const expectedPid = expectedStoreProductId(item, platform);
     if (!expectedPid) {
-      return jsonResponse(err("ITEM_INACTIVE", "Store product id not configured for this platform."), 422);
+      return jsonResponse(req, err("ITEM_INACTIVE", "Store product id not configured for this platform."), 422);
     }
 
     let storeProductId = expectedPid;
@@ -277,21 +277,21 @@ Deno.serve(async (req: Request) => {
     if (platform === "ios") {
       const secret = requireEnv("APPLE_IAP_SHARED_SECRET");
       if (!secret) {
-        return jsonResponse(err("STORE_NOT_CONFIGURED", "APPLE_IAP_SHARED_SECRET is not set."), 503);
+        return jsonResponse(req, err("STORE_NOT_CONFIGURED", "APPLE_IAP_SHARED_SECRET is not set."), 503);
       }
       const b64 = body.receipt?.ios?.receipt_data_base64?.trim();
       if (!b64) {
-        return jsonResponse(err("INVALID_INPUT", "receipt.ios.receipt_data_base64 is required."), 400);
+        return jsonResponse(req, err("INVALID_INPUT", "receipt.ios.receipt_data_base64 is required."), 400);
       }
       const vr = await verifyAppleReceipt(b64, secret, expectedPid);
       if (!vr.ok) {
-        return jsonResponse(
+        return jsonResponse(req,
           err("INVALID_RECEIPT", vr.message, { apple_status: vr.status }),
           422,
         );
       }
       if (vr.purchase.productId !== expectedPid) {
-        return jsonResponse(err("PRODUCT_MISMATCH", "Receipt product does not match catalog item."), 422);
+        return jsonResponse(req, err("PRODUCT_MISMATCH", "Receipt product does not match catalog item."), 422);
       }
       storeProductId = vr.purchase.productId;
       externalId = vr.purchase.transactionId;
@@ -305,28 +305,28 @@ Deno.serve(async (req: Request) => {
       const pkg = requireEnv("GOOGLE_PLAY_PACKAGE_NAME");
       const saJson = requireEnv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON");
       if (!pkg || !saJson) {
-        return jsonResponse(
+        return jsonResponse(req,
           err("STORE_NOT_CONFIGURED", "Google Play env vars missing."),
           503,
         );
       }
       const token = body.receipt?.android?.purchase_token?.trim();
       if (!token) {
-        return jsonResponse(err("INVALID_INPUT", "receipt.android.purchase_token is required."), 400);
+        return jsonResponse(req, err("INVALID_INPUT", "receipt.android.purchase_token is required."), 400);
       }
       const clientProductId = body.receipt?.android?.product_id?.trim() || expectedPid;
       if (clientProductId !== expectedPid) {
-        return jsonResponse(err("PRODUCT_MISMATCH", "product_id does not match catalog."), 422);
+        return jsonResponse(req, err("PRODUCT_MISMATCH", "product_id does not match catalog."), 422);
       }
       const vg = await verifyGoogleProduct(pkg, expectedPid, token, saJson);
       if (!vg.ok) {
-        return jsonResponse(
+        return jsonResponse(req,
           err("STORE_REJECTED", vg.message, { http: vg.httpStatus }),
           422,
         );
       }
       if (vg.purchase.productId !== expectedPid) {
-        return jsonResponse(err("PRODUCT_MISMATCH", "Play purchase product mismatch."), 422);
+        return jsonResponse(req, err("PRODUCT_MISMATCH", "Play purchase product mismatch."), 422);
       }
       storeProductId = vg.purchase.productId;
       externalId = vg.purchase.transactionId;
@@ -353,7 +353,7 @@ Deno.serve(async (req: Request) => {
             p_purchase_receipt_id: receiptId,
           }),
       });
-      return jsonResponse(result as never);
+      return jsonResponse(req, result as never);
     }
 
     if (action === "fulfill_border_self") {
@@ -372,7 +372,7 @@ Deno.serve(async (req: Request) => {
             p_shop_item_id: item.id,
           }),
       });
-      return jsonResponse(result as never);
+      return jsonResponse(req, result as never);
     }
 
     /* fulfill_border_gift */
@@ -397,33 +397,33 @@ Deno.serve(async (req: Request) => {
           p_note: note,
         }),
     });
-    return jsonResponse(result as never);
+    return jsonResponse(req, result as never);
   }
 
   /* ─── send_creator_gift (Sparks only; no store receipt) ─── */
   if (action === "send_creator_gift") {
     if (item.type !== "gift") {
-      return jsonResponse(err("ITEM_TYPE_MISMATCH", "shop_item must be a gift."), 400);
+      return jsonResponse(req, err("ITEM_TYPE_MISMATCH", "shop_item must be a gift."), 400);
     }
 
     const cg = body.creator_gift;
     if (!cg?.creator_user_id?.trim() || !cg.context_type || cg.idempotency_key == null) {
-      return jsonResponse(
+      return jsonResponse(req,
         err("INVALID_INPUT", "creator_gift.creator_user_id, context_type, idempotency_key required."),
         400,
       );
     }
     if (cg.idempotency_key.trim().length < 8) {
-      return jsonResponse(err("INVALID_INPUT", "idempotency_key must be at least 8 characters."), 400);
+      return jsonResponse(req, err("INVALID_INPUT", "idempotency_key must be at least 8 characters."), 400);
     }
 
     if (cg.creator_user_id === user.id) {
-      return jsonResponse(err("SELF_GIFT_NOT_ALLOWED", "Cannot gift yourself."), 422);
+      return jsonResponse(req, err("SELF_GIFT_NOT_ALLOWED", "Cannot gift yourself."), 422);
     }
 
     const { data: creatorRow } = await admin.from("profiles").select("id").eq("id", cg.creator_user_id).maybeSingle();
     if (!creatorRow) {
-      return jsonResponse(err("INVALID_RECIPIENT", "Creator profile not found."), 422);
+      return jsonResponse(req, err("INVALID_RECIPIENT", "Creator profile not found."), 422);
     }
 
     const { data, error } = await userSb.rpc("economy_send_creator_gift", {
@@ -436,10 +436,10 @@ Deno.serve(async (req: Request) => {
 
     if (error) {
       const code = mapRpcException({ message: error.message });
-      return jsonResponse(err(code, error.message), 422);
+      return jsonResponse(req, err(code, error.message), 422);
     }
 
-    return jsonResponse(
+    return jsonResponse(req,
       ok({
         creator_gift_id: data,
         sparks_spent: item.spark_price,
@@ -447,5 +447,5 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  return jsonResponse(err("INVALID_INPUT", `Unknown action: ${action}`), 400);
+  return jsonResponse(req, err("INVALID_INPUT", `Unknown action: ${action}`), 400);
 });

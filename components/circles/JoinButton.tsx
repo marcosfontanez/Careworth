@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { colors, borderRadius } from '@/theme';
+import { TouchableOpacity, Text, StyleSheet, View, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { borderRadius, pulseverse } from '@/theme';
 
 type Props = {
   joined: boolean;
@@ -11,11 +12,18 @@ type Props = {
 export function JoinButton({ joined, onToggle, compact }: Props) {
   return (
     <TouchableOpacity
-      style={[styles.btn, joined && styles.btnOn, compact && styles.btnCompact]}
+      style={[styles.btn, joined && styles.btnJoined, compact && styles.btnCompact, joined && styles.btnJoinedGlow]}
       onPress={onToggle}
-      activeOpacity={0.85}
+      activeOpacity={0.88}
     >
-      <Text style={[styles.txt, joined && styles.txtOn]}>{joined ? 'Joined' : 'Join'}</Text>
+      {joined ? (
+        <View style={styles.joinedInner}>
+          <Ionicons name="checkmark-circle" size={16} color={pulseverse.electricSoft} />
+          <Text style={styles.txtJoined}>Joined</Text>
+        </View>
+      ) : (
+        <Text style={styles.txtJoin}>Join</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -23,26 +31,44 @@ export function JoinButton({ joined, onToggle, compact }: Props) {
 const styles = StyleSheet.create({
   btn: {
     paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: borderRadius.button,
-    borderWidth: 1,
-    borderColor: colors.primary.teal + 'AA',
+    borderWidth: 1.5,
+    borderColor: `${pulseverse.electric}99`,
     backgroundColor: 'transparent',
   },
   btnCompact: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  btnOn: {
-    borderColor: colors.dark.border,
-    backgroundColor: colors.dark.cardAlt,
+  btnJoined: {
+    borderColor: `${pulseverse.electric}BB`,
+    backgroundColor: 'rgba(34,211,238,0.1)',
   },
-  txt: {
+  btnJoinedGlow: Platform.select({
+    ios: {
+      shadowColor: pulseverse.electric,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.22,
+      shadowRadius: 8,
+    },
+    default: {},
+  }),
+  joinedInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  txtJoin: {
     fontSize: 13,
     fontWeight: '800',
-    color: colors.primary.teal,
+    color: pulseverse.electricSoft,
+    letterSpacing: 0.2,
   },
-  txtOn: {
-    color: colors.dark.textMuted,
+  txtJoined: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: pulseverse.electricSoft,
+    letterSpacing: 0.15,
   },
 });

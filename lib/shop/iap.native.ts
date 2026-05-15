@@ -62,6 +62,54 @@ export function platformPrefix(): PurchasePlatform {
 }
 
 /**
+ * Triggers platform restore (syncs with App Store / Play) and returns active entitlement purchases.
+ * Non-consumables typically appear here; consumables may not.
+ */
+export async function restorePurchasesFromStore(): Promise<
+  { ok: true; purchases: { productId: string; purchaseToken?: string | null }[] } | { ok: false; message: string }
+> {
+  const mod = loadModule();
+  if (!mod) {
+    return { ok: false, message: 'Store purchases are only available on the iOS/Android app build.' };
+  }
+  const init = await initIapConnection();
+  if (!init.ok) return { ok: false, message: init.message };
+  try {
+    await mod.restorePurchases();
+    const list = await mod.getAvailablePurchases({
+      alsoPublishToEventListenerIOS: false,
+      onlyIncludeActiveItemsIOS: true,
+    });
+    const purchases = list.map((p: { productId: string; purchaseToken?: string | null }) => ({
+      productId: p.productId,
+      purchaseToken: p.purchaseToken ?? null,
+    }));
+    return { ok: true, purchases };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: msg };
+  }
+}
+
+/** Full app receipt (iOS) for server validation — same receipt can justify multiple product IDs. */
+export async function getIosReceiptBase64(): Promise<string | null> {
+  if (Platform.OS !== 'ios') return null;
+  const mod = loadModule();
+  if (!mod) return null;
+  const init = await initIapConnection();
+  if (!init.ok) return null;
+  try {
+    const fn = mod.getReceiptIOS as (() => Promise<string>) | undefined;
+    if (typeof fn !== 'function') return null;
+    const r = await fn();
+    const s = typeof r === 'string' ? r.trim() : '';
+    return s.length > 0 ? r : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Request purchase for a single SKU; resolves when purchase update delivers matching productId.
  * For consumables (Spark packs), pass isConsumable so Android finishes correctly.
  */

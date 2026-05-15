@@ -59,15 +59,15 @@ function normalizeMediaUrl(raw: unknown): string | undefined {
   return s;
 }
 
-/** DB + RPC expect exact tokens: forYou, following, topToday, friends — not "For You". */
+/** DB may still store legacy `friends`; we normalize to `following` (same surface in-app). */
 function normalizeFeedTypeEligibleTags(raw: unknown): string[] {
   const arr = Array.isArray(raw) ? raw : [];
   const mapped = arr.map((s) => {
     const t = String(s).trim();
     if (/^for\s*you$/i.test(t) || t.replace(/\s/g, '').toLowerCase() === 'foryou') return 'forYou';
     if (t.toLowerCase() === 'following') return 'following';
+    if (t.toLowerCase() === 'friends') return 'following';
     if (t.toLowerCase() === 'toptoday' || t === 'topToday') return 'topToday';
-    if (t.toLowerCase() === 'friends') return 'friends';
     if (t.toLowerCase() === 'community') return 'community';
     return t;
   });
@@ -80,18 +80,18 @@ function postIsLiveForPublicSurface(p: Post): boolean {
   return s === 'live';
 }
 
-/** Posts tagged only for circles must not appear in For You, Following, Friends, or Top Today (incl. author prepended slice). */
+/** Posts tagged only for circles must not appear in For You, Following, or Top Today (incl. author prepended slice). */
 function postAppearsInMainFeeds(p: Post): boolean {
   if (!postIsLiveForPublicSurface(p)) return false;
   const tags = p.feedTypeEligible ?? [];
-  return tags.some((x) => x === 'forYou' || x === 'following' || x === 'friends' || x === 'topToday');
+  return tags.some((x) => x === 'forYou' || x === 'following' || x === 'topToday');
 }
 
 function normalizeEducationCitations(
   raw: unknown,
-): Array<{ label?: string; url?: string; doi?: string; lastReviewed?: string }> | undefined {
+): { label?: string; url?: string; doi?: string; lastReviewed?: string }[] | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const out: Array<{ label?: string; url?: string; doi?: string; lastReviewed?: string }> = [];
+  const out: { label?: string; url?: string; doi?: string; lastReviewed?: string }[] = [];
   for (const item of raw) {
     if (item && typeof item === 'object') {
       const o = item as Record<string, unknown>;
@@ -132,7 +132,6 @@ function rowToReactionCounts(row: Record<string, unknown>): PostReactionCounts {
     wow: Number(row.reaction_wow_count ?? 0),
     sad: Number(row.reaction_sad_count ?? 0),
     angry: Number(row.reaction_angry_count ?? 0),
-    clap: Number(row.reaction_clap_count ?? 0),
   };
 }
 
@@ -162,8 +161,8 @@ function rowToPost(row: any): Post {
     createdAt: row.created_at,
     rankingScore: Number(row.ranking_score ?? 0),
     feedTypeEligible: normalizeFeedTypeEligibleTags(row.feed_type_eligible ?? []) as FeedType[],
-    roleContext: (row.role_context ?? 'RN') as Role,
-    specialtyContext: (row.specialty_context ?? 'General') as Specialty,
+    roleContext: (String(row.role_context ?? '').trim() || '') as Role,
+    specialtyContext: (String(row.specialty_context ?? '').trim() || '') as Specialty,
     locationContext: row.location_context != null ? String(row.location_context) : '',
     soundTitle: row.sound_title?.trim() || undefined,
     soundSourcePostId: row.sound_source_post_id ?? undefined,
@@ -251,7 +250,6 @@ const POST_SELECT = [
   'reaction_wow_count',
   'reaction_sad_count',
   'reaction_angry_count',
-  'reaction_clap_count',
   // Ranking
   'ranking_score',
   // Sound attribution (TikTok-style original-sound credit)
@@ -274,8 +272,8 @@ const POST_SELECT = [
   'cover_alt_url',
   'mood_preset',
   // Joined creator profile — explicit columns to avoid shipping email,
-  // push tokens, role_admin flag, identity_tags, etc. to the client.
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  // push tokens, role_admin flag, etc. to the client.
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /**
@@ -318,7 +316,7 @@ const POST_SELECT_FEED = [
   'scheduled_status',
   'cover_alt_url',
   'mood_preset',
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */
@@ -442,28 +440,6 @@ async function applyViewerFeedFilters(
   }
 }
 
-async function fetchMutualFollowCreatorIds(viewerId: string): Promise<string[]> {
-  const { data, error } = await supabase.rpc('get_mutual_follow_ids', { viewer: viewerId } as never);
-  if (error || !data?.length) return [];
-  return (data as { creator_id: string }[]).map((r) => r.creator_id);
-}
-
-async function runFriendsFeed(viewerId: string): Promise<Post[]> {
-  const mutual = await fetchMutualFollowCreatorIds(viewerId);
-  if (!mutual.length) return [];
-  let q = supabase
-    .from('posts')
-    .select(POST_SELECT_FEED)
-    .in('creator_id', mutual)
-    .order('created_at', { ascending: false })
-    .limit(60);
-  q = withFeedPrivacy(q, viewerId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map(rowToPost).filter(postAppearsInMainFeeds);
-}
-
-/** Feed queries only `public` by default; signed-in users also see their own posts (covers privacy "Followers"). */
 function withFeedPrivacy(query: any, viewerId?: string) {
   if (viewerId) {
     return query.or(`privacy_mode.eq.public,creator_id.eq.${viewerId}`);
@@ -719,12 +695,6 @@ export const postsService = {
         return finalizePostsForViewer(posts, userId);
       }
 
-      if (type === 'friends' && userId) {
-        const [p, ex] = await Promise.all([runFriendsFeed(userId), exclusionsPromise]);
-        posts = await applyViewerFeedFilters(p, userId, ex);
-        return finalizePostsForViewer(posts, userId);
-      }
-
       {
         let query = supabase.from('posts').select(POST_SELECT_FEED);
         query = withFeedPrivacy(query, userId);
@@ -741,7 +711,7 @@ export const postsService = {
         const [result, ex] = await Promise.all([query, exclusionsPromise]);
         const { data, error } = result;
         if (error) {
-          console.error('getFeed error:', error);
+          if (__DEV__) console.error('getFeed error:', error);
           throw error;
         }
         posts = await applyViewerFeedFilters(
@@ -793,31 +763,6 @@ export const postsService = {
 
     try {
       if (type === 'community') return { posts: [], nextCursor: null };
-
-      if (type === 'friends' && viewerId) {
-        const [mutual, exclusions] = await Promise.all([
-          fetchMutualFollowCreatorIds(viewerId),
-          loadFeedExclusions(viewerId),
-        ]);
-        if (!mutual.length) return { posts: [], nextCursor: null };
-        let q = supabase
-          .from('posts')
-          .select(POST_SELECT_FEED)
-          .in('creator_id', mutual)
-          .lt('created_at', cursor)
-          .order('created_at', { ascending: false })
-          .limit(limit * 2);
-        q = withFeedPrivacy(q, viewerId);
-        const { data, error } = await q;
-        if (error) throw error;
-        let posts = (data ?? [])
-          .map(rowToPost)
-          .filter((p) => !exclude.has(p.id) && postAppearsInMainFeeds(p));
-        posts = finalizePostsForViewer(await applyViewerFeedFilters(posts, viewerId, exclusions), viewerId);
-        posts = posts.slice(0, limit);
-        const nextCursor = posts.length ? posts[posts.length - 1].createdAt : null;
-        return { posts, nextCursor };
-      }
 
       let query = supabase
         .from('posts')
@@ -958,7 +903,7 @@ export const postsService = {
    * are simply absent from the map.
    */
   async getByIds(
-    ids: ReadonlyArray<string>,
+    ids: readonly string[],
     viewerId?: string | null,
   ): Promise<Map<string, Post>> {
     const unique = Array.from(new Set(ids.filter((x) => !!x && x.trim().length > 0)));
@@ -1179,7 +1124,7 @@ export const postsService = {
     shift_context?: string | null;
     /** Creator-tools (require migration 090). All optional and stripped on retry if the columns aren't present. */
     is_education?: boolean;
-    education_citations?: Array<{ label?: string; url: string }> | null;
+    education_citations?: { label?: string; url: string }[] | null;
     series_id?: string | null;
     series_part?: number | null;
     series_total?: number | null;

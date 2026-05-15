@@ -64,7 +64,7 @@ export async function persistQueryCache() {
       })
       .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt);
 
-    const serializable: Array<{ queryKey: unknown; data: unknown; dataUpdatedAt: number }> = [];
+    const serializable: { queryKey: unknown; data: unknown; dataUpdatedAt: number }[] = [];
     let runningBytes = 2; // for the surrounding "[]"
     for (const q of candidates) {
       const entry = {
@@ -143,7 +143,7 @@ export async function restoreQueryCache(): Promise<void> {
           return;
         }
 
-        const entries: Array<{ queryKey: any; data: any; dataUpdatedAt: number }> = JSON.parse(json);
+        const entries: { queryKey: any; data: any; dataUpdatedAt: number }[] = JSON.parse(json);
         const maxAge = 1000 * 60 * 60 * 24;
         const now = Date.now();
 

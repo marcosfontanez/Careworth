@@ -35,6 +35,8 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
 import { getCircleAccent } from '@/lib/circleAccents';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 
 const KIND_LABEL: Record<CircleThreadKind, string> = {
   question: 'Question',
@@ -89,8 +91,8 @@ export default function CircleThreadDetailScreen() {
       id: thread.authorId,
       displayName: 'Member',
       avatarUrl: '',
-      role: 'RN',
-      specialty: 'General',
+      role: '',
+      specialty: '',
       city: '',
       state: '',
       isVerified: false,
@@ -197,8 +199,11 @@ export default function CircleThreadDetailScreen() {
               <Text style={styles.meta}>
                 {isAnonRoom
                   ? `Anonymous · thread starter · ${timeAgo(thread.createdAt)}`
-                  : `${author.role}${author.specialty ? ` · ${author.specialty}` : ''} · ${timeAgo(thread.createdAt)}`}
+                  : timeAgo(thread.createdAt)}
               </Text>
+              {!isAnonRoom && buildNeonPillTags(author).length > 0 ? (
+                <ProfileNeonPills tags={buildNeonPillTags(author)} style={{ marginTop: 6 }} />
+              ) : null}
             </View>
           </View>
 
@@ -263,6 +268,7 @@ export default function CircleThreadDetailScreen() {
       <View style={[styles.composerBar, { paddingBottom: insets.bottom + 12 }]}>
         <AccentComposerFrame
           accentColor={composerAccent.color}
+          allowOverflow
           hint="Reply in this thread — @ mentions whoever you pick."
           style={{ marginHorizontal: 12 }}
           footer={
@@ -276,6 +282,7 @@ export default function CircleThreadDetailScreen() {
         >
           <View style={styles.composerRow}>
             <MentionAutocomplete
+              wrapperStyle={styles.composerMentionWrap}
               style={styles.threadComposerInput}
               placeholder="Add a reply…"
               placeholderTextColor={colors.dark.textMuted}
@@ -424,6 +431,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
+  },
+  composerMentionWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   threadComposerInput: {
     flex: 1,

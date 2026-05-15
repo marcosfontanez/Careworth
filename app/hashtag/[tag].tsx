@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
@@ -11,6 +11,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { colors, layout, spacing, typography } from '@/theme';
 import type { Post } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { getHashtagPostRowListWindow } from '@/lib/feedVideoListWindow';
+
+const HASHTAG_LIST_WINDOW = getHashtagPostRowListWindow();
 
 export default function HashtagPostsScreen() {
   const router = useRouter();
@@ -79,12 +82,11 @@ export default function HashtagPostsScreen() {
           keyExtractor={(p) => p.id}
           renderItem={renderItem}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={9}
+          initialNumToRender={HASHTAG_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={HASHTAG_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={HASHTAG_LIST_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          /** Trending hashtags can return hundreds of posts. */
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           ListEmptyComponent={<Text style={styles.empty}>No public posts with this tag yet.</Text>}
         />
       )}

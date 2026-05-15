@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Crypto from 'expo-crypto';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStream } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
@@ -26,7 +28,6 @@ import { GiftPicker } from '@/components/live/GiftPicker';
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard';
 import { PollWidget } from '@/components/live/PollWidget';
 import { HostPollCreator } from '@/components/live/HostPollCreator';
-import { CoinShopModal } from '@/components/live/CoinShopModal';
 import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { RoleBadge } from '@/components/ui/RoleBadge';
 import { SpecialtyBadge } from '@/components/ui/SpecialtyBadge';
@@ -37,7 +38,6 @@ import {
   streamPollsService,
   streamPinsService,
   streamsLiveService,
-  userCoinsService,
   profilesService,
 } from '@/services/supabase';
 import { supabase } from '@/lib/supabase';
@@ -48,12 +48,13 @@ import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
 import { colors, borderRadius, typography } from '@/theme';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { formatCount } from '@/utils/format';
+import { useSparkWallet, useSparkBalanceNumber } from '@/hooks/useShopEconomy';
+import { shopKeys } from '@/lib/shop/queryKeys';
 import type {
   StreamMessage,
   StreamPinnedMessage,
   StreamPoll,
   LiveGift,
-  LiveGiftEvent,
   StreamGiftLeaderboard,
 } from '@/types';
 
@@ -98,12 +99,14 @@ function StreamViewerScreenContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const streamId = id ?? '';
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const { data: stream, isLoading } = useStream(streamId);
   const showToast = useToast((s) => s.show);
 
-  const coinWallet = isFeatureEnabled('coinWallet');
+  const walletQ = useSparkWallet(user?.id);
+  const sparkBalance = useSparkBalanceNumber(walletQ.data);
 
   const streamIsLive = stream?.status === 'live';
 
@@ -117,9 +120,6 @@ function StreamViewerScreenContent() {
   const [hostPollVisible, setHostPollVisible] = useState(false);
   const [endingStream, setEndingStream] = useState(false);
 
-  /** Coin shop modal (open from GiftPicker's "Buy Coins"). */
-  const [coinShopVisible, setCoinShopVisible] = useState(false);
-
   /* ---------------- Followed set (hydrated from store) ------------------- */
   const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
   const setCreatorFollowed = useAppStore((s) => s.setCreatorFollowed);
@@ -130,11 +130,10 @@ function StreamViewerScreenContent() {
   const [inputText, setInputText] = useState('');
   const [showChat, setShowChat] = useState(true);
 
-  /* ---------------- Gifts / coins / leaderboard -------------------------- */
+  /* ---------------- Gifts / Sparks / leaderboard -------------------------- */
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [sparkGiftOpen, setSparkGiftOpen] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [coinBalance, setCoinBalance] = useState(0);
   const [giftSending, setGiftSending] = useState(false);
   const [leaderboard, setLeaderboard] = useState<StreamGiftLeaderboard[]>([]);
 
@@ -202,14 +201,14 @@ function StreamViewerScreenContent() {
       setMessages((prev) => [...prev.slice(-199), giftMsg]);
 
       setLeaderboard((prev) => {
-        const coinsAdded = event.gift.coinCost * event.quantity;
+        const sparksAdded = event.gift.sparkCost * event.quantity;
         const existing = prev.find((l) => l.userId === event.senderId);
         const next = existing
           ? prev.map((l) =>
               l.userId === event.senderId
                 ? {
                     ...l,
-                    totalCoins: l.totalCoins + coinsAdded,
+                    totalSparks: l.totalSparks + sparksAdded,
                     giftCount: l.giftCount + event.quantity,
                   }
                 : l,
@@ -219,35 +218,19 @@ function StreamViewerScreenContent() {
               {
                 userId: event.senderId,
                 displayName: event.senderName,
-                totalCoins: coinsAdded,
+                totalSparks: sparksAdded,
                 giftCount: event.quantity,
                 rank: prev.length + 1,
               },
             ];
         return next
-          .sort((a, b) => b.totalCoins - a.totalCoins)
+          .sort((a, b) => b.totalSparks - a.totalSparks)
           .map((l, i) => ({ ...l, rank: i + 1 }));
       });
     });
 
     return unsubscribe;
   }, [streamId]);
-
-  /* ==========================================================================
-   *  REAL — load the caller's coin wallet.
-   * ==========================================================================*/
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    (async () => {
-      await userCoinsService.ensureRow(user.id);
-      const wallet = await userCoinsService.getBalance(user.id);
-      if (!cancelled) setCoinBalance(wallet.balance);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
 
   /* ==========================================================================
    *  REAL — Supabase Realtime Presence gives an authoritative viewer count.
@@ -386,7 +369,7 @@ function StreamViewerScreenContent() {
           prev.map((m) => (m.id === optimistic.id ? persisted : m)),
         );
       }
-    } catch (err) {
+    } catch {
       // Rollback on failure.
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       showToast('Couldn\u2019t send message. Try again.', 'error');
@@ -411,26 +394,19 @@ function StreamViewerScreenContent() {
 
       setGiftSending(true);
 
-      // Optimistic: debit balance immediately. Rollback if the RPC throws.
-      const totalCost = gift.coinCost * quantity;
-      if (totalCost > 0) {
-        setCoinBalance((b) => Math.max(0, b - totalCost));
-      }
-
       try {
         await streamGiftsService.send({
           streamId,
-          senderId: user.id,
           gift,
           quantity,
+          idempotencyKey: Crypto.randomUUID(),
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await queryClient.invalidateQueries({ queryKey: shopKeys.sparkWallet(user.id) });
       } catch (err: any) {
-        // Rollback on failure.
-        if (totalCost > 0) setCoinBalance((b) => b + totalCost);
         showToast(
           err?.message?.toLowerCase().includes('insufficient')
-            ? 'Not enough coins. Top up to keep sending.'
+            ? 'Not enough Sparks. Top up in Pulse Shop.'
             : 'Couldn\u2019t send gift. Try again.',
           'error',
         );
@@ -441,7 +417,7 @@ function StreamViewerScreenContent() {
         }, 400);
       }
     },
-    [streamId, user?.id, profile?.displayName, showToast],
+    [streamId, user?.id, showToast, queryClient],
   );
 
   const handleToggleFollow = useCallback(async () => {
@@ -501,7 +477,7 @@ function StreamViewerScreenContent() {
         }
         // The realtime subscription will surface the authoritative counts as
         // other viewers vote, so we don't need to refetch here.
-      } catch (err) {
+      } catch {
         // Rollback.
         setHasVotedPoll(false);
         setVotedOptionId(undefined);
@@ -548,7 +524,7 @@ function StreamViewerScreenContent() {
   const handleCreatePoll = useCallback(
     async (input: {
       question: string;
-      options: Array<{ id: string; text: string }>;
+      options: { id: string; text: string }[];
       durationSec: number;
     }) => {
       if (!isHost) return;
@@ -569,7 +545,7 @@ function StreamViewerScreenContent() {
         showToast('Couldn\u2019t launch poll. Try again.', 'error');
       }
     },
-    [isHost, streamId, user?.id, showToast],
+    [isHost, streamId, showToast],
   );
 
   /** Host-only: manually end the active poll early. */
@@ -848,19 +824,21 @@ function StreamViewerScreenContent() {
                   >
                     <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
                   </TouchableOpacity>
-                  {coinWallet ? (
-                    <TouchableOpacity
-                      style={styles.giftBtn}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setShowGiftPicker(true);
-                      }}
-                      activeOpacity={0.75}
-                      accessibilityLabel="Send a coin gift"
-                    >
-                      <Ionicons name="logo-bitcoin" size={18} color={colors.status.premium} />
-                    </TouchableOpacity>
-                  ) : null}
+                  <TouchableOpacity
+                    style={styles.giftBtn}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      if (!user?.id) {
+                        showToast('Sign in to send gifts', 'error');
+                        return;
+                      }
+                      setShowGiftPicker(true);
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityLabel="Send quick live stickers (Sparks)"
+                  >
+                    <Ionicons name="flash" size={18} color={colors.status.premium} />
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -913,22 +891,15 @@ function StreamViewerScreenContent() {
 
       <GiftPicker
         visible={showGiftPicker}
-        coinBalance={coinBalance}
+        sparkBalance={sparkBalance}
         onSendGift={handleSendGift}
         onClose={() => setShowGiftPicker(false)}
-        onBuyCoins={coinWallet ? () => setCoinShopVisible(true) : undefined}
+        onBuySparks={() => {
+          setShowGiftPicker(false);
+          router.push({ pathname: '/pulse-shop', params: { tab: 'sparks' } });
+        }}
         sending={giftSending}
       />
-
-      {coinWallet ? (
-        <CoinShopModal
-          visible={coinShopVisible}
-          userId={user?.id}
-          currentBalance={coinBalance}
-          onClose={() => setCoinShopVisible(false)}
-          onPurchased={(next) => setCoinBalance(next)}
-        />
-      ) : null}
 
       <GiftLeaderboard
         visible={showLeaderboard}

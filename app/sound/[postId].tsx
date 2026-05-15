@@ -73,7 +73,7 @@ export default function SoundDetailScreen() {
   };
 
   const duetFromSource = () => {
-    router.push(`/create/video?mode=record&duetPostId=${encodeURIComponent(postId)}`);
+    router.push(`/create/video-camera?duetPostId=${encodeURIComponent(postId)}`);
   };
 
   const renderRemix = (item: Post) => {

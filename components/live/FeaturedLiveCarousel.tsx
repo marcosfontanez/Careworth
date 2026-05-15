@@ -11,6 +11,9 @@ import {
 import { layout, spacing, colors } from '@/theme';
 import { FeaturedLiveCard } from './FeaturedLiveCard';
 import type { LiveStream } from '@/types';
+import { getFeaturedLiveHeroCarouselWindow } from '@/lib/feedVideoListWindow';
+
+const FEATURED_LIVE_CAROUSEL_WINDOW = getFeaturedLiveHeroCarouselWindow();
 
 type Props = {
   streams: LiveStream[];
@@ -64,9 +67,9 @@ export function FeaturedLiveCarousel({
         ref={listRef}
         data={data}
         keyExtractor={(item) => item.id}
-        initialNumToRender={3}
-        maxToRenderPerBatch={3}
-        windowSize={5}
+        initialNumToRender={FEATURED_LIVE_CAROUSEL_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={FEATURED_LIVE_CAROUSEL_WINDOW.maxToRenderPerBatch}
+        windowSize={FEATURED_LIVE_CAROUSEL_WINDOW.windowSize}
         renderItem={({ item }) => (
           <View style={{ width: CARD_WIDTH, marginRight: spacing.md }}>
             <FeaturedLiveCard

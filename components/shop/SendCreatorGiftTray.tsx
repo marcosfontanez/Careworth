@@ -10,18 +10,23 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { colors, borderRadius, layout, typography, pulseverse, shadows } from '@/theme';
-import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useShopCatalog, useSparkWallet, useShopRefetchers, useSparkBalanceNumber, useShopDerived } from '@/hooks/useShopEconomy';
 import { purchaseService } from '@/services/shop/purchaseService';
 import type { ShopItemRow } from '@/lib/shop/types';
-import { giftIconFromItem } from '@/lib/shop/catalogUtils';
+import {
+  CREATOR_GIFT_TIER_META,
+  CREATOR_GIFT_TIER_ORDER,
+  type GiftTierFilter,
+  creatorGiftTierForItem,
+  groupGiftsByTier,
+} from '@/lib/shop/creatorGiftTiers';
+import { CreatorGiftOrb } from '@/components/shop/CreatorGiftOrb';
 import { analytics } from '@/lib/analytics';
 import { shopErrorHint } from '@/lib/shop/shopErrors';
 import { useToast } from '@/components/ui/Toast';
@@ -65,6 +70,7 @@ export function SendCreatorGiftTray({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [celebration, setCelebration] = useState<{ title: string; message: string } | null>(null);
+  const [giftTierFilter, setGiftTierFilter] = useState<GiftTierFilter>('all');
 
   useEffect(() => {
     if (visible && userId) {
@@ -78,6 +84,7 @@ export function SendCreatorGiftTray({
       setConfirmOpen(false);
       setSending(false);
       setCelebration(null);
+      setGiftTierFilter('all');
     }
   }, [visible]);
 
@@ -96,6 +103,13 @@ export function SendCreatorGiftTray({
     () => [...gifts].sort((a, b) => (a.spark_price ?? 0) - (b.spark_price ?? 0)),
     [gifts],
   );
+
+  const giftsByTier = useMemo(() => groupGiftsByTier(sortedGifts), [sortedGifts]);
+
+  const visibleTrayGifts = useMemo(() => {
+    if (giftTierFilter === 'all') return sortedGifts;
+    return giftsByTier.get(giftTierFilter) ?? [];
+  }, [giftTierFilter, giftsByTier, sortedGifts]);
 
   const openConfirm = (g: ShopItemRow) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -160,7 +174,7 @@ export function SendCreatorGiftTray({
       surface: 'creator_gift_tray',
     });
     handleClose();
-    router.push('/pulse-shop?tab=credits' as any);
+    router.push('/pulse-shop?tab=sparks' as any);
   };
 
   const ctxLabel =
@@ -223,26 +237,71 @@ export function SendCreatorGiftTray({
               ) : sortedGifts.length === 0 ? (
                 <Text style={styles.empty}>No gifts in the catalog yet. Check back soon.</Text>
               ) : (
-                <ScrollView style={styles.list} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-                  {sortedGifts.map((g) => {
+                <>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.tierChipsRow}
+                  >
+                    <TouchableOpacity
+                      style={[styles.tierChip, giftTierFilter === 'all' && styles.tierChipOn]}
+                      onPress={() => {
+                        void Haptics.selectionAsync();
+                        setGiftTierFilter('all');
+                      }}
+                      activeOpacity={0.88}
+                    >
+                      <Text style={[styles.tierChipTxt, giftTierFilter === 'all' && styles.tierChipTxtOn]}>
+                        All
+                      </Text>
+                    </TouchableOpacity>
+                    {CREATOR_GIFT_TIER_ORDER.map((tid) => {
+                      const count = giftsByTier.get(tid)?.length ?? 0;
+                      if (count === 0) return null;
+                      const meta = CREATOR_GIFT_TIER_META[tid];
+                      const on = giftTierFilter === tid;
+                      return (
+                        <TouchableOpacity
+                          key={tid}
+                          style={[styles.tierChip, on && styles.tierChipOn]}
+                          onPress={() => {
+                            void Haptics.selectionAsync();
+                            setGiftTierFilter(tid);
+                          }}
+                          activeOpacity={0.88}
+                        >
+                          <Ionicons
+                            name={meta.icon}
+                            size={13}
+                            color={on ? '#0F172A' : meta.iconColor}
+                            style={{ marginRight: 5 }}
+                          />
+                          <Text style={[styles.tierChipTxt, on && styles.tierChipTxtOn]}>{meta.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  <ScrollView style={styles.list} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+                    {visibleTrayGifts.map((g) => {
                     const price = g.spark_price ?? 0;
                     const short = sparks < price;
                     const contexts = g.gift_contexts ?? [];
                     const allowed = contexts.length === 0 || contexts.includes(contextType);
+                    const tier = creatorGiftTierForItem(g);
                     return (
                       <TouchableOpacity
                         key={g.id}
-                        style={[styles.giftRow, !allowed && styles.giftRowDisabled]}
+                        style={[
+                          styles.giftRow,
+                          !allowed && styles.giftRowDisabled,
+                          { borderLeftColor: CREATOR_GIFT_TIER_META[tier].cardAccent },
+                        ]}
                         disabled={!allowed || sending}
                         onPress={() => allowed && openConfirm(g)}
                         activeOpacity={0.88}
                       >
                         <View style={styles.giftOrb}>
-                          {g.image_url ? (
-                            <Image source={{ uri: g.image_url }} style={styles.giftImg} {...pulseImageListThumbProps} />
-                          ) : (
-                            <Ionicons name={giftIconFromItem(g) as any} size={22} color={pulseverse.electric} />
-                          )}
+                          <CreatorGiftOrb item={g} size={48} />
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.giftName} numberOfLines={1}>
@@ -268,6 +327,7 @@ export function SendCreatorGiftTray({
                     );
                   })}
                 </ScrollView>
+                </>
               )}
               <TouchableOpacity style={styles.getSparksCta} onPress={goGetSparks} activeOpacity={0.88}>
                 <Ionicons name="wallet-outline" size={18} color="#050A14" />
@@ -394,7 +454,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark.cardAlt,
     borderWidth: 1,
     borderColor: colors.dark.borderSubtle,
+    borderLeftWidth: 3,
   },
+  tierChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
+    marginHorizontal: -2,
+  },
+  tierChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+    backgroundColor: 'rgba(15,23,42,0.55)',
+  },
+  tierChipOn: {
+    borderColor: 'rgba(34,211,238,0.5)',
+    backgroundColor: 'rgba(34,211,238,0.22)',
+  },
+  tierChipTxt: { fontSize: 11, fontWeight: '800', color: colors.dark.textSecondary },
+  tierChipTxtOn: { color: '#0F172A' },
   giftRowDisabled: { opacity: 0.48 },
   giftOrb: {
     width: 48,
@@ -407,7 +491,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  giftImg: { width: 48, height: 48, borderRadius: borderRadius.full },
   giftName: { fontSize: 15, fontWeight: '900', color: colors.dark.text },
   giftMeta: { marginTop: 2, fontSize: 11, color: colors.dark.textMuted, fontWeight: '600' },
   giftRight: { alignItems: 'flex-end' },

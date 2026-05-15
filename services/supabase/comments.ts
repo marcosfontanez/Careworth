@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { COMMENT_MAX_LENGTH } from '@/constants';
+import { normalizePostReactionKind } from '@/lib/postReactions';
+import type { PostReactionKind } from '@/types';
 import { PROFILE_SELECT_CREATOR_WITH_FRAME } from '@/services/supabase/profileRowMapper';
 
 export interface SupabaseComment {
@@ -24,6 +26,12 @@ export interface SupabaseComment {
    * this as an "· edited" tag next to the created-at time.
    */
   edited_at: string | null;
+  media_url?: string | null;
+  reaction_heart_count?: number | null;
+  reaction_haha_count?: number | null;
+  reaction_wow_count?: number | null;
+  reaction_sad_count?: number | null;
+  reaction_angry_count?: number | null;
   author: {
     id: string;
     display_name: string;
@@ -53,6 +61,8 @@ export const commentsService = {
       .select(
         `
         id, post_id, parent_id, author_id, content, like_count, created_at, deleted_at, edited_at,
+        media_url,
+        reaction_heart_count, reaction_haha_count, reaction_wow_count, reaction_sad_count, reaction_angry_count,
         author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
       `,
       )
@@ -63,7 +73,7 @@ export const commentsService = {
     return (data ?? []) as unknown as SupabaseComment[];
   },
 
-  async create(postId: string, content: string, parentId?: string) {
+  async create(postId: string, content: string, parentId?: string, mediaUrl?: string | null) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -74,7 +84,9 @@ export const commentsService = {
      * tries to post a longer body — the server would otherwise reject
      * the row and the user would see a generic Postgres error.
      */
-    const safeContent = content.slice(0, COMMENT_MAX_LENGTH);
+    const safeContent = content.slice(0, COMMENT_MAX_LENGTH).trim();
+    const url = mediaUrl?.trim() || null;
+    if (!safeContent && !url) throw new Error('Comment cannot be empty');
 
     const { data, error } = await supabase
       .from('comments')
@@ -83,6 +95,7 @@ export const commentsService = {
         author_id: user.id,
         content: safeContent,
         parent_id: parentId ?? null,
+        media_url: url,
       })
       .select()
       .single();
@@ -136,7 +149,17 @@ export const commentsService = {
     if (!user) throw new Error('Not authenticated');
 
     const safe = content.slice(0, COMMENT_MAX_LENGTH).trim();
-    if (!safe) throw new Error('Comment cannot be empty');
+
+    const { data: rowMeta, error: metaErr } = await supabase
+      .from('comments')
+      .select('media_url')
+      .eq('id', commentId)
+      .eq('author_id', user.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (metaErr) throw metaErr;
+    const hasMedia = !!(rowMeta as { media_url?: string | null } | null)?.media_url?.trim();
+    if (!safe && !hasMedia) throw new Error('Comment cannot be empty');
 
     const { data, error } = await supabase
       .from('comments')
@@ -147,6 +170,8 @@ export const commentsService = {
       .select(
         `
         id, post_id, parent_id, author_id, content, like_count, created_at, deleted_at, edited_at,
+        media_url,
+        reaction_heart_count, reaction_haha_count, reaction_wow_count, reaction_sad_count, reaction_angry_count,
         author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
       `,
       )
@@ -156,27 +181,58 @@ export const commentsService = {
     return data as unknown as SupabaseComment;
   },
 
-  async likeComment(commentId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    const { error } = await supabase
+  /** Viewer’s reaction rows for this post’s comments (batch). */
+  async getViewerReactionsForComments(
+    userId: string,
+    commentIds: string[],
+  ): Promise<Partial<Record<string, PostReactionKind>>> {
+    if (commentIds.length === 0) return {};
+    const { data, error } = await supabase
       .from('comment_likes')
-      .upsert({ comment_id: commentId, user_id: user.id });
-
-    if (!error) {
-      await supabase.rpc('increment_comment_likes', { comment_id: commentId });
+      .select('comment_id, reaction')
+      .eq('user_id', userId)
+      .in('comment_id', commentIds);
+    if (error) throw error;
+    const out: Partial<Record<string, PostReactionKind>> = {};
+    for (const row of data ?? []) {
+      const r = row as { comment_id: string; reaction: string };
+      const k = normalizePostReactionKind(r.reaction);
+      if (k) out[r.comment_id] = k;
     }
+    return out;
   },
 
-  async unlikeComment(commentId: string) {
+  /**
+   * One reaction row per viewer per comment; `null` removes. Counts are maintained by trigger
+   * {@code trg_comment_likes_sync_counts} (migration 144).
+   */
+  async setCommentReaction(commentId: string, kind: PostReactionKind | null): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    await supabase
+    if (!kind) {
+      const { error } = await supabase.from('comment_likes').delete().eq('user_id', user.id).eq('comment_id', commentId);
+      if (error) throw error;
+      return;
+    }
+    const { data: existing, error: exErr } = await supabase
       .from('comment_likes')
-      .delete()
+      .select('id')
+      .eq('user_id', user.id)
       .eq('comment_id', commentId)
-      .eq('user_id', user.id);
+      .maybeSingle();
+    if (exErr) throw exErr;
+    if (existing) {
+      const { error } = await supabase
+        .from('comment_likes')
+        .update({ reaction: kind })
+        .eq('id', (existing as { id: string }).id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('comment_likes')
+        .insert({ user_id: user.id, comment_id: commentId, reaction: kind });
+      if (error) throw error;
+    }
   },
 };

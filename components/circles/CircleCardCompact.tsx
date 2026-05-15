@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius } from '@/theme';
+import { colors, borderRadius, pulseverse, pvKit } from '@/theme';
 import { formatCount } from '@/utils/format';
 import type { Community } from '@/types';
 import { JoinButton } from './JoinButton';
+
+const GLASS = pvKit.circles.glassList;
 
 function oneLine(s: string, max = 72) {
   const t = s.replace(/\s+/g, ' ').trim();
@@ -36,11 +38,21 @@ export function CircleCardCompact({
 }: Props) {
   const blurb = useMemo(() => oneLine(community.description), [community.description]);
 
-  return (
-    <View style={[styles.row, discovery && styles.rowDiscovery]}>
-      <TouchableOpacity style={styles.main} onPress={onPress} activeOpacity={0.82}>
-        <View style={[styles.iconWrap, { shadowColor: accent + '55' }]}>
-          <LinearGradient colors={[accent + '42', accent + '10']} style={styles.iconInner}>
+  const softLift =
+    Platform.OS === 'ios'
+      ? {
+          shadowColor: '#020617',
+          shadowOffset: { width: 0, height: 5 },
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+        }
+      : { elevation: 3 };
+
+  const inner = (
+    <>
+      <TouchableOpacity style={styles.main} onPress={onPress} activeOpacity={0.88}>
+        <View style={[styles.iconWrap, { shadowColor: `${accent}66` }]}>
+          <LinearGradient colors={[`${accent}55`, `${accent}18`]} style={[styles.iconInner, discovery && styles.iconInnerDiscovery]}>
             <Text style={styles.emoji}>{community.icon}</Text>
           </LinearGradient>
           {discovery ? (
@@ -60,7 +72,7 @@ export function CircleCardCompact({
               {community.name}
             </Text>
           </View>
-          <Text style={styles.desc} numberOfLines={1}>
+          <Text style={styles.desc} numberOfLines={2}>
             {blurb}
           </Text>
           <Text style={styles.meta}>
@@ -77,8 +89,28 @@ export function CircleCardCompact({
         </View>
       </TouchableOpacity>
       <JoinButton joined={joined} onToggle={onToggleJoin} compact />
-    </View>
+    </>
   );
+
+  if (discovery) {
+    return (
+      <LinearGradient
+        colors={[GLASS.fillTop, GLASS.fillBottom]}
+        style={[styles.row, styles.rowDiscovery, softLift]}
+      >
+        <LinearGradient
+          colors={['rgba(34,211,238,0.07)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        {inner}
+      </LinearGradient>
+    );
+  }
+
+  return <View style={styles.row}>{inner}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -86,17 +118,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 10,
+    marginBottom: 12,
     paddingVertical: 2,
   },
   rowDiscovery: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 8,
-    borderRadius: borderRadius.xl,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    borderRadius: borderRadius['2xl'],
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: GLASS.border,
+    overflow: 'hidden',
   },
   main: {
     flex: 1,
@@ -123,7 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.primary.gold + '44',
+    borderColor: `${colors.primary.gold}55`,
   },
   iconInner: {
     width: 50,
@@ -132,39 +164,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.dark.border,
+    borderColor: 'rgba(34,211,238,0.2)',
+  },
+  iconInnerDiscovery: {
+    borderWidth: 1.5,
+    borderColor: `${colors.primary.gold}88`,
   },
   emoji: { fontSize: 23 },
   textCol: { flex: 1, minWidth: 0 },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flexWrap: 'wrap',
   },
   newPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: colors.primary.teal + '18',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'rgba(34,211,238,0.1)',
     borderWidth: 1,
-    borderColor: colors.primary.teal + '35',
+    borderColor: `${pulseverse.electric}66`,
   },
   newPillText: {
     fontSize: 9,
     fontWeight: '900',
-    color: colors.primary.teal,
-    letterSpacing: 0.6,
+    color: pulseverse.electricSoft,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  name: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.dark.text, minWidth: 0 },
-  desc: { fontSize: 12, color: colors.dark.textSecondary, marginTop: 3, lineHeight: 16 },
-  meta: { fontSize: 10, fontWeight: '700', color: colors.dark.textMuted, marginTop: 5, letterSpacing: 0.2 },
+  name: { flex: 1, fontSize: 16, fontWeight: '800', color: colors.dark.text, minWidth: 0, letterSpacing: -0.25 },
+  desc: { fontSize: 12, color: colors.dark.textSecondary, marginTop: 4, lineHeight: 17 },
+  meta: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: pulseverse.electricMuted,
+    marginTop: 6,
+    letterSpacing: 0.15,
+  },
   activityHint: {
     fontSize: 10,
     fontWeight: '600',
     color: colors.dark.textQuiet,
-    marginTop: 3,
+    marginTop: 4,
     fontStyle: 'italic',
   },
 });

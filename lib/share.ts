@@ -223,23 +223,6 @@ export async function shareProfile(userId: string, displayName: string) {
   } catch {}
 }
 
-export async function shareJob(jobId: string, title: string, employer: string) {
-  try {
-    const link = `https://pulseverse.app/job/${jobId}`;
-    const { message, url } = buildShareBody({
-      headline: `${title} at ${employer}`,
-      link,
-      ctaVerb: 'Apply on PulseVerse',
-    });
-
-    await Share.share({
-      message,
-      ...(url != null ? { url } : {}),
-      title: `${title} - PulseVerse Jobs`,
-    });
-  } catch {}
-}
-
 /**
  * Pin a feed or circle post to the current user's My Pulse as a Clip. Used
  * by the share-sheet "Share to My Pulse" option so anyone can surface a

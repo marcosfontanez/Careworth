@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,8 +21,11 @@ import { MessengerInboxPanel } from '@/components/messenger/MessengerInboxPanel'
 import { notificationService } from '@/services';
 import { queryClient } from '@/lib/queryClient';
 import { prefetchCircleRoom } from '@/lib/communityCache';
+import { getNotificationSectionListWindow } from '@/lib/feedVideoListWindow';
 import { colors, typography, spacing } from '@/theme';
 import type { NotificationItem } from '@/types';
+
+const NOTIFICATION_SECTION_WINDOW = getNotificationSectionListWindow();
 
 /** Legacy circle thread rows (pre-118) used type `reply` + this exact message. */
 const LEGACY_CIRCLE_THREAD_REPLY_MESSAGE = 'New reply in your circle thread';
@@ -162,6 +164,8 @@ export default function NotificationsScreen() {
 
         if (kind === 'post' || kind === 'post_comment') {
           router.push(`/post/${id}`);
+        } else if (kind === 'profile_update_comment') {
+          router.push(`/my-pulse/${id}` as any);
         } else if (kind === 'profile_update') {
           router.push('/(tabs)/my-pulse');
         } else if (kind === 'circle_thread' || kind === 'circle_reply') {
@@ -276,11 +280,11 @@ export default function NotificationsScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={7}
+          initialNumToRender={NOTIFICATION_SECTION_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={NOTIFICATION_SECTION_WINDOW.maxToRenderPerBatch}
+          windowSize={NOTIFICATION_SECTION_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderSectionHeader={({ section: { title } }) => (
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{title}</Text>

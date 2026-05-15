@@ -5,7 +5,6 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Platform,
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,11 +16,17 @@ import { TopSegmentTabs } from '@/components/ui/TopSegmentTabs';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { colors, layout, spacing, typography } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { formatCount } from '@/utils/format';
 import { MY_PULSE_MAX_IDENTITY_TAGS, MY_PULSE_TAGS_CHAR_BUDGET } from '@/constants';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
+import type { PulseAvatarFrame } from '@/types';
+import { getAvatarSubtitleRowListWindow } from '@/lib/feedVideoListWindow';
+
+const FOLLOWERS_LIST_WINDOW = getAvatarSubtitleRowListWindow();
 
 /** Matches My Pulse header trimming — keep list rows from overflowing. */
 const NEON_PILL_MAX_LEN = 14;
@@ -34,6 +39,7 @@ interface FollowUser {
   identity_tags: string[];
   is_verified: boolean;
   follower_count: number;
+  pulseAvatarFrame: PulseAvatarFrame | null | undefined;
 }
 
 function trimTagsForRow(identityTags: string[] | null | undefined): string[] {
@@ -60,6 +66,11 @@ function mapEmbedRow(r: Record<string, unknown>): FollowUser | null {
   const identity_tags = Array.isArray(tagsRaw)
     ? tagsRaw.map((x) => String(x))
     : [];
+  let pulseRaw = p.pulse_avatar_frame as unknown;
+  if (Array.isArray(pulseRaw)) pulseRaw = pulseRaw.length > 0 ? pulseRaw[0] : null;
+  const pulseAvatarFrame =
+    pulseRaw === undefined ? undefined : mapPulseAvatarFrameEmbed(pulseRaw) ?? null;
+
   return {
     id: p.id,
     display_name: String(p.display_name ?? 'Member'),
@@ -71,11 +82,12 @@ function mapEmbedRow(r: Record<string, unknown>): FollowUser | null {
       typeof p.follower_count === 'number'
         ? p.follower_count
         : Number(p.follower_count) || 0,
+    pulseAvatarFrame,
   };
 }
 
 const FOLLOW_PROFILE_SELECT =
-  'id, display_name, avatar_url, banner_url, identity_tags, is_verified, follower_count';
+  'id, display_name, avatar_url, banner_url, identity_tags, is_verified, follower_count, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)';
 
 const TABS = [
   { key: 'followers', label: 'Followers' },
@@ -85,9 +97,11 @@ const TABS = [
 function FollowListMedia({
   avatarUrl,
   bannerUrl,
+  pulseAvatarFrame,
 }: {
   avatarUrl: string | null;
   bannerUrl: string | null;
+  pulseAvatarFrame: PulseAvatarFrame | null | undefined;
 }) {
   const COL_W = 64;
   const BANNER_H = 38;
@@ -115,30 +129,14 @@ function FollowListMedia({
           />
         )}
       </View>
-      <View
-        style={[
-          styles.avatarRing,
-          {
-            width: AVATAR_SZ,
-            height: AVATAR_SZ,
-            borderRadius: AVATAR_SZ / 2,
-            marginTop: -(AVATAR_SZ / 2),
-          },
-        ]}
-      >
-        {avatar ? (
-          <Image
-            source={{ uri: avatar }}
-            style={{ width: '100%', height: '100%' }}
-            contentFit="cover"
-            transition={120}
-            {...pulseImageListThumbProps}
-          />
-        ) : (
-          <View style={styles.avatarPlaceholderInner}>
-            <Ionicons name="person" size={22} color={colors.dark.textMuted} />
-          </View>
-        )}
+      <View style={[styles.avatarOverlap, { marginTop: -(AVATAR_SZ / 2) }]}>
+        <AvatarDisplay
+          size={AVATAR_SZ}
+          avatarUrl={avatar ?? undefined}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+          pulseFrame={pulseFrameFromUser(pulseAvatarFrame ?? null)}
+        />
       </View>
     </View>
   );
@@ -217,9 +215,9 @@ export default function FollowersScreen() {
         <FlatList
           data={data}
           keyExtractor={(item) => item.id}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={9}
+          initialNumToRender={FOLLOWERS_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={FOLLOWERS_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={FOLLOWERS_LIST_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
           /**
            * Android-only: virtualizes off-screen rows by detaching them
@@ -228,7 +226,7 @@ export default function FollowersScreen() {
            * handles this efficiently via UICollectionView, and enabling
            * it there can cause cells to flash blank on fast scroll.
            */
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderItem={({ item }) => {
             const neonTags = trimTagsForRow(item.identity_tags);
             return (
@@ -237,7 +235,11 @@ export default function FollowersScreen() {
                 onPress={() => router.push(`/profile/${item.id}`)}
                 activeOpacity={0.7}
               >
-                <FollowListMedia avatarUrl={item.avatar_url} bannerUrl={item.banner_url} />
+                <FollowListMedia
+                  avatarUrl={item.avatar_url}
+                  bannerUrl={item.banner_url}
+                  pulseAvatarFrame={item.pulseAvatarFrame}
+                />
                 <View style={styles.body}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
@@ -291,19 +293,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.dark.cardAlt,
   },
-  avatarRing: {
-    borderWidth: 2,
-    borderColor: colors.dark.bg,
-    backgroundColor: colors.dark.cardAlt,
-    overflow: 'hidden',
+  avatarOverlap: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarPlaceholderInner: {
-    flex: 1,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'visible',
   },
   body: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },

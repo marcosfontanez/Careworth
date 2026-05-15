@@ -18,11 +18,24 @@ async function getDeveloperToken(): Promise<string | null> {
     return cachedDevToken.token;
   }
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
+  if (!accessToken) {
+    return null;
+  }
+
   const { data, error } = await supabase.functions.invoke<{
     token?: string;
     expires_in?: number;
     error?: string;
-  }>('apple-music-developer-token', { body: {} });
+  }>('apple-music-developer-token', {
+    body: {},
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
 
   if (error) {
     console.warn('Apple Music developer token:', error.message);
@@ -41,8 +54,9 @@ async function getDeveloperToken(): Promise<string | null> {
 }
 
 /**
- * Search Apple Music catalog (songs). Requires Supabase Edge Function `apple-music-developer-token`
- * with Apple Music API keys. Does not access the user's library or live playback (needs MusicKit).
+ * Search Apple Music catalog (songs). Requires the user to be **signed in** (Edge Function mints
+ * developer tokens only for valid JWTs). Configure Apple secrets on the function — see
+ * `supabase/functions/README.txt`. Does not access the user's library or live playback (needs MusicKit).
  */
 export async function searchAppleMusicSongs(
   query: string,

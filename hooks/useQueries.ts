@@ -3,7 +3,6 @@ import { useQueries, useQuery, useInfiniteQuery, useQueryClient } from '@tanstac
 import {
   feedService,
   communityService,
-  jobService,
   userService,
   commentService,
   notificationService,
@@ -12,7 +11,6 @@ import {
 } from '@/services';
 import { useAuth } from '@/contexts/AuthContext';
 import { streaksService } from '@/services/social/streaks';
-import { streamsService } from '@/services/streams';
 import type { FeedType } from '@/types';
 import { postsService, profilesService } from '@/services/supabase';
 import {
@@ -25,6 +23,13 @@ import {
   profileUpdateKeys,
   userKeys,
 } from '@/lib/queryKeys';
+
+export { useLiveStreams, useStream } from '@/hooks/useLiveQueries';
+
+/**
+ * Central React Query hooks for the mobile app. This file is large by design; prefer extracting
+ * new domain hooks (e.g. `hooks/useLiveQueries.ts`, `hooks/queries/feed.ts`) and re-exporting here.
+ */
 
 /** Bump when feed queryFn shape changes so dev clients don’t keep a stale Fast Refresh closure. */
 const FEED_QUERY_KEY_VERSION = 2;
@@ -135,7 +140,7 @@ export function usePost(id: string, opts?: { enabled?: boolean }) {
  *     win is lost.
  */
 export function usePrefetchPostsByIds(
-  ids: ReadonlyArray<string | null | undefined>,
+  ids: readonly (string | null | undefined)[],
   enabled: boolean = true,
 ): void {
   const { user } = useAuth();
@@ -184,7 +189,7 @@ export function usePrefetchPostsByIds(
 }
 
 export function useLinkedPostsMap(
-  ids: ReadonlyArray<string | null | undefined>,
+  ids: readonly (string | null | undefined)[],
 ): Map<string, import('@/types').Post> {
   const { user } = useAuth();
   const viewerId = user?.id ?? null;
@@ -271,9 +276,12 @@ export function useUserPosts(userId: string) {
      * (was `staleTime: 0` + `refetchOnMount: 'always'` — that was a
      * full refetch on every screen mount, which made the profile flash
      * blank for ~300ms when re-visited).
+     *
+     * Refetch when the gallery/profile screen mounts if stale so feed →
+     * "swipe to videos" isn't stuck on an empty persisted-cache snapshot.
      */
     staleTime: 15_000,
-    refetchOnMount: false,
+    refetchOnMount: true,
   });
 }
 
@@ -307,7 +315,11 @@ export function useCommunity(slug: string) {
     staleTime: 60_000,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: true,
-    placeholderData: (previousData) => previousData,
+    /**
+     * Do **not** keep previous circle data while the slug changes — it leaves
+     * `community.id` stale so `useCommunityPosts` keeps querying the wrong wall
+     * until focus/refetch (felt like “blank room until I leave and come back”).
+     */
   });
 }
 
@@ -376,45 +388,16 @@ export function useCircleThreadReplies(threadId: string | undefined) {
   });
 }
 
-export function useJobs() {
-  return useQuery({
-    queryKey: ['jobs'],
-    queryFn: () => jobService.getAll(),
-    staleTime: 120_000,
-    gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
-  });
-}
-
-export function useJob(id: string) {
-  return useQuery({
-    queryKey: ['job', id],
-    queryFn: () => jobService.getById(id),
-    enabled: !!id,
-    staleTime: 120_000,
-    gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
-  });
-}
-
-export function useFeaturedJobs() {
-  return useQuery({
-    queryKey: ['jobs', 'featured'],
-    queryFn: () => jobService.getFeatured(),
-    staleTime: 120_000,
-    gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
-  });
-}
-
 export function useUser(id: string) {
   return useQuery({
     queryKey: userKeys.detail(id),
-    queryFn: () => userService.getUserById(id),
+    queryFn: async () => userService.getUserById(id),
     enabled: !!id,
     staleTime: 45_000,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
+    /** Avoid stale placeholder profiles when opening from feed swipe / search. */
+    refetchOnMount: true,
+    retry: 2,
   });
 }
 
@@ -434,9 +417,10 @@ export function useCreatorPostNotifications(
 }
 
 export function useComments(postId: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: commentKeys.byPost(postId),
-    queryFn: () => commentService.getByPostId(postId),
+    queryKey: commentKeys.byPost(postId, user?.id ?? null),
+    queryFn: () => commentService.getByPostId(postId, user?.id),
     enabled: !!postId,
     staleTime: 20_000,
     gcTime: 1000 * 60 * 15,
@@ -463,36 +447,6 @@ export function useUnreadCount() {
     queryFn: () => notificationService.getUnreadCount(user!.id),
     enabled: !!user?.id,
     staleTime: 45_000,
-    gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
-  });
-}
-
-export function useLiveStreams() {
-  return useQuery({
-    queryKey: ['streams', 'live'],
-    queryFn: () => streamsService.getAllStreams(),
-    /**
-     * Live stream presence doesn't need second-by-second freshness — a
-     * 90s cadence is "live enough" for a discover-tab card and cuts
-     * background traffic from idle viewers ~3× vs the old 30s polling
-     * (was hammering the streams table every 30s on every focused
-     * Discover tab session).
-     */
-    refetchInterval: 90_000,
-    refetchIntervalInBackground: false,
-    /** Align with poll cadence so remounts don’t immediately refetch the same payload. */
-    staleTime: 90_000,
-    gcTime: 1000 * 60 * 30,
-  });
-}
-
-export function useStream(id: string) {
-  return useQuery({
-    queryKey: ['stream', id],
-    queryFn: () => streamsService.getStreamById(id),
-    enabled: !!id,
-    staleTime: 30_000,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: false,
   });

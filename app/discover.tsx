@@ -10,7 +10,7 @@ import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
-import { useFeed, useFeaturedCommunities, useFeaturedJobs } from '@/hooks/useQueries';
+import { useFeed, useFeaturedCommunities } from '@/hooks/useQueries';
 import { usePersistedCommunityJoinToggle } from '@/hooks/usePersistedCommunityJoinToggle';
 import { useAppStore } from '@/store/useAppStore';
 import { colors, borderRadius, iconSize, layout, spacing, typography } from '@/theme';
@@ -22,9 +22,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import type { UserProfile, Post } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
+import { getDiscoverHorizontalShelfWindow } from '@/lib/feedVideoListWindow';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W * 0.42;
+/** Prefer raster thumbnails in Discover rails on Android — avoids many simultaneous video decoders. */
+const ANDROID_STATIC_GRID_THUMB = Platform.OS === 'android';
+
+const DISCOVER_LEARN_SHELF_WIN = getDiscoverHorizontalShelfWindow(4, 4);
+const DISCOVER_NIGHT_SHELF_WIN = getDiscoverHorizontalShelfWindow(4, 4);
+const DISCOVER_TREND_WIN = getDiscoverHorizontalShelfWindow(5, 5);
+const DISCOVER_COMMUNITIES_WIN = getDiscoverHorizontalShelfWindow(5, 5);
 
 /**
  * Rotating per-tag accent colours. These are purely decorative —
@@ -58,7 +68,6 @@ export default function DiscoverScreen() {
   const { user } = useAuth();
   const { data: trendingPosts, refetch: refetchPosts } = useFeed('topToday');
   const { data: featuredCommunities } = useFeaturedCommunities();
-  const { data: featuredJobs } = useFeaturedJobs();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const persistToggleJoin = usePersistedCommunityJoinToggle();
   const [refreshing, setRefreshing] = useState(false);
@@ -114,7 +123,7 @@ export default function DiscoverScreen() {
       try {
         const { data: creators } = await supabase
           .from('profiles')
-          .select('id, display_name, avatar_url, role, specialty, city, state, is_verified, follower_count')
+          .select('id, display_name, avatar_url, identity_tags, city, state, is_verified, follower_count')
           .order('follower_count', { ascending: false })
           .limit(8);
 
@@ -123,8 +132,11 @@ export default function DiscoverScreen() {
             id: c.id,
             displayName: c.display_name,
             avatarUrl: c.avatar_url ?? '',
-            role: c.role,
-            specialty: c.specialty,
+            identityTags: Array.isArray(c.identity_tags)
+              ? (c.identity_tags as unknown[]).map((s) => String(s).trim()).filter(Boolean)
+              : undefined,
+            role: '',
+            specialty: '',
             city: c.city,
             state: c.state,
             isVerified: c.is_verified,
@@ -154,7 +166,6 @@ export default function DiscoverScreen() {
 
   const topPosts = (trendingPosts ?? []).slice(0, 12);
   const topCommunities = (featuredCommunities ?? []).slice(0, 8);
-  const topJobs = (featuredJobs ?? []).slice(0, 6);
 
   return (
     <View style={styles.container}>
@@ -189,7 +200,7 @@ export default function DiscoverScreen() {
               <Ionicons name="sparkles" size={iconSize.xl} color={colors.primary.teal} />
               <View>
                 <Text style={styles.forYouTitle}>For You</Text>
-                <Text style={styles.forYouSub}>Curated based on your specialty</Text>
+                <Text style={styles.forYouSub}>Personalized picks from your feed</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={iconSize.md} color={colors.primary.teal} />
@@ -216,7 +227,9 @@ export default function DiscoverScreen() {
         {/* Suggested Creators */}
         <Text style={styles.sectionTitle}>Suggested Creators</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-          {suggestedCreators.map((c) => (
+          {suggestedCreators.map((c) => {
+            const neonTags = buildNeonPillTags({ identityTags: c.identityTags });
+            return (
             <TouchableOpacity
               key={c.id}
               style={styles.creatorCard}
@@ -238,13 +251,16 @@ export default function DiscoverScreen() {
                 <Text style={styles.creatorName} numberOfLines={1}>{c.displayName}</Text>
                 {c.isVerified && <Ionicons name="checkmark-circle" size={12} color={colors.primary.teal} />}
               </View>
-              <Text style={styles.creatorRole}>{c.role} · {c.specialty}</Text>
+              {neonTags.length > 0 ? (
+                <ProfileNeonPills tags={neonTags} style={styles.creatorNeon} />
+              ) : null}
               <Text style={styles.creatorFollowers}>{formatCount(c.followerCount)} followers</Text>
               <TouchableOpacity style={styles.followBtn} activeOpacity={0.7}>
                 <Text style={styles.followBtnText}>Follow</Text>
               </TouchableOpacity>
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </ScrollView>
 
         {learnShelf.length > 0 && (
@@ -257,18 +273,22 @@ export default function DiscoverScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScroll}
-              initialNumToRender={4}
-              maxToRenderPerBatch={4}
-              windowSize={5}
+              initialNumToRender={DISCOVER_LEARN_SHELF_WIN.initialNumToRender}
+              maxToRenderPerBatch={DISCOVER_LEARN_SHELF_WIN.maxToRenderPerBatch}
+              windowSize={DISCOVER_LEARN_SHELF_WIN.windowSize}
               updateCellsBatchingPeriod={50}
-              removeClippedSubviews={Platform.OS === 'android'}
+              removeClippedSubviews={false}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.postCard}
                   onPress={() => router.push(`/post/${item.id}`)}
                   activeOpacity={0.8}
                 >
-                  <RecentMediaThumb post={item} style={styles.postImage} />
+                  <RecentMediaThumb
+                    post={item}
+                    style={styles.postImage}
+                    preferStaticAndroidVideoTile={ANDROID_STATIC_GRID_THUMB}
+                  />
                   <View style={styles.postOverlay}>
                     <Text style={styles.postCaption} numberOfLines={2}>{item.caption}</Text>
                     <View style={styles.postStats}>
@@ -292,18 +312,22 @@ export default function DiscoverScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScroll}
-              initialNumToRender={4}
-              maxToRenderPerBatch={4}
-              windowSize={5}
+              initialNumToRender={DISCOVER_NIGHT_SHELF_WIN.initialNumToRender}
+              maxToRenderPerBatch={DISCOVER_NIGHT_SHELF_WIN.maxToRenderPerBatch}
+              windowSize={DISCOVER_NIGHT_SHELF_WIN.windowSize}
               updateCellsBatchingPeriod={50}
-              removeClippedSubviews={Platform.OS === 'android'}
+              removeClippedSubviews={false}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.postCard}
                   onPress={() => router.push(`/post/${item.id}`)}
                   activeOpacity={0.8}
                 >
-                  <RecentMediaThumb post={item} style={styles.postImage} />
+                  <RecentMediaThumb
+                    post={item}
+                    style={styles.postImage}
+                    preferStaticAndroidVideoTile={ANDROID_STATIC_GRID_THUMB}
+                  />
                   <View style={styles.postOverlay}>
                     <Text style={styles.postCaption} numberOfLines={2}>{item.caption}</Text>
                     <View style={styles.postStats}>
@@ -324,18 +348,22 @@ export default function DiscoverScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.hScroll}
-          initialNumToRender={5}
-          maxToRenderPerBatch={5}
-          windowSize={5}
+          initialNumToRender={DISCOVER_TREND_WIN.initialNumToRender}
+          maxToRenderPerBatch={DISCOVER_TREND_WIN.maxToRenderPerBatch}
+          windowSize={DISCOVER_TREND_WIN.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.postCard}
               onPress={() => router.push(`/post/${item.id}`)}
               activeOpacity={0.8}
             >
-              <RecentMediaThumb post={item} style={styles.postImage} />
+              <RecentMediaThumb
+                post={item}
+                style={styles.postImage}
+                preferStaticAndroidVideoTile={ANDROID_STATIC_GRID_THUMB}
+              />
               <View style={styles.postOverlay}>
                 <Text style={styles.postCaption} numberOfLines={2}>{item.caption}</Text>
                 <View style={styles.postStats}>
@@ -356,11 +384,11 @@ export default function DiscoverScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScroll}
-              initialNumToRender={5}
-              maxToRenderPerBatch={5}
-              windowSize={5}
+              initialNumToRender={DISCOVER_COMMUNITIES_WIN.initialNumToRender}
+              maxToRenderPerBatch={DISCOVER_COMMUNITIES_WIN.maxToRenderPerBatch}
+              windowSize={DISCOVER_COMMUNITIES_WIN.windowSize}
               updateCellsBatchingPeriod={50}
-              removeClippedSubviews={Platform.OS === 'android'}
+              removeClippedSubviews={false}
               renderItem={({ item }) => {
                 const isJoined = joinedIds.has(item.id);
                 return (
@@ -390,29 +418,6 @@ export default function DiscoverScreen() {
                 );
               }}
             />
-          </>
-        )}
-
-        {topJobs.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Hot Jobs</Text>
-            {topJobs.map((job) => (
-              <TouchableOpacity
-                key={job.id}
-                style={styles.jobRow}
-                onPress={() => router.push(`/jobs/${job.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.jobIcon}>
-                  <Ionicons name="briefcase" size={20} color={colors.primary.teal} />
-                </View>
-                <View style={styles.jobBody}>
-                  <Text style={styles.jobTitle}>{job.title}</Text>
-                  <Text style={styles.jobMeta}>{job.employerName} · {job.city}, {job.state}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={iconSize.sm} color={colors.dark.textMuted} />
-              </TouchableOpacity>
-            ))}
           </>
         )}
 
@@ -500,26 +505,6 @@ const styles = StyleSheet.create({
   joinText: { fontSize: 12, fontWeight: '700', color: colors.dark.text },
   joinedText: { color: colors.dark.textMuted },
 
-  jobRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: layout.screenPadding,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.dark.border,
-  },
-  jobIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary.teal + '15',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  jobBody: { flex: 1 },
-  jobTitle: { ...typography.creatorName, color: colors.dark.text },
-  jobMeta: { ...typography.metadata, color: colors.dark.textMuted, marginTop: 2 },
-
   forYouBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -565,7 +550,7 @@ const styles = StyleSheet.create({
   creatorAvatarImg: { width: 52, height: 52, borderRadius: 26 },
   creatorNameRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   creatorName: { fontSize: 13, fontWeight: '700', color: colors.dark.text },
-  creatorRole: { fontSize: 11, color: colors.dark.textSecondary },
+  creatorNeon: { marginTop: 4, marginBottom: 2, alignSelf: 'stretch', maxWidth: '100%' },
   creatorFollowers: { fontSize: 10, color: colors.dark.textMuted },
   followBtn: {
     marginTop: spacing.sm - 2,

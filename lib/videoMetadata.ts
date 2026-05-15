@@ -1,3 +1,5 @@
+import { isReactNativeCompressorLinked } from '@/lib/compressorAvailability';
+
 /**
  * Best-effort duration / dimensions for a local video file (dev client has
  * `react-native-compressor`; Expo Go falls back to empty).
@@ -8,6 +10,7 @@ export async function probeVideoFile(uri: string): Promise<{
   height?: number;
 }> {
   try {
+    if (!isReactNativeCompressorLinked()) return {};
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { getVideoMetaData } = require('react-native-compressor') as {
       getVideoMetaData: (path: string) => Promise<{ duration: number; width: number; height: number }>;
@@ -30,6 +33,7 @@ export async function makeVideoThumbnail(
   atSec?: number,
 ): Promise<string | null> {
   try {
+    if (!isReactNativeCompressorLinked()) return null;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const compressor = require('react-native-compressor') as {
       createVideoThumbnail: (

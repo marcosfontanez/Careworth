@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,9 @@ import { borderRadius, colors, layout, spacing, typography } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { getAvatarSubtitleRowListWindow } from '@/lib/feedVideoListWindow';
+
+const BLOCKED_USERS_LIST_WINDOW = getAvatarSubtitleRowListWindow('initialBoost');
 
 interface BlockedUser {
   blockId: string;
@@ -91,11 +94,11 @@ export default function BlockedUsersScreen() {
         <FlatList
           data={blocked}
           keyExtractor={(item) => item.blockId}
-          initialNumToRender={14}
-          maxToRenderPerBatch={10}
-          windowSize={9}
+          initialNumToRender={BLOCKED_USERS_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={BLOCKED_USERS_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={BLOCKED_USERS_LIST_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderItem={({ item }) => (
             <View style={styles.row}>
               <Image

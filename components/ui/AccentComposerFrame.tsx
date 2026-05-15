@@ -11,6 +11,12 @@ export type AccentComposerFrameProps = {
   style?: StyleProp<ViewStyle>;
   innerStyle?: StyleProp<ViewStyle>;
   /**
+   * Allow children (e.g. {@link MentionAutocomplete} suggestion sheet) to paint
+   * outside the card bounds. Default clipping can hide text when the sheet is
+   * wider than the field or opens above the keyboard.
+   */
+  allowOverflow?: boolean;
+  /**
    * Tighter padding + lighter elevation — single-line fields, auth, search,
    * stacked forms. Keeps the left accent rail and card surface.
    */
@@ -54,6 +60,7 @@ export function AccentComposerFrame({
   innerStyle,
   compact = false,
   noShadow = false,
+  allowOverflow = false,
 }: AccentComposerFrameProps) {
   const showHint = Boolean(hint?.trim());
   return (
@@ -63,11 +70,18 @@ export function AccentComposerFrame({
         compact ? styles.cardCompactRadius : null,
         noShadow ? null : compact ? shadowSoft : shadowStrong,
         { borderLeftColor: accentColor },
+        allowOverflow ? styles.overflowVisible : null,
         style,
       ]}
       accessibilityRole="none"
     >
-      <View style={[compact ? styles.innerCompact : styles.inner, innerStyle]}>
+      <View
+        style={[
+          compact ? styles.innerCompact : styles.inner,
+          allowOverflow ? styles.overflowVisible : null,
+          innerStyle,
+        ]}
+      >
         {showHint ? (
           <View style={styles.hintRow}>
             <View style={[styles.hintDot, compact && styles.hintDotCompact, { backgroundColor: accentColor }]} />
@@ -110,6 +124,7 @@ export function AccentCharCount({
 }
 
 const styles = StyleSheet.create({
+  overflowVisible: { overflow: 'visible' },
   cardBase: {
     backgroundColor: colors.dark.card,
     borderRadius: borderRadius.card ?? 16,

@@ -26,6 +26,8 @@ import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
 import { BorderCompactMetaRow } from '@/components/shop/border/BorderCompactMetaRow';
 import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
+import { CreatorGiftOrb } from '@/components/shop/CreatorGiftOrb';
+import { CREATOR_GIFT_TIER_META, creatorGiftTierForItem } from '@/lib/shop/creatorGiftTiers';
 
 function normalizeHandle(raw: string): string {
   return raw.replace(/^@/, '').trim().toLowerCase();
@@ -471,6 +473,8 @@ export function SparkGiftPreviewModal({ visible, onClose, gift, sparkBalance }: 
   const price = gift.spark_price ?? 0;
   const short = sparkBalance < price;
   const ring = ringPreviewColor(gift);
+  const tier = creatorGiftTierForItem(gift);
+  const tierMeta = CREATOR_GIFT_TIER_META[tier];
 
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
@@ -489,12 +493,11 @@ export function SparkGiftPreviewModal({ visible, onClose, gift, sparkBalance }: 
             </View>
           </View>
           <View style={[styles.giftOrbLarge, { borderColor: ring + '55' }]}>
-            {gift.image_url ? (
-              <Image source={{ uri: gift.image_url }} style={styles.giftImgLg} {...pulseImageListThumbProps} />
-            ) : (
-              <Ionicons name="gift" size={32} color="#22D3EE" />
-            )}
+            <CreatorGiftOrb item={gift} size={72} />
           </View>
+          <Text style={styles.giftTierPill}>
+            {tierMeta.label} · {tierMeta.tagline}
+          </Text>
           <Text style={styles.sheetTitle}>{gift.name}</Text>
           <Text style={styles.sheetBody}>{gift.description || 'Support a creator with this gift.'}</Text>
           <Text style={styles.sheetBody}>
@@ -507,7 +510,7 @@ export function SparkGiftPreviewModal({ visible, onClose, gift, sparkBalance }: 
             <Text style={styles.balanceValue}>{sparkBalance.toLocaleString()} Sparks</Text>
           </View>
           {short ? (
-            <Text style={styles.errorText}>Not enough Sparks. Open the Credits tab to top up.</Text>
+            <Text style={styles.errorText}>Not enough Sparks. Open the Sparks tab to top up.</Text>
           ) : (
             <Text style={styles.sheetFine}>
               To send this gift, open a creator’s profile, a post, or a live stream and choose Send gift.
@@ -583,7 +586,7 @@ export function CreditPackConfirmModal({
           <View style={styles.modeRow}>
             <View style={styles.modeBadgeSparks}>
               <Ionicons name="wallet-outline" size={14} color="#A5F3FC" />
-              <Text style={styles.modeBadgeSparksText}>Store top-up · credits your Sparks</Text>
+              <Text style={styles.modeBadgeSparksText}>Store top-up · adds to your Sparks balance</Text>
             </View>
           </View>
           <Text style={styles.sheetTitle}>{packLabel}</Text>
@@ -816,7 +819,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'rgba(56,189,248,0.06)',
   },
-  giftImgLg: { width: 72, height: 72, borderRadius: borderRadius.full },
+  giftTierPill: {
+    alignSelf: 'center',
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: 0.2,
+  },
   purchaseChoiceStack: {
     marginTop: 18,
     gap: 10,

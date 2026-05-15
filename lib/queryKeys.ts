@@ -73,9 +73,15 @@ export const commentKeys = {
    * scope to a single post.
    */
   root: () => ['comments'] as const,
-  /** Comments for a single post. */
-  byPost: (postId: string) =>
+  /**
+   * Prefix for invalidation: clears this post’s thread for every signed-in viewer
+   * (`['comments', …, postId, viewerId]`).
+   */
+  byPostPrefix: (postId: string) =>
     ['comments', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, postId] as const,
+  /** Comments for a single post (viewer id scopes cached reaction picks). */
+  byPost: (postId: string, viewerId?: string | null) =>
+    ['comments', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, postId, viewerId ?? ''] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────

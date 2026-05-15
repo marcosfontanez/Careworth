@@ -1,9 +1,11 @@
 /**
  * Build Circles tab header asset: PulseVerse + Circles lockup on black matte → transparent PNG.
  */
-import sharp from 'sharp';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { loadSharp } from './load-sharp.mjs';
+
+const sharp = await loadSharp();
 
 const SRC =
   process.argv[2] ||

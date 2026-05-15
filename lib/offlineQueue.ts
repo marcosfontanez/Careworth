@@ -212,6 +212,7 @@ export function createOfflineExecutor() {
             author_id: action.payload.userId,
             content: safeContent,
             parent_id: action.payload.parentId ?? null,
+            media_url: action.payload.mediaUrl ?? null,
           });
         return !error;
       }

@@ -17,7 +17,7 @@ import type { Role } from '@/types';
  *     fitting brand accent
  *   - avoid introducing a second "same color different hex" drift
  */
-export const ROLE_COLORS: Record<Role, string> = {
+export const ROLE_COLORS: Record<Exclude<Role, ''>, string> = {
   RN: colors.primary.royal,
   CNA: colors.primary.teal,
   PCT: '#10B981',
@@ -36,6 +36,6 @@ export const ROLE_COLORS: Record<Role, string> = {
  * entry here.
  */
 export function roleColor(role?: Role | null): string {
-  if (!role) return colors.primary.royal;
-  return ROLE_COLORS[role] ?? colors.primary.royal;
+  if (role == null || role === '') return colors.dark.textMuted;
+  return ROLE_COLORS[role] ?? colors.dark.textMuted;
 }

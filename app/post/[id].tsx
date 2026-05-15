@@ -10,6 +10,8 @@ import { useEventListener } from 'expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -47,10 +49,17 @@ import { enqueueAction } from '@/lib/offlineQueue';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { pickCoverForSession } from '@/lib/coverAbRotation';
-import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
-import type { Comment } from '@/types';
+import { trySignedUrlFromPostMediaPublicUrl, storageService, avatarThumb } from '@/lib/storage';
+import type { Comment, PostReactionKind } from '@/types';
+import * as ImagePicker from 'expo-image-picker';
+import { CommentReactionStrip } from '@/components/comments/CommentReactionStrip';
+import { emptyPostReactionCounts } from '@/lib/postReactions';
+import { pickCommentReaction } from '@/lib/commentReactionPick';
+import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+/** Max height for post media so full image/video fits on screen while comments stay reachable. */
+const POST_DETAIL_MEDIA_MAX_H = Math.min(SCREEN_H * 0.82, SCREEN_W * 2.2);
 
 /** Inline player for `/post/[id]` — feed uses `VideoFeedPost`; this screen previously showed a static cover + dead play icon. */
 function PostDetailVideo({ publicUri }: { publicUri: string }) {
@@ -59,7 +68,7 @@ function PostDetailVideo({ publicUri }: { publicUri: string }) {
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [buffering, setBuffering] = useState(true);
-  const sourcePhase = useRef<'public' | 'signed'>('public');
+  const sourcePhase = useRef<'public' | 'signed' | 'failed'>('public');
   const publicFallbackInFlight = useRef(false);
 
   useEffect(() => {
@@ -91,6 +100,7 @@ function PostDetailVideo({ publicUri }: { publicUri: string }) {
       setBuffering(false);
       return;
     }
+    if (sourcePhase.current === 'failed') return;
     if (publicFallbackInFlight.current) return;
     publicFallbackInFlight.current = true;
     void trySignedUrlFromPostMediaPublicUrl(publicUri).then((signed) => {
@@ -99,6 +109,7 @@ function PostDetailVideo({ publicUri }: { publicUri: string }) {
         sourcePhase.current = 'signed';
         setFallbackUri(signed);
       } else {
+        sourcePhase.current = 'failed';
         setLoadError(true);
         setBuffering(false);
       }
@@ -134,7 +145,7 @@ function PostDetailVideo({ publicUri }: { publicUri: string }) {
       <VideoView
         player={player}
         style={StyleSheet.absoluteFillObject}
-        contentFit="cover"
+        contentFit="contain"
         nativeControls={false}
         {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
       />
@@ -145,7 +156,7 @@ function PostDetailVideo({ publicUri }: { publicUri: string }) {
       ) : null}
       {paused && isFocused ? (
         <View style={styles.playOverlay} pointerEvents="none">
-          <Ionicons name="play" size={42} color="#FFFFFFE6" />
+          <Ionicons name="play" size={42} color={`${colors.dark.text}E6`} />
         </View>
       ) : null}
       {loadError ? (
@@ -210,6 +221,24 @@ export default function PostDetailScreen() {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, Platform.OS === 'ios' ? 250 : 180);
   }, []);
+
+  const [imageAspect, setImageAspect] = useState<number | null>(null);
+
+  useEffect(() => {
+    setImageAspect(null);
+  }, [id]);
+
+  const imageMediaHeight = useMemo(() => {
+    if (imageAspect != null && imageAspect > 0) {
+      return Math.min(SCREEN_W / imageAspect, POST_DETAIL_MEDIA_MAX_H);
+    }
+    return Math.min(SCREEN_W, POST_DETAIL_MEDIA_MAX_H * 0.85);
+  }, [imageAspect]);
+
+  const videoMediaHeight = useMemo(
+    () => Math.min(POST_DETAIL_MEDIA_MAX_H, SCREEN_H * 0.75),
+    [],
+  );
 
   const [liked, setLiked] = useState(false);
   const likedSig = likedIdsArr.join('|');
@@ -396,7 +425,6 @@ export default function PostDetailScreen() {
   const isAnonRoom = isAnonymousConfessionCircle(slugLabel);
   /** Opened from Circles — omit Save; Share already offers My Pulse + system share. */
   const openedFromCircle = Boolean(slugLabel);
-  const commentQs = circle ? `?circle=${encodeURIComponent(String(circle))}` : '';
   const isSaved = savedPostIds.has(post.id);
   const isOwnPost = authUser?.id === post.creatorId;
 
@@ -544,14 +572,10 @@ export default function PostDetailScreen() {
                   {post.creator.isVerified && (
                     <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
                   )}
-                  {post.creator.role && (
-                    <View style={[styles.rolePill, { backgroundColor: `${accent.color}1F`, borderColor: `${accent.color}55` }]}>
-                      <Text style={[styles.rolePillText, { color: accent.color }]}>{post.creator.role}</Text>
-                    </View>
-                  )}
                 </View>
+                <ProfileNeonPills tags={buildNeonPillTags(post.creator)} style={styles.authorNeonPills} />
                 <Text style={styles.authorMeta}>
-                  {post.creator.specialty ? `${post.creator.specialty} · ` : ''}{timeAgo(post.createdAt)}
+                  {timeAgo(post.createdAt)}
                   {post.editedAt ? <Text style={styles.authorMetaEdited}> · edited</Text> : null}
                 </Text>
               </View>
@@ -565,7 +589,7 @@ export default function PostDetailScreen() {
 
           {/* Media */}
           {post.type === 'video' && post.mediaUrl?.trim() ? (
-            <View style={styles.mediaWrap}>
+            <View style={[styles.mediaWrapBase, { height: videoMediaHeight }]}>
               <PostDetailVideo publicUri={post.mediaUrl.trim()} />
             </View>
           ) : post.type === 'image' && previewUri ? (
@@ -576,13 +600,19 @@ export default function PostDetailScreen() {
                 }
               }}
               activeOpacity={0.92}
-              style={styles.mediaWrap}
+              style={[styles.mediaWrapBase, { height: imageMediaHeight }]}
             >
               <Image
                 source={{ uri: previewUri }}
                 style={styles.media}
-                contentFit="cover"
+                contentFit="contain"
                 transition={120}
+                onLoad={(e) => {
+                  const s = e.source;
+                  const w = typeof s?.width === 'number' ? s.width : 0;
+                  const h = typeof s?.height === 'number' ? s.height : 0;
+                  if (w > 0 && h > 0) setImageAspect(w / h);
+                }}
                 {...pulseImageFeedHeroProps}
               />
             </TouchableOpacity>
@@ -624,7 +654,7 @@ export default function PostDetailScreen() {
             <ActionButton
               icon={liked ? 'heart' : 'heart-outline'}
               label="Like"
-              tint={liked ? '#EF4444' : colors.dark.textSecondary}
+              tint={liked ? colors.status.error : colors.dark.textSecondary}
               onPress={handleToggleLike}
             />
             {!isOwnPost && authUser && !maskIdentity ? (
@@ -808,6 +838,7 @@ function CommentsCard({
   const inputRef = useRef<MentionRef>(null);
 
   const [text, setText] = useState('');
+  const [pendingAttach, setPendingAttach] = useState<{ uri: string; mime?: string } | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [reportCommentId, setReportCommentId] = useState<string | null>(null);
@@ -817,6 +848,20 @@ function CommentsCard({
      *  Android, where the system keyboard race-condition can swallow
      *  focus events fired in the same tick as a state update. */
     setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
+
+  const pickCommentAttach = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const a = result.assets[0];
+      setPendingAttach({ uri: a.uri, mime: a.mimeType ?? 'image/jpeg' });
+    }
   }, []);
 
   useEffect(() => {
@@ -835,7 +880,7 @@ function CommentsCard({
    */
   const handleDelete = useCallback(
     async (commentId: string) => {
-      const queryKey = commentKeys.byPost(postId);
+      const queryKey = commentKeys.byPost(postId, authUserId ?? null);
       const prev = queryClient.getQueryData<Comment[]>(queryKey);
 
       const tombstoneTree = (nodes: Comment[]): Comment[] =>
@@ -867,7 +912,7 @@ function CommentsCard({
    */
   const handleEdit = useCallback(
     async (commentId: string, nextContent: string) => {
-      const queryKey = commentKeys.byPost(postId);
+      const queryKey = commentKeys.byPost(postId, authUserId ?? null);
       const prev = queryClient.getQueryData<Comment[]>(queryKey);
 
       const patchTree = (nodes: Comment[], next: (c: Comment) => Comment): Comment[] =>
@@ -911,7 +956,7 @@ function CommentsCard({
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if ((!trimmed && !pendingAttach) || sending) return;
     if (!authUserId) {
       Alert.alert('Sign in required', 'Log in to post a comment.');
       return;
@@ -927,9 +972,22 @@ function CommentsCard({
 
     setSending(true);
     try {
-      await commentService.addComment(postId, safe, replyTo?.id);
-      analytics.track('comment_created', { postId, isReply: !!replyTo });
+      let mediaUrl: string | null = null;
+      if (pendingAttach) {
+        mediaUrl = await storageService.uploadPostMedia(authUserId, {
+          uri: pendingAttach.uri,
+          type: pendingAttach.mime ?? 'image/jpeg',
+          name: `comment_${Date.now()}.jpg`,
+        });
+      }
+      await commentService.addComment(postId, safe, replyTo?.id, mediaUrl);
+      analytics.track('comment_created', {
+        postId,
+        isReply: !!replyTo,
+        hasMedia: !!mediaUrl,
+      });
       setText('');
+      setPendingAttach(null);
       setReplyTo(null);
       /**
        * Optimistically bump every cached copy of this post's commentCount
@@ -939,11 +997,16 @@ function CommentsCard({
        */
       bumpPostCount(postId, 'commentCount', 1);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: commentKeys.byPost(postId) }),
+        queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(postId) }),
         queryClient.invalidateQueries({ queryKey: postKeys.byId(postId) }),
       ]);
     } catch {
       try {
+        if (pendingAttach) {
+          toast.show('Photo comments need a connection. Try again when you’re online.', 'error');
+          setSending(false);
+          return;
+        }
         await enqueueAction({
           type: 'create_comment',
           payload: {
@@ -961,7 +1024,7 @@ function CommentsCard({
       }
     }
     setSending(false);
-  }, [text, sending, postId, replyTo, authUserId, queryClient, toast]);
+  }, [text, sending, postId, replyTo, authUserId, queryClient, toast, pendingAttach]);
 
   const handleReplyTo = useCallback(
     (id: string, name: string) => {
@@ -1017,6 +1080,7 @@ function CommentsCard({
       {/* Inline composer — same accent card chrome as Circle create/replies. */}
       <AccentComposerFrame
         accentColor={accent}
+        allowOverflow
         hint={
           replyTo
             ? 'Add your reply — @ to mention.'
@@ -1032,9 +1096,31 @@ function CommentsCard({
           />
         }
       >
+        {pendingAttach ? (
+          <View style={styles.composerAttachPreview}>
+            <Image source={{ uri: pendingAttach.uri }} style={styles.composerAttachThumb} contentFit="cover" />
+            <TouchableOpacity
+              onPress={() => setPendingAttach(null)}
+              style={styles.composerAttachClear}
+              hitSlop={10}
+              accessibilityLabel="Remove attachment"
+            >
+              <Ionicons name="close-circle" size={22} color={colors.dark.textMuted} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
         <View style={styles.composerRow}>
+          <TouchableOpacity
+            onPress={pickCommentAttach}
+            disabled={sending}
+            style={styles.composerAttachBtn}
+            accessibilityLabel="Attach photo"
+          >
+            <Ionicons name="image-outline" size={22} color={accent} />
+          </TouchableOpacity>
           <MentionAutocomplete
             ref={inputRef}
+            wrapperStyle={styles.composerMentionWrap}
             style={styles.composerInputFramed}
             value={text}
             onChangeText={setText}
@@ -1054,16 +1140,18 @@ function CommentsCard({
           <TouchableOpacity
             style={[
               styles.composerSendBtn,
-              { backgroundColor: text.trim() ? accent : colors.dark.cardAlt },
+              {
+                backgroundColor: text.trim() || pendingAttach ? accent : colors.dark.cardAlt,
+              },
             ]}
-            disabled={!text.trim() || sending}
+            disabled={(!text.trim() && !pendingAttach) || sending}
             onPress={handleSend}
             activeOpacity={0.85}
           >
             <Ionicons
               name="send"
               size={16}
-              color={text.trim() ? '#FFFFFF' : colors.dark.textMuted}
+              color={text.trim() || pendingAttach ? colors.dark.text : colors.dark.textMuted}
             />
           </TouchableOpacity>
         </View>
@@ -1122,6 +1210,7 @@ function CommentNode({
   depth?: number;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [showReplies, setShowReplies] = useState(false);
   /** Local edit mode. Comment body opens in CommentEditComposer modal. */
   const [editing, setEditing] = useState(false);
@@ -1166,6 +1255,25 @@ function CommentNode({
     ]);
   }, [confirmDelete]);
 
+  const onReactionPick = async (kind: PostReactionKind) => {
+    if (!user?.id) {
+      Alert.alert('Sign in required', 'Log in to react to comments.');
+      return;
+    }
+    try {
+      await pickCommentReaction({
+        postId,
+        viewerId: user.id,
+        comment,
+        kind,
+      });
+    } catch {
+      Alert.alert('Couldn’t update reaction', 'Try again in a moment.');
+    }
+  };
+
+  const showTextRow = isDeleted || !!comment.content.trim();
+
   return (
     <View style={[styles.commentRow, depth > 0 && styles.commentRowReply]}>
       {maskAuthors ? (
@@ -1180,8 +1288,8 @@ function CommentNode({
           accessibilityLabel={`Open ${displayName} profile`}
         >
           <AvatarDisplay
-            size={32}
-            avatarUrl={comment.author.avatarUrl}
+            size={36}
+            avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
             prioritizeRemoteAvatar
             ringColor={colors.dark.border}
             pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
@@ -1189,8 +1297,8 @@ function CommentNode({
         </TouchableOpacity>
       ) : (
         <AvatarDisplay
-          size={32}
-          avatarUrl={comment.author.avatarUrl}
+          size={36}
+          avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
           prioritizeRemoteAvatar
           ringColor={colors.dark.border}
           pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
@@ -1219,14 +1327,20 @@ function CommentNode({
           {!maskAuthors && !isDeleted && comment.author.isVerified ? (
             <Ionicons name="checkmark-circle" size={11} color={colors.primary.teal} />
           ) : null}
-          <Text style={styles.commentTime}>
-            · {timeAgo(comment.createdAt)}
-            {wasEdited && !isDeleted ? (
-              <Text style={styles.commentEditedTag}> · edited</Text>
-            ) : null}
-          </Text>
+          {!maskAuthors && !isDeleted ? (
+            <PulseTierBadge
+              tier={comment.author.pulseTier ?? null}
+              size="xs"
+              hideMurmur
+              showIcon={false}
+            />
+          ) : null}
+          {comment.isPinned && !isDeleted && !maskAuthors ? (
+            <View style={styles.commentPinnedBadge}>
+              <Text style={styles.commentPinnedText}>Pinned</Text>
+            </View>
+          ) : null}
 
-          {/* Spacer pushes the overflow icon to the far right of the row. */}
           <View style={{ flex: 1 }} />
 
           {currentUserId && onReport && !isDeleted && !editing && !isAuthor ? (
@@ -1240,10 +1354,6 @@ function CommentNode({
             </TouchableOpacity>
           ) : null}
 
-          {/** Author-only overflow. Taps open an action-sheet with
-           *   Edit + Remove (see `openMenu`) so both affordances share
-           *   one entry point. Hidden on tombstones (nothing to act on)
-           *   and anonymous posts (would leak authorship). */}
           {isOwn && !isDeleted && !editing ? (
             <TouchableOpacity
               onPress={openMenu}
@@ -1259,6 +1369,9 @@ function CommentNode({
             </TouchableOpacity>
           ) : null}
         </View>
+        {!maskAuthors && !isDeleted && buildNeonPillTags(comment.author).length > 0 ? (
+          <ProfileNeonPills tags={buildNeonPillTags(comment.author)} style={{ marginTop: 4 }} />
+        ) : null}
         {editing && !isDeleted ? (
           <CommentEditComposer
             initialContent={comment.content}
@@ -1269,39 +1382,63 @@ function CommentNode({
             onCancel={() => setEditing(false)}
             accent={accent}
           />
-        ) : (
+        ) : showTextRow ? (
           <CommentRichText
             text={comment.content}
             style={[styles.commentText, isDeleted && styles.commentTextDeleted]}
             mentionsInteractive={!maskAuthors}
             linksInteractive={!maskAuthors}
           />
-        )}
+        ) : null}
+
+        {!isDeleted && !editing && comment.mediaUrl?.trim() ? (
+          <TouchableOpacity
+            onPress={() =>
+              router.push(`/image-viewer?uri=${encodeURIComponent(comment.mediaUrl!.trim())}` as never)
+            }
+            activeOpacity={0.9}
+            style={styles.commentAttachedImageTouch}
+          >
+            <Image
+              source={{ uri: comment.mediaUrl!.trim() }}
+              style={styles.commentAttachedImage}
+              contentFit="contain"
+              {...pulseImageFeedHeroProps}
+            />
+          </TouchableOpacity>
+        ) : null}
 
         {/* Action row is suppressed for tombstones — there's nothing to
-            like, no one to reply to. Also hidden in edit mode so the
+            react to. Also hidden in edit mode so the
             composer owns the action row (save/cancel). */}
         {!isDeleted && !editing ? (
-          <View style={styles.commentActionRow}>
-            {comment.likeCount > 0 ? (
-              <View style={styles.commentMetaCell}>
-                <Ionicons name="heart" size={11} color={colors.dark.textMuted} />
-                <Text style={styles.commentMetaText}>{formatCount(comment.likeCount)}</Text>
-              </View>
-            ) : null}
-            {/** Only the top-level row exposes "Reply" — nested replies don't,
-             *  so we don't grow conversations into deep reply chains that
-             *  break readability on a phone-sized card. */}
-            {depth === 0 && (
-              <TouchableOpacity
-                onPress={() => onReply(comment.id, displayName)}
-                activeOpacity={0.7}
-                hitSlop={6}
-              >
-                <Text style={styles.commentReplyText}>Reply</Text>
-              </TouchableOpacity>
-            )}
+          <View style={styles.commentFooterCol}>
+            <Text style={styles.commentFooterTime}>
+              {timeAgo(comment.createdAt)}
+              {wasEdited ? <Text style={styles.commentEditedTag}> · edited</Text> : null}
+            </Text>
+            <CommentReactionStrip
+              counts={comment.reactionCounts ?? emptyPostReactionCounts()}
+              viewerReaction={comment.viewerReaction ?? null}
+              accentColor={accent}
+              onPick={onReactionPick}
+            />
+            <View style={styles.commentActionRow}>
+              {depth === 0 && (
+                <TouchableOpacity
+                  onPress={() => onReply(comment.id, displayName)}
+                  activeOpacity={0.7}
+                  hitSlop={6}
+                >
+                  <Text style={styles.commentReplyText}>Reply</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
+        ) : null}
+
+        {isDeleted && !editing ? (
+          <Text style={styles.commentFooterTime}>{timeAgo(comment.createdAt)}</Text>
         ) : null}
 
         {comment.replies.length > 0 && depth === 0 ? (
@@ -1420,8 +1557,7 @@ const styles = StyleSheet.create({
   authorBody: { flex: 1, minWidth: 0 },
   authorNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   authorName: { fontSize: 14, fontWeight: '800', color: colors.dark.text, letterSpacing: -0.2 },
-  rolePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1 },
-  rolePillText: { fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 },
+  authorNeonPills: { marginTop: 2 },
   authorMeta: { fontSize: 11.5, color: colors.dark.textMuted, marginTop: 1 },
   authorMetaEdited: {
     fontSize: 11.5,
@@ -1438,16 +1574,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
-  mediaWrap: {
+  mediaWrapBase: {
     marginTop: 10,
     borderRadius: borderRadius.md ?? 12,
     overflow: 'hidden',
-    /** Cap media at a sensible portrait-friendly height. Old value
-     *  (`SCREEN_W * 0.7` ~ 288pt) made the post tile dominate the page;
-     *  the new ~55% width keeps memes legible while leaving room for the
-     *  caption + actions + comments to sit in the same viewport. Also
-     *  capped to 240pt on extra-large devices. */
-    height: Math.min(SCREEN_W * 0.55, 240),
+    width: '100%',
     backgroundColor: colors.dark.cardAlt,
   },
   media: { width: '100%', height: '100%' },
@@ -1560,7 +1691,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
-  commentRow: { flexDirection: 'row', gap: 10, paddingVertical: 8 },
+  commentRow: { flexDirection: 'row', gap: 10, paddingVertical: 12 },
   /** Reply rows get a subtle left indent + a thin guide so the thread of a
    *  conversation reads visually without deep nesting. */
   commentRowReply: {
@@ -1569,7 +1700,7 @@ const styles = StyleSheet.create({
     borderLeftColor: 'rgba(255,255,255,0.08)',
     marginLeft: 6,
   },
-  commentAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.dark.cardAlt },
+  commentAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.dark.cardAlt },
   commentAnonAvatar: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1578,21 +1709,41 @@ const styles = StyleSheet.create({
   },
   commentAnonGlyph: { fontSize: 14, fontWeight: '900', color: colors.dark.textSecondary },
   commentBody: { flex: 1, minWidth: 0 },
-  commentNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
-  commentName: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
+  commentNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginBottom: 4,
+  },
+  commentName: { fontSize: 13, fontWeight: '700', color: colors.dark.text },
+  commentPinnedBadge: { flexDirection: 'row', alignItems: 'center' },
+  commentPinnedText: { fontSize: 10, color: colors.primary.gold, fontWeight: '600' },
   commentNameHit: { flexShrink: 1, minWidth: 0 },
-  commentTime: { fontSize: 11.5, color: colors.dark.textMuted },
+  commentFooterTime: { fontSize: 12, color: colors.dark.textMuted },
   commentEditedTag: {
     fontSize: 11,
     color: colors.dark.textMuted,
     fontStyle: 'italic',
   },
-  commentText: { fontSize: 13.5, color: colors.dark.text, lineHeight: 19, marginTop: 2 },
+  commentText: {
+    fontSize: 14,
+    color: colors.dark.textSecondary,
+    lineHeight: 20,
+  },
   commentTextDeleted: {
     fontStyle: 'italic',
     color: colors.dark.textMuted,
   },
+  commentAttachedImageTouch: {
+    marginTop: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.dark.cardAlt,
+  },
+  commentAttachedImage: { width: '100%', height: 180, backgroundColor: colors.dark.cardAlt },
 
+  commentFooterCol: { marginTop: 6, gap: 6 },
   commentActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1601,7 +1752,7 @@ const styles = StyleSheet.create({
   },
   commentMetaCell: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   commentMetaText: { fontSize: 11, fontWeight: '700', color: colors.dark.textMuted },
-  commentReplyText: { fontSize: 12, fontWeight: '800', color: colors.dark.textMuted },
+  commentReplyText: { fontSize: 12, fontWeight: '600', color: colors.primary.royal },
 
   commentRepliesToggle: {
     flexDirection: 'row',
@@ -1626,10 +1777,32 @@ const styles = StyleSheet.create({
   },
   replyStripText: { flex: 1, fontSize: 12, fontWeight: '700' },
 
+  composerAttachPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  composerAttachThumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: colors.dark.cardAlt },
+  composerAttachClear: { padding: 2 },
+  composerAttachBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.dark.cardAlt,
+    marginBottom: 2,
+  },
+
   composerRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
+  },
+  composerMentionWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   composerInputFramed: {
     flex: 1,

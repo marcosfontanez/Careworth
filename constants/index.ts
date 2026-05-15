@@ -21,7 +21,7 @@ export const CONTENT_INTERESTS: { value: ContentInterest; label: string; icon: s
   { value: 'career_tips', label: 'Career Tips', icon: '💼' },
   { value: 'shift_stories', label: 'Shift Stories', icon: '🏥' },
   { value: 'new_grad', label: 'New Grad Content', icon: '🎓' },
-  { value: 'local_jobs', label: 'Local Jobs', icon: '📍' },
+  { value: 'local_jobs', label: 'Career-focused feeds', icon: '💼' },
   { value: 'travel_nursing', label: 'Travel Nursing', icon: '✈️' },
   { value: 'leadership', label: 'Leadership', icon: '⭐' },
   { value: 'gear_tools', label: 'Gear & Tools', icon: '🩺' },
@@ -82,7 +82,6 @@ export { MY_PULSE_LEGEND } from './myPulse';
 export const FEED_TABS = [
   { key: 'forYou' as const, label: 'For You' },
   { key: 'following' as const, label: 'Following' },
-  { key: 'friends' as const, label: 'Friends' },
   { key: 'topToday' as const, label: 'Top Today' },
 ];
 

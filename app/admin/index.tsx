@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, TextInput, RefreshControl,
-  Platform, Modal,
+  Modal, Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -13,10 +13,14 @@ import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
-import { useFeatureFlags } from '@/lib/featureFlags';
+import { LAUNCH_LINKS } from '@/constants/launch';
+import { useFeatureFlags, type FeatureFlags } from '@/lib/featureFlags';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
-import { adsService, subscriptionService, jobPricingService, creatorTipsService } from '@/services/monetization';
+import { adsService, subscriptionService, creatorTipsService } from '@/services/monetization';
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
+import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
+
+const ADMIN_MOD_LIST_WINDOW = getAdminModerationListWindow();
 
 type Tab = 'reports' | 'users' | 'content' | 'circles' | 'stats' | 'revenue';
 
@@ -99,7 +103,6 @@ export default function AdminPanel() {
   const [revenueData, setRevenueData] = useState({
     adCampaigns: 0, adImpressions: 0, adRevenue: 0,
     subscribers: 0, subRevenue: 0,
-    jobListings: 0, jobRevenue: 0, jobByTier: {} as Record<string, number>,
     tipCount: 0, tipAmount: 0, uniqueTippers: 0,
   });
 
@@ -113,6 +116,11 @@ export default function AdminPanel() {
     await loadData();
     setRefreshing(false);
   }, [tab, reportFilter]);
+
+  const openWebAdmin = useCallback(() => {
+    const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+    void Linking.openURL(`${base}/admin/login`);
+  }, []);
 
   const loadData = async () => {
     if (tab === 'circles') {
@@ -235,10 +243,9 @@ export default function AdminPanel() {
           setTopEvents([]);
         }
       } else if (tab === 'revenue') {
-        const [campaigns, subs, jobStats, tipStats] = await Promise.all([
+        const [campaigns, subs, tipStats] = await Promise.all([
           adsService.getAllCampaigns(),
           subscriptionService.getActiveSubscribers(),
-          jobPricingService.getRevenueStats(),
           creatorTipsService.getPlatformTipStats(),
         ]);
 
@@ -256,9 +263,6 @@ export default function AdminPanel() {
           adRevenue,
           subscribers: subs.filter((s) => s.isActive).length,
           subRevenue,
-          jobListings: jobStats.activeListings,
-          jobRevenue: jobStats.totalRevenue,
-          jobByTier: jobStats.byTier,
           tipCount: tipStats.totalTips,
           tipAmount: tipStats.totalAmount,
           uniqueTippers: tipStats.uniqueTippers,
@@ -448,7 +452,12 @@ export default function AdminPanel() {
     if (!selectedReport) return null;
     const r = selectedReport;
     return (
-      <Modal visible={!!selectedReport} animationType="slide" transparent>
+      <Modal
+        visible={!!selectedReport}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedReport(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -559,7 +568,12 @@ export default function AdminPanel() {
     if (!selectedUser) return null;
     const u = selectedUser;
     return (
-      <Modal visible={!!selectedUser} animationType="slide" transparent>
+      <Modal
+        visible={!!selectedUser}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedUser(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -643,6 +657,14 @@ export default function AdminPanel() {
         <Text style={styles.headerTitle}>Admin Panel</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity
+            onPress={openWebAdmin}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Open web admin"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="globe-outline" size={22} color={colors.primary.royal} />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => router.push('/admin/border-catalog')}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Border catalog"
@@ -684,6 +706,20 @@ export default function AdminPanel() {
         ))}
       </View>
 
+      <TouchableOpacity
+        style={styles.webConsoleHint}
+        onPress={openWebAdmin}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityHint="Opens the staff sign-in page in your browser"
+      >
+        <Ionicons name="desktop-outline" size={18} color={colors.primary.royal} />
+        <Text style={styles.webConsoleHintText}>
+          Shop grants, audit log, and full insights run on the website — tap to open the staff console.
+        </Text>
+        <Ionicons name="open-outline" size={16} color={colors.dark.textMuted} />
+      </TouchableOpacity>
+
       <View style={styles.content}>
         {tab === 'reports' && (
           <>
@@ -704,11 +740,11 @@ export default function AdminPanel() {
               <FlatList
                 data={reports}
                 keyExtractor={(item) => item.id}
-                initialNumToRender={12}
-                maxToRenderPerBatch={10}
-                windowSize={9}
+                initialNumToRender={ADMIN_MOD_LIST_WINDOW.initialNumToRender}
+                maxToRenderPerBatch={ADMIN_MOD_LIST_WINDOW.maxToRenderPerBatch}
+                windowSize={ADMIN_MOD_LIST_WINDOW.windowSize}
                 updateCellsBatchingPeriod={50}
-                removeClippedSubviews={Platform.OS === 'android'}
+                removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.card} onPress={() => setSelectedReport(item)} activeOpacity={0.7}>
@@ -791,11 +827,11 @@ export default function AdminPanel() {
               <FlatList
                 data={users}
                 keyExtractor={(item) => item.id}
-                initialNumToRender={12}
-                maxToRenderPerBatch={10}
-                windowSize={9}
+                initialNumToRender={ADMIN_MOD_LIST_WINDOW.initialNumToRender}
+                maxToRenderPerBatch={ADMIN_MOD_LIST_WINDOW.maxToRenderPerBatch}
+                windowSize={ADMIN_MOD_LIST_WINDOW.windowSize}
                 updateCellsBatchingPeriod={50}
-                removeClippedSubviews={Platform.OS === 'android'}
+                removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.card} onPress={() => setSelectedUser(item)} activeOpacity={0.7}>
@@ -867,11 +903,11 @@ export default function AdminPanel() {
               <FlatList
                 data={content}
                 keyExtractor={(item) => item.id}
-                initialNumToRender={12}
-                maxToRenderPerBatch={10}
-                windowSize={9}
+                initialNumToRender={ADMIN_MOD_LIST_WINDOW.initialNumToRender}
+                maxToRenderPerBatch={ADMIN_MOD_LIST_WINDOW.maxToRenderPerBatch}
+                windowSize={ADMIN_MOD_LIST_WINDOW.windowSize}
                 updateCellsBatchingPeriod={50}
-                removeClippedSubviews={Platform.OS === 'android'}
+                removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
                 renderItem={({ item }) => (
                   <View style={styles.card}>
@@ -1003,7 +1039,7 @@ export default function AdminPanel() {
               <View style={styles.statsGrid}>
                 <StatCard
                   label="Total Revenue"
-                  value={`$${(revenueData.adRevenue + revenueData.subRevenue + revenueData.jobRevenue + revenueData.tipAmount * 0.05).toFixed(0)}`}
+                  value={`$${(revenueData.adRevenue + revenueData.subRevenue + revenueData.tipAmount * 0.05).toFixed(0)}`}
                   icon="cash"
                   color={colors.status.premium}
                   isText
@@ -1025,30 +1061,6 @@ export default function AdminPanel() {
                 <StatCard label="Sub Revenue" value={`$${revenueData.subRevenue.toFixed(2)}`} icon="card" color={colors.primary.teal} isText />
               </View>
 
-              <Text style={styles.sectionTitle}>Job Listings</Text>
-              <View style={styles.statsGrid}>
-                <StatCard label="Active Listings" value={revenueData.jobListings} icon="briefcase" color={colors.primary.royal} />
-                <StatCard label="Listing Revenue" value={`$${revenueData.jobRevenue.toFixed(2)}`} icon="cash" color={colors.primary.teal} isText />
-              </View>
-              {Object.keys(revenueData.jobByTier).length > 0 && (
-                <View style={styles.chartCard}>
-                  {Object.entries(revenueData.jobByTier).map(([tier, amount]) => (
-                    <View key={tier} style={styles.eventRow}>
-                      <Text style={styles.eventName}>{tier}</Text>
-                      <View style={styles.eventBarWrap}>
-                        <View
-                          style={[styles.eventBar, {
-                            width: `${Math.max((amount / Math.max(...Object.values(revenueData.jobByTier), 1)) * 100, 8)}%`,
-                            backgroundColor: colors.primary.royal,
-                          }]}
-                        />
-                      </View>
-                      <Text style={styles.eventCount}>${amount}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
               <Text style={styles.sectionTitle}>Creator Tips</Text>
               <View style={styles.statsGrid}>
                 <StatCard label="Total Tips" value={revenueData.tipCount} icon="gift" color={colors.status.premium} />
@@ -1060,10 +1072,8 @@ export default function AdminPanel() {
               <View style={styles.featureFlagSection}>
                 <Text style={styles.sectionTitle}>Feature Flags</Text>
                 <FlagToggle label="Live streaming (tab + rooms)" flag="liveStreaming" />
-                <FlagToggle label="Coin wallet + buy coins (live gifts)" flag="coinWallet" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />
-                <FlagToggle label="Job Pricing Tiers" flag="jobPricingTiers" />
                 <FlagToggle label="Creator Tips" flag="creatorTips" />
                 <FlagToggle label="Creator Fund" flag="creatorFund" />
               </View>
@@ -1088,16 +1098,14 @@ function StatCard({ label, value, icon, color, isText }: { label: string; value:
   );
 }
 
-function FlagToggle({ label, flag }: { label: string; flag: keyof ReturnType<typeof useFeatureFlags.getState> }) {
+function FlagToggle({ label, flag }: { label: string; flag: keyof FeatureFlags }) {
   const value = useFeatureFlags((s) => s[flag]);
   const setFlag = useFeatureFlags((s) => s.setFlag);
-
-  if (typeof value === 'function') return null;
 
   return (
     <TouchableOpacity
       style={[styles.flagRow, value && styles.flagRowActive]}
-      onPress={() => setFlag(flag as any, !value)}
+      onPress={() => setFlag(flag, !value)}
       activeOpacity={0.7}
     >
       <View style={[styles.flagDot, { backgroundColor: value ? colors.status.success : colors.neutral.midGray }]} />
@@ -1166,6 +1174,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2,
   },
   tabBadgeText: { color: colors.dark.text, fontSize: 9, fontWeight: '800' },
+
+  webConsoleHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 2,
+    marginBottom: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.28)',
+  },
+  webConsoleHintText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+    lineHeight: 16,
+  },
 
   content: { flex: 1, backgroundColor: colors.dark.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
 

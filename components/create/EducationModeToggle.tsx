@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
+import { normalizeWebUrl } from '@/lib/safeExternalLink';
 
 const EDU_ACCENT = '#10B981';
 
@@ -29,8 +30,13 @@ export function EducationModeToggle({ enabled, onToggle, citations, onChange }: 
   const [draftReviewed, setDraftReviewed] = useState('');
 
   const add = () => {
-    const url = draftUrl.trim();
-    if (!url) return;
+    const rawUrl = draftUrl.trim();
+    if (!rawUrl) return;
+    const url = normalizeWebUrl(rawUrl);
+    if (!url) {
+      Alert.alert('Invalid link', 'Citations must use a valid http or https URL.');
+      return;
+    }
     onChange([
       ...citations,
       {

@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, FlatList, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, FlatList } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { StreamGiftLeaderboard } from '@/types';
+import { getGiftLeaderboardListWindow } from '@/lib/feedVideoListWindow';
+
+const GIFT_LEADERBOARD_LIST_WINDOW = getGiftLeaderboardListWindow();
 
 const RANK_EMOJIS = ['👑', '🥈', '🥉'];
 const RANK_COLORS = [colors.status.premium, '#94A3B8', '#CD7F32'];
@@ -35,10 +38,10 @@ export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
             <FlatList
               data={leaderboard}
               keyExtractor={(item) => item.userId}
-              initialNumToRender={12}
-              maxToRenderPerBatch={8}
-              windowSize={7}
-              removeClippedSubviews={Platform.OS === 'android'}
+              initialNumToRender={GIFT_LEADERBOARD_LIST_WINDOW.initialNumToRender}
+              maxToRenderPerBatch={GIFT_LEADERBOARD_LIST_WINDOW.maxToRenderPerBatch}
+              windowSize={GIFT_LEADERBOARD_LIST_WINDOW.windowSize}
+              removeClippedSubviews={false}
               renderItem={({ item, index }) => (
                 <View style={[styles.row, index < 3 && styles.rowTop]}>
                   <View style={[styles.rankBadge, { backgroundColor: index < 3 ? RANK_COLORS[index] + '20' : colors.dark.cardAlt }]}>
@@ -64,10 +67,10 @@ export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
                     <Text style={styles.giftCount}>{item.giftCount} gifts</Text>
                   </View>
 
-                  <View style={styles.coinCol}>
-                    <Ionicons name="logo-bitcoin" size={14} color={colors.status.premium} />
-                    <Text style={[styles.coinAmount, index === 0 && styles.coinAmountGold]}>
-                      {item.totalCoins.toLocaleString()}
+                  <View style={styles.sparkCol}>
+                    <Ionicons name="flash" size={14} color={colors.status.premium} />
+                    <Text style={[styles.sparkAmount, index === 0 && styles.sparkAmountGold]}>
+                      {item.totalSparks.toLocaleString()}
                     </Text>
                   </View>
                 </View>
@@ -143,10 +146,9 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   name: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   giftCount: { fontSize: 11, color: colors.dark.textMuted, marginTop: 1 },
-  coinCol: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  coinIcon: { fontSize: 12 },
-  coinAmount: { fontSize: 14, fontWeight: '800', color: colors.dark.textSecondary },
-  coinAmountGold: { color: colors.status.premium },
+  sparkCol: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sparkAmount: { fontSize: 14, fontWeight: '800', color: colors.dark.textSecondary },
+  sparkAmountGold: { color: colors.status.premium },
 
   empty: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyEmoji: { fontSize: 40 },

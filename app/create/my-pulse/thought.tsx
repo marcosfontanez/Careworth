@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,9 @@ import { profileUpdatesService } from '@/services/profileUpdates';
 import { useToast } from '@/components/ui/Toast';
 import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
+import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { colors, typography } from '@/theme';
 import { profileUpdateKeys } from '@/lib/queryKeys';
 
@@ -32,6 +35,10 @@ export default function MyPulseThoughtScreen() {
 
   const [body, setBody] = useState('');
   const [mood, setMood] = useState('');
+  const [phiAck, setPhiAck] = useState(false);
+
+  const phiFindings = useMemo(() => scanForPhi(body, mood), [body, mood]);
+  const phiSev = highestSeverity(phiFindings);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -43,6 +50,10 @@ export default function MyPulseThoughtScreen() {
         previewText: body.trim().slice(0, 160),
       });
     },
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : 'Could not add thought';
+      showToast(msg, 'error');
+    },
     onSuccess: async () => {
       if (user?.id) await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
       showToast('Thought added to My Pulse', 'success');
@@ -52,8 +63,17 @@ export default function MyPulseThoughtScreen() {
 
   const submit = useCallback(() => {
     if (!body.trim()) return;
+    if (phiSev === 'high') {
+      showToast('High-risk privacy pattern — remove or reword before posting', 'error');
+      return;
+    }
+    if (phiFindings.length > 0 && !phiAck) {
+      showToast('Review the privacy banner and confirm before posting', 'error');
+      return;
+    }
+    if (!checkRateLimit('post')) return;
     mutation.mutate();
-  }, [body, mutation]);
+  }, [body, mutation, phiSev, phiFindings.length, phiAck, showToast]);
 
   if (!user) return <Redirect href="/auth/login" />;
 
@@ -95,9 +115,12 @@ export default function MyPulseThoughtScreen() {
         />
       </AccentComposerFrame>
 
+      <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
+
       <Text style={styles.fieldLbl}>What&apos;s on your mind?</Text>
       <AccentComposerFrame
         accentColor={colors.primary.teal}
+        allowOverflow
         hint="Thought"
         noShadow
         footer={

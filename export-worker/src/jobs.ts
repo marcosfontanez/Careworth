@@ -4,10 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkExportRateLimit } from './rateLimit.js';
 import { runExportPipeline } from './pipeline.js';
+import { runDuetMuxPipeline } from './duetMuxPipeline.js';
 import { uploadExportMp4 } from './storage.js';
-import type { JobRecord, VideoExportJobRequestBody } from './types.js';
+import type { DuetMuxJobRecord, DuetMuxJobRequestBody, JobRecord, VideoExportJobRequestBody } from './types.js';
 
 const jobs = new Map<string, JobRecord>();
+const duetMuxJobs = new Map<string, DuetMuxJobRecord>();
 
 // Single-CPU worker — serialize jobs so concurrent requests don't choke ffmpeg.
 let queue: Promise<void> = Promise.resolve();
@@ -88,12 +90,88 @@ async function runJob(job: JobRecord): Promise<void> {
   }
 }
 
+export function getDuetMuxJob(id: string): DuetMuxJobRecord | undefined {
+  return duetMuxJobs.get(id);
+}
+
+export function createDuetMuxJob(userId: string, body: DuetMuxJobRequestBody): DuetMuxJobRecord {
+  checkExportRateLimit(userId);
+  if (!body.leftVideoUrl?.trim() || !body.rightVideoUrl?.trim()) {
+    throw new Error('leftVideoUrl and rightVideoUrl required');
+  }
+  const id = randomUUID();
+  const job: DuetMuxJobRecord = {
+    id,
+    userId,
+    status: 'queued',
+    progress: 0,
+    createdAt: Date.now(),
+    request: body,
+  };
+  duetMuxJobs.set(id, job);
+  console.log('[duet-mux]', id, 'queued', body.clientRef ?? '');
+
+  enqueue(() => runDuetMuxJob(job));
+
+  return job;
+}
+
+async function runDuetMuxJob(job: DuetMuxJobRecord): Promise<void> {
+  const j = duetMuxJobs.get(job.id);
+  if (!j) return;
+  j.status = 'processing';
+  j.progress = 0.05;
+  const t0 = Date.now();
+  console.log('[duet-mux]', job.id, 'processing start');
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'pv-duet-'));
+  try {
+    const outPath = await runDuetMuxPipeline({
+      jobId: job.id,
+      workDir: tmp,
+      leftVideoUrl: j.request.leftVideoUrl.trim(),
+      rightVideoUrl: j.request.rightVideoUrl.trim(),
+      onProgress: (p) => {
+        const cur = duetMuxJobs.get(job.id);
+        if (cur) cur.progress = Math.min(0.95, p);
+      },
+    });
+
+    const objectPath = `${j.userId}/duet-${j.id}.mp4`;
+    console.log('[duet-mux]', job.id, 'upload begin', objectPath);
+    const signed = await uploadExportMp4(outPath, objectPath);
+
+    const done = duetMuxJobs.get(job.id);
+    if (done) {
+      done.status = 'completed';
+      done.progress = 1;
+      done.outputUrl = signed;
+    }
+    console.log('[duet-mux]', job.id, 'completed', `${Date.now() - t0}ms total`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[duet-mux]', job.id, 'FAILED', `${Date.now() - t0}ms`, msg);
+    const failed = duetMuxJobs.get(job.id);
+    if (failed) {
+      failed.status = 'failed';
+      failed.error = msg.length > 200 ? `${msg.slice(0, 197)}…` : msg;
+    }
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 /** Prune old jobs from memory (best-effort; deploy with restart or add Redis later). */
 setInterval(() => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const [id, j] of jobs) {
     if (j.createdAt < cutoff && (j.status === 'completed' || j.status === 'failed')) {
       jobs.delete(id);
+    }
+  }
+  for (const [id, j] of duetMuxJobs) {
+    if (j.createdAt < cutoff && (j.status === 'completed' || j.status === 'failed')) {
+      duetMuxJobs.delete(id);
     }
   }
 }, 60 * 60 * 1000).unref();

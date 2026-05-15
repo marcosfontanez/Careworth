@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
@@ -7,6 +7,7 @@ import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import type { ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 
 interface Props {
@@ -66,8 +67,7 @@ export function MyPulseLinkCard({
     }
     const raw = u.linkedUrl?.trim();
     if (!raw) return;
-    const href = raw.startsWith('http') ? raw : `https://${raw}`;
-    Linking.openURL(href).catch(() => undefined);
+    openWebUrlSafely(raw);
   }, [onPress, u.linkedUrl]);
 
   return (

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { InteractionManager, AppState } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as SplashScreen from 'expo-splash-screen';
@@ -19,6 +19,7 @@ import { notificationService } from '@/services';
 import { feedKeys, likedPostKeys } from '@/lib/queryKeys';
 import { NetworkBanner } from '@/components/ui/NetworkBanner';
 import { ToastContainer } from '@/components/ui/Toast';
+import { AppMinimumVersionGate } from '@/components/versioning/AppMinimumVersionGate';
 import { MediaExportOverlay } from '@/components/export/MediaExportOverlay';
 import { trackAppOpen, promptReview } from '@/lib/appReview';
 import { useOfflineQueueProcessor } from '@/hooks/useOfflineQueueProcessor';
@@ -37,6 +38,15 @@ import { attachAppResumeStaleDataRefresh } from '@/lib/appResumeQuerySync';
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();
 
+/**
+ * Required before calling hideAsync(): otherwise iOS may auto-dismiss the splash
+ * (or the VC has no registration yet) and repeated hides surface as unhandled rejections in Sentry
+ * ("No native splash screen registered…").
+ */
+void SplashScreen.preventAutoHideAsync().catch(() => {
+  /* Dev reload / Expo Go edge cases where splash is already torn down */
+});
+
 function AppShell() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -44,11 +54,7 @@ function AppShell() {
   const hasRedirected = useRef(false);
 
   useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading) SplashScreen.hideAsync().catch(() => {});
+    if (!isLoading) void SplashScreen.hideAsync().catch(() => {});
   }, [isLoading]);
 
   useEffect(() => {
@@ -191,10 +197,14 @@ function AppShell() {
 
     let cancelled = false;
     let pushCleanup: (() => void) | undefined;
-    void initPushNotifications(uid).then((cleanup) => {
-      if (cancelled) cleanup();
-      else pushCleanup = cleanup;
-    });
+    void initPushNotifications(uid)
+      .then((cleanup) => {
+        if (cancelled) cleanup();
+        else pushCleanup = cleanup;
+      })
+      .catch(() => {
+        /* Push registration is best-effort; avoid unhandled rejections if listeners fail */
+      });
 
     /**
      * Debounce invalidation: a burst of notification inserts (e.g. batch
@@ -272,6 +282,7 @@ function AppShell() {
       <StatusBar style="light" />
       <NetworkBanner />
       <ToastContainer />
+      <AppMinimumVersionGate />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -296,7 +307,6 @@ function AppShell() {
         <Stack.Screen name="discover" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="blocked-users" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="change-password" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="apply/[jobId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="my-posts" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="pulse-shop" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="my-borders" options={{ animation: 'slide_from_right' }} />
@@ -320,26 +330,6 @@ export default function RootLayout() {
   useEffect(() => {
     const detachAuthRefresh = attachSupabaseAuthAutoRefreshToAppState();
     return () => detachAuthRefresh();
-  }, []);
-
-  useEffect(() => {
-    const hide = () => SplashScreen.hideAsync().catch(() => {});
-    hide();
-    let innerRaf = 0;
-    const outerRaf = requestAnimationFrame(() => {
-      hide();
-      innerRaf = requestAnimationFrame(hide);
-    });
-    const t0 = setTimeout(hide, 0);
-    const t1 = setTimeout(hide, 120);
-    const task = InteractionManager.runAfterInteractions(hide);
-    return () => {
-      cancelAnimationFrame(outerRaf);
-      cancelAnimationFrame(innerRaf);
-      clearTimeout(t0);
-      clearTimeout(t1);
-      task.cancel?.();
-    };
   }, []);
 
   return (

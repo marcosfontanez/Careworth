@@ -9,7 +9,7 @@ interface Props {
   onChange: (next: Date | null) => void;
 }
 
-const PRESETS: Array<{ label: string; minutes: number }> = [
+const PRESETS: { label: string; minutes: number }[] = [
   { label: 'In 1 hour', minutes: 60 },
   { label: 'In 3 hours', minutes: 180 },
   { label: 'Tonight 8pm', minutes: -1 }, // special-cased below

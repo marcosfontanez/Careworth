@@ -6,7 +6,7 @@ import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
  * Use inside `author:author_id(<this>)` and similar `profiles` FK selects.
  */
 export const PROFILE_SELECT_CREATOR_SUMMARY_BASE =
-  'id, display_name, username, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current';
+  'id, display_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current';
 
 /** Must match `profiles.selected_pulse_avatar_frame_id` FK hint. */
 export const PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED =
@@ -54,6 +54,9 @@ export function profileRowToCreatorSummary(row: any): CreatorSummary {
     firstName: base.first_name ?? undefined,
     lastName: base.last_name ?? undefined,
     avatarUrl: base.avatar_url ?? '',
+    identityTags: Array.isArray(base.identity_tags)
+      ? (base.identity_tags as unknown[]).map((s) => String(s).trim()).filter(Boolean)
+      : undefined,
     role: base.role,
     specialty: base.specialty,
     city: base.city ?? '',
@@ -86,8 +89,8 @@ export function unknownCreatorSummary(id: string = ''): CreatorSummary {
     id,
     displayName: 'Unknown',
     avatarUrl: '',
-    role: 'RN',
-    specialty: 'General',
+    role: '',
+    specialty: '',
     city: '',
     state: '',
     isVerified: false,

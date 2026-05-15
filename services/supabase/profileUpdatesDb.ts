@@ -173,7 +173,7 @@ export const profileUpdatesDb = {
     const { data, error } = await supabase
       .from('profile_update_comments')
       .select(
-        'id, update_id, author_id, parent_id, content, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
+        'id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
       )
       .eq('update_id', updateId)
       .order('created_at', { ascending: true });
@@ -187,6 +187,7 @@ export const profileUpdatesDb = {
         authorId: row.author_id,
         parentId: row.parent_id ?? undefined,
         content: row.content,
+        mediaUrl: row.media_url ?? undefined,
         createdAt: row.created_at,
         editedAt: row.edited_at ?? undefined,
         authorName: p?.display_name ?? undefined,
@@ -201,9 +202,11 @@ export const profileUpdatesDb = {
     authorId: string,
     content: string,
     parentId?: string | null,
+    mediaUrl?: string | null,
   ): Promise<ProfileUpdateComment> {
     const trimmed = content.trim();
-    if (!trimmed) throw new Error('Comment cannot be empty');
+    const media = mediaUrl?.trim() ?? null;
+    if (!trimmed && !media) throw new Error('Comment cannot be empty');
 
     const { data, error } = await supabase
       .from('profile_update_comments')
@@ -212,9 +215,10 @@ export const profileUpdatesDb = {
         author_id: authorId,
         content: trimmed,
         parent_id: parentId ?? null,
+        media_url: media,
       })
       .select(
-        'id, update_id, author_id, parent_id, content, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
+        'id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
       )
       .single();
 
@@ -227,6 +231,7 @@ export const profileUpdatesDb = {
       authorId: (data as any).author_id,
       parentId: (data as any).parent_id ?? undefined,
       content: (data as any).content,
+      mediaUrl: (data as any).media_url ?? undefined,
       createdAt: (data as any).created_at,
       editedAt: (data as any).edited_at ?? undefined,
       authorName: p?.display_name ?? undefined,
@@ -257,7 +262,19 @@ export const profileUpdatesDb = {
     content: string,
   ): Promise<ProfileUpdateComment> {
     const trimmed = content.trim();
-    if (!trimmed) throw new Error('Comment cannot be empty');
+
+    const { data: existing, error: loadErr } = await supabase
+      .from('profile_update_comments')
+      .select('media_url')
+      .eq('id', commentId)
+      .eq('author_id', authorId)
+      .maybeSingle();
+
+    if (loadErr) throw loadErr;
+    if (!existing) throw new Error('Comment not found');
+
+    const hasMedia = !!(existing as { media_url?: string | null }).media_url?.trim();
+    if (!trimmed && !hasMedia) throw new Error('Comment cannot be empty');
 
     const { data, error } = await supabase
       .from('profile_update_comments')
@@ -265,7 +282,7 @@ export const profileUpdatesDb = {
       .eq('id', commentId)
       .eq('author_id', authorId)
       .select(
-        'id, update_id, author_id, parent_id, content, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
+        'id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
       )
       .single();
 
@@ -278,6 +295,7 @@ export const profileUpdatesDb = {
       authorId: (data as any).author_id,
       parentId: (data as any).parent_id ?? undefined,
       content: (data as any).content,
+      mediaUrl: (data as any).media_url ?? undefined,
       createdAt: (data as any).created_at,
       editedAt: (data as any).edited_at ?? undefined,
       authorName: p?.display_name ?? undefined,

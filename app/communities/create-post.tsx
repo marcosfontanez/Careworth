@@ -34,6 +34,9 @@ import {
 } from '@/components/circles/CircleSettingsCard';
 import { CircleContextFooter } from '@/components/circles/CircleContextFooter';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
 
 /** Legacy AsyncStorage key for circle drafts — purged on open/post so nothing lingers. */
 const LEGACY_CIRCLE_DRAFT = 'circle';
@@ -79,6 +82,7 @@ export default function CommunityCreatePostScreen() {
     allowComments: true,
     pinToHighlights: false,
   });
+  const [phiAck, setPhiAck] = useState(false);
 
   /** Remove any saved circle drafts — feature disabled; avoids stale keys and room-banner checks. */
   React.useEffect(() => {
@@ -87,6 +91,9 @@ export default function CommunityCreatePostScreen() {
       await clearDraft(LEGACY_CIRCLE_DRAFT);
     })();
   }, [slug]);
+
+  const phiFindings = useMemo(() => scanForPhi(body), [body]);
+  const phiSev = highestSeverity(phiFindings);
 
   const placeholder = postType === 'question'
     ? 'What do you want to ask the room?'
@@ -132,14 +139,23 @@ export default function CommunityCreatePostScreen() {
       toast.show('Not signed in', 'error');
       return;
     }
+    if (phiSev === 'high') {
+      toast.show('High-risk privacy pattern — remove or reword before posting', 'error');
+      return;
+    }
+    if (phiFindings.length > 0 && !phiAck) {
+      toast.show('Review the privacy banner and confirm before posting', 'error');
+      return;
+    }
+    if (!checkRateLimit('post')) return;
 
     setPosting(true);
     try {
       let mediaUrl: string | undefined;
       let postKind: 'image' | 'video' | 'text' = 'text';
       if (mediaUri) {
+        const isVideo = mediaKind === 'video';
         try {
-          const isVideo = mediaKind === 'video';
           mediaUrl = await storageService.uploadPostMedia(user.id, {
             uri: mediaUri,
             type: isVideo ? 'video/mp4' : 'image/jpeg',
@@ -147,7 +163,8 @@ export default function CommunityCreatePostScreen() {
           });
           postKind = isVideo ? 'video' : 'image';
         } catch {
-          toast.show('Media upload failed — posting as text', 'info');
+          toast.show('Could not upload media. Check your connection and try again.', 'error');
+          return;
         }
       }
 
@@ -298,6 +315,10 @@ export default function CommunityCreatePostScreen() {
             textAlignVertical="top"
           />
         </AccentComposerFrame>
+
+        <View style={{ marginHorizontal: 14 }}>
+          <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
+        </View>
 
         {/* ====================== MEDIA TILES ======================= */}
         {allowsMedia && (

@@ -19,6 +19,9 @@ import { profilesService } from '@/services/supabase/profiles';
 import { avatarThumb } from '@/lib/storage';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { UserProfile } from '@/types';
+import { getAvatarSubtitleRowListWindow } from '@/lib/feedVideoListWindow';
+
+const COLLAB_SEARCH_LIST_WINDOW = getAvatarSubtitleRowListWindow();
 
 interface Props {
   visible: boolean;
@@ -136,11 +139,11 @@ export function CollabInviteeSearchModal({ visible, onClose, onSelect, excludeUs
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={9}
+          initialNumToRender={COLLAB_SEARCH_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={COLLAB_SEARCH_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={COLLAB_SEARCH_LIST_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderItem={renderRow}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: layout.screenPadding + 24 }}

@@ -1,4 +1,4 @@
-/** Structured API responses for Pulse Shop Edge + app clients. */
+import { edgeCorsHeaders } from "../edgeCors.ts";
 
 export type PulseShopErrorCode =
   | "UNAUTHORIZED"
@@ -36,26 +36,28 @@ export type PulseShopFailure = {
 
 export type PulseShopResult<T extends Record<string, unknown>> = PulseShopSuccess<T> | PulseShopFailure;
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-pulse-shop-nonce",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+export function pulseShopCorsHeaders(_req: Request): Record<string, string> {
+  return edgeCorsHeaders({
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-pulse-shop-nonce",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  });
+}
 
 export function jsonResponse(
+  req: Request,
   body: PulseShopResult<Record<string, unknown>>,
   status = 200,
 ): Response {
   const httpStatus = body.ok ? status : errorToStatus(body.error.code);
   return new Response(JSON.stringify(body), {
     status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...pulseShopCorsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
-export function optionsResponse(): Response {
-  return new Response(null, { headers: corsHeaders });
+export function optionsResponse(req: Request): Response {
+  return new Response(null, { headers: pulseShopCorsHeaders(req) });
 }
 
 function errorToStatus(code: PulseShopErrorCode): number {

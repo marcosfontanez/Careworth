@@ -1,22 +1,93 @@
 // Deploy: npx supabase functions deploy apple-music-developer-token
-// Secrets: APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_P8_KEY (see README.txt in functions folder)
-import { SignJWT, importPKCS8 } from 'npm:jose@5';
+//
+// Requires a valid logged-in Supabase session:
+//   Authorization: Bearer <user access token>
+// plus project apikey (sent automatically by supabase.functions.invoke).
+//
+// Secrets: APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_P8_KEY (see README.txt)
+// Optional: EDGE_CORS_ALLOWLIST — single origin for browser callers.
 
-const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { SignJWT, importPKCS8 } from 'npm:jose@5';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+import { edgeCorsHeaders } from '../_shared/edgeCors.ts';
+
+function corsHeaders(): Record<string, string> {
+  return edgeCorsHeaders({
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  });
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
   });
+}
+
+/** Supabase clients send this — blocks drive-by traffic that isn’t using your project. */
+function hasProjectApiKey(req: Request): boolean {
+  const anon = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!anon) return false;
+  const apikey = req.headers.get('apikey');
+  return apikey === anon;
+}
+
+async function getAuthedUserId(
+  supabaseUrl: string,
+  anonKey: string,
+  authHeader: string | null,
+): Promise<string | null> {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const sb = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data, error } = await sb.auth.getUser();
+  if (error || !data.user?.id) return null;
+  return data.user.id;
+}
+
+/** Best-effort per-isolate cap so one account cannot hammer Apple token minting. */
+const RL_WINDOW_MS = 60_000;
+const RL_MAX_PER_WINDOW = 30;
+const rlBuckets = new Map<string, number[]>();
+
+function rateLimitAllow(userId: string): boolean {
+  const now = Date.now();
+  const cutoff = now - RL_WINDOW_MS;
+  const next = (rlBuckets.get(userId) ?? []).filter((t) => t > cutoff);
+  if (next.length >= RL_MAX_PER_WINDOW) {
+    rlBuckets.set(userId, next);
+    return false;
+  }
+  next.push(now);
+  rlBuckets.set(userId, next);
+  return true;
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders() });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')?.trim();
+  if (!supabaseUrl || !anonKey) {
+    return json({ error: 'Server misconfigured.' }, 503);
+  }
+
+  if (!hasProjectApiKey(req)) {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
+  const authHeader = req.headers.get('Authorization');
+  const userId = await getAuthedUserId(supabaseUrl, anonKey, authHeader);
+  if (!userId) {
+    return json({ error: 'Unauthorized', hint: 'Sign in required.' }, 401);
+  }
+
+  if (!rateLimitAllow(userId)) {
+    return json({ error: 'Too many requests', retry_after_seconds: Math.ceil(RL_WINDOW_MS / 1000) }, 429);
   }
 
   try {

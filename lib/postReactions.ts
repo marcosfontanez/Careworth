@@ -1,12 +1,15 @@
 import type { PostReactionCounts, PostReactionKind } from '@/types';
 
+/**
+ * Single app-wide reaction set (posts + comments). Order: heart → laugh → cry → anger → surprise.
+ * DB may still store legacy `clap` rows; {@link normalizePostReactionKind} maps unknown kinds to null.
+ */
 export const POST_REACTION_ORDER: PostReactionKind[] = [
   'heart',
   'haha',
-  'wow',
   'sad',
   'angry',
-  'clap',
+  'wow',
 ];
 
 export const POST_REACTION_EMOJI: Record<PostReactionKind, string> = {
@@ -14,8 +17,7 @@ export const POST_REACTION_EMOJI: Record<PostReactionKind, string> = {
   haha: '😂',
   wow: '😮',
   sad: '😢',
-  angry: '😠',
-  clap: '👏',
+  angry: '😡',
 };
 
 export function emptyPostReactionCounts(): PostReactionCounts {
@@ -25,7 +27,6 @@ export function emptyPostReactionCounts(): PostReactionCounts {
     wow: 0,
     sad: 0,
     angry: 0,
-    clap: 0,
   };
 }
 

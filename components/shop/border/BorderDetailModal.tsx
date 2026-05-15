@@ -21,6 +21,7 @@ import {
   borderFlavorLine,
   resolveBorderPrimaryCta,
   lockReasonDisplay,
+  borderWebStoreStatusLabel,
   shouldShowOwnedGiftAction,
   detailAvailabilityLabel,
   detailVisualTierLabel,
@@ -83,7 +84,10 @@ export function BorderDetailModal({
   const flavor = borderFlavorLine(item, collection?.name ?? null);
   const cta = inventorySurface ? null : resolveBorderPrimaryCta(item, ownership, isWeb);
   const showGiftOwned =
-    !inventorySurface && shouldShowOwnedGiftAction(item, ownership) && Platform.OS !== 'web';
+    !inventorySurface &&
+    shouldShowOwnedGiftAction(item, ownership) &&
+    Platform.OS !== 'web' &&
+    cta?.kind !== 'owned_retail';
   const motionHint =
     item.visual_tier === 'animated' ||
     item.visual_tier === 'reactive' ||
@@ -220,21 +224,37 @@ export function BorderDetailModal({
                   </>
                 ) : (
                   <>
-                {cta?.kind === 'equipped' ? (
-                  <View style={styles.ctaStatus}>
-                    <Ionicons name="checkmark-circle" size={18} color={pulseverse.electric} style={{ marginRight: 8 }} />
-                    <Text style={styles.ctaStatusText}>Equipped on your avatar</Text>
-                  </View>
-                ) : null}
-
-                {cta?.kind === 'owned_equip' ? (
-                  <TouchableOpacity
-                    style={styles.ctaPrimary}
-                    onPress={() => onEquip?.(cta.inventoryRowId)}
-                    activeOpacity={0.88}
-                  >
-                    <Text style={styles.ctaPrimaryText}>Equip</Text>
-                  </TouchableOpacity>
+                {cta?.kind === 'owned_retail' ? (
+                  <>
+                    <View style={styles.ctaStatus}>
+                      <Ionicons name="checkmark-done" size={18} color="#FDE68A" style={{ marginRight: 8 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ctaStatusText}>
+                          {cta.equipped ? 'Owned · Equipped on your avatar' : 'Owned · In your collection'}
+                        </Text>
+                      </View>
+                    </View>
+                    {!cta.equipped && cta.inventoryRowId ? (
+                      <TouchableOpacity
+                        style={styles.ctaPrimary}
+                        onPress={() => onEquip?.(cta.inventoryRowId!)}
+                        activeOpacity={0.88}
+                      >
+                        <Text style={styles.ctaPrimaryText}>Equip</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {cta.showRepurchase ? (
+                      <TouchableOpacity style={styles.ctaPrimary} onPress={onBuy} activeOpacity={0.88}>
+                        <Text style={styles.ctaPrimaryText}>Buy again</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {item.is_giftable && !isWeb ? (
+                      <TouchableOpacity style={styles.ctaSecondary} onPress={onGift} activeOpacity={0.88}>
+                        <Ionicons name="gift-outline" size={18} color={pulseverse.electric} style={{ marginRight: 8 }} />
+                        <Text style={styles.ctaSecondaryText}>Gift to someone</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </>
                 ) : null}
 
                 {cta?.kind === 'free_claim' ? (
@@ -245,7 +265,11 @@ export function BorderDetailModal({
 
                 {cta?.kind === 'iap_choose_recipient' && !isWeb ? (
                   <TouchableOpacity style={styles.ctaPrimary} onPress={onBuy} activeOpacity={0.88}>
-                    <Text style={styles.ctaPrimaryText}>Purchase</Text>
+                    <Text style={styles.ctaPrimaryText}>
+                      {item.real_money_display_price?.trim()
+                        ? `Purchase · ${item.real_money_display_price.trim()}`
+                        : 'Purchase'}
+                    </Text>
                   </TouchableOpacity>
                 ) : null}
 
@@ -256,15 +280,27 @@ export function BorderDetailModal({
                   </TouchableOpacity>
                 ) : null}
 
-                {isWeb && item.is_shop_item && cta?.kind !== 'free_claim' ? (
+                {isWeb &&
+                item.is_shop_item &&
+                cta?.kind !== 'free_claim' &&
+                cta?.kind !== 'owned_retail' ? (
                   <View style={styles.webNote}>
                     <Text style={styles.webNoteText}>
-                      Border purchases complete in the iOS/Android app with your app store account.
+                      {item.real_money_display_price?.trim()
+                        ? `This border is listed at ${item.real_money_display_price.trim()} in the shop catalog; checkout runs in the iOS/Android app with your app store account (final price is set by Apple/Google).`
+                        : 'Border purchases complete in the iOS/Android app with your app store account.'}
                     </Text>
                   </View>
                 ) : null}
 
-                {cta?.kind === 'locked' ? (
+                {cta?.kind === 'locked' && cta.reason === 'web_store' ? (
+                  <View style={styles.lockedBanner}>
+                    <Ionicons name="lock-closed" size={18} color={colors.dark.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={styles.lockedBannerText}>{borderWebStoreStatusLabel(item)}</Text>
+                  </View>
+                ) : null}
+
+                {cta?.kind === 'locked' && cta.reason !== 'web_store' ? (
                   <View style={styles.lockedBanner}>
                     <Ionicons name="lock-closed" size={18} color={colors.dark.textMuted} style={{ marginRight: 8 }} />
                     <Text style={styles.lockedBannerText}>{lockReasonDisplay(cta.reason)}</Text>

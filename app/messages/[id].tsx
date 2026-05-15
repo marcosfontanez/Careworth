@@ -18,6 +18,9 @@ import { useUser } from '@/hooks/useQueries';
 import { avatarThumb } from '@/lib/storage';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { getThreadListWindow } from '@/lib/feedVideoListWindow';
+
+const DM_LIST_WINDOW = getThreadListWindow('dmInverted');
 
 const DM_MESSAGE_MAX_LENGTH = 1000;
 
@@ -294,11 +297,11 @@ export default function ChatScreen() {
           style={styles.listFlex}
           data={messages}
           keyExtractor={(item) => item.id}
-          initialNumToRender={18}
-          maxToRenderPerBatch={12}
-          windowSize={11}
+          initialNumToRender={DM_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={DM_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={DM_LIST_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           inverted
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
@@ -467,6 +470,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingHorizontal: 6,
     paddingVertical: spacing.sm + 2,
+    textAlignVertical: 'top',
   },
   sendBtn: {
     width: 40,

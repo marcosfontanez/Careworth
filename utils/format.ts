@@ -47,7 +47,3 @@ export function relativeMyPulse(iso: string): string {
   if (days < 7) return `${days}d ago`;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
-
-export function formatPayRange(min: number, max: number): string {
-  return `$${min}–$${max}/hr`;
-}

@@ -10,10 +10,9 @@ import {
   TextInput,
   ScrollView,
   FlatList,
-  Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -26,8 +25,13 @@ import { setPendingVideoCapture } from '@/lib/pendingVideoCapture';
 import { probeVideoFile } from '@/lib/videoMetadata';
 import { looksByKind, tintForLook, type VideoLookId, type VideoLookKind } from '@/lib/videoFilters';
 import { postsService } from '@/services/supabase';
+import { DuetParentPreview, type DuetParentLayoutMode } from '@/components/feed/DuetParentPreview';
+import { getSoundRowPickerListWindow } from '@/lib/feedVideoListWindow';
+
+const VIDEO_CAMERA_SOUND_LIST_WINDOW = getSoundRowPickerListWindow();
 
 const CAP_OPTIONS = [
+  { label: '10s', sec: 10 },
   { label: '15s', sec: 15 },
   { label: '60s', sec: 60 },
   { label: '3m', sec: Math.min(180, VIDEO_MAX_SECONDS) },
@@ -50,6 +54,13 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export default function CreateVideoCameraScreen() {
   const router = useRouter();
+  const { duetPostId: duetPostIdRaw, soundPostId: soundPostIdRaw } = useLocalSearchParams<{
+    duetPostId?: string;
+    soundPostId?: string;
+  }>();
+  const duetPostIdTrim = (Array.isArray(duetPostIdRaw) ? duetPostIdRaw[0] : duetPostIdRaw)?.trim() ?? '';
+  const soundPostIdTrim =
+    (Array.isArray(soundPostIdRaw) ? soundPostIdRaw[0] : soundPostIdRaw)?.trim() ?? '';
   const insets = useSafeAreaInsets();
   const camRef = useRef<CameraView>(null);
   const [camPerm, requestCam] = useCameraPermissions();
@@ -76,6 +87,31 @@ export default function CreateVideoCameraScreen() {
 
   const [pickedSound, setPickedSound] = useState<PickedSound | null>(null);
   const [soundOpen, setSoundOpen] = useState(false);
+  const [duetLayoutMode, setDuetLayoutMode] = useState<DuetParentLayoutMode>('strip');
+
+  useEffect(() => {
+    if (!soundPostIdTrim) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const post = await postsService.getById(soundPostIdTrim);
+        if (cancelled || !post) return;
+        const dn = post.creator.displayName?.trim() || post.creator.username || 'Creator';
+        const title = post.soundTitle?.trim() || post.caption?.trim()?.slice(0, 48) || 'Sound';
+        setPickedSound({
+          postId: post.id,
+          title,
+          creatorName: dn,
+          thumbnailUrl: post.thumbnailUrl ?? undefined,
+        });
+      } catch {
+        /* ignore missing sound */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [soundPostIdTrim]);
 
   useEffect(() => {
     if (!camPerm?.granted) void requestCam();
@@ -119,9 +155,10 @@ export default function CreateVideoCameraScreen() {
       const sp = pickedSound?.postId
         ? `&soundPostId=${encodeURIComponent(pickedSound.postId)}`
         : '';
-      router.replace(`/create/video?mode=record${sp}` as any);
+      const dp = duetPostIdTrim ? `&duetPostId=${encodeURIComponent(duetPostIdTrim)}` : '';
+      router.replace(`/create/video?mode=record${sp}${dp}` as any);
     },
-    [router, lookId, pickedSound],
+    [router, lookId, pickedSound, duetPostIdTrim],
   );
 
   const stopRecordingOnly = useCallback(() => {
@@ -205,11 +242,12 @@ export default function CreateVideoCameraScreen() {
   }
 
   const screenH = Dimensions.get('window').height;
+  const cameraShellH = Math.min(screenH * 0.72, 560);
   const activeChips = lookKind === 'filter' ? filterChips : effectChips;
 
   return (
     <View style={styles.root}>
-      <View style={[styles.cameraShell, { height: Math.min(screenH * 0.72, 560) }]}>
+      <View style={[styles.cameraShell, { height: cameraShellH }]}>
         <CameraView
           ref={camRef}
           style={StyleSheet.absoluteFill}
@@ -225,6 +263,16 @@ export default function CreateVideoCameraScreen() {
 
         {tint ? (
           <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: tint }]} />
+        ) : null}
+
+        {duetPostIdTrim ? (
+          <DuetParentPreview
+            parentPostId={duetPostIdTrim}
+            pageHeight={cameraShellH}
+            layoutMode={duetLayoutMode}
+            enablePlayback
+            referenceMuted
+          />
         ) : null}
 
         {/* Top sound pill — TikTok-style "+ Add sound" / picked sound chip */}
@@ -302,6 +350,26 @@ export default function CreateVideoCameraScreen() {
         </View>
 
         <View style={styles.secondaryRow}>
+          {duetPostIdTrim ? (
+            <TouchableOpacity
+              style={[styles.smallChip, styles.duetLayoutChip]}
+              onPress={() =>
+                !recording &&
+                setDuetLayoutMode((m) => (m === 'strip' ? 'floating' : 'strip'))
+              }
+              disabled={recording}
+              accessibilityHint="In-app layout only. System picture-in-picture above other apps is not available with expo-video."
+            >
+              <Ionicons
+                name={duetLayoutMode === 'strip' ? 'tablet-portrait-outline' : 'layers-outline'}
+                size={16}
+                color="#FFF"
+              />
+              <Text style={styles.smallChipTextLight}>
+                {duetLayoutMode === 'strip' ? 'Side-by-side' : 'PiP'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.smallChip, countdownMode === 3 && styles.smallChipOn]}
             onPress={() => !recording && setCountdownMode((c) => (c === 3 ? 0 : 3))}
@@ -315,6 +383,11 @@ export default function CreateVideoCameraScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+        {duetPostIdTrim ? (
+          <Text style={styles.duetSystemPipHint}>
+            PiP here is only the in-camera layout — not iOS/Android system mini-player over other apps (needs native PiP APIs).
+          </Text>
+        ) : null}
 
         {/* Filters / Effects rail */}
         <View style={styles.lookSegment}>
@@ -523,11 +596,11 @@ function SoundPickerModal({ visible, currentId, onClose, onPick }: SoundPickerMo
             <FlatList
               data={items}
               keyExtractor={(item) => item.postId}
-              initialNumToRender={12}
-              maxToRenderPerBatch={8}
-              windowSize={9}
+              initialNumToRender={VIDEO_CAMERA_SOUND_LIST_WINDOW.initialNumToRender}
+              maxToRenderPerBatch={VIDEO_CAMERA_SOUND_LIST_WINDOW.maxToRenderPerBatch}
+              windowSize={VIDEO_CAMERA_SOUND_LIST_WINDOW.windowSize}
               updateCellsBatchingPeriod={50}
-              removeClippedSubviews={Platform.OS === 'android'}
+              removeClippedSubviews={false}
               renderItem={({ item }) => {
                 const isOn = item.postId === currentId;
                 return (
@@ -653,7 +726,16 @@ const styles = StyleSheet.create({
   },
   capChipText: { color: 'rgba(255,255,255,0.85)', fontWeight: '800', fontSize: 12 },
   capChipTextOn: { color: '#FFF' },
-  secondaryRow: { flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' },
+  secondaryRow: { flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' },
+  duetLayoutChip: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' },
+  duetSystemPipHint: {
+    marginTop: 6,
+    paddingHorizontal: 24,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.52)',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
   smallChip: {
     flexDirection: 'row',
     alignItems: 'center',

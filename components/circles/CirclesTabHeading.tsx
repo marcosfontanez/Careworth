@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import { colors } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 const HEADER = require('../../assets/images/circles-header-lockup.png');
@@ -44,7 +43,7 @@ export function CirclesTabHeading({ onPress }: Props) {
           alignSelf: 'stretch',
           width: '100%',
           /** Matches screen bg so expo-image `contain` letterboxing isn’t pure black. */
-          backgroundColor: colors.dark.bg,
+          backgroundColor: 'transparent',
         },
         pressed && { opacity: 0.85 },
       ]}
@@ -64,12 +63,12 @@ const styles = StyleSheet.create({
     maxHeight: 136,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.bg,
+    backgroundColor: 'transparent',
   },
   img: {
     width: '100%',
     height: HEADER_HEIGHT,
     maxWidth: 560,
-    backgroundColor: colors.dark.bg,
+    backgroundColor: 'transparent',
   },
 });

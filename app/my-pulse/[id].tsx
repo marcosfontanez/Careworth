@@ -4,16 +4,12 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  Image as RNImage,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -32,14 +28,24 @@ import { userService } from '@/services/user';
 import { withPulseVerseCta } from '@/lib/share';
 import { postKeys, profileUpdateKeys, userKeys } from '@/lib/queryKeys';
 import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
-import { queryClient } from '@/lib/queryClient';
+import { hrefPost } from '@/lib/communityRoutes';
+import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { useFeatureFlags } from '@/lib/featureFlags';
-import { colors, borderRadius, typography, spacing } from '@/theme';
+import { colors, borderRadius, typography, spacing, iconSize, layout } from '@/theme';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { MentionAutocomplete, type MentionRef } from '@/components/ui/MentionAutocomplete';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
-import { relativeMyPulse } from '@/utils/format';
+import { avatarThumb, storageService } from '@/lib/storage';
+import { COMMENT_MAX_LENGTH } from '@/constants';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getThreadListWindow } from '@/lib/feedVideoListWindow';
+
+const MY_PULSE_COMMENT_LIST_WINDOW = getThreadListWindow('comments');
+import { analytics } from '@/lib/analytics';
+import { relativeMyPulse, timeAgo } from '@/utils/format';
 import { resolvePicsUrls, getMyPulseDisplayType } from '@/utils/myPulseDisplayType';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
+import { CommentRichText } from '@/components/ui/CommentRichText';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import type { ProfileUpdateComment } from '@/types';
@@ -47,8 +53,13 @@ import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { MY_PULSE_VISUALS } from '@/components/mypage/cards/MyPulseCardShell';
 import { CirclesOrbitIcon } from '@/components/mypage/cards/icons/CirclesOrbitIcon';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import * as ImagePicker from 'expo-image-picker';
 
 const SCREEN_W = Dimensions.get('window').width;
+const SCREEN_H = Dimensions.get('window').height;
+/** Detail + comment thread: show full media up to this height (tall memes, vertical video). */
+const MY_PULSE_MEDIA_MAX_H = Math.min(SCREEN_H * 0.82, SCREEN_W * 2.2);
+const CLIP_DETAIL_MEDIA_H = Math.min((SCREEN_W * 11) / 16, MY_PULSE_MEDIA_MAX_H);
 
 export default function MyPulseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -277,16 +288,47 @@ export default function MyPulseDetailScreen() {
   const canEditBody =
     isOwner && (displayType === 'thought' || displayType === 'pics' || displayType === 'link');
 
-  // ─── Comment composer ──────────────────────────────────────────────
+  // ─── Comment composer (parity with `/comments/[postId]` — text + optional photo) ───
   const [draft, setDraft] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const [pendingAttach, setPendingAttach] = useState<{ uri: string; mime?: string } | null>(null);
+  const inputRef = useRef<MentionRef>(null);
+
+  const pickCommentAttach = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const a = result.assets[0];
+      setPendingAttach({ uri: a.uri, mime: a.mimeType ?? 'image/jpeg' });
+    }
+  }, []);
+
   const addCommentMut = useMutation({
-    mutationFn: (text: string) => {
+    mutationFn: async ({
+      text,
+      localAttach,
+    }: {
+      text: string;
+      localAttach?: { uri: string; mime?: string } | null;
+    }) => {
       if (!viewerId) throw new Error('Not signed in');
-      return profileUpdatesService.addComment(id!, viewerId, text);
+      let mediaUrl: string | null = null;
+      if (localAttach) {
+        mediaUrl = await storageService.uploadPostMedia(viewerId, {
+          uri: localAttach.uri,
+          type: localAttach.mime ?? 'image/jpeg',
+          name: `pulse_comment_${Date.now()}.jpg`,
+        });
+      }
+      return profileUpdatesService.addComment(id!, viewerId, text, null, mediaUrl);
     },
     onSuccess: () => {
       setDraft('');
+      setPendingAttach(null);
       inputRef.current?.blur();
       queryClient.invalidateQueries({ queryKey: profileUpdateKeys.comments(id!) });
       if (update?.userId) {
@@ -294,7 +336,6 @@ export default function MyPulseDetailScreen() {
       }
       queryClient.invalidateQueries({ queryKey: profileUpdateKeys.byId(id!) });
     },
-    onError: (e: any) => Alert.alert('Could not post comment', e?.message ?? 'Try again'),
   });
 
   const deleteCommentMut = useMutation({
@@ -355,15 +396,34 @@ export default function MyPulseDetailScreen() {
     },
   });
 
-  const postComment = useCallback(() => {
-    const t = draft.trim();
-    if (!t) return;
+  const postComment = useCallback(async () => {
+    const trimmed = draft.trim().slice(0, COMMENT_MAX_LENGTH);
+    if ((!trimmed && !pendingAttach) || addCommentMut.isPending) return;
     if (!viewerId) {
       Alert.alert('Sign in to comment', 'You need to be signed in to leave a comment.');
       return;
     }
-    addCommentMut.mutate(t);
-  }, [draft, addCommentMut, viewerId]);
+    if (!checkRateLimit('comment')) return;
+
+    const hadAttach = !!pendingAttach;
+    try {
+      await addCommentMut.mutateAsync({ text: trimmed, localAttach: pendingAttach });
+      analytics.track('comment_created', {
+        context: 'profile_update',
+        updateId: id,
+        hasMedia: hadAttach,
+      });
+    } catch (e: any) {
+      if (hadAttach) {
+        Alert.alert(
+          'Connection needed',
+          'Photo comments need a working internet connection. Try again when you’re online.',
+        );
+        return;
+      }
+      Alert.alert('Could not post comment', e?.message ?? 'Try again');
+    }
+  }, [draft, pendingAttach, addCommentMut, viewerId, id]);
 
   // ─── Share ─────────────────────────────────────────────────────────
   const onShare = useCallback(async () => {
@@ -388,16 +448,14 @@ export default function MyPulseDetailScreen() {
     if (!update) return;
     if (update.linkedPostId) {
       /**
-       * Feed / Circle-post pins always drop the viewer into the
-       * fullscreen feed-style viewer so the original video plays and
-       * the real engagement rail wires through — matches the behavior
-       * on the Pulse clip card tap. The Circle slug rides along as a
-       * query param so anonymous masking / accent stays correct.
+       * Post detail (`/post/[id]`) keeps a bounded media preview up top and the
+       * real comments thread + composer below — the surface users expect when
+       * they want to discuss the source clip. The fullscreen `/feed/[id]`
+       * shell is for passive scrolling, not “jump in and comment.”
        */
-      const qs = update.linkedCircleSlug?.trim()
-        ? `?circle=${encodeURIComponent(update.linkedCircleSlug.trim())}`
-        : '';
-      router.push(`/feed/${update.linkedPostId}${qs}` as any);
+      router.push(
+        hrefPost(update.linkedPostId, update.linkedCircleSlug?.trim() || undefined) as any,
+      );
       return;
     }
     if (update.linkedThreadId && update.linkedCircleSlug) {
@@ -415,11 +473,9 @@ export default function MyPulseDetailScreen() {
       return;
     }
     if (update.linkedUrl?.trim()) {
-      const raw = update.linkedUrl.trim();
-      const href = raw.startsWith('http') ? raw : `https://${raw}`;
-      Linking.openURL(href).catch(() => undefined);
+      openWebUrlSafely(update.linkedUrl.trim());
     }
-  }, [router, update, liveStreaming, authUser?.id]);
+  }, [router, update, liveStreaming, authUser?.id, queryClient]);
 
   const sourceButtonLabel = useMemo(() => {
     if (!update) return null;
@@ -480,9 +536,9 @@ export default function MyPulseDetailScreen() {
         style={styles.listFlex}
         data={comments}
         keyExtractor={(c) => c.id}
-        initialNumToRender={14}
-        maxToRenderPerBatch={10}
-        windowSize={11}
+        initialNumToRender={MY_PULSE_COMMENT_LIST_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={MY_PULSE_COMMENT_LIST_WINDOW.maxToRenderPerBatch}
+        windowSize={MY_PULSE_COMMENT_LIST_WINDOW.windowSize}
         updateCellsBatchingPeriod={50}
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={false}
@@ -632,19 +688,14 @@ export default function MyPulseDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Comments section header */}
+            {/* Comments — same header pattern as feed post detail / Circles */}
             <View style={styles.commentsHead}>
-              <Text style={styles.commentsTitle}>
-                {commentCount === 0
-                  ? 'No comments yet'
-                  : commentCount === 1
-                    ? '1 comment'
-                    : `${commentCount} comments`}
-              </Text>
-              {commentCount === 0 ? (
-                <Text style={styles.commentsHint}>Be the first to reply.</Text>
-              ) : null}
+              <Text style={styles.commentsTitle}>Comments</Text>
+              <Text style={styles.commentsCount}>{commentCount}</Text>
             </View>
+            {commentCount === 0 ? (
+              <Text style={styles.commentsHint}>Be the first to share your thoughts.</Text>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => (
@@ -668,54 +719,89 @@ export default function MyPulseDetailScreen() {
         )}
       />
 
-      {/* Sticky composer */}
-      <View
-        style={[
-          styles.composer,
-          { paddingBottom: Math.max(insets.bottom, 10) },
-        ]}
-      >
+      {/* Sticky composer — matches `/comments/[postId]` (attach + field + send). */}
+      <View style={[styles.composerBar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
         <AccentComposerFrame
           accentColor={colors.primary.teal}
-          compact
+          allowOverflow
           noShadow
+          hint={viewerId ? 'Comment on this Pulse — @ to mention.' : undefined}
           style={{ flex: 1 }}
+          innerStyle={{ paddingTop: 10, paddingBottom: 8 }}
           footer={
             <AccentCharCount
               length={draft.length}
-              max={600}
+              max={COMMENT_MAX_LENGTH}
               accentColor={colors.primary.teal}
-              warnWithin={60}
+              warnWithin={30}
             />
           }
         >
-          <TextInput
-            ref={inputRef}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder={viewerId ? 'Add a comment…' : 'Sign in to comment'}
-            placeholderTextColor={colors.dark.textMuted}
-            style={styles.inputComposer}
-            multiline
-            editable={!!viewerId}
-            maxLength={600}
-          />
+          {pendingAttach ? (
+            <View style={styles.attachPreview}>
+              <ExpoImage
+                source={{ uri: pendingAttach.uri }}
+                style={styles.attachThumb}
+                contentFit="cover"
+              />
+              <TouchableOpacity
+                onPress={() => setPendingAttach(null)}
+                style={styles.attachClear}
+                hitSlop={10}
+                accessibilityLabel="Remove attachment"
+              >
+                <Ionicons name="close-circle" size={22} color={colors.dark.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <View style={styles.composerRow}>
+            <TouchableOpacity
+              onPress={pickCommentAttach}
+              disabled={!viewerId || addCommentMut.isPending}
+              style={styles.attachBtn}
+              accessibilityLabel="Attach photo"
+            >
+              <Ionicons name="image-outline" size={22} color={colors.primary.teal} />
+            </TouchableOpacity>
+            <MentionAutocomplete
+              ref={inputRef}
+              wrapperStyle={styles.composerMentionWrap}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={viewerId ? 'Add a comment…' : 'Sign in to comment'}
+              placeholderTextColor={colors.dark.textMuted}
+              style={styles.inputComposer}
+              multiline
+              textAlignVertical="top"
+              scrollEnabled
+              editable={!!viewerId && !addCommentMut.isPending}
+              maxLength={COMMENT_MAX_LENGTH}
+            />
+            <TouchableOpacity
+              onPress={() => void postComment()}
+              disabled={(!draft.trim() && !pendingAttach) || addCommentMut.isPending}
+              style={[
+                styles.sendIconBtn,
+                ((!draft.trim() && !pendingAttach) || addCommentMut.isPending) && styles.sendIconDisabled,
+              ]}
+              accessibilityLabel="Post comment"
+            >
+              {addCommentMut.isPending ? (
+                <ActivityIndicator color={colors.primary.teal} size="small" />
+              ) : (
+                <Ionicons
+                  name="send"
+                  size={iconSize.md}
+                  color={
+                    (draft.trim() || pendingAttach) && !addCommentMut.isPending
+                      ? colors.primary.teal
+                      : colors.dark.textMuted
+                  }
+                />
+              )}
+            </TouchableOpacity>
+          </View>
         </AccentComposerFrame>
-        <TouchableOpacity
-          onPress={postComment}
-          disabled={!draft.trim() || addCommentMut.isPending}
-          style={[
-            styles.sendBtn,
-            (!draft.trim() || addCommentMut.isPending) && styles.sendBtnDisabled,
-          ]}
-          accessibilityLabel="Post comment"
-        >
-          {addCommentMut.isPending ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <Ionicons name="arrow-up" size={18} color="#FFF" />
-          )}
-        </TouchableOpacity>
       </View>
 
       {canEditBody && update ? (
@@ -746,6 +832,19 @@ export default function MyPulseDetailScreen() {
           onSave={async (next) => {
             await editMut.mutateAsync(next);
           }}
+        />
+      ) : null}
+
+      {showCreatorGift && author && giftContext ? (
+        <SendCreatorGiftTray
+          visible={creatorGiftOpen}
+          onClose={() => setCreatorGiftOpen(false)}
+          creatorUserId={author.id}
+          creatorDisplayName={author.displayName}
+          creatorHandle={author.username}
+          creatorAvatarUrl={author.avatarUrl}
+          contextType={giftContext.type === 'post' ? 'post' : 'profile'}
+          contextId={giftContext.id}
         />
       ) : null}
     </KeyboardAvoidingView>
@@ -785,7 +884,7 @@ function Header({
   onCreatorGift?: () => void;
 }) {
   const openOwnerMenu = useCallback(() => {
-    const buttons: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [];
+    const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [];
     if (onTogglePin) {
       buttons.push({
         text: isPinned ? 'Unpin from top' : 'Pin to top',
@@ -900,7 +999,7 @@ function TypedBody({
             <ExpoImage
               source={{ uri: thumb }}
               style={styles.clipImage}
-              contentFit="cover"
+              contentFit="contain"
               {...pulseImageFeedHeroProps}
             />
           ) : (
@@ -999,14 +1098,32 @@ function TypedBody({
 // ════════════════════════════════════════════════════════════════════
 
 function PhotosGrid({ urls }: { urls: string[] }) {
+  const [soloAspect, setSoloAspect] = useState<number | null>(null);
+  const soloUri = urls[0] ?? '';
+
+  useEffect(() => {
+    setSoloAspect(null);
+  }, [soloUri, urls.length]);
+
   if (urls.length === 0) return null;
 
   if (urls.length === 1) {
+    const soloH =
+      soloAspect != null && soloAspect > 0
+        ? Math.min(SCREEN_W / soloAspect, MY_PULSE_MEDIA_MAX_H)
+        : Math.min(SCREEN_W, MY_PULSE_MEDIA_MAX_H * 0.85);
     return (
       <ExpoImage
         source={{ uri: urls[0] }}
-        style={styles.gridSolo}
-        contentFit="cover"
+        style={[styles.gridSolo, { height: soloH }]}
+        contentFit="contain"
+        onLoad={(e) => {
+          const w = e.source?.width;
+          const h = e.source?.height;
+          if (typeof w === 'number' && typeof h === 'number' && h > 0) {
+            setSoloAspect(w / h);
+          }
+        }}
         {...pulseImageFeedHeroProps}
       />
     );
@@ -1020,7 +1137,7 @@ function PhotosGrid({ urls }: { urls: string[] }) {
           key={`${u}-${i}`}
           source={{ uri: u }}
           style={styles.gridTile}
-          contentFit="cover"
+          contentFit="contain"
           {...pulseImageListThumbProps}
         />
       ))}
@@ -1047,6 +1164,7 @@ function CommentRow({
   onEdit: (nextContent: string) => Promise<void>;
   onPressAuthor: () => void;
 }) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const wasEdited = !!comment.editedAt;
 
@@ -1063,7 +1181,7 @@ function CommentRow({
   }, [onDelete]);
 
   const openMenu = useCallback(() => {
-    const buttons: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [];
+    const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [];
     if (canEdit) {
       buttons.push({ text: 'Edit', onPress: () => setEditing(true) });
     }
@@ -1077,30 +1195,20 @@ function CommentRow({
   return (
     <View style={styles.comment}>
       <Pressable onPress={onPressAuthor}>
-        {comment.authorAvatarUrl ? (
-          <RNImage
-            source={{ uri: comment.authorAvatarUrl }}
-            style={styles.commentAvatar}
-          />
-        ) : (
-          <View style={[styles.commentAvatar, styles.avatarFallback]}>
-            <Ionicons name="person" size={14} color={colors.dark.textMuted} />
-          </View>
-        )}
+        <AvatarDisplay
+          size={36}
+          avatarUrl={avatarThumb(comment.authorAvatarUrl, 36)}
+          prioritizeRemoteAvatar
+          ringColor={colors.dark.border}
+        />
       </Pressable>
       <View style={styles.commentBody}>
         <View style={styles.commentHeaderRow}>
-          <Text
-            style={styles.commentName}
-            numberOfLines={1}
-            onPress={onPressAuthor}
-          >
-            {comment.authorName || 'Someone'}
-          </Text>
-          <Text style={styles.commentTime}>
-            · {relativeMyPulse(comment.createdAt)}
-            {wasEdited ? <Text style={styles.commentEdited}> · edited</Text> : null}
-          </Text>
+          <Pressable onPress={onPressAuthor} style={styles.commentNameHit}>
+            <Text style={styles.commentName} numberOfLines={1}>
+              {comment.authorName || 'Someone'}
+            </Text>
+          </Pressable>
           <View style={{ flex: 1 }} />
           {(canEdit || canDelete) && !editing ? (
             <TouchableOpacity
@@ -1110,7 +1218,7 @@ function CommentRow({
             >
               <Ionicons
                 name="ellipsis-horizontal"
-                size={16}
+                size={14}
                 color={colors.dark.textMuted}
               />
             </TouchableOpacity>
@@ -1126,11 +1234,43 @@ function CommentRow({
             onCancel={() => setEditing(false)}
           />
         ) : (
-          <CaptionWithMentions
-            text={comment.content}
-            style={styles.commentText}
-          />
+          <>
+            {comment.content.trim() ? (
+              <CommentRichText
+                text={comment.content}
+                style={styles.commentRichText}
+                mentionsInteractive
+                linksInteractive
+              />
+            ) : null}
+            {comment.mediaUrl?.trim() ? (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push(
+                    `/image-viewer?uri=${encodeURIComponent(comment.mediaUrl!.trim())}` as any,
+                  )
+                }
+                activeOpacity={0.9}
+                style={styles.commentAttachWrap}
+                accessibilityRole="button"
+                accessibilityLabel="View attached image"
+              >
+                <ExpoImage
+                  source={{ uri: comment.mediaUrl!.trim() }}
+                  style={styles.commentAttachImg}
+                  contentFit="contain"
+                  {...pulseImageFeedHeroProps}
+                />
+              </TouchableOpacity>
+            ) : null}
+          </>
         )}
+        {!editing ? (
+          <Text style={styles.commentMeta}>
+            {timeAgo(comment.createdAt)}
+            {wasEdited ? <Text style={styles.commentEdited}> · edited</Text> : null}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -1254,7 +1394,7 @@ const styles = StyleSheet.create({
   // Clip
   clipHero: {
     width: '100%',
-    aspectRatio: 16 / 11,
+    height: CLIP_DETAIL_MEDIA_H,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     position: 'relative',
@@ -1380,7 +1520,6 @@ const styles = StyleSheet.create({
   // Photos grid
   gridSolo: {
     width: '100%',
-    aspectRatio: 4 / 3,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.dark.cardAlt,
     marginBottom: 10,
@@ -1456,88 +1595,124 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
-  // Comments
-  commentsHead: { marginBottom: 4 },
+  // Comments — aligned with `CommentItem` / post detail card
+  commentsHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 6,
+  },
   commentsTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
-    color: colors.dark.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: colors.dark.text,
+    letterSpacing: -0.2,
+  },
+  commentsCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.dark.textMuted,
   },
   commentsHint: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: 2,
+    marginBottom: 4,
+    fontSize: 13,
     color: colors.dark.textMuted,
   },
   comment: {
     flexDirection: 'row',
     gap: 10,
     paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-  },
-  commentAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.dark.card,
+    paddingVertical: 12,
   },
   commentBody: { flex: 1, minWidth: 0 },
   commentHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
+    gap: 6,
+    marginBottom: 4,
   },
+  commentNameHit: { flexShrink: 1, minWidth: 0 },
   commentName: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.dark.text,
-  },
-  commentTime: {
-    fontSize: 11,
-    color: colors.dark.textMuted,
   },
   commentEdited: {
     fontSize: 11,
     color: colors.dark.textMuted,
     fontStyle: 'italic',
   },
-  commentText: {
+  commentRichText: {
     fontSize: 14,
     lineHeight: 20,
-    color: colors.dark.text,
+    color: colors.dark.textSecondary,
+  },
+  commentMeta: {
+    marginTop: 6,
+    fontSize: 12,
+    color: colors.dark.textMuted,
+  },
+  commentAttachWrap: {
+    marginTop: 8,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: colors.dark.cardAlt,
+  },
+  commentAttachImg: {
+    width: '100%',
+    height: 180,
+    backgroundColor: colors.dark.cardAlt,
   },
 
-  // Composer
-  composer: {
+  // Composer — matches `app/comments/[postId].tsx` input bar (card chrome + row width).
+  composerBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: spacing.md,
-    paddingTop: 8,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: colors.dark.border,
     backgroundColor: colors.dark.bg,
+  },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  composerMentionWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   inputComposer: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 100,
-    paddingHorizontal: 4,
-    paddingVertical: 6,
-    color: colors.dark.text,
+    paddingHorizontal: 6,
+    paddingVertical: spacing.sm,
     fontSize: 14,
+    color: colors.dark.text,
+    textAlignVertical: 'top',
   },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  attachPreview: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary.teal,
+    gap: 8,
+    marginBottom: spacing.sm,
   },
-  sendBtnDisabled: {
-    backgroundColor: 'rgba(20,184,166,0.3)',
+  attachThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: colors.dark.cardAlt,
   },
+  attachClear: { padding: 2 },
+  attachBtn: {
+    padding: spacing.sm,
+    marginBottom: 2,
+    borderRadius: 20,
+    backgroundColor: colors.dark.cardAlt,
+  },
+  sendIconBtn: { padding: spacing.sm },
+  sendIconDisabled: { opacity: 0.4 },
 });

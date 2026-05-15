@@ -106,7 +106,7 @@ export function bumpPostCount(
         Array.isArray((data as { pages: unknown }).pages)
       ) {
         const inf = data as {
-          pages: Array<{ posts?: unknown }>;
+          pages: { posts?: unknown }[];
           pageParams: unknown[];
         };
         let changed = false;
@@ -182,7 +182,7 @@ export function patchPostReactionCounts(
         Array.isArray((data as { pages: unknown }).pages)
       ) {
         const inf = data as {
-          pages: Array<{ posts?: unknown }>;
+          pages: { posts?: unknown }[];
           pageParams: unknown[];
         };
         let changed = false;

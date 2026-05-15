@@ -20,6 +20,18 @@ export function hrefPost(postId: string, circleSlug?: string): Href {
   return `/post/${postId}`;
 }
 
+/**
+ * Same destination as {@link hrefPost}, plus `focusComments=1` so the post
+ * composer focuses — used when opening a linked clip from My Pulse (card tap
+ * or Comment) so users land in the thread immediately.
+ */
+export function hrefPostFocusComments(postId: string, circleSlug?: string): Href {
+  const base = hrefPost(postId, circleSlug);
+  const path = typeof base === 'string' ? base : `/post/${postId}`;
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}focusComments=1`;
+}
+
 /** Circle wall scrolled to a specific post (e.g. opening a pin from My Pulse). */
 export function hrefCommunityWallPost(slug: string, postId: string): Href {
   return `/communities/${slug}?focusPost=${encodeURIComponent(postId)}`;

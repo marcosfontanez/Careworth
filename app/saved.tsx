@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Dimensions, Platform,
 } from 'react-native';
@@ -6,23 +6,20 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { Ionicons } from '@expo/vector-icons';
-import { TopSegmentTabs } from '@/components/ui/TopSegmentTabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
-import { postsService, jobsService } from '@/services/supabase';
+import { postsService } from '@/services/supabase';
 import { useAppStore } from '@/store/useAppStore';
-import { borderRadius, colors, iconSize, layout, spacing, typography } from '@/theme';
-import { formatCount, formatPayRange } from '@/utils/format';
-import type { Post, Job } from '@/types';
+import { borderRadius, colors, layout, spacing, typography } from '@/theme';
+import { formatCount } from '@/utils/format';
+import type { Post } from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { savedPostKeys } from '@/lib/queryKeys';
+import { getSavedPostsGridListWindow } from '@/lib/feedVideoListWindow';
 
-const TABS = [
-  { key: 'posts', label: 'Posts' },
-  { key: 'jobs', label: 'Jobs' },
-];
+const SAVED_GRID_WINDOW = getSavedPostsGridListWindow();
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = spacing.xs;
@@ -32,9 +29,7 @@ export default function SavedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [tab, setTab] = useState('posts');
   const toggleSavePost = useAppStore((s) => s.toggleSavePost);
-  const toggleSaveJob = useAppStore((s) => s.toggleSaveJob);
   const queryClient = useQueryClient();
 
   /**
@@ -51,27 +46,17 @@ export default function SavedScreen() {
     staleTime: 30_000,
   });
 
-  const jobsQuery = useQuery<Job[]>({
-    queryKey: ['savedJobs', user?.id ?? 'anon'],
-    queryFn: () => (user ? jobsService.getSaved(user.id) : Promise.resolve([])),
-    enabled: !!user,
-    staleTime: 30_000,
-  });
-
   /** Always refetch on screen focus so a save made elsewhere is picked up,
    *  even if the cached query is still considered fresh. */
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
       postsQuery.refetch();
-      jobsQuery.refetch();
-    }, [user, postsQuery, jobsQuery]),
+    }, [user, postsQuery]),
   );
 
   const savedPosts = postsQuery.data ?? [];
-  const savedJobs = jobsQuery.data ?? [];
-  const loading = (postsQuery.isLoading && postsQuery.fetchStatus !== 'idle')
-    || (jobsQuery.isLoading && jobsQuery.fetchStatus !== 'idle');
+  const loading = postsQuery.isLoading && postsQuery.fetchStatus !== 'idle';
 
   /**
    * Optimistic remove: yank from the cache so the unsave feels instant, then
@@ -98,34 +83,9 @@ export default function SavedScreen() {
     },
   });
 
-  const unsaveJobMut = useMutation({
-    mutationFn: async (jobId: string) => {
-      if (!user) return;
-      await jobsService.toggleSave(user.id, jobId);
-    },
-    onMutate: async (jobId: string) => {
-      const key = ['savedJobs', user?.id ?? 'anon'];
-      await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<Job[]>(key);
-      queryClient.setQueryData<Job[]>(key, (prev) => (prev ?? []).filter((j) => j.id !== jobId));
-      return { previous, key };
-    },
-    onError: (_err, _jobId, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(ctx.key, ctx.previous);
-    },
-    onSettled: () => {
-      if (user) queryClient.invalidateQueries({ queryKey: ['savedJobs', user.id] });
-    },
-  });
-
   const handleUnsavePost = (id: string) => {
     toggleSavePost(id);
     unsavePostMut.mutate(id);
-  };
-
-  const handleUnsaveJob = (id: string) => {
-    toggleSaveJob(id);
-    unsaveJobMut.mutate(id);
   };
 
   if (loading) {
@@ -141,81 +101,46 @@ export default function SavedScreen() {
     <View style={styles.container}>
       <StackScreenHeader insetTop={insets.top} title="Saved" onPressLeft={() => router.back()} />
 
-      <TopSegmentTabs tabs={TABS} activeKey={tab} onSelect={setTab} appearance="onLight" />
-
-      {tab === 'posts' ? (
-        savedPosts.length === 0 ? (
-          <EmptyState icon="🔖" title="No saved posts" subtitle="Bookmark posts from the feed to see them here" />
-        ) : (
-          <FlatList
-            data={savedPosts}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            initialNumToRender={9}
-            maxToRenderPerBatch={9}
-            windowSize={7}
-            updateCellsBatchingPeriod={50}
-            /** Android virtualization win for power users with many saves. */
-            removeClippedSubviews={Platform.OS === 'android'}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.gridItem}
-                onPress={() => router.push(`/comments/${item.id}`)}
-                activeOpacity={0.8}
-              >
-                <RecentMediaThumb post={item} style={styles.gridImage} />
-                <View style={styles.gridOverlay}>
-                  <View style={styles.gridStatRow}>
-                    <Ionicons name="heart" size={10} color={colors.status.error} />
-                    <Text style={styles.gridStat}>{formatCount(item.likeCount)}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.unsaveBtn}
-                  onPress={() => handleUnsavePost(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="bookmark" size={14} color={colors.primary.gold} />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={styles.grid}
-            columnWrapperStyle={{ gap: GRID_GAP }}
-          />
-        )
-      ) : savedJobs.length === 0 ? (
-        <EmptyState icon="💼" title="No saved jobs" subtitle="Save job listings to review them later" />
+      {savedPosts.length === 0 ? (
+        <EmptyState icon="🔖" title="No saved posts" subtitle="Bookmark posts from the feed to see them here" />
       ) : (
         <FlatList
-          data={savedJobs}
+          data={savedPosts}
           keyExtractor={(item) => item.id}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={9}
+          numColumns={3}
+          initialNumToRender={SAVED_GRID_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={SAVED_GRID_WINDOW.maxToRenderPerBatch}
+          windowSize={SAVED_GRID_WINDOW.windowSize}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={styles.jobRow}
-              onPress={() => router.push(`/jobs/${item.id}`)}
-              activeOpacity={0.7}
+              style={styles.gridItem}
+              onPress={() => router.push(`/comments/${item.id}`)}
+              activeOpacity={0.8}
             >
-              <View style={styles.jobIcon}>
-                <Ionicons name="business" size={iconSize.md} color={colors.primary.royal} />
+              <RecentMediaThumb
+                post={item}
+                style={styles.gridImage}
+                preferStaticAndroidVideoTile={Platform.OS === 'android'}
+              />
+              <View style={styles.gridOverlay}>
+                <View style={styles.gridStatRow}>
+                  <Ionicons name="heart" size={10} color={colors.status.error} />
+                  <Text style={styles.gridStat}>{formatCount(item.likeCount)}</Text>
+                </View>
               </View>
-              <View style={styles.jobBody}>
-                <Text style={styles.jobTitle}>{item.title}</Text>
-                <Text style={styles.jobEmployer}>{item.employerName}</Text>
-                <Text style={styles.jobMeta}>
-                  {item.city}, {item.state} · {formatPayRange(item.payMin, item.payMax)}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => handleUnsaveJob(item.id)} activeOpacity={0.7}>
-                <Ionicons name="bookmark" size={iconSize.md} color={colors.primary.gold} />
+              <TouchableOpacity
+                style={styles.unsaveBtn}
+                onPress={() => handleUnsavePost(item.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="bookmark" size={14} color={colors.primary.gold} />
               </TouchableOpacity>
             </TouchableOpacity>
           )}
-          contentContainerStyle={styles.jobList}
+          contentContainerStyle={styles.grid}
+          columnWrapperStyle={{ gap: GRID_GAP }}
         />
       )}
     </View>
@@ -254,31 +179,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  jobList: { padding: layout.screenPadding, gap: spacing.xs },
-  jobRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md - 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.dark.border,
-  },
-  jobIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary.royal + '18',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  jobBody: { flex: 1 },
-  jobTitle: { ...typography.creatorName, color: colors.dark.text },
-  jobEmployer: { ...typography.bodySmall, color: colors.dark.textSecondary, marginTop: 1 },
-  jobMeta: {
-    ...typography.metadata,
-    color: colors.primary.teal,
-    fontWeight: '500',
-    marginTop: 2,
   },
 });

@@ -24,6 +24,9 @@ import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import { colors, borderRadius, typography, spacing } from '@/theme';
 import type { Post } from '@/types';
+import { getProfileTwoColumnMediaGridWindow } from '@/lib/feedVideoListWindow';
+
+const LINK_POST_GRID_WINDOW = getProfileTwoColumnMediaGridWindow('linkPostPicker');
 
 type Tab = 'mine' | 'saved';
 
@@ -117,7 +120,11 @@ export default function MyPulseLinkPostScreen() {
           activeOpacity={0.82}
           style={[styles.tile, isOn && styles.tileOn]}
         >
-          <RecentMediaThumb post={item} style={styles.tileMedia} />
+          <RecentMediaThumb
+            post={item}
+            style={styles.tileMedia}
+            preferStaticAndroidVideoTile={Platform.OS === 'android'}
+          />
 
           {/* Bottom gradient for caption legibility over any thumbnail. */}
           <LinearGradient
@@ -238,11 +245,11 @@ export default function MyPulseLinkPostScreen() {
         data={list}
         keyExtractor={(p) => p.id}
         numColumns={2}
-        initialNumToRender={6}
-        maxToRenderPerBatch={4}
-        windowSize={5}
+        initialNumToRender={LINK_POST_GRID_WINDOW.initialNumToRender}
+        maxToRenderPerBatch={LINK_POST_GRID_WINDOW.maxToRenderPerBatch}
+        windowSize={LINK_POST_GRID_WINDOW.windowSize}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews={false}
         renderItem={renderTile}
         columnWrapperStyle={{ gap: GRID_GAP }}
         contentContainerStyle={{

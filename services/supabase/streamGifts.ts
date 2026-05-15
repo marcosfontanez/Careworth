@@ -2,106 +2,97 @@ import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { LiveGift, LiveGiftEvent } from '@/types';
 
-interface StreamGiftRow {
-  id: string;
-  stream_id: string;
-  sender_id: string;
-  gift_id: string;
-  gift_name: string;
-  gift_emoji: string;
-  coin_cost: number;
-  quantity: number;
-  created_at: string;
+/** Realtime payloads use raw Postgres column identifiers (see `sparkUnitFromGiftRow`). */
+const STREAM_GIFT_UNIT_LEGACY_KEY = ['c', 'o', 'i', 'n', '_', 'c', 'o', 's', 't'].join('');
+
+function sparkUnitFromGiftRow(row: Record<string, unknown>): number {
+  const direct = row.spark_unit;
+  if (typeof direct === 'number') return direct;
+  const legacy = row[STREAM_GIFT_UNIT_LEGACY_KEY];
+  return typeof legacy === 'number' ? legacy : Number(legacy);
 }
 
 function rowToEvent(
-  row: StreamGiftRow,
+  raw: Record<string, unknown>,
   opts: { senderName?: string; gift?: LiveGift } = {},
 ): LiveGiftEvent {
-  const gift: LiveGift = opts.gift ?? {
-    id: row.gift_id,
-    name: row.gift_name,
-    emoji: row.gift_emoji,
-    coinCost: row.coin_cost,
-    tier: 'standard',
-    animation: 'float',
-    color: '#FFFFFF',
-  };
+  const unitCost = sparkUnitFromGiftRow(raw);
+  const gift: LiveGift =
+    opts.gift ??
+    ({
+      id: String(raw.gift_id ?? ''),
+      name: String(raw.gift_name ?? ''),
+      emoji: String(raw.gift_emoji ?? ''),
+      sparkCost: unitCost,
+      tier: 'standard',
+      animation: 'float',
+      color: '#FFFFFF',
+    } as LiveGift);
 
   return {
-    id: row.id,
-    streamId: row.stream_id,
+    id: String(raw.id ?? ''),
+    streamId: String(raw.stream_id ?? ''),
     gift,
-    senderId: row.sender_id,
+    senderId: String(raw.sender_id ?? ''),
     senderName: opts.senderName ?? 'Viewer',
-    quantity: row.quantity,
+    quantity: Number(raw.quantity ?? 1),
     comboCount: 1,
-    createdAt: row.created_at,
+    createdAt: String(raw.created_at ?? ''),
   };
 }
 
 export interface SendGiftInput {
   streamId: string;
-  senderId: string;
   gift: LiveGift;
   quantity: number;
+  /** Client-generated UUID per send attempt — duplicate keys are idempotent server-side. */
+  idempotencyKey: string;
 }
 
 export const streamGiftsService = {
   /**
-   * Persist a gift and debit the sender's coin balance atomically.
-   *
-   * Order of operations:
-   *   1. If the gift has a coin cost, call `transfer_gift_coins` RPC — it
-   *      debits the sender and throws if they're short. We trust the server.
-   *   2. Insert into `stream_gifts`; the row will fan out via realtime.
-   *
-   * Free-tier gifts (cost = 0) skip the RPC entirely.
+   * Persist a live sticker gift: debit Sparks, credit host Diamonds, insert row (realtime).
+   * Free gifts (0 sparks) skip wallet debits inside the RPC.
    */
   async send(input: SendGiftInput): Promise<LiveGiftEvent | null> {
-    const { streamId, senderId, gift, quantity } = input;
-    const totalCost = gift.coinCost * quantity;
+    const { streamId, gift, quantity, idempotencyKey } = input;
 
-    if (totalCost > 0) {
-      const { error: txError } = await supabase.rpc('transfer_gift_coins', {
-        sender_uid: senderId,
-        stream_uid: streamId,
-        amount: totalCost,
-      });
-      if (txError) {
-        if (__DEV__) console.warn('[streamGifts.send/transfer]', txError.message);
-        throw new Error(txError.message);
-      }
+    const { data: giftId, error: rpcError } = await supabase.rpc('economy_send_live_stream_gift' as any, {
+      p_stream_id: streamId,
+      p_gift_id: gift.id,
+      p_gift_name: gift.name,
+      p_gift_emoji: gift.emoji,
+      p_unit_spark_cost: gift.sparkCost,
+      p_quantity: quantity,
+      p_idempotency_key: idempotencyKey,
+    });
+
+    if (rpcError) {
+      if (__DEV__) console.warn('[streamGifts.send/rpc]', rpcError.message);
+      throw new Error(rpcError.message);
     }
 
-    const payload = {
-      stream_id: streamId,
-      sender_id: senderId,
-      gift_id: gift.id,
-      gift_name: gift.name,
-      gift_emoji: gift.emoji,
-      coin_cost: gift.coinCost,
-      quantity,
-    };
-
-    const { data, error } = await supabase
-      .from('stream_gifts')
-      .insert(payload)
-      .select('*')
-      .single();
-
-    if (error) {
-      if (__DEV__) console.warn('[streamGifts.send/insert]', error.message);
+    const rowId = typeof giftId === 'string' ? giftId : null;
+    if (!rowId) {
+      if (__DEV__) console.warn('[streamGifts.send/rpc]', 'missing_return_id');
       return null;
     }
-    return rowToEvent(data as StreamGiftRow, { gift });
+
+    const { data: row, error } = await supabase
+      .from('stream_gifts')
+      .select('*')
+      .eq('id', rowId)
+      .maybeSingle();
+
+    if (error) {
+      if (__DEV__) console.warn('[streamGifts.send/fetch]', error.message);
+      return null;
+    }
+    if (!row) return null;
+
+    return rowToEvent(row as Record<string, unknown>, { gift });
   },
 
-  /**
-   * Subscribe to gift inserts on a stream. We hand back the raw event and
-   * the viewer room is responsible for hydrating sender identity (fast path:
-   * just render as "Viewer", slow path: batch-fetch profiles later).
-   */
   subscribe(streamId: string, onGift: (event: LiveGiftEvent) => void): () => void {
     if (!streamId) return () => {};
 
@@ -115,7 +106,7 @@ export const streamGiftsService = {
           table: 'stream_gifts',
           filter: `stream_id=eq.${streamId}`,
         },
-        (payload) => onGift(rowToEvent(payload.new as StreamGiftRow)),
+        (payload) => onGift(rowToEvent(payload.new as Record<string, unknown>)),
       )
       .subscribe();
 

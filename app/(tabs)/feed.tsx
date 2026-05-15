@@ -1,13 +1,13 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
   View, FlatList, StyleSheet, Dimensions, Platform,
-  TouchableOpacity, Text, ViewToken, ScrollView, AppState,
+  TouchableOpacity, Text, ViewToken, AppState,
   NativeSyntheticEvent, NativeScrollEvent, RefreshControl,
   InteractionManager,
   useWindowDimensions, type LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
@@ -35,7 +35,7 @@ import { bumpPostCount } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { feedKeys, likedPostKeys, savedPostKeys, userKeys } from '@/lib/queryKeys';
 import { getFeedVideoListWindow } from '@/lib/feedVideoListWindow';
-import type { Post, FeedType } from '@/types';
+import type { Post } from '@/types';
 
 const VIDEO_BG = colors.media.videoCanvas;
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -104,6 +104,14 @@ export default function FeedScreen() {
     isFetchingNextPage,
     error: feedError,
   } = useFeedInfinite(feedTab, user?.id);
+
+  /** Ranked feed caches aggressively; refetch when the Feed tab gains focus so new posts appear without force-quit. */
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
+
   const posts = useMemo(() => feedInfData?.pages.flatMap((p) => p.posts) ?? [], [feedInfData]);
   const { data: likedIdsArr = [] } = useLikedPostIds(user?.id);
 
@@ -465,8 +473,8 @@ export default function FeedScreen() {
    * whole feed on every scroll snapshot.
    */
   const feedListExtraData = useMemo(
-    () => `${activePostId ?? ''}|${rowUiEpoch}`,
-    [activePostId, rowUiEpoch],
+    () => `${activePostId ?? ''}|${rowUiEpoch}|${isFocused ? 1 : 0}|${appIsActive ? 1 : 0}`,
+    [activePostId, rowUiEpoch, isFocused, appIsActive],
   );
 
   const getItemLayout = useCallback(
@@ -523,10 +531,15 @@ export default function FeedScreen() {
         snapToAlignment="start"
         decelerationRate="fast"
         getItemLayout={getItemLayout}
-        removeClippedSubviews={Platform.OS === 'android'}
+        /**
+         * Android + `expo-video`: clipping “off-screen” rows while decoders are still
+         * tearing down causes native SIGABRT / `libmedia_jni` crashes (comments, scroll,
+         * post flows). Keep rows attached like iOS; tune `windowSize` instead.
+         */
+        removeClippedSubviews={false}
         /**
          * Prefetch buffer: render 2 cells immediately (active + next) and
-         * keep up to 3 cells warm during fast scrolling. Each mounted
+         * keep neighbors warm during fast scrolling. Each mounted
          * `VideoFeedPost` instantiates its own `useVideoPlayer`, which
          * begins buffering the source as soon as the cell mounts —
          * so by the time the user scrolls to the next clip, the player
@@ -534,10 +547,8 @@ export default function FeedScreen() {
          * playback starts in ~0 ms instead of the 800–1500 ms it took
          * when we mounted lazily on scroll. (TikTok-style pre-roll.)
          *
-         * `windowSize={5}` keeps a 2-up / 2-down window of mounted
-         * cells around the active index, so backwards scroll is also
-         * instant. The trade-off is ~50 MB of extra RAM for video
-         * surfaces — well within budget on any phone we support.
+         * Trade-off: extra RAM for video surfaces — `feedVideoListWindow` keeps
+         * Android slightly tighter than iOS to reduce decoder contention.
          */
         maxToRenderPerBatch={feedListWindow.maxToRenderPerBatch}
         updateCellsBatchingPeriod={50}
@@ -554,27 +565,24 @@ export default function FeedScreen() {
 
       <View style={[styles.feedChrome, { paddingTop: insets.top + 6 }]}>
         <View style={styles.chromeSide} />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabScroll}
-          style={styles.tabScrollFlex}
-        >
+        <View style={styles.tabRow}>
           {FEED_TABS.map((tab) => {
             const isActive = tab.key === feedTab;
             return (
               <TouchableOpacity
                 key={tab.key}
                 style={styles.tabItem}
-                onPress={() => setFeedTab(tab.key as FeedType)}
+                onPress={() => setFeedTab(tab.key)}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{tab.label}</Text>
+                <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>
+                  {tab.label}
+                </Text>
                 {isActive ? <View style={styles.tabUnderline} /> : <View style={styles.tabUnderlineSpacer} />}
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
         <TouchableOpacity
           onPress={() => router.push('/search')}
           style={styles.searchBtn}
@@ -649,24 +657,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.feed.chromeScrim,
   },
   chromeSide: { width: 44 },
-  tabScrollFlex: { flex: 1, maxHeight: 44 },
-  tabScroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  tabRow: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 4,
+    justifyContent: 'space-between',
+    minWidth: 0,
     paddingHorizontal: 4,
+    gap: 4,
   },
   tabItem: {
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     paddingBottom: 2,
   },
   tabLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.15,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.12,
     color: colors.feed.tabInactive,
+    textAlign: 'center',
   },
   tabLabelActive: {
     color: colors.onVideo.primary,
@@ -675,14 +687,14 @@ const styles = StyleSheet.create({
   tabUnderline: {
     marginTop: 6,
     height: 3,
-    width: 22,
+    width: 28,
     borderRadius: 2,
     backgroundColor: colors.primary.teal,
   },
   tabUnderlineSpacer: {
     marginTop: 6,
     height: 3,
-    width: 22,
+    width: 28,
   },
   searchBtn: {
     width: 44,

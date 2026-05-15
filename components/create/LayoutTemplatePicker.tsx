@@ -5,7 +5,7 @@ import { colors } from '@/theme';
 
 export type PhotoLayoutPreset = 'carousel' | 'filmstrip' | 'grid2' | 'stack' | 'row3';
 
-const PRESETS: Array<{ id: PhotoLayoutPreset; label: string; icon: keyof typeof Ionicons.glyphMap; hint: string }> = [
+const PRESETS: { id: PhotoLayoutPreset; label: string; icon: keyof typeof Ionicons.glyphMap; hint: string }[] = [
   { id: 'carousel', label: 'Carousel', icon: 'albums-outline', hint: 'Swipe slides — first is cover' },
   { id: 'filmstrip', label: 'Film strip', icon: 'film-outline', hint: 'Wide crops read best left-to-right' },
   { id: 'grid2', label: '2×2 story', icon: 'grid-outline', hint: 'Aim for four balanced shots' },

@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase';
-import type { ShopItemRow, UserInventoryRow, SparkWalletRow, PurchaseReceiptRow } from '@/lib/shop/types';
+import type {
+  ShopItemRow,
+  UserInventoryRow,
+  SparkWalletRow,
+  DiamondWalletRow,
+  PurchaseReceiptRow,
+} from '@/lib/shop/types';
 
 export type BorderCollectionSummary = {
   id: string;
@@ -18,14 +24,37 @@ export const shopQueriesService = {
     return (data ?? []) as unknown as BorderCollectionSummary[];
   },
 
+  /**
+   * Active Pulse Shop catalog. Fetched **per `type`** so PostgREST `max_rows` (often 1000) never
+   * truncates gifts/packs after a long border list — a single global `order by sort_order` can drop
+   * high `sort_order` gift rows when total active items exceed the limit.
+   */
   async getActiveCatalog(): Promise<ShopItemRow[]> {
-    const { data, error } = await supabase
-      .from('shop_items' as any)
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
-    if (error) throw error;
-    const rows = (data ?? []) as unknown as ShopItemRow[];
+    const types = ['border', 'spark_pack', 'gift', 'bundle', 'seasonal_drop', 'sponsored_drop'] as const;
+    const results = await Promise.all(
+      types.map((type) =>
+        supabase
+          .from('shop_items' as any)
+          .select('*')
+          .eq('is_active', true)
+          .eq('type', type)
+          .order('sort_order', { ascending: true }),
+      ),
+    );
+    for (const r of results) {
+      if (r.error) throw r.error;
+    }
+    const byId = new Map<string, ShopItemRow>();
+    for (const r of results) {
+      for (const row of (r.data ?? []) as unknown as ShopItemRow[]) {
+        byId.set(row.id, row);
+      }
+    }
+    const rows = [...byId.values()].sort((a, b) => {
+      const d = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      if (d !== 0) return d;
+      return String(a.id).localeCompare(String(b.id));
+    });
     const now = Date.now();
     return rows.filter((row) => {
       if (row.release_at) {
@@ -48,6 +77,16 @@ export const shopQueriesService = {
       .maybeSingle();
     if (error) throw error;
     return data as SparkWalletRow | null;
+  },
+
+  async getDiamondWallet(userId: string): Promise<DiamondWalletRow | null> {
+    const { data, error } = await supabase
+      .from('diamond_wallets' as any)
+      .select('*')
+      .eq('creator_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as DiamondWalletRow | null;
   },
 
   async getUserInventory(userId: string): Promise<UserInventoryRow[]> {

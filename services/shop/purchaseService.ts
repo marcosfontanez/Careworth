@@ -1,7 +1,9 @@
 import { invokePulseShopFulfillment, type PulseShopRequest } from '@/lib/pulseShopFulfillment';
 import { isFreeShopBorder } from '@/lib/shop/catalogUtils';
 import type { ShopItemRow } from '@/lib/shop/types';
-import { initIapConnection, platformPrefix, purchaseSku } from '@/lib/shop/iap';
+import { initIapConnection, platformPrefix, purchaseSku, restorePurchasesFromStore, getIosReceiptBase64 } from '@/lib/shop/iap';
+import { Platform } from 'react-native';
+import { shopQueriesService } from '@/services/shop/shopQueries';
 import { supabase } from '@/lib/supabase';
 
 export type PurchaseOutcome =
@@ -205,5 +207,120 @@ export const purchaseService = {
       return mapEdgeError(error.code ?? 'RPC_ERROR', error.message);
     }
     return { ok: true, data: (data ?? {}) as Record<string, unknown> };
+  },
+
+  /**
+   * App Store / Play requirement: let users restore non-consumable entitlements (e.g. borders).
+   * Re-validates the current iOS receipt or each Android purchase token against the server.
+   * Consumable Spark packs are not re-granted by design.
+   */
+  async restoreStorePurchases(): Promise<PurchaseOutcome> {
+    if (Platform.OS === 'web') {
+      return {
+        ok: false,
+        code: 'IAP_UNAVAILABLE',
+        message: 'Restore purchases is only available in the PulseVerse iOS or Android app.',
+      };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session?.user?.id) {
+      return { ok: false, code: 'UNAUTHORIZED', message: 'Sign in to restore purchases.' };
+    }
+
+    const restored = await restorePurchasesFromStore();
+    if (!restored.ok) {
+      return { ok: false, code: 'RESTORE_FAILED', message: restored.message };
+    }
+
+    let catalog: ShopItemRow[];
+    try {
+      catalog = await shopQueriesService.getActiveCatalog();
+    } catch (e) {
+      return {
+        ok: false,
+        code: 'CATALOG_FAILED',
+        message: e instanceof Error ? e.message : 'Could not load shop catalog.',
+      };
+    }
+
+    const byStoreId = new Map<string, ShopItemRow>();
+    for (const row of catalog) {
+      const ios = row.store_product_id_ios?.trim();
+      const android = row.store_product_id_android?.trim();
+      if (ios) byStoreId.set(ios, row);
+      if (android) byStoreId.set(android, row);
+    }
+
+    let entitlementsSynced = 0;
+    const notes: string[] = [];
+    const triedBorderIds = new Set<string>();
+
+    const iosReceipt =
+      Platform.OS === 'ios' ? (await getIosReceiptBase64())?.trim() ?? null : null;
+
+    for (const pr of restored.purchases) {
+      const item = byStoreId.get(pr.productId);
+      if (!item || item.type !== 'border' || isFreeShopBorder(item)) continue;
+      if (triedBorderIds.has(item.id)) continue;
+      triedBorderIds.add(item.id);
+
+      if (Platform.OS === 'ios') {
+        if (!iosReceipt) {
+          notes.push('ios_receipt_unavailable');
+          continue;
+        }
+        const res = await invokePulseShopFulfillment({
+          action: 'fulfill_border_self',
+          shop_item_id: item.id,
+          platform: 'ios',
+          receipt: { ios: { receipt_data_base64: iosReceipt } },
+        });
+        if (res.ok) entitlementsSynced += 1;
+        else if (
+          res.error.code === 'DUPLICATE_PURCHASE' ||
+          /already|duplicate|fulfilled/i.test(res.error.message)
+        ) {
+          entitlementsSynced += 1;
+        } else {
+          notes.push(res.error.code);
+        }
+      } else {
+        const token = pr.purchaseToken?.trim();
+        if (!token) {
+          notes.push(`missing_token:${pr.productId}`);
+          continue;
+        }
+        const res = await invokePulseShopFulfillment({
+          action: 'fulfill_border_self',
+          shop_item_id: item.id,
+          platform: 'android',
+          receipt: {
+            android: {
+              purchase_token: token,
+              product_id: item.store_product_id_android ?? undefined,
+            },
+          },
+        });
+        if (res.ok) entitlementsSynced += 1;
+        else if (
+          res.error.code === 'DUPLICATE_PURCHASE' ||
+          /already|duplicate|fulfilled/i.test(res.error.message)
+        ) {
+          entitlementsSynced += 1;
+        } else {
+          notes.push(res.error.code);
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        store_purchases_found: restored.purchases.length,
+        border_entitlements_synced: entitlementsSynced,
+        detail_notes: notes.length ? notes : undefined,
+      },
+    };
   },
 };

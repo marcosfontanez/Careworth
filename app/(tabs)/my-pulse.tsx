@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useUserPosts, useProfileUpdates } from '@/hooks/useQueries';
 import { MyPageContent } from '@/components/mypage/MyPageContent';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PVPageBackground } from '@/components/pv/PVPageBackground';
 import { colors, typography, spacing, borderRadius, shadows } from '@/theme';
 
 /**
@@ -40,13 +41,15 @@ export default function MyPulseTabScreen() {
 
   if (!authUser) {
     return (
-      <View style={gateStyles.wrap}>
-        <Text style={gateStyles.title}>Sign in to view My Pulse</Text>
-        <Text style={gateStyles.sub}>Your profile, My Pulse updates, and uploads sync after you log in.</Text>
-        <TouchableOpacity style={gateStyles.btn} onPress={() => router.push('/auth/login')} activeOpacity={0.85}>
-          <Text style={gateStyles.btnText}>Go to sign in</Text>
-        </TouchableOpacity>
-      </View>
+      <PVPageBackground style={{ flex: 1 }}>
+        <View style={gateStyles.wrap}>
+          <Text style={gateStyles.title}>Sign in to view My Pulse</Text>
+          <Text style={gateStyles.sub}>Your profile, My Pulse updates, and uploads sync after you log in.</Text>
+          <TouchableOpacity style={gateStyles.btn} onPress={() => router.push('/auth/login')} activeOpacity={0.85}>
+            <Text style={gateStyles.btnText}>Go to sign in</Text>
+          </TouchableOpacity>
+        </View>
+      </PVPageBackground>
     );
   }
 
@@ -70,7 +73,6 @@ export default function MyPulseTabScreen() {
 const gateStyles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.dark.bg,
     paddingHorizontal: spacing.xl,
     justifyContent: 'center',
     gap: spacing.md,

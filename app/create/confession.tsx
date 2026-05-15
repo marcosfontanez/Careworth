@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert,
@@ -14,35 +14,53 @@ import { postsService } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
+import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
+import { useToast } from '@/components/ui/Toast';
 
 export default function CreateConfessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const toast = useToast();
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
+  const [phiAck, setPhiAck] = useState(false);
   const MAX_CHARS = 2000;
+
+  const phiFindings = useMemo(() => scanForPhi(content), [content]);
+  const phiSev = highestSeverity(phiFindings);
 
   const handlePost = async () => {
     if (!content.trim()) {
       Alert.alert('Add content', 'Please write your confession before posting.');
       return;
     }
+    if (!user) {
+      toast.show('Sign in to post', 'error');
+      return;
+    }
+    if (phiSev === 'high') {
+      toast.show('High-risk privacy pattern — remove or reword before posting', 'error');
+      return;
+    }
+    if (phiFindings.length > 0 && !phiAck) {
+      toast.show('Review the privacy banner and confirm before posting', 'error');
+      return;
+    }
     if (!checkRateLimit('post')) return;
 
     setPosting(true);
     try {
-      if (user) {
-        await postsService.create({
-          creator_id: user.id,
-          type: 'confession',
-          caption: content.trim(),
-          is_anonymous: true,
-          privacy_mode: 'alias',
-          communities: ['shift-confessions'],
-          feed_type_eligible: ['forYou'],
-        });
-      }
+      await postsService.create({
+        creator_id: user.id,
+        type: 'confession',
+        caption: content.trim(),
+        is_anonymous: true,
+        privacy_mode: 'alias',
+        communities: ['shift-confessions'],
+        feed_type_eligible: ['forYou'],
+      });
 
       analytics.track('post_created', { type: 'confession' });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -54,24 +72,26 @@ export default function CreateConfessionScreen() {
     }
   };
 
+  const canPost = content.trim().length > 0;
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#1a0a2e', '#2d1654']} style={styles.gradient}>
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Close">
             <Ionicons name="close" size={iconSize.lg} color={colors.dark.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Shift Confession</Text>
-          <TouchableOpacity onPress={handlePost} activeOpacity={0.7} disabled={posting}>
+          <TouchableOpacity onPress={handlePost} activeOpacity={0.7} disabled={posting || !canPost} accessibilityRole="button" accessibilityLabel="Post confession">
             {posting ? (
               <ActivityIndicator size="small" color={colors.primary.gold} />
             ) : (
-              <Text style={styles.postBtn}>Post</Text>
+              <Text style={[styles.postBtn, !canPost && styles.postBtnDisabled]}>Post</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.anonBadge}>
             <Ionicons name="eye-off" size={iconSize.sm} color={colors.dark.text} />
             <Text style={styles.anonText}>This will be posted anonymously</Text>
@@ -79,7 +99,7 @@ export default function CreateConfessionScreen() {
 
           <AccentComposerFrame
             accentColor={colors.primary.gold}
-            hint="Anonymous — only this text is visible to others."
+            hint="Anonymous — only this text is visible to others. Avoid names, MRNs, or details that identify anyone."
             style={{ marginBottom: spacing.md }}
             footer={
               <AccentCharCount
@@ -103,6 +123,8 @@ export default function CreateConfessionScreen() {
               maxLength={MAX_CHARS}
             />
           </AccentComposerFrame>
+
+          <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
 
           <View style={styles.footer}>
             <Ionicons name="shield-checkmark" size={iconSize.sm} color={colors.form.iconMuted} />
@@ -130,6 +152,7 @@ const styles = StyleSheet.create({
   },
   title: { ...typography.sectionTitle, fontSize: 16, color: colors.dark.text },
   postBtn: { ...typography.button, fontSize: 15, fontWeight: '800', color: colors.primary.gold },
+  postBtnDisabled: { opacity: 0.35 },
   content: { padding: layout.screenPadding },
   anonBadge: {
     flexDirection: 'row',

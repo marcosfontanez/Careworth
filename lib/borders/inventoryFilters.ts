@@ -1,6 +1,6 @@
 import type { OwnedBorderEntry } from '@/lib/borders/ownedTypes';
 import type { BorderAvailabilityStatus } from '@/lib/shop/borderCatalogTaxonomy';
-import { effectiveRarityKey } from '@/lib/shop/catalogUtils';
+import { effectiveRarityKey, isFreeShopBorder } from '@/lib/shop/catalogUtils';
 import { rarityTierSortKey } from '@/lib/shop/borderBadgeTheme';
 
 export type OwnershipFilter = 'all' | 'equipped' | 'unequipped';
@@ -56,7 +56,8 @@ function matchesAvailability(entry: OwnedBorderEntry, key: string | null): boole
 
 function matchesCollection(entry: OwnedBorderEntry, key: CollectionFilterKey): boolean {
   if (!key) return true;
-  if (key === '__shop__') return entry.item.is_shop_item === true;
+  if (key === '__shop__')
+    return entry.item.is_shop_item === true || isFreeShopBorder(entry.item);
   if (key === '__uncat__') return !entry.item.collection_id;
   return entry.item.collection_id === key;
 }

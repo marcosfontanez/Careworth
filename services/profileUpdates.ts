@@ -50,12 +50,10 @@ export const profileUpdatesService = {
     return profileUpdatesDb.listForUser(userId, limit, viewerId);
   },
 
-  async getById(
-    id: string,
-    viewerId?: string | null,
-  ): Promise<ProfileUpdate | undefined> {
+  /** Use `null` when missing — TanStack Query must not settle `undefined` from `queryFn`. */
+  async getById(id: string, viewerId?: string | null): Promise<ProfileUpdate | null> {
     const row = await profileUpdatesDb.getById(id, viewerId);
-    return row ?? undefined;
+    return row ?? null;
   },
 
   async getEligiblePostsForLinking(userId: string): Promise<Post[]> {
@@ -106,8 +104,9 @@ export const profileUpdatesService = {
     authorId: string,
     content: string,
     parentId?: string | null,
+    mediaUrl?: string | null,
   ): Promise<ProfileUpdateComment> {
-    return profileUpdatesDb.addComment(updateId, authorId, content, parentId);
+    return profileUpdatesDb.addComment(updateId, authorId, content, parentId, mediaUrl);
   },
 
   async deleteComment(commentId: string): Promise<void> {

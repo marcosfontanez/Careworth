@@ -8,6 +8,8 @@ interface Props {
   trimStart: number;
   trimEnd: number | null;
   onTrim?: (start: number, end: number) => void;
+  /** Optional vertical marker (e.g. borrowed-sound hook / beat planning). Seconds from clip start. */
+  markerSec?: number | null;
 }
 
 const SEGMENTS = 64;
@@ -17,7 +19,7 @@ const SEGMENTS = 64;
  * trim window. We don't have ffmpeg amplitude data on the client today, so
  * the bars are pseudo-random but stable per video. The trim window is real.
  */
-export function WaveformTimeline({ uri, durationSec, trimStart, trimEnd }: Props) {
+export function WaveformTimeline({ uri, durationSec, trimStart, trimEnd, markerSec }: Props) {
   const bars = useMemo(() => {
     let h = 0;
     for (let i = 0; i < uri.length; i += 1) h = (h * 31 + uri.charCodeAt(i)) | 0;
@@ -34,6 +36,10 @@ export function WaveformTimeline({ uri, durationSec, trimStart, trimEnd }: Props
   const endPct = Math.max(startPct, Math.min(1, (trimEnd ?? total) / total));
   const trimW = (endPct - startPct) * 100;
   const screen = Dimensions.get('window').width - 32;
+  const markerPct =
+    markerSec != null && durationSec != null && durationSec > 0
+      ? Math.max(0, Math.min(1, markerSec / durationSec))
+      : null;
 
   return (
     <View style={[styles.wrap, { width: screen }]}>
@@ -58,6 +64,9 @@ export function WaveformTimeline({ uri, durationSec, trimStart, trimEnd }: Props
           { left: `${startPct * 100}%`, width: `${trimW}%` },
         ]}
       />
+      {markerPct != null ? (
+        <View pointerEvents="none" style={[styles.markerLine, { left: `${markerPct * 100}%` }]} />
+      ) : null}
     </View>
   );
 }
@@ -76,5 +85,15 @@ const styles = StyleSheet.create({
     borderColor: colors.primary.teal,
     borderWidth: 2, borderRadius: 8,
     backgroundColor: colors.primary.teal + '14',
+  },
+  markerLine: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    width: 3,
+    marginLeft: -1.5,
+    borderRadius: 2,
+    backgroundColor: colors.primary.gold,
+    zIndex: 2,
   },
 });

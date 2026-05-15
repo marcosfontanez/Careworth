@@ -16,7 +16,7 @@ export type LiveTopic = {
 
 /**
  * Curated topic catalog for the "Browse by Topic" section.
- * Order matches the design spec: Nursing, ICU, ER, Night Shift, Pharmacy, Wellness, Funny Medical Memes.
+ * Order matches the design spec: Nursing, ICU, ER, Night Shift, Pharmacy, Wellness, Memes.
  * Each topic carries an accent that maps loosely to its mood.
  */
 export const LIVE_TOPICS: LiveTopic[] = [
@@ -26,7 +26,7 @@ export const LIVE_TOPICS: LiveTopic[] = [
   { id: 'night',    label: 'Night Shift',         icon: 'moon-outline',       accent: colors.status.invite },
   { id: 'pharmacy', label: 'Pharmacy',            icon: 'flask-outline',      accent: colors.community.pharmacists },
   { id: 'wellness', label: 'Wellness',            icon: 'leaf-outline',       accent: colors.community.confessions },
-  { id: 'memes',    label: 'Funny Medical Memes', icon: 'happy-outline',      accent: colors.community.memes },
+  { id: 'memes',    label: 'Memes', icon: 'happy-outline',      accent: colors.community.memes },
 ];
 
 type Props = {

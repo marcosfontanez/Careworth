@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius } from '@/theme';
+import { colors } from '@/theme';
 import { timeAgo } from '@/utils/format';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import type { CircleReply, CreatorSummary } from '@/types';
 
@@ -26,8 +27,8 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
         id: reply?.authorId ?? '',
         displayName: 'Member',
         avatarUrl: '',
-        role: 'RN',
-        specialty: 'General',
+        role: '',
+        specialty: '',
         city: '',
         state: '',
         isVerified: false,
@@ -39,7 +40,7 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
     if (!reply) return 'Member';
     if (isAnonRoom && threadId) return anonymousDisplayName(reply.authorId, threadId);
     return author.displayName;
-  }, [isAnonRoom, threadId, reply, reply?.authorId, author.displayName]);
+  }, [isAnonRoom, threadId, reply, author.displayName]);
 
   const isOp = Boolean(
     reply && isAnonRoom && threadAuthorId && threadId && reply.authorId === threadAuthorId,
@@ -89,7 +90,7 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
           <Text style={styles.time}>{timeAgo(reply.createdAt)}</Text>
         </View>
         <Text style={styles.role} numberOfLines={1}>
-          {isAnonRoom ? (isOp ? 'Original poster' : 'Anonymous') : author.role}
+          {isAnonRoom ? (isOp ? 'Original poster' : 'Anonymous') : buildNeonPillTags(author).join(' · ') || '\u00a0'}
         </Text>
         <CommentRichText
           text={bodyText}

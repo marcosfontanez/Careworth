@@ -1,5 +1,6 @@
 import type { PulseAvatarFrame } from '@/types';
 import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
+import { coerceCssColor } from '@/lib/coerceCssColor';
 
 export function mapPulseAvatarFrameEmbed(raw: unknown): PulseAvatarFrame | null | undefined {
   if (raw == null) return raw === null ? null : undefined;
@@ -50,8 +51,8 @@ export function mapPulseAvatarFrameEmbed(raw: unknown): PulseAvatarFrame | null 
     rarityTier,
     acquisitionTag,
     monthStart: String(o.month_start ?? ''),
-    ringColor: String(o.ring_color ?? '#FFFFFF'),
-    glowColor: String(o.glow_color ?? '#FFFFFF'),
+    ringColor: coerceCssColor(o.ring_color, '#FFFFFF'),
+    glowColor: coerceCssColor(o.glow_color, '#FFFFFF'),
   };
 }
 

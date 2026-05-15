@@ -1,6 +1,6 @@
 import { AppState } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';
-import { communityKeys } from '@/lib/queryKeys';
+import { communityKeys, feedKeys } from '@/lib/queryKeys';
 
 /** Only refetch after this much background time — avoids churn on quick app switches. */
 const MIN_BACKGROUND_FOR_STALE_REFRESH_MS = 25_000;
@@ -55,6 +55,7 @@ export function attachAppResumeStaleDataRefresh(
       }
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+      void queryClient.invalidateQueries({ queryKey: feedKeys.infiniteRoot() });
       void queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
       void queryClient.invalidateQueries({ queryKey: communityKeys.circlesHome() });
     }, FOREGROUND_INVALIDATE_DEBOUNCE_MS);

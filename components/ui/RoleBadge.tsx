@@ -4,7 +4,10 @@ import { borderRadius, roleColor } from '@/theme';
 import type { Role } from '@/types';
 
 export function RoleBadge({ role, size = 'sm', variant = 'solid' }: { role: Role; size?: 'sm' | 'md'; variant?: 'solid' | 'overlay' }) {
-  const bg = roleColor(role);
+  const trimmed = typeof role === 'string' ? role.trim() : '';
+  if (!trimmed) return null;
+
+  const bg = roleColor(trimmed as Role);
   const isMd = size === 'md';
   const overlay = variant === 'overlay';
 
@@ -18,7 +21,7 @@ export function RoleBadge({ role, size = 'sm', variant = 'solid' }: { role: Role
         isMd && styles.md,
       ]}
     >
-      <Text style={[styles.text, isMd && styles.mdText, overlay && styles.textOverlay]}>{role}</Text>
+      <Text style={[styles.text, isMd && styles.mdText, overlay && styles.textOverlay]}>{trimmed}</Text>
     </View>
   );
 }

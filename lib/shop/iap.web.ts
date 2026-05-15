@@ -34,3 +34,13 @@ export async function purchaseSku(_params: {
     message: 'In-app purchases are not available on web. Use the PulseVerse app.',
   };
 }
+
+export async function restorePurchasesFromStore(): Promise<
+  { ok: true; purchases: { productId: string; purchaseToken?: string | null }[] } | { ok: false; message: string }
+> {
+  return { ok: false, message: 'Restore purchases is only available in the iOS/Android app.' };
+}
+
+export async function getIosReceiptBase64(): Promise<string | null> {
+  return null;
+}

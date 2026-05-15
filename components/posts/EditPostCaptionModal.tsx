@@ -92,7 +92,9 @@ export function EditPostCaptionModal({
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={saving ? undefined : onClose}
+      onRequestClose={() => {
+        if (!saving) onClose();
+      }}
       statusBarTranslucent
     >
       <KeyboardAvoidingView

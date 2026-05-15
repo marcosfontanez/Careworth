@@ -40,4 +40,14 @@ export const pulseverse = {
   heroBloom: 'rgba(34,211,238,0.065)',
   /** Equipped / accent rim without neon */
   rimEquipped: 'rgba(34,211,238,0.30)',
+
+  /** Creator Hub — purple / green / blue tiles on the compose grid */
+  hubTilePurple: '#A855F7',
+  hubTilePurpleBg: '#A855F718',
+  hubTileGreen: '#22C55E',
+  hubTileGreenBg: '#22C55E18',
+  hubTileBlue: '#3B82F6',
+  hubTileBlueBg: '#3B82F618',
+  /** Live / broadcast entry accent */
+  livePink: '#EC4899',
 } as const;

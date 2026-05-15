@@ -2,14 +2,21 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { featuredCardSchemeForSlug } from '@/constants/featuredCircleSchemes';
-import { borderRadius, colors, typography } from '@/theme';
+import { borderRadius, colors, pulseverse, spacing, pvKit } from '@/theme';
 import { formatCount } from '@/utils/format';
 import type { Community } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
-const CARD_HEIGHT = 268;
-const BUBBLE = 78;
+/** Tall enough for 2-line title + 2-line blurb + meta + avatar stack without clipping (fixed height + overflow:hidden). */
+const CARD_HEIGHT = 322;
+const BUBBLE = 82;
+const CARD_WIDTH = 180;
+
+const TOP_WASH_ALPHA = Math.round(pvKit.circles.featured.topWashOpacity * 255)
+  .toString(16)
+  .padStart(2, '0');
 
 function blurbOneLine(s: string, max = 52) {
   const t = s.replace(/\s+/g, ' ').trim();
@@ -21,12 +28,15 @@ type Props = {
   community: Community;
   accent: string;
   onPress: () => void;
+  /** Position in featured carousel — unknown slugs cycle primary → secondary → neon, then repeat. */
+  carouselIndex?: number;
 };
 
-export function CircleCardFeatured({ community, accent, onPress }: Props) {
+export function CircleCardFeatured({ community, accent, onPress, carouselIndex = 0 }: Props) {
   const scheme = useMemo(
-    () => featuredCardSchemeForSlug(community.slug, accent || colors.primary.teal),
-    [community.slug, accent],
+    () =>
+      featuredCardSchemeForSlug(community.slug, accent || pulseverse.electric, carouselIndex),
+    [community.slug, accent, carouselIndex],
   );
 
   const tag = useMemo(() => blurbOneLine(community.description), [community.description]);
@@ -36,32 +46,78 @@ export function CircleCardFeatured({ community, accent, onPress }: Props) {
   const shownFaces = Math.min(avatars.length, 5);
   const restOnline = Math.max(0, online - shownFaces);
 
-  const neonShadow =
+  const { featured } = pvKit.circles;
+  const rimHex = `${scheme.glow}${featured.borderAlpha}`;
+
+  const softLift =
+    Platform.OS === 'ios'
+      ? {
+          shadowColor: scheme.glow,
+          shadowOffset: { width: 0, height: featured.shadowOffsetY },
+          shadowOpacity: featured.shadowOpacity,
+          shadowRadius: featured.shadowRadius,
+        }
+      : { elevation: 6 };
+
+  const auraGlow =
     Platform.OS === 'ios'
       ? {
           shadowColor: scheme.glow,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.88,
-          shadowRadius: 22,
+          shadowOpacity: 0.38,
+          shadowRadius: 18,
         }
-      : { elevation: 14 };
+      : { elevation: 4 };
 
   const borderW = scheme.borderEmphasis;
+  const topWashColor = `${scheme.glow}${TOP_WASH_ALPHA}`;
 
   return (
-    <TouchableOpacity style={styles.outer} activeOpacity={0.88} onPress={onPress}>
+    <TouchableOpacity style={styles.outer} activeOpacity={0.9} onPress={onPress}>
       <LinearGradient
         colors={scheme.gradient}
         style={[
           styles.card,
-          { borderColor: `${scheme.glow}99`, borderWidth: borderW },
-          neonShadow,
+          {
+            borderColor: rimHex,
+            borderWidth: borderW,
+          },
+          softLift,
         ]}
       >
-        <View style={[styles.glowRing, { shadowColor: scheme.glow }]}>
+        {Platform.OS === 'web' ? (
+          <View style={[StyleSheet.absoluteFill, styles.glassWebVeil]} pointerEvents="none" />
+        ) : (
+          <BlurView intensity={Platform.OS === 'ios' ? 28 : 22} tint="dark" style={styles.blurFill} pointerEvents="none" />
+        )}
+        <LinearGradient
+          colors={[topWashColor, 'transparent']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 0.55 }}
+          style={styles.topWash}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={['rgba(255,255,255,0.42)', 'rgba(255,255,255,0.12)', 'transparent']}
+          locations={[0, 0.22, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.topShimmer}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={[...pvKit.cards.bottomVignette]}
+          start={{ x: 0.5, y: 0.38 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.bottomVig}
+          pointerEvents="none"
+        />
+        <View style={styles.innerHairline} pointerEvents="none" />
+
+        <View style={[styles.glowRing, auraGlow]}>
           <LinearGradient
             colors={scheme.bubble}
-            style={[styles.iconBubble, { borderColor: `${scheme.glow}aa` }]}
+            style={[styles.iconBubble, { borderColor: `${scheme.glow}88` }]}
           >
             <Text style={styles.emoji}>{community.icon}</Text>
           </LinearGradient>
@@ -70,7 +126,7 @@ export function CircleCardFeatured({ community, accent, onPress }: Props) {
         <Text style={styles.name} numberOfLines={2}>
           {community.name}
         </Text>
-        <Text style={styles.tag} numberOfLines={1}>
+        <Text style={styles.tag} numberOfLines={2}>
           {tag}
         </Text>
         <Text style={styles.meta}>{formatCount(community.memberCount)} members</Text>
@@ -96,7 +152,7 @@ export function CircleCardFeatured({ community, accent, onPress }: Props) {
                 ) : null}
               </View>
             ) : (
-              <Text style={styles.onlineMuted}>Be the first online</Text>
+              <Text style={styles.firstOnline}>Be the first online</Text>
             )}
           </View>
         </View>
@@ -106,22 +162,60 @@ export function CircleCardFeatured({ community, accent, onPress }: Props) {
 }
 
 const styles = StyleSheet.create({
-  outer: { width: 174 },
+  outer: { width: CARD_WIDTH },
   card: {
-    borderRadius: borderRadius['2xl'],
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 14,
-    height: CARD_HEIGHT,
+    borderRadius: borderRadius['3xl'],
+    paddingHorizontal: spacing.lg,
+    paddingTop: 16,
+    paddingBottom: 20,
+    minHeight: CARD_HEIGHT,
     justifyContent: 'flex-start',
+    overflow: 'hidden',
+  },
+  blurFill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: borderRadius['3xl'],
+  },
+  glassWebVeil: {
+    backgroundColor: 'rgba(15,23,42,0.22)',
+    borderRadius: borderRadius['3xl'],
+  },
+  topWash: {
+    ...StyleSheet.absoluteFillObject,
+    height: '52%',
+    borderTopLeftRadius: borderRadius['3xl'],
+    borderTopRightRadius: borderRadius['3xl'],
+  },
+  topShimmer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: '30%',
+    borderTopLeftRadius: borderRadius['3xl'],
+    borderTopRightRadius: borderRadius['3xl'],
+  },
+  bottomVig: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '58%',
+    borderBottomLeftRadius: borderRadius['3xl'],
+    borderBottomRightRadius: borderRadius['3xl'],
+  },
+  innerHairline: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: borderRadius['3xl'],
+    borderWidth: 1,
+    borderColor: pvKit.cards.innerHairline,
+    margin: 1,
+    opacity: 0.95,
+    pointerEvents: 'none',
   },
   glowRing: {
     alignSelf: 'center',
     marginBottom: 10,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.95,
-    shadowRadius: 24,
-    elevation: 12,
   },
   iconBubble: {
     width: BUBBLE,
@@ -132,40 +226,42 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   emoji: {
-    fontSize: 40,
-    transform: [{ scale: 1.05 }],
+    fontSize: 42,
+    transform: [{ scale: 1.06 }],
   },
   name: {
-    ...typography.sectionTitle,
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: colors.dark.text,
     textAlign: 'center',
-    minHeight: 36,
+    letterSpacing: -0.5,
+    lineHeight: 21,
   },
   tag: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.dark.textSecondary,
     textAlign: 'center',
-    marginTop: 4,
-    opacity: 0.92,
-    minHeight: 18,
+    marginTop: 6,
+    fontWeight: '500',
   },
   meta: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.dark.textMuted,
+    fontSize: 13,
+    fontWeight: '800',
+    color: pulseverse.electricSoft,
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 8,
+    letterSpacing: 0.15,
   },
   presenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
+    marginBottom: 2,
     flexWrap: 'wrap',
     paddingHorizontal: 4,
+    paddingBottom: 6,
   },
   avatarSlot: {
     width: 28,
@@ -191,6 +287,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: colors.dark.textMuted,
+  },
+  firstOnline: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: pvKit.circles.firstOnline,
+    letterSpacing: 0.15,
   },
   plusMore: {
     fontSize: 11,

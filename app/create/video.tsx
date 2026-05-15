@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Alert, Keyboard,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { usePost } from '@/hooks/useQueries';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,26 +16,30 @@ import * as Haptics from 'expo-haptics';
 import { colors } from '@/theme';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { useAuth } from '@/contexts/AuthContext';
-import { storageService } from '@/lib/storage';
+import { storageService, resolvePostMediaDownloadUrl } from '@/lib/storage';
 import { postsService } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
 import { useToast } from '@/components/ui/Toast';
-import { saveDraft, loadDraft, clearDraft } from '@/lib/drafts';
+import { saveDraft, loadDraft, clearDraft, type DraftData } from '@/lib/drafts';
+import { subscribeComposerDraftFlush } from '@/lib/draftAppStateFlush';
 import { recordVideo, pickVideoFromGallery, VIDEO_MIN_SECONDS, VIDEO_MAX_SECONDS, type MediaAsset } from '@/lib/media';
 import { compressVideoIfTooLarge, VIDEO_UPLOAD_MAX_LONG_EDGE } from '@/lib/videoCompression';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
 import { consumePendingVideoCapture } from '@/lib/pendingVideoCapture';
-import { makeVideoThumbnail } from '@/lib/videoMetadata';
+import { makeVideoThumbnail, probeVideoFile } from '@/lib/videoMetadata';
 import { tintForLook, VIDEO_LOOKS, type VideoLookId } from '@/lib/videoFilters';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
 import { loadBrandKit, saveBrandKit, type BrandKit } from '@/lib/brandKit';
 import type { MoodPreset, MoodPresetId } from '@/lib/moodPresets';
 import { appendHashtag } from '@/lib/hashtagStudio';
 import { startNewSeries, type SeriesSelection } from '@/lib/seriesMode';
+import { requestDuetMuxMergedFile } from '@/services/export/duetMuxExportClient';
+import { isVideoExportConfigured } from '@/services/export/videoExportClient';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { EducationModeToggle, type EducationCitation } from '@/components/create/EducationModeToggle';
@@ -44,11 +50,11 @@ import { MoodPresetPicker } from '@/components/create/MoodPresetPicker';
 import { ThumbnailStudio } from '@/components/create/ThumbnailStudio';
 import { WaveformTimeline } from '@/components/create/WaveformTimeline';
 import { ClipSplitterModal } from '@/components/create/ClipSplitterModal';
-import { MultiClipStitchModal } from '@/components/create/MultiClipStitchModal';
+import { MultiClipStitchModal, type MultiClipStitchVariant } from '@/components/create/MultiClipStitchModal';
 import { SpeedRampEditor } from '@/components/create/SpeedRampEditor';
 import { SmartTrimCard } from '@/components/create/SmartTrimCard';
 import { VideoHygieneCard } from '@/components/create/VideoHygieneCard';
-import { BrollSoonCard } from '@/components/create/BrollSoonCard';
+import { BrollInsertCard } from '@/components/create/BrollInsertCard';
 import { CoCreateRoadmapCard } from '@/components/create/CoCreateRoadmapCard';
 import Slider from '@react-native-community/slider';
 
@@ -110,7 +116,48 @@ function ComposableVideoPreview({
         style={StyleSheet.absoluteFillObject}
         contentFit="cover"
         nativeControls={false}
+        {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
       />
+      {tint ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: tint }]} />
+      ) : null}
+      {overlayText.trim() ? (
+        <View style={[styles.previewStickerWrap]} pointerEvents="none">
+          <Text style={styles.previewStickerText}>{overlayText.trim()}</Text>
+        </View>
+      ) : null}
+      <VideoBrandWatermark compact position="bottom-center" edgeOffset={10} variant="subtle" />
+    </>
+  );
+}
+
+/**
+ * Android: looping {@link VideoView} + IME triggers native aborts in libmedia_jni (SIGABRT /
+ * AssertNoPendingException) when focusing caption fields. Swap to a static frame while the keyboard
+ * is up — no expo-video hooks on this path.
+ */
+function ComposableVideoPreviewFrozen({
+  posterUri,
+  filter,
+  overlayText,
+}: {
+  posterUri: string | null;
+  filter: FilterPreset;
+  overlayText: string;
+}) {
+  const tint = tintForLook(filter);
+  return (
+    <>
+      {posterUri ? (
+        <Image
+          source={{ uri: posterUri }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          {...pulseImageFeedHeroProps}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.dark.cardAlt }]} />
+      )}
       {tint ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: tint }]} />
       ) : null}
@@ -126,6 +173,7 @@ function ComposableVideoPreview({
 
 export default function CreateVideoScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { mode, soundPostId: soundPostIdRaw, duetPostId: duetPostIdRaw } =
     useLocalSearchParams<{
       mode?: 'record' | 'upload';
@@ -168,6 +216,10 @@ export default function CreateVideoScreen() {
   const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
   const [showDraftHint, setShowDraftHint] = useState(false);
   const openedPickerRef = useRef(false);
+  /** Skip one trim reset after hydrating clip URI from draft (same URI transition otherwise wipes trimmed markers). */
+  const skipNextTrimResetRef = useRef(false);
+  /** Avoid auto midpoint overwriting restored draft anchor for borrowed sounds. */
+  const soundAnchorInitDoneRef = useRef(false);
 
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
   const [brandKitOpen, setBrandKitOpen] = useState(false);
@@ -186,15 +238,128 @@ export default function CreateVideoScreen() {
   const [thumbStudioMode, setThumbStudioMode] = useState<'primary' | 'alt'>('primary');
   const [clipSplitOpen, setClipSplitOpen] = useState(false);
   const [stitchOpen, setStitchOpen] = useState(false);
+  const [stitchVariant, setStitchVariant] = useState<MultiClipStitchVariant>('series');
+  /** Tracks whether queued clips came from B-roll vs multi-part UI (for labels only). */
+  const [clipQueueVariant, setClipQueueVariant] = useState<MultiClipStitchVariant | null>(null);
+  const [duetMuxBusy, setDuetMuxBusy] = useState(false);
   const [speedRamp, setSpeedRamp] = useState({ start: 1 as number, mid: 1 as number, end: 1 as number });
   const [followUpClips, setFollowUpClips] = useState<MediaAsset[]>([]);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState<number | null>(null);
+  /** Borrowed-sound planning marker on waveform (seconds); upload unaffected. */
+  const [soundAnchorSec, setSoundAnchorSec] = useState<number | null>(null);
+  /** Progressive disclosure: color grade, thumbnails, series queue, education mode, etc. */
+  const [advancedCreatorOpen, setAdvancedCreatorOpen] = useState(false);
+  /** Avoid clearing AsyncStorage draft before the first loadDraft + pending capture pass finishes. */
+  const [draftBootstrapped, setDraftBootstrapped] = useState(false);
+  /**
+   * Android: {@link VideoView} + soft keyboard has crashed native media (SIGABRT / JNI pending
+   * exception). Swap to a static poster whenever the keyboard is visible.
+   */
+  const [androidFreezeComposerPreview, setAndroidFreezeComposerPreview] = useState(false);
+  /** Frame grab for frozen preview (`makeVideoThumbnail` — null until ready or if compressor missing). */
+  const [composerPreviewPosterUri, setComposerPreviewPosterUri] = useState<string | null>(null);
+
+  const hasComposerDraft = useMemo(() => {
+    if (
+      caption.trim() ||
+      hashtags.trim() ||
+      soundTitle.trim() ||
+      shortTitle.trim() ||
+      overlayLine.trim()
+    ) {
+      return true;
+    }
+    if (media) return true;
+    if (followUpClips.length > 0) return true;
+    if (seriesSelection) return true;
+    return false;
+  }, [
+    caption,
+    hashtags,
+    soundTitle,
+    shortTitle,
+    overlayLine,
+    media,
+    followUpClips.length,
+    seriesSelection,
+  ]);
+
+  /** Wider than persisted draft: prompts before losing scheduling, covers, duet evidence, or education cites. */
+  const hasUnsavedLeaveRisk = useMemo(() => {
+    if (hasComposerDraft) return true;
+    if (evidenceUrl.trim() || evidenceLabel.trim()) return true;
+    if (customCoverUri || coverAltUri) return true;
+    if (scheduledAt) return true;
+    if (educationOn && citations.length > 0) return true;
+    return false;
+  }, [
+    hasComposerDraft,
+    evidenceUrl,
+    evidenceLabel,
+    customCoverUri,
+    coverAltUri,
+    scheduledAt,
+    educationOn,
+    citations.length,
+  ]);
+
+  const unsavedLeaveRef = useRef(hasUnsavedLeaveRisk);
+  unsavedLeaveRef.current = hasUnsavedLeaveRisk;
 
   useEffect(() => {
+    if (followUpClips.length === 0) setClipQueueVariant(null);
+  }, [followUpClips.length]);
+
+  useEffect(() => {
+    if (skipNextTrimResetRef.current) {
+      skipNextTrimResetRef.current = false;
+      return;
+    }
     setTrimStart(0);
-    setTrimEnd(media?.duration ?? null);
-  }, [media?.uri, media?.duration]);
+    setTrimEnd(null);
+    setSoundAnchorSec(null);
+    soundAnchorInitDoneRef.current = false;
+  }, [media?.uri]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', () => setAndroidFreezeComposerPreview(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setAndroidFreezeComposerPreview(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const uri = media?.uri;
+    if (!uri) {
+      setComposerPreviewPosterUri(null);
+      return;
+    }
+    setComposerPreviewPosterUri(null);
+    let cancelled = false;
+    void makeVideoThumbnail(uri).then((thumb) => {
+      if (!cancelled && thumb) setComposerPreviewPosterUri(thumb);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [media?.uri]);
+
+  useEffect(() => {
+    const d = media?.duration;
+    if (d == null || d <= 0) return;
+    setTrimEnd((prev) => (prev === null ? d : Math.min(prev, d)));
+    setTrimStart((prev) => Math.min(Math.max(0, prev), Math.max(0, d - 5)));
+  }, [media?.duration]);
+
+  useEffect(() => {
+    if (!soundPostIdTrim || media?.duration == null || soundAnchorInitDoneRef.current) return;
+    soundAnchorInitDoneRef.current = true;
+    setSoundAnchorSec(media.duration / 2);
+  }, [soundPostIdTrim, media?.duration]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -229,6 +394,7 @@ export default function CreateVideoScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    setDraftBootstrapped(false);
     (async () => {
       const pending = consumePendingVideoCapture();
       if (pending && !cancelled) {
@@ -243,8 +409,42 @@ export default function CreateVideoScreen() {
       if (draft) {
         setCaption(draft.caption ?? '');
         setHashtags(draft.hashtags ?? '');
+        setShortTitle(draft.shortTitle ?? '');
+        setOverlayLine(draft.overlayLine ?? '');
         if (!pending?.soundTitle) setSoundTitle(draft.soundTitle ?? '');
+        if (draft.seriesSelection?.seriesId) setSeriesSelection(draft.seriesSelection);
+        if (draft.clipQueueVariant === 'series' || draft.clipQueueVariant === 'broll') {
+          setClipQueueVariant(draft.clipQueueVariant);
+        }
+        if (draft.privacyVideo === 'public' || draft.privacyVideo === 'followers') {
+          setPrivacy(draft.privacyVideo);
+        }
+        if (typeof draft.commentsOnVideo === 'boolean') {
+          setCommentsOn(draft.commentsOnVideo);
+        }
+        if (typeof draft.trimStartSec === 'number' && Number.isFinite(draft.trimStartSec)) {
+          setTrimStart(draft.trimStartSec);
+        }
+        if (typeof draft.trimEndSec === 'number' && Number.isFinite(draft.trimEndSec)) {
+          setTrimEnd(draft.trimEndSec);
+        }
+        if (typeof draft.soundAnchorSec === 'number' && Number.isFinite(draft.soundAnchorSec)) {
+          soundAnchorInitDoneRef.current = true;
+          setSoundAnchorSec(draft.soundAnchorSec);
+        }
+        if (draft.followUpClipUris?.length) {
+          setFollowUpClips(
+            draft.followUpClipUris.map((uri, i) => ({
+              uri,
+              type: 'video' as const,
+              mimeType: 'video/mp4',
+              fileName: `draft_queue_${i}.mp4`,
+            })),
+          );
+          setAdvancedCreatorOpen(true);
+        }
         if (draft.mediaUris?.[0] && !pending) {
+          skipNextTrimResetRef.current = true;
           const u = draft.mediaUris[0];
           setMedia({
             uri: u,
@@ -254,7 +454,19 @@ export default function CreateVideoScreen() {
           });
           openedPickerRef.current = true;
         }
-        if ((draft.caption || draft.hashtags || draft.soundTitle || draft.mediaUris?.length) && !pending) {
+        if (
+          (draft.caption ||
+            draft.hashtags ||
+            draft.soundTitle ||
+            draft.shortTitle ||
+            draft.overlayLine ||
+            draft.mediaUris?.length ||
+            draft.followUpClipUris?.length ||
+            draft.soundAnchorSec != null ||
+            draft.trimStartSec != null ||
+            draft.trimEndSec != null) &&
+          !pending
+        ) {
           setShowDraftHint(true);
         }
       }
@@ -267,27 +479,166 @@ export default function CreateVideoScreen() {
           if (!cancelled && asset) setMedia(asset);
         }
       }
+      if (!cancelled) setDraftBootstrapped(true);
     })();
     return () => {
       cancelled = true;
     };
   }, [mode]);
 
-  useEffect(() => {
-    if (caption || hashtags || soundTitle || media) {
-      saveDraft('video', {
-        caption,
-        hashtags,
-        soundTitle,
-        mediaUris: media ? [media.uri] : undefined,
-      });
+  const buildVideoDraftData = useCallback((): DraftData => {
+    const payload: DraftData = {
+      caption,
+      hashtags,
+      soundTitle,
+      shortTitle,
+      overlayLine,
+      mediaUris: media ? [media.uri] : undefined,
+      followUpClipUris: followUpClips.length > 0 ? followUpClips.map((c) => c.uri) : undefined,
+      clipQueueVariant: clipQueueVariant ?? undefined,
+      seriesSelection: seriesSelection ?? undefined,
+      privacyVideo: privacy,
+      commentsOnVideo: commentsOn,
+    };
+    if (media?.duration != null) {
+      payload.trimStartSec = trimStart;
+      payload.trimEndSec = trimEnd ?? undefined;
     }
-  }, [caption, hashtags, soundTitle, media]);
+    if (soundPostIdTrim && soundAnchorSec != null) {
+      payload.soundAnchorSec = soundAnchorSec;
+    }
+    return payload;
+  }, [
+    caption,
+    hashtags,
+    soundTitle,
+    shortTitle,
+    overlayLine,
+    media,
+    followUpClips,
+    clipQueueVariant,
+    seriesSelection,
+    privacy,
+    commentsOn,
+    trimStart,
+    trimEnd,
+    soundPostIdTrim,
+    soundAnchorSec,
+  ]);
+
+  useEffect(() => {
+    if (!draftBootstrapped) return;
+    if (!hasComposerDraft) {
+      void clearDraft('video');
+      return;
+    }
+    saveDraft('video', buildVideoDraftData());
+  }, [draftBootstrapped, hasComposerDraft, buildVideoDraftData]);
+
+  useEffect(() => {
+    return subscribeComposerDraftFlush(() => {
+      if (!draftBootstrapped || !hasComposerDraft) return null;
+      return { ready: true, type: 'video', data: buildVideoDraftData() };
+    });
+  }, [draftBootstrapped, hasComposerDraft, buildVideoDraftData]);
+
+  useEffect(() => {
+    if (!draftBootstrapped) return;
+    const sub = navigation.addListener('beforeRemove', (e) => {
+      if (posting || showSuccess) return;
+      if (!unsavedLeaveRef.current) return;
+      e.preventDefault();
+      Alert.alert(
+        'Leave composer?',
+        'You have unsaved work (caption, media, queued clips, or other edits). Discard and leave?',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              void clearDraft('video');
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ],
+      );
+    });
+    return sub;
+  }, [navigation, draftBootstrapped, posting, showSuccess]);
 
   const handleUpload = async () => {
     const asset = await pickVideoFromGallery();
     if (asset) setMedia(asset);
   };
+
+  const openReRecord = useCallback(() => {
+    const q = new URLSearchParams();
+    if (soundPostIdTrim) q.set('soundPostId', soundPostIdTrim);
+    if (duetPostIdTrim) q.set('duetPostId', duetPostIdTrim);
+    const qs = q.toString();
+    router.push((qs ? `/create/video-camera?${qs}` : '/create/video-camera') as any);
+  }, [router, soundPostIdTrim, duetPostIdTrim]);
+
+  const handleMergeDuetMux = useCallback(async () => {
+    if (!user?.id || !media || !duetParentPost?.mediaUrl?.trim() || duetMuxBusy || posting) return;
+    if (!isVideoExportConfigured()) {
+      toast.show('Export service not configured (EXPO_PUBLIC_VIDEO_EXPORT_URL)', 'info');
+      return;
+    }
+    setDuetMuxBusy(true);
+    try {
+      let clip = media;
+      const longEdge = Math.max(media.width ?? 0, media.height ?? 0);
+      if (longEdge > VIDEO_UPLOAD_MAX_LONG_EDGE) {
+        clip = await compressVideoIfTooLarge(media, () => {});
+      }
+      const leftUrl = await resolvePostMediaDownloadUrl(duetParentPost.mediaUrl);
+      const rightPublic = await storageService.uploadPostMedia(user.id, {
+        uri: clip.uri,
+        type: clip.mimeType,
+        name: clip.fileName ?? `duet_side_${Date.now()}.mp4`,
+      });
+      const rightUrl = await resolvePostMediaDownloadUrl(rightPublic);
+      const mergedUri = await requestDuetMuxMergedFile({
+        leftVideoUrl: leftUrl,
+        rightVideoUrl: rightUrl,
+        clientRef: duetPostIdTrim,
+      });
+      const meta = await probeVideoFile(mergedUri);
+      const ext = mergedUri.split('.').pop()?.toLowerCase().split('?')[0] ?? 'mp4';
+      setMedia({
+        uri: mergedUri,
+        type: 'video',
+        mimeType: ext === 'mov' ? 'video/quicktime' : 'video/mp4',
+        fileName: `duet_merged_${Date.now()}.${ext === 'mov' ? 'mov' : 'mp4'}`,
+        duration: meta.duration,
+        width: meta.width,
+        height: meta.height,
+      });
+      const qs = new URLSearchParams();
+      qs.set('mode', 'record');
+      if (soundPostIdTrim) qs.set('soundPostId', soundPostIdTrim);
+      router.replace(`/create/video?${qs.toString()}` as any);
+      toast.show('Merged duet — review preview, then Post as one file', 'success');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Merge failed';
+      toast.show(msg.length > 140 ? `${msg.slice(0, 137)}…` : msg, 'error');
+    } finally {
+      setDuetMuxBusy(false);
+    }
+  }, [
+    user?.id,
+    media,
+    duetParentPost?.mediaUrl,
+    duetMuxBusy,
+    posting,
+    duetPostIdTrim,
+    soundPostIdTrim,
+    router,
+    toast,
+  ]);
 
   const handlePost = async () => {
     let composedCaption = [shortTitle.trim(), overlayLine.trim(), caption.trim()]
@@ -496,7 +847,15 @@ export default function CreateVideoScreen() {
               }
             : null,
         );
-        toast.show(`Part posted — ${rest.length} more in queue. Edit caption and tap Post again.`, 'success');
+        const nextMsg =
+          rest.length === 0
+            ? clipQueueVariant === 'broll'
+              ? 'Last B-roll posted — queue complete.'
+              : 'Last part posted — queue complete.'
+            : clipQueueVariant === 'broll'
+              ? `Story posted — ${rest.length} B-roll cutaway(s) left. Edit caption and tap Post again.`
+              : `Part posted — ${rest.length} more in queue. Edit caption and tap Post again.`;
+        toast.show(nextMsg, 'success');
         return;
       }
 
@@ -576,15 +935,20 @@ export default function CreateVideoScreen() {
         visible={stitchOpen}
         onClose={() => setStitchOpen(false)}
         primary={media}
+        variant={stitchVariant}
         onConfirm={(clips) => {
           setFollowUpClips(clips);
+          setClipQueueVariant(stitchVariant);
           setSeriesSelection((prev) => {
             const total = 1 + clips.length;
             if (prev) return { ...prev, seriesTotal: Math.max(prev.seriesTotal, total) };
             return startNewSeries({ totalPlanned: total });
           });
-          setStitchOpen(false);
-          toast.show(`${clips.length} clip(s) queued — post this video first, then tap Post for each queued clip.`, 'success');
+          const msg =
+            stitchVariant === 'broll'
+              ? `${clips.length} B-roll clip(s) queued — post your main story first, then each cutaway.`
+              : `${clips.length} clip(s) queued — post this video first, then tap Post for each follow-up.`;
+          toast.show(msg, 'success');
         }}
       />
 
@@ -627,12 +991,60 @@ export default function CreateVideoScreen() {
       ) : null}
 
       {duetPostIdTrim && duetParentPost ? (
-        <View style={styles.duetBanner}>
-          <Ionicons name="git-branch-outline" size={18} color={colors.primary.teal} />
-          <Text style={styles.duetBannerText} numberOfLines={3}>
-            Duet: original clip from {duetParentPost.creator.displayName} appears on the left in the feed. Record your
-            reaction on the right.
+        <View style={{ marginHorizontal: 16, marginBottom: 10, gap: 10 }}>
+          <View style={styles.duetBanner}>
+            <Ionicons name="git-branch-outline" size={18} color={colors.primary.teal} />
+            <Text style={styles.duetBannerText} numberOfLines={5}>
+              Duet: your clip plays beside {duetParentPost.creator.displayName}&apos;s video in the feed (live reference on
+              Studio camera — use Side-by-side or PiP floating layout). Not one merged file until you use Merge below or export.
+            </Text>
+          </View>
+          {isVideoExportConfigured() && media && duetParentPost.mediaUrl?.trim() && user?.id ? (
+            <TouchableOpacity
+              style={[styles.duetMuxBtn, (duetMuxBusy || posting) && { opacity: 0.65 }]}
+              disabled={duetMuxBusy || posting}
+              onPress={() => void handleMergeDuetMux()}
+              activeOpacity={0.85}
+            >
+              {duetMuxBusy ? (
+                <ActivityIndicator size="small" color={colors.primary.teal} />
+              ) : (
+                <Ionicons name="film-outline" size={20} color={colors.primary.teal} />
+              )}
+              <Text style={styles.duetMuxBtnText}>
+                {duetMuxBusy ? 'Merging on PulseVerse export…' : 'Merge into one video file (beta)'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
+      {followUpClips.length > 0 ? (
+        <View style={styles.clipQueueBanner}>
+          <Ionicons name="layers-outline" size={18} color={colors.primary.teal} />
+          <Text style={styles.clipQueueBannerText}>
+            <Text>
+              {clipQueueVariant === 'broll'
+                ? `${followUpClips.length} B-roll cutaway(s) queued — publish this main clip first, then tap Post for each cutaway.`
+                : `${followUpClips.length} follow-up clip(s) queued — publish this part first, then edit caption and tap Post for each.`}
+            </Text>
+            {'\n'}
+            <Text style={styles.clipQueueBannerSub}>
+              Each Post publishes one clip in this order. This screen never merges into one MP4 — that needs uploads plus the media worker (scripts/creator-media-worker.mjs).
+            </Text>
           </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setFollowUpClips([]);
+              setClipQueueVariant(null);
+              toast.show('Clip queue cleared', 'info');
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear queued clips"
+          >
+            <Text style={styles.clipQueueClear}>Clear</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 
@@ -650,15 +1062,23 @@ export default function CreateVideoScreen() {
         {media ? (
           <>
             <View style={styles.videoPreviewWrap}>
-            <ComposableVideoPreview
-              key={media.uri}
-              uri={media.uri}
-              playbackRate={previewPlaybackRate}
-              filter={filterPreset}
-              overlayText={overlayLine}
-              previewMuted={Boolean(soundPostIdTrim) || !originalAudioOn}
-              previewVolume={originalAudioOn && !soundPostIdTrim ? originalAudioMix : 0}
-            />
+              {Platform.OS === 'android' && androidFreezeComposerPreview ? (
+                <ComposableVideoPreviewFrozen
+                  posterUri={composerPreviewPosterUri}
+                  filter={filterPreset}
+                  overlayText={overlayLine}
+                />
+              ) : (
+                <ComposableVideoPreview
+                  key={media.uri}
+                  uri={media.uri}
+                  playbackRate={previewPlaybackRate}
+                  filter={filterPreset}
+                  overlayText={overlayLine}
+                  previewMuted={Boolean(soundPostIdTrim) || !originalAudioOn}
+                  previewVolume={originalAudioOn && !soundPostIdTrim ? originalAudioMix : 0}
+                />
+              )}
             {durationStr ? (
               <View style={[styles.durationBadge, !durationValid && styles.durationBadgeError]}>
                 <Ionicons name="time-outline" size={12} color={colors.onVideo.primary} />
@@ -673,6 +1093,15 @@ export default function CreateVideoScreen() {
             <TouchableOpacity style={styles.removeBtn} onPress={() => setMedia(null)}>
               <Ionicons name="close-circle" size={26} color={colors.onVideo.primary} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.rerecordBtn}
+              onPress={openReRecord}
+              accessibilityRole="button"
+              accessibilityLabel="Re-record from camera"
+              hitSlop={10}
+            >
+              <Ionicons name="refresh-outline" size={22} color={colors.onVideo.primary} />
+            </TouchableOpacity>
           </View>
             <View style={styles.waveOuter}>
               <WaveformTimeline
@@ -680,7 +1109,13 @@ export default function CreateVideoScreen() {
                 durationSec={media.duration ?? null}
                 trimStart={trimStart}
                 trimEnd={trimEnd ?? media.duration ?? null}
+                markerSec={soundPostIdTrim ? soundAnchorSec : undefined}
               />
+              {soundPostIdTrim ? (
+                <Text style={styles.soundWaveHint}>
+                  Gold marker lines up your hook moment vs borrowed audio — preview planner until timeline exports honor offsets server-side.
+                </Text>
+              ) : null}
             </View>
             {media.duration != null &&
             media.duration >= VIDEO_MIN_SECONDS &&
@@ -724,155 +1159,23 @@ export default function CreateVideoScreen() {
                 />
               </View>
             ) : null}
-            {durationSec >= 50 ? <SmartTrimCard durationSec={durationSec} /> : null}
-          </>
-        ) : null}
-
-        {media ? (
-          <View style={styles.proPanel}>
-            <Text style={styles.proLabel}>Creator tools</Text>
-            <VideoHygieneCard />
-            <BrollSoonCard />
-            <CoCreateRoadmapCard />
-            <Text style={styles.aspectHint}>Vertical 9:16 looks best in the feed — preview is cropped to fill.</Text>
-            <Text style={styles.proSub}>Preview playback speed (does not change the uploaded file yet)</Text>
-            <View style={styles.chipRow}>
-              {[0.5, 1, 1.5, 2].map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.miniChip, previewPlaybackRate === r && styles.miniChipOn]}
-                  onPress={() => setPreviewPlaybackRate(r)}
-                >
-                  <Text style={[styles.miniChipText, previewPlaybackRate === r && styles.miniChipTextOn]}>
-                    {r === 1 ? '1×' : `${r}×`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={styles.proSub}>Color grade (preview only)</Text>
-            <View style={styles.chipRow}>
-              {EDITOR_FILTER_IDS.map((f) => {
-                const meta = VIDEO_LOOKS.find((l) => l.id === f);
-                if (!meta) return null;
-                return (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.miniChip, filterPreset === f && styles.miniChipOn]}
-                    onPress={() => setFilterPreset(f)}
-                  >
-                    <Text style={[styles.miniChipText, filterPreset === f && styles.miniChipTextOn]}>
-                      {meta.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <SpeedRampEditor
-              rates={speedRamp}
-              onChange={(r) => {
-                setSpeedRamp(r);
-                setPreviewPlaybackRate(r.mid);
-              }}
-              effectivePreview={previewPlaybackRate}
-              onPreviewChange={setPreviewPlaybackRate}
-            />
-            {!soundPostIdTrim ? (
-              <TouchableOpacity
-                style={styles.secondaryFullBtn}
-                onPress={() => setOriginalAudioOn(!originalAudioOn)}
-                activeOpacity={0.85}
-              >
-                <Ionicons
-                  name={originalAudioOn ? 'volume-high-outline' : 'volume-mute-outline'}
-                  size={18}
-                  color={colors.primary.teal}
-                />
-                <Text style={styles.secondaryFullBtnText}>
-                  {originalAudioOn ? 'Original audio ON in preview' : 'Original audio muted in preview'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            {originalAudioOn && !soundPostIdTrim ? (
-              <View style={{ marginBottom: 10, paddingHorizontal: 2 }}>
-                <Text style={styles.proSub}>Original level in preview (upload file unchanged)</Text>
+            {soundPostIdTrim && media.duration != null && media.duration > 6 ? (
+              <View style={{ width: '100%', paddingHorizontal: 16, marginBottom: 10, gap: 6 }}>
+                <Text style={styles.proSub}>Sound hook marker (planning — slider mirrors gold line)</Text>
                 <Slider
-                  style={{ width: '100%', height: 36 }}
+                  style={{ width: '100%', height: 32 }}
                   minimumValue={0}
-                  maximumValue={1}
-                  value={originalAudioMix}
-                  onValueChange={setOriginalAudioMix}
-                  minimumTrackTintColor={colors.primary.teal}
+                  maximumValue={media.duration}
+                  value={soundAnchorSec ?? media.duration / 2}
+                  onValueChange={(v) => setSoundAnchorSec(Math.min(Math.max(0, v), media.duration!))}
+                  minimumTrackTintColor={colors.primary.gold}
                   maximumTrackTintColor={colors.dark.border}
-                  thumbTintColor={colors.primary.teal}
+                  thumbTintColor={colors.primary.gold}
                 />
               </View>
             ) : null}
-            <TouchableOpacity
-              style={styles.secondaryFullBtn}
-              onPress={() => {
-                setThumbStudioMode('primary');
-                setThumbStudioOpen(true);
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="image-outline" size={18} color={colors.primary.teal} />
-              <Text style={styles.secondaryFullBtnText}>Thumbnail studio</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.secondaryFullBtn}
-              onPress={() => {
-                setThumbStudioMode('alt');
-                setThumbStudioOpen(true);
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="layers-outline" size={18} color={colors.primary.teal} />
-              <Text style={styles.secondaryFullBtnText}>Alt cover (A/B test)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryFullBtn} onPress={() => setClipSplitOpen(true)} activeOpacity={0.85}>
-              <Ionicons name="albums-outline" size={18} color={colors.primary.teal} />
-              <Text style={styles.secondaryFullBtnText}>Clip split planner</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryFullBtn} onPress={() => {
-              if (!media) {
-                toast.show('Add a video first', 'info');
-                return;
-              }
-              setStitchOpen(true);
-            }} activeOpacity={0.85}>
-              <Ionicons name="git-merge-outline" size={18} color={colors.primary.teal} />
-              <Text style={styles.secondaryFullBtnText}>Queue clips for series</Text>
-            </TouchableOpacity>
-            <View style={styles.soundDiscoverRow}>
-              <TouchableOpacity
-                style={styles.secondaryFullBtn}
-                onPress={() => router.push('/discover')}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="musical-notes-outline" size={18} color={colors.primary.teal} />
-                <Text style={styles.secondaryFullBtnText}>Browse sounds & trends</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryFullBtn}
-                onPress={() => router.push('/create/video-camera')}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="videocam-outline" size={18} color={colors.primary.teal} />
-                <Text style={styles.secondaryFullBtnText}>Open full-screen camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryFullBtn}
-                onPress={async () => {
-                  const a = await pickVideoFromGallery();
-                  if (a) setMedia(a);
-                }}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="cut-outline" size={18} color={colors.primary.teal} />
-                <Text style={styles.secondaryFullBtnText}>Replace / re-trim video (Gallery)</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            {durationSec >= 50 ? <SmartTrimCard durationSec={durationSec} /> : null}
+          </>
         ) : null}
 
         {media ? null : (
@@ -894,7 +1197,13 @@ export default function CreateVideoScreen() {
         <View style={styles.mediaActions}>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => router.push('/create/video-camera')}
+            onPress={() =>
+              router.push(
+                duetPostIdTrim
+                  ? (`/create/video-camera?duetPostId=${encodeURIComponent(duetPostIdTrim)}` as any)
+                  : ('/create/video-camera' as any),
+              )
+            }
             activeOpacity={0.8}
           >
             <LinearGradient
@@ -918,30 +1227,6 @@ export default function CreateVideoScreen() {
               <Text style={[styles.actionText, { color: '#3B82F6' }]}>Gallery</Text>
             </LinearGradient>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.proPanel}>
-          <Text style={styles.proLabel}>More creator tools</Text>
-          <TouchableOpacity
-            style={styles.secondaryFullBtn}
-            onPress={() => setBrandKitOpen(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="color-wand-outline" size={18} color={colors.primary.teal} />
-            <Text style={styles.secondaryFullBtnText}>Brand kit</Text>
-          </TouchableOpacity>
-          <MoodPresetPicker selected={moodId} onSelect={applyMoodPreset} />
-          <View style={{ gap: 10 }}>
-            <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
-            <EducationModeToggle
-              enabled={educationOn}
-              onToggle={setEducationOn}
-              citations={citations}
-              onChange={(next) => setCitations(next.slice(0, 5))}
-            />
-            <SeriesModePicker userId={user?.id ?? null} selection={seriesSelection} onChange={setSeriesSelection} />
-            <SchedulePostPicker scheduledAt={scheduledAt} onChange={setScheduledAt} />
-          </View>
         </View>
 
         <View style={styles.fieldGroup}>
@@ -1089,6 +1374,10 @@ export default function CreateVideoScreen() {
           </View>
         ) : null}
 
+        <View style={{ gap: 10 }}>
+          <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
+        </View>
+
         <View style={styles.optionsRow}>
           <TouchableOpacity
             style={[styles.optionChip, privacy === 'followers' && styles.optionChipActive]}
@@ -1119,6 +1408,220 @@ export default function CreateVideoScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.advancedToggle}
+          onPress={() => setAdvancedCreatorOpen((o) => !o)}
+          activeOpacity={0.75}
+        >
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.advancedToggleTitle}>Advanced creator tools</Text>
+            <Text style={styles.advancedToggleSub}>
+              Color grade & speed preview, thumbnails, B-roll queue, multi-part series, education citations, scheduling…
+            </Text>
+          </View>
+          <Ionicons
+            name={advancedCreatorOpen ? 'chevron-up' : 'chevron-down'}
+            size={22}
+            color={colors.dark.textMuted}
+          />
+        </TouchableOpacity>
+
+        {advancedCreatorOpen ? (
+          <>
+            {media ? (
+              <View style={styles.proPanel}>
+                <Text style={styles.proLabel}>Looks, audio preview & media tools</Text>
+                <VideoHygieneCard />
+                <BrollInsertCard
+                  hasPrimaryVideo={!!media}
+                  queuedCutaways={clipQueueVariant === 'broll' ? followUpClips.length : 0}
+                  onOpenPicker={() => {
+                    if (!media) {
+                      toast.show('Add a video first', 'info');
+                      return;
+                    }
+                    setStitchVariant('broll');
+                    setStitchOpen(true);
+                  }}
+                />
+                <CoCreateRoadmapCard />
+                <Text style={styles.aspectHint}>Vertical 9:16 looks best in the feed — preview is cropped to fill.</Text>
+                <Text style={styles.proSub}>Preview playback speed (does not change the uploaded file yet)</Text>
+                <View style={styles.chipRow}>
+                  {[0.5, 1, 1.5, 2].map((r) => (
+                    <TouchableOpacity
+                      key={r}
+                      style={[styles.miniChip, previewPlaybackRate === r && styles.miniChipOn]}
+                      onPress={() => setPreviewPlaybackRate(r)}
+                    >
+                      <Text style={[styles.miniChipText, previewPlaybackRate === r && styles.miniChipTextOn]}>
+                        {r === 1 ? '1×' : `${r}×`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.proSub}>Color grade (preview only)</Text>
+                <View style={styles.chipRow}>
+                  {EDITOR_FILTER_IDS.map((f) => {
+                    const meta = VIDEO_LOOKS.find((l) => l.id === f);
+                    if (!meta) return null;
+                    return (
+                      <TouchableOpacity
+                        key={f}
+                        style={[styles.miniChip, filterPreset === f && styles.miniChipOn]}
+                        onPress={() => setFilterPreset(f)}
+                      >
+                        <Text style={[styles.miniChipText, filterPreset === f && styles.miniChipTextOn]}>
+                          {meta.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <SpeedRampEditor
+                  rates={speedRamp}
+                  onChange={(r) => {
+                    setSpeedRamp(r);
+                    setPreviewPlaybackRate(r.mid);
+                  }}
+                  effectivePreview={previewPlaybackRate}
+                  onPreviewChange={setPreviewPlaybackRate}
+                />
+                {!soundPostIdTrim ? (
+                  <TouchableOpacity
+                    style={styles.secondaryFullBtn}
+                    onPress={() => setOriginalAudioOn(!originalAudioOn)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons
+                      name={originalAudioOn ? 'volume-high-outline' : 'volume-mute-outline'}
+                      size={18}
+                      color={colors.primary.teal}
+                    />
+                    <Text style={styles.secondaryFullBtnText}>
+                      {originalAudioOn ? 'Original audio ON in preview' : 'Original audio muted in preview'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {originalAudioOn && !soundPostIdTrim ? (
+                  <View style={{ marginBottom: 10, paddingHorizontal: 2 }}>
+                    <Text style={styles.proSub}>Original level in preview (upload file unchanged)</Text>
+                    <Slider
+                      style={{ width: '100%', height: 36 }}
+                      minimumValue={0}
+                      maximumValue={1}
+                      value={originalAudioMix}
+                      onValueChange={setOriginalAudioMix}
+                      minimumTrackTintColor={colors.primary.teal}
+                      maximumTrackTintColor={colors.dark.border}
+                      thumbTintColor={colors.primary.teal}
+                    />
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.secondaryFullBtn}
+                  onPress={() => {
+                    setThumbStudioMode('primary');
+                    setThumbStudioOpen(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="image-outline" size={18} color={colors.primary.teal} />
+                  <Text style={styles.secondaryFullBtnText}>Thumbnail studio</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryFullBtn}
+                  onPress={() => {
+                    setThumbStudioMode('alt');
+                    setThumbStudioOpen(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="layers-outline" size={18} color={colors.primary.teal} />
+                  <Text style={styles.secondaryFullBtnText}>Alt cover (A/B test)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryFullBtn} onPress={() => setClipSplitOpen(true)} activeOpacity={0.85}>
+                  <Ionicons name="albums-outline" size={18} color={colors.primary.teal} />
+                  <Text style={styles.secondaryFullBtnText}>Clip split planner</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryFullBtn}
+                  onPress={() => {
+                    if (!media) {
+                      toast.show('Add a video first', 'info');
+                      return;
+                    }
+                    setStitchVariant('series');
+                    setStitchOpen(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="git-merge-outline" size={18} color={colors.primary.teal} />
+                  <Text style={styles.secondaryFullBtnText}>Multi-part series queue</Text>
+                </TouchableOpacity>
+                <View style={styles.soundDiscoverRow}>
+                  <TouchableOpacity
+                    style={styles.secondaryFullBtn}
+                    onPress={() => router.push('/discover')}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="musical-notes-outline" size={18} color={colors.primary.teal} />
+                    <Text style={styles.secondaryFullBtnText}>Browse sounds & trends</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.secondaryFullBtn}
+                    onPress={() =>
+                      router.push(
+                        duetPostIdTrim
+                          ? (`/create/video-camera?duetPostId=${encodeURIComponent(duetPostIdTrim)}` as any)
+                          : ('/create/video-camera' as any),
+                      )
+                    }
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="videocam-outline" size={18} color={colors.primary.teal} />
+                    <Text style={styles.secondaryFullBtnText}>Open full-screen camera</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.secondaryFullBtn}
+                    onPress={async () => {
+                      const a = await pickVideoFromGallery();
+                      if (a) setMedia(a);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="cut-outline" size={18} color={colors.primary.teal} />
+                    <Text style={styles.secondaryFullBtnText}>Replace / re-trim video (Gallery)</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.proPanel}>
+              <Text style={styles.proLabel}>Brand, mood & scheduling</Text>
+              <TouchableOpacity
+                style={styles.secondaryFullBtn}
+                onPress={() => setBrandKitOpen(true)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="color-wand-outline" size={18} color={colors.primary.teal} />
+                <Text style={styles.secondaryFullBtnText}>Brand kit</Text>
+              </TouchableOpacity>
+              <MoodPresetPicker selected={moodId} onSelect={applyMoodPreset} />
+              <View style={{ gap: 10 }}>
+                <EducationModeToggle
+                  enabled={educationOn}
+                  onToggle={setEducationOn}
+                  citations={citations}
+                  onChange={(next) => setCitations(next.slice(0, 5))}
+                />
+                <SeriesModePicker userId={user?.id ?? null} selection={seriesSelection} onChange={setSeriesSelection} />
+                <SchedulePostPicker scheduledAt={scheduledAt} onChange={setScheduledAt} />
+              </View>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -1146,6 +1649,28 @@ const styles = StyleSheet.create({
     borderColor: colors.primary.gold + '44',
   },
   soundBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.dark.textSecondary, lineHeight: 18 },
+  clipQueueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.dark.card,
+    borderWidth: 1,
+    borderColor: colors.primary.teal + '66',
+  },
+  clipQueueBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.dark.textSecondary, lineHeight: 18 },
+  clipQueueBannerSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    lineHeight: 15,
+    marginTop: 4,
+  },
+  clipQueueClear: { fontSize: 13, fontWeight: '800', color: colors.primary.teal },
   duetBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1160,6 +1685,18 @@ const styles = StyleSheet.create({
     borderColor: colors.primary.teal + '55',
   },
   duetBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.dark.textSecondary, lineHeight: 18 },
+  duetMuxBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.dark.card,
+    borderWidth: 1,
+    borderColor: colors.primary.teal + '55',
+  },
+  duetMuxBtnText: { flex: 1, fontSize: 13, fontWeight: '800', color: colors.dark.text },
   shiftRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   shiftChip: {
     paddingHorizontal: 12,
@@ -1198,6 +1735,23 @@ const styles = StyleSheet.create({
   removeBtn: {
     position: 'absolute', top: 10, right: 10,
     backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 13,
+  },
+  rerecordBtn: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 13,
+    padding: 6,
+  },
+  soundWaveHint: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    lineHeight: 15,
   },
 
   emptyPreview: {
@@ -1256,6 +1810,25 @@ const styles = StyleSheet.create({
   optionText: { fontSize: 13, fontWeight: '600', color: colors.dark.textSecondary },
   optionChipActive: { borderColor: colors.primary.teal },
   optionTextActive: { color: colors.primary.teal },
+
+  advancedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: colors.dark.card,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  advancedToggleTitle: { fontSize: 14, fontWeight: '800', color: colors.dark.text },
+  advancedToggleSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    marginTop: 4,
+    lineHeight: 17,
+  },
 
   draftHint: {
     flexDirection: 'row',

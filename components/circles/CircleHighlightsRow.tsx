@@ -4,8 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
 import { formatCount } from '@/utils/format';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import type { CircleAccent } from '@/lib/circleAccents';
-import type { CircleThread, Post } from '@/types';
+import type { CircleThread, Post, CreatorSummary } from '@/types';
 
 type Props = {
   posts: Post[];
@@ -128,7 +129,7 @@ export function CircleHighlightsRow({
     const recentForCreator = posts.filter((p) => new Date(p.createdAt).getTime() >= weekAgo);
     const creatorTotals = new Map<
       string,
-      { id: string; name: string; role?: string; score: number }
+      { id: string; name: string; creator: CreatorSummary; score: number }
     >();
     for (const p of recentForCreator) {
       const id = p.creatorId;
@@ -145,19 +146,22 @@ export function CircleHighlightsRow({
         creatorTotals.set(id, {
           id,
           name: p.creator?.displayName ?? 'Member',
-          role: p.creator?.role,
+          creator: p.creator,
           score,
         });
       }
     }
     const topCreator = Array.from(creatorTotals.values()).sort((a, b) => b.score - a.score)[0];
+    const tagLine = topCreator ? buildNeonPillTags(topCreator.creator).join(' · ') : '';
     const creatorHighlight: Highlight = topCreator
       ? {
           key: 'creator',
           icon: 'star',
           label: 'Top Creator',
           title: topCreator.name,
-          meta: topCreator.role ? `${topCreator.role} · ${formatCount(topCreator.score)} pts` : `${formatCount(topCreator.score)} pts`,
+          meta: tagLine
+            ? `${tagLine} · ${formatCount(topCreator.score)} pts`
+            : `${formatCount(topCreator.score)} pts`,
           onPress: onSelectCreator ? () => onSelectCreator(topCreator.id) : undefined,
         }
       : {

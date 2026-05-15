@@ -11,11 +11,11 @@ import type { LiveGift, LiveGiftTier } from '@/types';
 
 interface Props {
   visible: boolean;
-  coinBalance: number;
+  sparkBalance: number;
   onSendGift: (gift: LiveGift, quantity: number) => void;
   onClose: () => void;
-  /** When omitted (v1 launch), coin balance is display-only — no “buy coins”. */
-  onBuyCoins?: () => void;
+  /** Opens Pulse Shop Sparks tab (or other top-up flow). */
+  onBuySparks?: () => void;
   sending?: boolean;
 }
 
@@ -26,13 +26,15 @@ const TABS: { key: LiveGiftTier; label: string; icon: string }[] = [
   { key: 'legendary', label: 'Legendary', icon: 'trophy' },
 ];
 
-export function GiftPicker({ visible, coinBalance, onSendGift, onClose, onBuyCoins, sending }: Props) {
+export function GiftPicker({ visible, sparkBalance, onSendGift, onClose, onBuySparks, sending }: Props) {
   const [tab, setTab] = useState<LiveGiftTier>('free');
   const [selected, setSelected] = useState<LiveGift | null>(null);
   const [quantity, setQuantity] = useState(1);
 
   const gifts = getGiftsByTier(tab);
-  const canAfford = selected ? selected.coinCost * quantity <= coinBalance || selected.coinCost === 0 : false;
+  const canAfford = selected
+    ? selected.sparkCost * quantity <= sparkBalance || selected.sparkCost === 0
+    : false;
 
   const handleSend = () => {
     if (!selected) return;
@@ -50,16 +52,16 @@ export function GiftPicker({ visible, coinBalance, onSendGift, onClose, onBuyCoi
 
           <View style={styles.headerRow}>
             <Text style={styles.title}>Send a Gift</Text>
-            {onBuyCoins ? (
-              <TouchableOpacity style={styles.coinBadge} onPress={onBuyCoins} activeOpacity={0.7}>
-                <Ionicons name="logo-bitcoin" size={14} color={colors.status.premium} />
-                <Text style={styles.coinText}>{coinBalance.toLocaleString()}</Text>
+            {onBuySparks ? (
+              <TouchableOpacity style={styles.sparkBadge} onPress={onBuySparks} activeOpacity={0.7}>
+                <Ionicons name="flash" size={14} color={colors.status.premium} />
+                <Text style={styles.sparkText}>{sparkBalance.toLocaleString()}</Text>
                 <Ionicons name="add-circle" size={16} color={colors.status.premium} />
               </TouchableOpacity>
             ) : (
-              <View style={styles.coinBadge}>
-                <Ionicons name="logo-bitcoin" size={14} color={colors.status.premium} />
-                <Text style={styles.coinText}>{coinBalance.toLocaleString()}</Text>
+              <View style={styles.sparkBadge}>
+                <Ionicons name="flash" size={14} color={colors.status.premium} />
+                <Text style={styles.sparkText}>{sparkBalance.toLocaleString()}</Text>
               </View>
             )}
           </View>
@@ -104,10 +106,10 @@ export function GiftPicker({ visible, coinBalance, onSendGift, onClose, onBuyCoi
                 >
                   <Text style={styles.giftEmoji}>{gift.emoji}</Text>
                   <Text style={styles.giftName} numberOfLines={1}>{gift.name}</Text>
-                  {gift.coinCost > 0 ? (
+                  {gift.sparkCost > 0 ? (
                     <View style={styles.giftCostRow}>
-                      <Ionicons name="logo-bitcoin" size={10} color={colors.status.premium} />
-                      <Text style={styles.giftCost}>{gift.coinCost}</Text>
+                      <Ionicons name="flash" size={10} color={colors.status.premium} />
+                      <Text style={styles.giftCost}>{gift.sparkCost}</Text>
                     </View>
                   ) : (
                     <Text style={styles.giftFreeLabel}>FREE</Text>
@@ -151,17 +153,17 @@ export function GiftPicker({ visible, coinBalance, onSendGift, onClose, onBuyCoi
                     <Text style={styles.sendEmoji}>{selected.emoji}</Text>
                     <Text style={styles.sendBtnText}>
                       Send {quantity > 1 ? `x${quantity} ` : ''}
-                      {selected.coinCost > 0
-                        ? `(${(selected.coinCost * quantity).toLocaleString()} coins)`
+                      {selected.sparkCost > 0
+                        ? `(${(selected.sparkCost * quantity).toLocaleString()} Sparks)`
                         : ''}
                     </Text>
                   </>
                 )}
               </TouchableOpacity>
 
-              {!canAfford && selected.coinCost > 0 && (
-                <TouchableOpacity style={styles.buyMoreBtn} onPress={onBuyCoins} activeOpacity={0.7}>
-                  <Text style={styles.buyMoreText}>Not enough coins — Tap to buy more</Text>
+              {!canAfford && selected.sparkCost > 0 && (
+                <TouchableOpacity style={styles.buyMoreBtn} onPress={onBuySparks} activeOpacity={0.7}>
+                  <Text style={styles.buyMoreText}>Not enough Sparks — open shop to top up</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -189,13 +191,12 @@ const styles = StyleSheet.create({
     marginBottom: 14, paddingHorizontal: 4,
   },
   title: { fontSize: 18, fontWeight: '800', color: '#FFF' },
-  coinBadge: {
+  sparkBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: colors.dark.cardAlt, paddingHorizontal: 12, paddingVertical: 6,
     borderRadius: 20, borderWidth: 1, borderColor: colors.status.premium + '30',
   },
-  coinIcon: { fontSize: 14 },
-  coinText: { fontSize: 14, fontWeight: '700', color: colors.status.premium },
+  sparkText: { fontSize: 14, fontWeight: '700', color: colors.status.premium },
 
   tabs: { flexDirection: 'row', gap: 6, marginBottom: 16 },
   tab: {
@@ -216,7 +217,6 @@ const styles = StyleSheet.create({
   giftEmoji: { fontSize: 32, marginBottom: 6 },
   giftName: { fontSize: 10, fontWeight: '600', color: colors.dark.textSecondary, textAlign: 'center' },
   giftCostRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
-  coinMini: { fontSize: 10 },
   giftCost: { fontSize: 12, fontWeight: '800', color: colors.status.premium },
   giftFreeLabel: { fontSize: 10, fontWeight: '800', color: colors.status.success, marginTop: 4 },
 

@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
-  colors,
   gradients,
   iconSize,
   semantic,
@@ -30,6 +29,7 @@ import {
   PodiumRasterRingStack,
   prizeFrameTierForMonthlyRank,
 } from '@/components/profile/PodiumRasterRingStack';
+import { CreatorHubGlassBackdrop } from '@/components/pv/CreatorHubGlassBackdrop';
 import { isSummerSolstice2026PulseCollectionActive } from '@/lib/pulseRingRasterAssets';
 
 type Tab = 'current' | 'lifetime';
@@ -65,6 +65,49 @@ const MEDALS = {
   },
 } as const;
 
+/** Left→right display ranks for a symmetric top-N podium (winner centered when N≥3). */
+const PODIUM_ORDER: Record<number, number[]> = {
+  1: [1],
+  2: [2, 1],
+  3: [2, 1, 3],
+  4: [4, 2, 1, 3],
+  5: [4, 2, 1, 3, 5],
+};
+
+function podiumVisual(rank: number, soloWinner: boolean): {
+  podiumHeight: number;
+  avatarSize: number;
+  medal: (typeof MEDALS)[keyof typeof MEDALS];
+  showCrown: boolean;
+} {
+  if (soloWinner && rank === 1) {
+    return { podiumHeight: 56, avatarSize: 72, medal: MEDALS.goldsolo, showCrown: true };
+  }
+  switch (rank) {
+    case 1:
+      return { podiumHeight: 52, avatarSize: 58, medal: MEDALS.gold, showCrown: true };
+    case 2:
+      return { podiumHeight: 42, avatarSize: 50, medal: MEDALS.silver, showCrown: false };
+    case 3:
+      return { podiumHeight: 34, avatarSize: 46, medal: MEDALS.bronze, showCrown: false };
+    case 4:
+      return { podiumHeight: 28, avatarSize: 42, medal: MEDALS.bronze, showCrown: false };
+    case 5:
+      return { podiumHeight: 24, avatarSize: 40, medal: MEDALS.bronze, showCrown: false };
+    default:
+      return { podiumHeight: 30, avatarSize: 44, medal: MEDALS.bronze, showCrown: false };
+  }
+}
+
+function buildPodiumSlots<T extends { userId: string }>(rows: T[]): { row: T; rank: number }[] {
+  const top = rows.slice(0, 5);
+  const n = top.length;
+  if (n === 0) return [];
+  const order = PODIUM_ORDER[n];
+  if (!order) return [];
+  return order.map((rank) => ({ row: top[rank - 1]!, rank }));
+}
+
 /** Prize strip copy + preview sizes — borders match equipped monthly silver/bronze/gold frames. */
 const MONTHLY_PRIZE_STRIPS = [
   { tier: 'gold' as const, label: 'Gold', rank: '1st place', photoD: 56, fireworks: true },
@@ -74,7 +117,7 @@ const MONTHLY_PRIZE_STRIPS = [
 
 /**
  * Pulse Score leaderboards — **This month** & **Lifetime** (global only).
- * Podium: 2nd · 1st · 3rd on tiered steps; 4th & 5th below.
+ * Single five-slot podium: 4th · 2nd · 1st · 3rd · 5th (fewer rows omit outer slots).
  */
 export function PulseLeaderboards({ limit = 5 }: Props) {
   const [tab, setTab] = useState<Tab>('current');
@@ -102,12 +145,15 @@ export function PulseLeaderboards({ limit = 5 }: Props) {
   const loading = tab === 'current' ? currentLoading : lifetimeLoading;
 
   return (
-    <LinearGradient
-      colors={[...gradients.leaderboardCard]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.cardGradient}
-    >
+    <View style={styles.cardOuter}>
+      <CreatorHubGlassBackdrop borderRadius={22} blurIntensity={40} />
+      <LinearGradient
+        colors={['rgba(32,26,52,0.44)', 'rgba(14,20,38,0.50)', 'rgba(11,18,32,0.46)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <View style={styles.cardInner}>
         <View style={styles.headerRow}>
           <LinearGradient
@@ -161,7 +207,7 @@ export function PulseLeaderboards({ limit = 5 }: Props) {
 
         {tab === 'current' ? <MonthlyBorderPrizePreview /> : null}
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -175,11 +221,13 @@ function MonthlyBorderPrizePreview() {
 
   return (
     <View style={styles.prizePreviewSection}>
+      <CreatorHubGlassBackdrop borderRadius={18} blurIntensity={26} />
       <LinearGradient
         colors={[...gradients.leaderboardPrizePreview]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
       <View style={styles.prizePreviewInner}>
         <View style={styles.prizePreviewTitleRow}>
@@ -273,6 +321,7 @@ function TabControl({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
+      <CreatorHubGlassBackdrop borderRadius={14} blurIntensity={22} />
       {active ? (
         <LinearGradient
           colors={activeColors}
@@ -297,46 +346,33 @@ function PodiumCurrentBoard({ rows }: { rows: PulseLeaderboardRow[] }) {
       <EmptyBoard message="No scores yet this month — post, comment, and connect to claim the podium." />
     );
   }
-  const top = rows.slice(0, 3);
-  const tail = rows.slice(3, 5);
-  const ordered =
-    top.length >= 3
-      ? ([top[1], top[0], top[2]] as [PulseLeaderboardRow, PulseLeaderboardRow, PulseLeaderboardRow])
-      : top.length === 2
-        ? ([top[1], top[0]] as [PulseLeaderboardRow, PulseLeaderboardRow])
-        : ([top[0]] as [PulseLeaderboardRow]);
-  const heights =
-    top.length >= 3 ? ([36, 56, 28] as const) : top.length === 2 ? ([40, 52] as const) : ([56] as const);
-  const avatarSizes =
-    top.length >= 3 ? ([52, 68, 48] as const) : top.length === 2 ? ([56, 72] as const) : ([76] as const);
-  const medals: (keyof typeof MEDALS)[] =
-    top.length >= 3 ? (['silver', 'gold', 'bronze'] as const) : top.length === 2 ? (['silver', 'gold'] as const) : (['goldsolo'] as const);
+  const slots = buildPodiumSlots(rows);
+  const soloWinner = rows.length === 1;
 
   return (
     <View style={styles.podiumSection}>
       <View style={styles.podiumRow}>
-        {ordered.map((row, idx) => {
-          const realRank =
-            top.length >= 3 ? (idx === 0 ? 2 : idx === 1 ? 1 : 3) : top.length === 2 ? (idx === 0 ? 2 : 1) : 1;
+        {slots.map(({ row, rank }) => {
+          const v = podiumVisual(rank, soloWinner);
           return (
             <PodiumStand
               key={row.userId}
-              rank={realRank}
+              rank={rank}
               userId={row.userId}
               displayName={row.displayName}
               username={row.username}
               avatarUrl={row.avatarUrl}
-              podiumHeight={heights[idx] ?? 40}
-              avatarSize={avatarSizes[idx] ?? 56}
-              medal={MEDALS[medals[idx] ?? 'gold']}
-              showCrown={realRank === 1}
+              podiumHeight={v.podiumHeight}
+              avatarSize={v.avatarSize}
+              medal={v.medal}
+              showCrown={v.showCrown}
+              compact={rank >= 4}
             >
-              <CurrentPodiumMetrics row={row} />
+              <CurrentPodiumMetrics row={row} rank={rank} />
             </PodiumStand>
           );
         })}
       </View>
-      {tail.length > 0 ? <RunnersCurrent tail={tail} /> : null}
     </View>
   );
 }
@@ -347,104 +383,33 @@ function PodiumLifetimeBoard({ rows }: { rows: PulseLifetimeLeaderboardRow[] }) 
       <EmptyBoard message="No lifetime totals yet. Earn Pulse in completed months to climb the board." />
     );
   }
-  const top = rows.slice(0, 3);
-  const tail = rows.slice(3, 5);
-  const ordered =
-    top.length >= 3
-      ? ([top[1], top[0], top[2]] as [
-          PulseLifetimeLeaderboardRow,
-          PulseLifetimeLeaderboardRow,
-          PulseLifetimeLeaderboardRow,
-        ])
-      : top.length === 2
-        ? ([top[1], top[0]] as [PulseLifetimeLeaderboardRow, PulseLifetimeLeaderboardRow])
-        : ([top[0]] as [PulseLifetimeLeaderboardRow]);
-  const heights =
-    top.length >= 3 ? ([36, 56, 28] as const) : top.length === 2 ? ([40, 52] as const) : ([56] as const);
-  const avatarSizes =
-    top.length >= 3 ? ([52, 68, 48] as const) : top.length === 2 ? ([56, 72] as const) : ([76] as const);
-  const medals: (keyof typeof MEDALS)[] =
-    top.length >= 3 ? (['silver', 'gold', 'bronze'] as const) : top.length === 2 ? (['silver', 'gold'] as const) : (['goldsolo'] as const);
+  const slots = buildPodiumSlots(rows);
+  const soloWinner = rows.length === 1;
 
   return (
     <View style={styles.podiumSection}>
       <View style={styles.podiumRow}>
-        {ordered.map((row, idx) => {
-          const realRank =
-            top.length >= 3 ? (idx === 0 ? 2 : idx === 1 ? 1 : 3) : top.length === 2 ? (idx === 0 ? 2 : 1) : 1;
+        {slots.map(({ row, rank }) => {
+          const v = podiumVisual(rank, soloWinner);
           return (
             <PodiumStand
               key={row.userId}
-              rank={realRank}
+              rank={rank}
               userId={row.userId}
               displayName={row.displayName}
               username={row.username}
               avatarUrl={row.avatarUrl}
-              podiumHeight={heights[idx] ?? 40}
-              avatarSize={avatarSizes[idx] ?? 56}
-              medal={MEDALS[medals[idx] ?? 'gold']}
-              showCrown={realRank === 1}
+              podiumHeight={v.podiumHeight}
+              avatarSize={v.avatarSize}
+              medal={v.medal}
+              showCrown={v.showCrown}
+              compact={rank >= 4}
             >
-              <LifetimePodiumMetrics row={row} />
+              <LifetimePodiumMetrics row={row} rank={rank} />
             </PodiumStand>
           );
         })}
       </View>
-      {tail.length > 0 ? <RunnersLifetime tail={tail} /> : null}
-    </View>
-  );
-}
-
-function RunnersCurrent({ tail }: { tail: PulseLeaderboardRow[] }) {
-  return (
-    <View style={styles.runnersBlock}>
-      <RunnersHeader />
-      <View style={styles.runnersRow}>
-        {tail.map((row, i) => (
-          <RunnerCard
-            key={row.userId}
-            rank={4 + i}
-            userId={row.userId}
-            displayName={row.displayName}
-            username={row.username}
-            avatarUrl={row.avatarUrl}
-          >
-            <RunnerCurrentRight row={row} />
-          </RunnerCard>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function RunnersLifetime({ tail }: { tail: PulseLifetimeLeaderboardRow[] }) {
-  return (
-    <View style={styles.runnersBlock}>
-      <RunnersHeader />
-      <View style={styles.runnersRow}>
-        {tail.map((row, i) => (
-          <RunnerCard
-            key={row.userId}
-            rank={4 + i}
-            userId={row.userId}
-            displayName={row.displayName}
-            username={row.username}
-            avatarUrl={row.avatarUrl}
-          >
-            <RunnerLifetimeRight row={row} />
-          </RunnerCard>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function RunnersHeader() {
-  return (
-    <View style={styles.runnersHeader}>
-      <View style={styles.runnersRule} />
-      <Text style={styles.runnersTitle}>Also climbing</Text>
-      <View style={styles.runnersRule} />
     </View>
   );
 }
@@ -459,6 +424,7 @@ function PodiumStand({
   avatarSize,
   medal,
   showCrown,
+  compact,
   children,
 }: {
   rank: number;
@@ -470,6 +436,7 @@ function PodiumStand({
   avatarSize: number;
   medal: (typeof MEDALS)[keyof typeof MEDALS];
   showCrown: boolean;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -497,13 +464,13 @@ function PodiumStand({
           />
         </Pressable>
         <Pressable onPress={go} hitSlop={{ top: 2, bottom: 2, left: 6, right: 6 }}>
-          <Text style={styles.standName} numberOfLines={1}>
+          <Text style={[styles.standName, compact && styles.standNameCompact]} numberOfLines={1}>
             {name}
           </Text>
         </Pressable>
         {username ? (
           <Pressable onPress={go}>
-            <Text style={styles.standHandle} numberOfLines={1}>
+            <Text style={[styles.standHandle, compact && styles.standHandleCompact]} numberOfLines={1}>
               @{username}
             </Text>
           </Pressable>
@@ -526,103 +493,40 @@ function PodiumStand({
             },
           ]}
         >
-          <Text style={styles.podiumRankLabel}>{ordinal(rank)}</Text>
+          <Text style={[styles.podiumRankLabel, compact && styles.podiumRankLabelCompact]}>{ordinal(rank)}</Text>
         </LinearGradient>
       </Pressable>
     </View>
   );
 }
 
-function CurrentPodiumMetrics({ row }: { row: PulseLeaderboardRow }) {
+function CurrentPodiumMetrics({ row, rank }: { row: PulseLeaderboardRow; rank: number }) {
   const tier = tierMeta(row.tier);
+  const compact = rank >= 4;
   return (
     <View style={styles.metricsPodium}>
-      <Text style={styles.scoreHero}>{row.overall}</Text>
+      <Text style={[styles.scoreHero, compact && styles.scoreHeroCompact]}>{row.overall}</Text>
       <View style={[styles.tierChip, { borderColor: `${tier.accent}55`, backgroundColor: `${tier.accent}14` }]}>
-        <Text style={[styles.tierChipText, { color: tier.accent }]}>{tier.label}</Text>
+        <Text style={[styles.tierChipText, compact && styles.tierChipTextCompact, { color: tier.accent }]}>
+          {tier.label}
+        </Text>
       </View>
     </View>
   );
 }
 
-function LifetimePodiumMetrics({ row }: { row: PulseLifetimeLeaderboardRow }) {
+function LifetimePodiumMetrics({ row, rank }: { row: PulseLifetimeLeaderboardRow; rank: number }) {
   const best = tierMeta(row.bestTier);
+  const compact = rank >= 4;
   return (
     <View style={styles.metricsPodium}>
-      <Text style={styles.scoreHeroLifetime}>{formatPulseStat(row.lifetimeTotal)}</Text>
-      <Text style={styles.lifetimeUnit}>lifetime Pulse</Text>
-      <Text style={styles.bestTierHint} numberOfLines={1}>
+      <Text style={[styles.scoreHeroLifetime, compact && styles.scoreHeroLifetimeCompact]}>
+        {formatPulseStat(row.lifetimeTotal)}
+      </Text>
+      <Text style={[styles.lifetimeUnit, compact && styles.lifetimeUnitCompact]}>lifetime Pulse</Text>
+      <Text style={[styles.bestTierHint, compact && styles.bestTierHintCompact]} numberOfLines={1}>
         Peak {best.label}
       </Text>
-    </View>
-  );
-}
-
-function RunnerCard({
-  rank,
-  userId,
-  displayName,
-  username,
-  avatarUrl,
-  children,
-}: {
-  rank: number;
-  userId: string;
-  displayName: string | null;
-  username: string | null;
-  avatarUrl: string | null;
-  children: React.ReactNode;
-}) {
-  const router = useRouter();
-  const go = () => router.push(`/profile/${userId}` as any);
-  const name = displayName || username || 'Creator';
-
-  return (
-    <Pressable
-      onPress={go}
-      style={({ pressed }) => [styles.runnerCard, pressed && { opacity: 0.9 }]}
-      accessibilityRole="button"
-      accessibilityLabel={`${ordinal(rank)} — ${name}, open My Pulse`}
-    >
-      <LinearGradient
-        colors={[...gradients.cardRowSheen]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.runnerRank}>
-        <Text style={styles.runnerRankText}>{rank}</Text>
-      </View>
-      <Pressable onPress={go} hitSlop={8} accessibilityLabel={`${name} profile photo`}>
-        <PodiumRasterRingStack photoDiameter={44} prizeTier="bronze" avatarUrl={avatarUrl} />
-      </Pressable>
-      <View style={styles.runnerMeta}>
-        <Pressable onPress={go}>
-          <Text style={styles.runnerName} numberOfLines={1}>
-            {name}
-          </Text>
-        </Pressable>
-        {children}
-      </View>
-    </Pressable>
-  );
-}
-
-function RunnerCurrentRight({ row }: { row: PulseLeaderboardRow }) {
-  const tier = tierMeta(row.tier);
-  return (
-    <View style={styles.runnerRight}>
-      <Text style={styles.runnerScore}>{row.overall}</Text>
-      <Text style={[styles.runnerTier, { color: tier.accent }]}>{tier.label}</Text>
-    </View>
-  );
-}
-
-function RunnerLifetimeRight({ row }: { row: PulseLifetimeLeaderboardRow }) {
-  return (
-    <View style={styles.runnerRight}>
-      <Text style={styles.runnerScoreGold}>{formatPulseStat(row.lifetimeTotal)}</Text>
-      <Text style={styles.runnerSub}>lifetime</Text>
     </View>
   );
 }
@@ -644,18 +548,19 @@ function EmptyBoard({ message }: { message: string }) {
 }
 
 const styles = StyleSheet.create({
-  cardGradient: {
+  cardOuter: {
     borderRadius: 22,
-    padding: 1,
     borderWidth: 1,
-    borderColor: 'rgba(252,211,77,0.16)',
+    borderColor: 'rgba(252,211,77,0.20)',
+    overflow: 'hidden',
+    position: 'relative',
     ...shadows.lifted,
   },
   cardInner: {
-    borderRadius: 21,
-    backgroundColor: 'rgba(8,12,24,0.94)',
     padding: spacing.lg,
     gap: spacing.lg,
+    position: 'relative',
+    zIndex: 1,
     overflow: 'hidden',
   },
   headerRow: {
@@ -708,13 +613,16 @@ const styles = StyleSheet.create({
     borderColor: semantic.borderSubtle,
     overflow: 'hidden',
     minHeight: 52,
+    position: 'relative',
   },
-  tabBtnFill: { ...StyleSheet.absoluteFillObject },
-  tabBtnMuted: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.03)' },
+  tabBtnFill: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
+  tabBtnMuted: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.05)' },
   tabBtnContent: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: 'center',
+    position: 'relative',
+    zIndex: 1,
   },
   tabLabel: {
     fontSize: 13,
@@ -727,8 +635,8 @@ const styles = StyleSheet.create({
   loadingWrap: { paddingVertical: 32, alignItems: 'center', gap: 10 },
   loadingText: { fontSize: 12, color: semantic.textMuted },
   podiumSection: { gap: 18, marginTop: 4 },
-  podiumRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
-  standCol: { flex: 1, alignItems: 'center', minWidth: 0, maxWidth: 120 },
+  podiumRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 4 },
+  standCol: { flex: 1, alignItems: 'center', minWidth: 0, maxWidth: 100 },
   standTop: { alignItems: 'center', width: '100%', marginBottom: 6, gap: 2 },
   crownWrap: { marginBottom: 2 },
   avatarPress: { marginTop: 2 },
@@ -740,12 +648,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 2,
   },
+  standNameCompact: { fontSize: 10.5, marginTop: 4 },
   standHandle: {
     fontSize: 10,
     color: semantic.textMuted,
     fontWeight: '600',
     textAlign: 'center',
   },
+  standHandleCompact: { fontSize: 9 },
   metricsPodium: { alignItems: 'center', gap: 4, marginTop: 4 },
   scoreHero: {
     fontSize: 24,
@@ -754,6 +664,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
   },
+  scoreHeroCompact: { fontSize: 17, letterSpacing: -0.35 },
   scoreHeroLifetime: {
     fontSize: 20,
     fontWeight: '900',
@@ -761,8 +672,11 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.4,
   },
+  scoreHeroLifetimeCompact: { fontSize: 15, letterSpacing: -0.3 },
   lifetimeUnit: { fontSize: 9, fontWeight: '800', color: semantic.textMuted, letterSpacing: 0.8 },
+  lifetimeUnitCompact: { fontSize: 8, letterSpacing: 0.5 },
   bestTierHint: { fontSize: 9, color: semantic.textSecondary, fontWeight: '600' },
+  bestTierHintCompact: { fontSize: 8 },
   tierChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -770,6 +684,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   tierChipText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
+  tierChipTextCompact: { fontSize: 8, letterSpacing: 0.4 },
   podiumBase: {
     width: '100%',
     borderTopLeftRadius: 10,
@@ -785,46 +700,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.92)',
     letterSpacing: 1,
   },
-  runnersBlock: { gap: 12 },
-  runnersHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
-  runnersRule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.12)' },
-  runnersTitle: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    color: semantic.textMuted,
-  },
-  runnersRow: { gap: 8 },
-  runnerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-  },
-  runnerRank: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  runnerRankText: { fontSize: 12, fontWeight: '900', color: semantic.textPrimary },
-  runnerMeta: { flex: 1, minWidth: 0 },
-  runnerName: { fontSize: 14, fontWeight: '800', color: semantic.textPrimary },
-  runnerRight: { alignItems: 'flex-end' },
-  runnerScore: { fontSize: 18, fontWeight: '900', color: semantic.textPrimary, fontVariant: ['tabular-nums'] },
-  runnerScoreGold: { fontSize: 17, fontWeight: '900', color: semantic.warning, fontVariant: ['tabular-nums'] },
-  runnerTier: { fontSize: 9, fontWeight: '800' },
-  runnerSub: { fontSize: 9, fontWeight: '800', color: semantic.textMuted, letterSpacing: 0.5 },
+  podiumRankLabelCompact: { fontSize: 9, letterSpacing: 0.6 },
   emptyWrap: { paddingVertical: 28, alignItems: 'center', gap: 10 },
   emptyText: {
     fontSize: 12,
@@ -837,8 +713,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(252,211,77,0.14)',
+    borderColor: 'rgba(252,211,77,0.16)',
     overflow: 'hidden',
+    position: 'relative',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -852,6 +729,8 @@ const styles = StyleSheet.create({
   prizePreviewInner: {
     padding: spacing.md,
     gap: 10,
+    position: 'relative',
+    zIndex: 1,
   },
   prizePreviewTitleRow: {
     flexDirection: 'row',

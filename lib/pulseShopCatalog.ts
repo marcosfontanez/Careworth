@@ -1,4 +1,5 @@
 export type ShopTabKey = 'borders' | 'credits' | 'gifts' | 'more';
+/** UI: "Sparks" tab uses key `credits` + deep link `?tab=sparks` or `?tab=credits`. */
 
 export type GiftContext = 'live' | 'post' | 'profile';
 

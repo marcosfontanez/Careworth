@@ -1,14 +1,29 @@
-import type { Comment } from '@/types';
+import type { Comment, PostReactionCounts, PostReactionKind } from '@/types';
 import { commentsService as supaComments } from '@/services/supabase/comments';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
+import { normalizePostReactionKind } from '@/lib/postReactions';
 import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
 
-function buildTree(flat: any[]): Comment[] {
+function rowToCommentReactionCounts(row: any): PostReactionCounts {
+  return {
+    heart: row.reaction_heart_count ?? 0,
+    haha: row.reaction_haha_count ?? 0,
+    wow: row.reaction_wow_count ?? 0,
+    sad: row.reaction_sad_count ?? 0,
+    angry: row.reaction_angry_count ?? 0,
+  };
+}
+
+function buildTree(
+  flat: any[],
+  viewerByComment: Partial<Record<string, PostReactionKind>>,
+): Comment[] {
   const map = new Map<string, Comment>();
   const roots: Comment[] = [];
 
   for (const raw of flat) {
     const isDeleted = !!raw.deleted_at;
+    const vr = normalizePostReactionKind(viewerByComment[raw.id]);
 
     const c: Comment = {
       id: raw.id,
@@ -24,7 +39,10 @@ function buildTree(flat: any[]): Comment[] {
        * everywhere.
        */
       content: isDeleted ? COMMENT_DELETED_TOMBSTONE : raw.content,
+      mediaUrl: isDeleted ? undefined : raw.media_url?.trim() || undefined,
       likeCount: raw.like_count ?? 0,
+      reactionCounts: rowToCommentReactionCounts(raw),
+      viewerReaction: vr,
       replyCount: 0,
       createdAt: raw.created_at,
       /**
@@ -36,7 +54,7 @@ function buildTree(flat: any[]): Comment[] {
        */
       editedAt: isDeleted ? undefined : raw.edited_at ?? undefined,
       isPinned: false,
-      isLiked: false,
+      isLiked: vr === 'heart',
       isDeleted,
       replies: [],
     };
@@ -58,24 +76,29 @@ function buildTree(flat: any[]): Comment[] {
 }
 
 export const commentService = {
-  async getByPostId(postId: string): Promise<Comment[]> {
+  async getByPostId(postId: string, viewerId?: string | null): Promise<Comment[]> {
     try {
       const data = await supaComments.getByPostId(postId);
-      return buildTree(data);
+      const ids = data.map((r) => r.id);
+      const viewerMap =
+        viewerId && ids.length > 0
+          ? await supaComments.getViewerReactionsForComments(viewerId, ids)
+          : {};
+      return buildTree(data, viewerMap);
     } catch {
       return [];
     }
   },
 
-  async addComment(postId: string, content: string, parentId?: string) {
+  async addComment(postId: string, content: string, parentId?: string, mediaUrl?: string | null) {
     /**
      * Trim to the cap before we even hit the wire. Same defense-in-depth
      * pattern as the supabase service — keeps offline-queued comments
      * from getting silently rejected by the DB CHECK constraint when
      * they finally replay.
      */
-    const safe = content.slice(0, COMMENT_MAX_LENGTH);
-    return supaComments.create(postId, safe, parentId);
+    const safe = content.slice(0, COMMENT_MAX_LENGTH).trim();
+    return supaComments.create(postId, safe, parentId, mediaUrl);
   },
 
   /**
@@ -98,7 +121,7 @@ export const commentService = {
     return supaComments.update(commentId, safe);
   },
 
-  async likeComment(commentId: string) {
-    return supaComments.likeComment(commentId);
+  async setCommentReaction(commentId: string, kind: PostReactionKind | null) {
+    return supaComments.setCommentReaction(commentId, kind);
   },
 };

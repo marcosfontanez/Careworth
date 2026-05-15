@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, shadows, spacing } from '@/theme';
 import type { ProfileUpdateDisplayType } from '@/types';
 import { withPulseVerseCta } from '@/lib/share';
+import { formatCount } from '@/utils/format';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 
 export interface MyPulseTypeVisual {
@@ -473,17 +474,10 @@ function ActionBtn({
   );
 }
 
-function formatCount(n: number): string {
-  if (n < 1_000) return String(n);
-  if (n < 10_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
-  if (n < 1_000_000) return `${Math.round(n / 1_000)}K`;
-  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-}
-
 const styles = StyleSheet.create({
   shell: {
     flexDirection: 'row',
-    backgroundColor: '#0D1524',
+    backgroundColor: colors.dark.card,
     borderRadius: borderRadius.xl,
     borderWidth: 1,
     overflow: 'hidden',
