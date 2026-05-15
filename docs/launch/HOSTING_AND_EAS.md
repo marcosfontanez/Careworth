@@ -41,7 +41,7 @@ Replace `YOUR_SHA256` with the signing certificate fingerprint from Play Console
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.pulseverse.app",
+      "package_name": "app.pulseverse.app",
       "sha256_cert_fingerprints": ["YOUR_SHA256"]
     }
   }
