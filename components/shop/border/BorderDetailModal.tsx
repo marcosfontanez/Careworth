@@ -30,6 +30,16 @@ import {
 } from '@/lib/shop/borderDisplayModel';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
 import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
+import { BorderCategoryBadge } from '@/components/borders/BorderCategoryBadge';
+import { CampaignWindowCountdown } from '@/components/borders/CampaignWindowCountdown';
+import { CharityCalloutBlock } from '@/components/borders/CharityCalloutBlock';
+import { PartnerDropCalloutBlock } from '@/components/borders/PartnerDropCalloutBlock';
+import {
+  deriveBorderCategory,
+  readCharityMeta,
+  readSponsorMeta,
+} from '@/lib/borders/category';
+import { readCampaignWindow } from '@/lib/borders/campaignWindow';
 
 export type BorderDetailModalProps = {
   visible: boolean;
@@ -97,6 +107,12 @@ export function BorderDetailModal({
     item.rank_place != null && item.rank_place > 0 ? `#${item.rank_place} place` : null;
   const lockedPreview = !inventorySurface && cta?.kind === 'locked';
 
+  const category = deriveBorderCategory(item, collection ?? null);
+  const charity = category === 'charity' ? readCharityMeta(item) : null;
+  const sponsor = category === 'advertiser' ? readSponsorMeta(item) : null;
+  const campaign = readCampaignWindow(item);
+  const showCountdown = !!(campaign.releaseAt || campaign.expiresAt);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalRoot}>
@@ -150,10 +166,23 @@ export function BorderDetailModal({
 
               <View style={styles.rarityRow}>
                 <BorderRarityBadge item={item} emphasized={inventorySurface} />
+                <BorderCategoryBadge category={category} />
+                {showCountdown ? <CampaignWindowCountdown item={item} live /> : null}
               </View>
 
               {flavor ? <Text style={styles.flavor}>{flavor}</Text> : null}
               {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
+
+              {charity ? (
+                <View style={styles.calloutBlock}>
+                  <CharityCalloutBlock charity={charity} />
+                </View>
+              ) : null}
+              {sponsor ? (
+                <View style={styles.calloutBlock}>
+                  <PartnerDropCalloutBlock sponsor={sponsor} />
+                </View>
+              ) : null}
 
               <View style={[styles.metaBlock, inventorySurface && styles.metaBlockVault]}>
                 <Row label="Rarity" value={String(item.rarity_tier ?? item.rarity ?? '—').toUpperCase()} />
@@ -412,7 +441,15 @@ const styles = StyleSheet.create({
     color: 'rgba(148,163,184,0.9)',
     textAlign: 'center',
   },
-  rarityRow: { alignItems: 'center', marginTop: 14 },
+  rarityRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  calloutBlock: { marginTop: 16 },
   flavor: {
     marginTop: 14,
     fontSize: 14,

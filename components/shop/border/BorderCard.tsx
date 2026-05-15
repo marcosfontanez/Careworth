@@ -17,6 +17,10 @@ import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
 import { CompactMetaChipPills } from '@/components/shop/border/BorderCompactMetaRow';
 import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
 import { buildCompactMetaChips } from '@/lib/shop/borderDisplayModel';
+import { BorderCategoryBadge } from '@/components/borders/BorderCategoryBadge';
+import { CampaignWindowCountdown } from '@/components/borders/CampaignWindowCountdown';
+import { deriveBorderCategory } from '@/lib/borders/category';
+import { readCampaignWindow } from '@/lib/borders/campaignWindow';
 
 export type BorderCardVariant = 'shop' | 'inventory' | 'gift';
 
@@ -66,6 +70,9 @@ export function BorderCard({
   const subtitleLine = subtitleParts.join(' · ');
 
   const purchaseLabel = borderShopCardPurchaseLabel(item, cta, isWeb);
+  const category = deriveBorderCategory(item, null);
+  const campaign = readCampaignWindow(item);
+  const showCountdown = !!(campaign.releaseAt || campaign.expiresAt);
 
   const body = (
     <>
@@ -88,6 +95,8 @@ export function BorderCard({
 
       <View style={styles.descriptorStrip}>
         <BorderRarityBadge item={item} compact align="center" />
+        <BorderCategoryBadge category={category} compact />
+        {showCountdown ? <CampaignWindowCountdown item={item} variant="chip" /> : null}
         <CompactMetaChipPills chips={metaChips} compact />
       </View>
 

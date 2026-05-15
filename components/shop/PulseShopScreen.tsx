@@ -62,6 +62,9 @@ import { PremiumCardSparkBorder } from '@/components/shop/premium/PremiumCardSpa
 import { BorderCard } from '@/components/shop/border/BorderCard';
 import { BorderDetailModal } from '@/components/shop/border/BorderDetailModal';
 import { useBorderCollectionsMap } from '@/hooks/useBorderCollectionsMap';
+import { MonthlyHeroRail, type MonthlyHeroEntry } from '@/components/borders/MonthlyHeroRail';
+import { deriveBorderCategory, type BorderCategory } from '@/lib/borders/category';
+import { readCampaignWindow } from '@/lib/borders/campaignWindow';
 import { useBorderCatalogLists } from '@/hooks/useBorderCatalogFilters';
 import { ShopResultModal } from '@/components/shop/ShopResultModal';
 import { ShopCatalogSkeleton } from '@/components/shop/ShopLoadingSkeleton';
@@ -244,6 +247,45 @@ export default function PulseShopScreen() {
 
   const browseList = featured ? browseBorders : borders;
 
+  /**
+   * Monthly hero rail — surfaces ONE hero per active border program (free
+   * holiday, premium drop, charity, partner). Limits to 4 to keep the rail
+   * focused; sorts by category priority then `sort_order`. Hidden when only
+   * 0–1 categories are live (the single big featured hero below covers it).
+   */
+  const monthlyHeroEntries = useMemo<MonthlyHeroEntry[]>(() => {
+    if (!borders.length) return [];
+    const CAT_PRIORITY: Record<BorderCategory, number> = {
+      holiday: 0,
+      charity: 1,
+      advertiser: 2,
+      premium: 3,
+      reward: 4,
+      leaderboard: 5,
+      beta: 6,
+      legacy: 9,
+    };
+    const seen = new Set<BorderCategory>();
+    const candidates: MonthlyHeroEntry[] = [];
+    for (const b of [...borders].sort((a, c) => a.sort_order - c.sort_order)) {
+      const collection = b.collection_id ? collectionsQ.rowById.get(b.collection_id) ?? null : null;
+      const cat = deriveBorderCategory(b, collection);
+      // Skip categories that read awkwardly as a "monthly drop" hero.
+      if (cat === 'beta' || cat === 'leaderboard' || cat === 'legacy') continue;
+      if (seen.has(cat)) continue;
+      const win = readCampaignWindow(b);
+      if (win.isClosed) continue; // hide expired drops from the rail
+      seen.add(cat);
+      candidates.push({ item: b, collection, category: cat });
+    }
+    return candidates
+      .sort((a, c) => CAT_PRIORITY[a.category!] - CAT_PRIORITY[c.category!])
+      .slice(0, 4);
+  }, [borders, collectionsQ.rowById]);
+
+  /** Show the rail when 2+ programs are running this month. */
+  const showMonthlyHeroRail = monthlyHeroEntries.length >= 2;
+
   const { processed: browseProcessed, filter: borderFilter, setFilter: setBorderFilter, sort: borderSort, setSort: setBorderSort } =
     useBorderCatalogLists(browseList, invState.ownsBorder);
 
@@ -376,6 +418,16 @@ export default function PulseShopScreen() {
           <>
             {tab === 'borders' && feat ? (
               <View style={styles.tabPane}>
+                {showMonthlyHeroRail ? (
+                  <View style={styles.monthlyRailWrap}>
+                    <MonthlyHeroRail
+                      entries={monthlyHeroEntries}
+                      onOpenDetail={(it) => setBorderDetailItem(it)}
+                      ownsBorder={(id) => invState.ownsBorder(id)}
+                      equippedShopItemId={equipped?.shop_item_id ?? null}
+                    />
+                  </View>
+                ) : null}
                 <View
                   style={styles.featuredSparkHost}
                   collapsable={false}
@@ -1275,6 +1327,9 @@ const styles = StyleSheet.create({
   featuredSparkHost: {
     position: 'relative',
     marginBottom: spacing['2xl'] + 4,
+  },
+  monthlyRailWrap: {
+    marginBottom: spacing.xl,
   },
   featuredNeonRing: {
     borderRadius: borderRadius['2xl'] + 3,
