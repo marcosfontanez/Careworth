@@ -85,7 +85,9 @@
     "plugins": [
       "expo-router",
       "expo-video",
+      "react-native-compressor",
       "expo-font",
+      "expo-asset",
       "expo-secure-store",
       [
         "expo-image-picker",
@@ -134,14 +136,13 @@
       "router": {},
       "eas": {
         "projectId": "45474eb0-9910-4871-974d-9bd110a724e1"
-      }
+      },
+      "storeIosUrl": "",
+      "storeAndroidUrl": ""
     },
     "owner": "care-worth",
     "updates": {
       "url": "https://u.expo.dev/45474eb0-9910-4871-974d-9bd110a724e1"
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
     }
   }
 }

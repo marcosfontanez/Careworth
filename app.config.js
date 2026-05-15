@@ -28,5 +28,11 @@ module.exports = {
   expo: {
     ...appJson.expo,
     plugins: patchPlugins(appJson.expo.plugins),
+    /**
+     * Bare workflow: `runtimeVersion` must be a string. Policy objects like
+     * `{ policy: "appVersion" }` are managed-workflow only.
+     * Keep aligned with native-compatible releases (bump when you ship a new binary).
+     */
+    runtimeVersion: String(appJson.expo.version),
   },
 };

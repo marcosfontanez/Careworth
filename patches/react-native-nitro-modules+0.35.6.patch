@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-nitro-modules/android/build.gradle b/node_modules/react-native-nitro-modules/android/build.gradle
+index e36e0cd..fc05998 100644
+--- a/node_modules/react-native-nitro-modules/android/build.gradle
++++ b/node_modules/react-native-nitro-modules/android/build.gradle
+@@ -7,7 +7,9 @@ buildscript {
+   }
+ 
+   dependencies {
+-    classpath "com.android.tools.build:gradle:9.2.0"
++    // Align with React Native 0.81 / expo prebuild (libs.versions.toml agp = 8.11.0).
++    // Upstream 9.2.0 requires Gradle 9.4.1+ while RN templates ship Gradle 8.14.x — breaks EAS/Android CI.
++    classpath "com.android.tools.build:gradle:8.11.0"
+   }
+ }
+ 
