@@ -16,6 +16,9 @@ const HomeCreatorHub = dynamic(() =>
 const HomeSparksDiamonds = dynamic(() =>
   import("@/components/marketing/home-sparks-diamonds").then((mod) => mod.HomeSparksDiamonds),
 );
+const HomeBordersFlagship = dynamic(() =>
+  import("@/components/marketing/home-borders-flagship").then((mod) => mod.HomeBordersFlagship),
+);
 const HomeTrustSection = dynamic(() =>
   import("@/components/marketing/home-trust-section").then((mod) => mod.HomeTrustSection),
 );
@@ -35,6 +38,7 @@ export default async function HomePage() {
       <HomeCirclesSpotlight locale={locale} />
       <HomeCreatorHub locale={locale} />
       <HomeSparksDiamonds locale={locale} />
+      <HomeBordersFlagship locale={locale} />
       <HomeTrustSection locale={locale} />
       <HomeFinalCta locale={locale} />
     </>

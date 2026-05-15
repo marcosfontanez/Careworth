@@ -49,6 +49,30 @@ export type HomeSparksDiamondsCopy = {
   ctaSecondary: string;
 };
 
+export type HomeBordersDropTile = {
+  /** "Free monthly" / "Premium drop" / "Charity" / "Partner drop" */
+  badge: string;
+  title: string;
+  body: string;
+};
+
+export type HomeBordersSurfaceTile = { surface: string; line: string };
+
+export type HomeBordersCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  posterTag: string;
+  posterCaption: string;
+  /** Four monthly drop programs, in priority order. */
+  drops: readonly HomeBordersDropTile[];
+  /** Surfaces strip — where borders appear across the app. */
+  surfacesEyebrow: string;
+  surfaces: readonly HomeBordersSurfaceTile[];
+  ctaPrimary: string;
+  ctaSecondary: string;
+};
+
 export type HomeTrustVoice = { quote: string; role: string };
 
 export type HomeTrustCopy = {
@@ -213,6 +237,98 @@ const sparksDiamonds: Record<Locale, HomeSparksDiamondsCopy> = {
 };
 
 /* ------------------------------------------------------------------------- */
+/*  Borders flagship — identity layer across the app (poster-led).            */
+/*  The infographic does the heavy lifting; section copy stays headline-      */
+/*  weight. Two compact strips below the poster: the four monthly drop        */
+/*  programs, then the surfaces where a border actually appears.              */
+/* ------------------------------------------------------------------------- */
+
+const borders: Record<Locale, HomeBordersCopy> = {
+  en: {
+    eyebrow: "PulseVerse Borders",
+    title: "Your identity. Everywhere.",
+    description:
+      "Borders frame your avatar across the app — feed, circles, comments, profiles. Every month, four ways to get a new one.",
+    posterTag: "Borders · Overview",
+    posterCaption: "Pulse Shop  ·  My Pulse  ·  Border Vault",
+    drops: [
+      {
+        badge: "Free monthly",
+        title: "Holiday border",
+        body: "Free for the whole community. Claim it before the month ends.",
+      },
+      {
+        badge: "Premium drop",
+        title: "Premium monthly",
+        body: "A limited monthly Pulse Shop border you own and equip.",
+      },
+      {
+        badge: "Charity",
+        title: "Charity border",
+        body: "Support a cause — a portion of every claim goes to the partner.",
+      },
+      {
+        badge: "Partner drop",
+        title: "Sponsored partner",
+        body: "Brought to you by a partner brand. Free, time-limited campaigns.",
+      },
+    ],
+    surfacesEyebrow: "Seen across PulseVerse",
+    surfaces: [
+      { surface: "Feed posts", line: "Wraps the creator avatar on every video." },
+      { surface: "Circles posts", line: "Frames the author across rooms and threads." },
+      { surface: "Comments & profiles", line: "Visible everywhere your avatar appears." },
+      { surface: "My Pulse Customize", line: "Equip what you've unlocked in two taps." },
+      { surface: "Border Vault", line: "Browse, filter, and showcase your collection." },
+      { surface: "Pulse Shop", line: "Discover this month's drops in one rail." },
+    ],
+    ctaPrimary: "Open Pulse Shop",
+    ctaSecondary: "Customize your borders",
+  },
+  es: {
+    eyebrow: "Bordes de PulseVerse",
+    title: "Tu identidad. En todas partes.",
+    description:
+      "Los bordes enmarcan tu avatar en toda la app — feed, circles, comentarios, perfiles. Cada mes, cuatro formas de conseguir uno nuevo.",
+    posterTag: "Bordes · Vista general",
+    posterCaption: "Pulse Shop  ·  My Pulse  ·  Cofre de Bordes",
+    drops: [
+      {
+        badge: "Mensual gratis",
+        title: "Borde de temporada",
+        body: "Gratis para toda la comunidad. Reclámalo antes de fin de mes.",
+      },
+      {
+        badge: "Drop premium",
+        title: "Premium mensual",
+        body: "Un borde limitado del Pulse Shop que es tuyo y puedes equipar.",
+      },
+      {
+        badge: "Caridad",
+        title: "Borde benéfico",
+        body: "Apoya una causa — parte de cada reclamo va a la organización aliada.",
+      },
+      {
+        badge: "Drop aliado",
+        title: "Marca patrocinadora",
+        body: "Cortesía de una marca aliada. Campañas gratis y por tiempo limitado.",
+      },
+    ],
+    surfacesEyebrow: "Visto en todo PulseVerse",
+    surfaces: [
+      { surface: "Posts del feed", line: "Enmarca al creador en cada vídeo." },
+      { surface: "Posts de Circles", line: "Acompaña al autor en salas e hilos." },
+      { surface: "Comentarios y perfiles", line: "Visible donde aparezca tu avatar." },
+      { surface: "Personaliza My Pulse", line: "Equipa lo que has desbloqueado en dos toques." },
+      { surface: "Cofre de Bordes", line: "Explora, filtra y luce tu colección." },
+      { surface: "Pulse Shop", line: "Descubre los drops del mes en un solo carril." },
+    ],
+    ctaPrimary: "Abrir Pulse Shop",
+    ctaSecondary: "Personalizar mis bordes",
+  },
+};
+
+/* ------------------------------------------------------------------------- */
 /*  Trust / proof section — slimmed: commitments + ONE voice.                 */
 /* ------------------------------------------------------------------------- */
 
@@ -275,6 +391,10 @@ export function getHomeCreatorHubCopy(locale: Locale): HomeCreatorHubCopy {
 
 export function getHomeSparksDiamondsCopy(locale: Locale): HomeSparksDiamondsCopy {
   return sparksDiamonds[locale] ?? sparksDiamonds.en;
+}
+
+export function getHomeBordersCopy(locale: Locale): HomeBordersCopy {
+  return borders[locale] ?? borders.en;
 }
 
 export function getHomeTrustCopy(locale: Locale): HomeTrustCopy {
