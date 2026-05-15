@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Check,
   Film,
-  Heart,
   Image as ImageIcon,
   MessageSquare,
   Radio,
@@ -11,38 +10,32 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  OrbitDots,
+  PosterCaptionStrip,
+  PosterFrame,
+  SpotlightBeam,
+  WebsiteSectionBackdrop,
+} from "@/components/marketing/website-visuals";
 import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
-import { feedForYouTags, feedFormatPills, feedMockPosts, feedTrustPoints } from "@/mock/marketing";
-
-function MiniWave() {
-  return (
-    <svg className="h-8 w-full text-primary/60" viewBox="0 0 120 24" fill="none" aria-hidden>
-      <path
-        d="M0 12 H20 L24 4 L28 20 L32 6 L36 18 L40 10 H120"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
+import { feedForYouTags, feedFormatPills, feedTrustPoints } from "@/mock/marketing";
 
 export function FeatureFeedLanding() {
   return (
     <>
-      <section className="relative overflow-hidden pb-16 pt-10 sm:pb-24 sm:pt-14">
-        <div className="pointer-events-none absolute -right-16 top-0 h-80 w-80 rounded-full bg-primary/12 blur-[90px]" />
-        <div className={cn(marketingGutterX, "relative grid items-center gap-14 lg:grid-cols-2")}>
+      <section className="relative isolate overflow-hidden pb-20 pt-12 sm:pb-28 sm:pt-16">
+        <WebsiteSectionBackdrop variant="deep" />
+        <div className={cn(marketingGutterX, "relative grid items-center gap-12 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:gap-16")}>
           <div>
             <p className={marketingEyebrow}>Feed</p>
-            <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem]">
+            <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem]">
               Stay current with healthcare culture —{" "}
               <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">
                 not generic noise.
               </span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
               Short-form video, images, and threads tuned for specialty, shift, and credibility. Discovery that respects
               how you work — with safety rails that understand medicine.
             </p>
@@ -57,7 +50,7 @@ export function FeatureFeedLanding() {
                 <Link href="/features/circles">Explore Circles</Link>
               </Button>
             </div>
-            <div className="mt-6 flex flex-wrap gap-2">
+            <div className="mt-7 flex flex-wrap gap-2">
               {feedForYouTags.map((t) => (
                 <span
                   key={t}
@@ -73,30 +66,26 @@ export function FeatureFeedLanding() {
               ))}
             </div>
           </div>
-          <div className={cn("space-y-3 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.85)] p-4 ring-1 ring-white/[0.06] backdrop-blur-md")}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Feed preview</p>
-            {feedMockPosts.map((post) => (
-              <div key={post.name} className="rounded-xl border border-white/5 bg-white/[0.03] p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-[#0066ff]/40" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">{post.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{post.excerpt}</p>
-                  </div>
-                </div>
-                <MiniWave />
-                <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Heart className="h-3.5 w-3.5 text-rose-400" />
-                    {post.hearts}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    Chat
-                  </span>
-                </div>
-              </div>
-            ))}
+
+          <div className="relative lg:-mr-6 xl:-mr-12">
+            <SpotlightBeam tone="cyan" intensity="strong" />
+            <OrbitDots tone="cyan" preset="hero" />
+            <PosterFrame
+              src="/marketing/hero-healthcare-home.png"
+              alt="PulseVerse Feed — short-form video, images, and threads tuned for healthcare on iPhone."
+              width={1024}
+              height={576}
+              glow="cyan"
+              size="dramatic"
+              priority
+              sizes="(max-width: 1024px) 100vw, 760px"
+              tag={{ label: "Feed · iPhone" }}
+            />
+            <PosterCaptionStrip
+              device="iPhone"
+              context="Home  ·  For you  ·  Following  ·  Topic-tuned discovery"
+              tone="cyan"
+            />
           </div>
         </div>
       </section>

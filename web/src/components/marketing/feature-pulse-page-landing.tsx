@@ -2,6 +2,14 @@ import Link from "next/link";
 import { ArrowRight, BarChart3, Link2, MessageSquare, Sparkles, UserCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  OrbitDots,
+  PosterCaptionStrip,
+  PosterFrame,
+  PremiumSectionHeader,
+  SpotlightBeam,
+  WebsiteSectionBackdrop,
+} from "@/components/marketing/website-visuals";
 import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta, marketingInlineLinkStrong } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import {
@@ -11,75 +19,31 @@ import {
   pulsePageWhyProfessionals,
 } from "@/mock/marketing";
 
-function DeviceCluster() {
-  return (
-    <div className="relative mx-auto max-w-lg">
-      <div className="pointer-events-none absolute -inset-6 rounded-3xl bg-gradient-to-tr from-primary/20 via-transparent to-[var(--accent)]/15 blur-2xl" />
-      <div className="relative grid gap-4 sm:grid-cols-2">
-        <div
-          className={cn(
-            "rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.9)] p-4 shadow-xl backdrop-blur-md",
-            "sm:translate-y-8 sm:scale-95",
-          )}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Phone · Pulse</p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="h-11 w-11 rounded-full bg-gradient-to-br from-primary to-[#0066ff]" />
-            <div>
-              <p className="text-sm font-semibold text-foreground">Dr. Sara Khan</p>
-              <p className="text-xs text-muted-foreground">1.2K followers · verified</p>
-            </div>
-          </div>
-          <div className="mt-4 rounded-xl border border-primary/20 bg-black/30 p-3">
-            <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--accent)]">Current Vibe</p>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-[10px] text-muted-foreground">
-                ▶
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-medium text-foreground">Night-shift focus playlist</p>
-                <p className="truncate text-[10px] text-muted-foreground">Now playing · mini player</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.85)] p-5 shadow-xl ring-1 ring-primary/15 backdrop-blur-md">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">Laptop · edit</p>
-          <div className="mt-3 space-y-2">
-            <div className="h-2 w-3/4 rounded bg-white/10" />
-            <div className="h-2 w-1/2 rounded bg-white/10" />
-            <div className="mt-4 flex gap-2">
-              <span className="rounded-lg bg-primary/20 px-2 py-1 text-[10px] font-medium text-primary">Edit profile</span>
-              <span className="rounded-lg border border-white/15 px-2 py-1 text-[10px] text-muted-foreground">View page</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function FeaturePulsePageLanding() {
   return (
     <>
-      <section className="relative overflow-hidden pb-16 pt-8 sm:pb-24 sm:pt-12">
-        <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-primary/12 blur-[90px]" />
-        <div className="pointer-events-none absolute -right-16 bottom-0 h-72 w-72 rounded-full bg-[var(--accent)]/10 blur-[80px]" />
-        <div className={cn(marketingGutterX, "relative grid items-center gap-14 lg:grid-cols-2")}>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Pulse Page / <span className="text-[var(--accent)]">My Pulse</span>
+      {/* Hero — copy + identity statement, no inline mock UI. The flagship
+          comparison render carries the visual story in the next band. */}
+      <section className="relative isolate overflow-hidden pb-12 pt-12 sm:pb-16 sm:pt-16">
+        <WebsiteSectionBackdrop variant="spotlight" />
+        <div className={cn(marketingGutterX, "relative")}>
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary backdrop-blur">
+              Pulse Page <span className="text-muted-foreground/60">/</span>
+              <span className="text-[var(--accent)]">My Pulse</span>
             </p>
-            <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
-              Build your{" "}
-              <span className="bg-gradient-to-r from-foreground to-foreground bg-clip-text">professional home</span> on{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">PulseVerse.</span>
+            <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
+              Your{" "}
+              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">
+                professional home
+              </span>{" "}
+              on PulseVerse.
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Your identity home on PulseVerse: premium profile, Current Vibe mini player, My Pulse (latest five updates),
-              and Media Hub — music, moments, and momentum in one creator-grade surface.
+            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground">
+              A premium identity surface — Current Vibe mini player, My Pulse (latest five updates), Media Hub — and a
+              rolling five-slot expression feed that always reads current, never cluttered.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
                 <Link href="/download" className="inline-flex items-center gap-2">
                   Create your Pulse Page
@@ -87,13 +51,13 @@ export function FeaturePulsePageLanding() {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
-                <Link href="/features" className="inline-flex items-center gap-2">
-                  <UserCircle className="h-4 w-4" />
-                  Explore PulseVerse
+                <Link href="/features/my-pulse" className="inline-flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  How My Pulse works
                 </Link>
               </Button>
             </div>
-            <div className="mt-10 flex flex-wrap gap-6 text-sm text-muted-foreground">
+            <div className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
                 Premium professional profile
@@ -108,7 +72,38 @@ export function FeaturePulsePageLanding() {
               </span>
             </div>
           </div>
-          <DeviceCluster />
+        </div>
+      </section>
+
+      {/* Flagship Pulse Page vs My Pulse poster — same treatment as homepage. */}
+      <section className="relative isolate overflow-hidden border-t border-white/5 py-20 sm:py-24">
+        <WebsiteSectionBackdrop variant="deep" />
+        <div className={cn(marketingGutterX, "relative")}>
+          <PremiumSectionHeader
+            eyebrow="Pulse Page · My Pulse"
+            title="One identity, two surfaces."
+            description="Pulse Page is your full identity hub — Current Vibe, Media Hub, professional profile. My Pulse is the rolling five-slot strip on top, where Thought, Clip, Link, and Pics keep your page alive."
+          />
+          <div className="relative mt-14 sm:mt-16">
+            <SpotlightBeam tone="cyan" intensity="strong" />
+            <OrbitDots tone="cyan" preset="pulse" />
+            <PosterFrame
+              src="/marketing/pulse-page-vs-my-pulse.png"
+              alt="PulseVerse Pulse Page (full identity hub) vs My Pulse (rolling 5-slot expression feed) on iPhone."
+              width={1024}
+              height={576}
+              glow="cyan"
+              size="dramatic"
+              priority
+              tag={{ label: "Pulse Page · iPhone" }}
+              className="mx-auto max-w-6xl"
+            />
+            <PosterCaptionStrip
+              device="iPhone"
+              context="Pulse Page · Identity hub  ·  My Pulse · Rolling 5-slot feed"
+              tone="cyan"
+            />
+          </div>
         </div>
       </section>
 

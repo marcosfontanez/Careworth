@@ -6,12 +6,21 @@ import { FeaturesComparisonSection, FeaturesHubBanner } from "@/components/marke
 import { HomeWhySix } from "@/components/marketing/home-why-six";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
+import {
+  OrbitDots,
+  PosterCaptionStrip,
+  PosterFrame,
+  PremiumSectionHeader,
+  SpotlightBeam,
+  WebsiteSectionBackdrop,
+} from "@/components/marketing/website-visuals";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   marketingCardInteractive,
   marketingEyebrow,
+  marketingGutterX,
   marketingSectionTitle,
   shadowPrimaryCta,
 } from "@/lib/ui-classes";
@@ -52,6 +61,38 @@ export default async function FeaturesHubPage() {
           </div>
         </div>
       </MarketingPageShell>
+
+      {/* Flagship Creator Hub poster — anchors the destination of the homepage
+          "Creator" tile so users never land on generic placeholder content. */}
+      <section className="relative isolate overflow-hidden border-y border-white/5 py-20 sm:py-24">
+        <WebsiteSectionBackdrop variant="deep" />
+        <div className={cn(marketingGutterX, "relative")}>
+          <PremiumSectionHeader
+            eyebrow="Creator economy"
+            title="Hub, Shop, and rewards on one premium surface."
+            description="Built for creators in healthcare — custom borders, send-a-spark gifting, and a Pulse Shop tuned for credibility, not chaos."
+          />
+          <div className="relative mt-14 sm:mt-16">
+            <SpotlightBeam tone="gold" intensity="strong" />
+            <OrbitDots tone="gold" preset="hero" />
+            <PosterFrame
+              src="/marketing/creator-hub.png"
+              alt="PulseVerse Creator Hub, Pulse Shop, and rewards on iPhone — borders, gifting, and creator surface."
+              width={1024}
+              height={576}
+              glow="gold"
+              size="dramatic"
+              tag={{ label: "Creator Hub · iPhone" }}
+              className="mx-auto max-w-6xl"
+            />
+            <PosterCaptionStrip
+              device="iPhone"
+              context="Creator Hub  ·  Pulse Shop  ·  Rewards & gifting"
+              tone="gold"
+            />
+          </div>
+        </div>
+      </section>
 
       <FeaturesHubBanner message={copy.hubBanner} />
 

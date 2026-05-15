@@ -9,6 +9,13 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  OrbitDots,
+  PosterCaptionStrip,
+  PosterFrame,
+  SpotlightBeam,
+  WebsiteSectionBackdrop,
+} from "@/components/marketing/website-visuals";
 import { marketingGutterX, marketingEyebrow, marketingCardMuted, shadowPrimaryCta, marketingInlineLinkStrong } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import {
@@ -18,38 +25,19 @@ import {
   circlesWhyBetter,
 } from "@/mock/marketing";
 
-function PulseDecor({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("text-primary/50", className)}
-      viewBox="0 0 400 100"
-      fill="none"
-      aria-hidden
-    >
-      <path
-        d="M0 50 H80 L92 18 L104 82 L116 28 L128 72 L140 38 L152 58 H400"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
 export function FeatureCirclesLanding() {
   return (
     <>
-      <section className="relative overflow-hidden pb-16 pt-10 sm:pb-24 sm:pt-14">
-        <div className="pointer-events-none absolute -left-24 top-0 h-80 w-80 rounded-full bg-primary/10 blur-[90px]" />
-        <div className="pointer-events-none absolute -right-20 top-40 h-72 w-72 rounded-full bg-[var(--accent)]/10 blur-[80px]" />
-        <div className={cn(marketingGutterX, "relative grid items-center gap-14 lg:grid-cols-2")}>
+      <section className="relative isolate overflow-hidden pb-20 pt-12 sm:pb-28 sm:pt-16">
+        <WebsiteSectionBackdrop variant="deep" />
+        <div className={cn(marketingGutterX, "relative grid items-center gap-12 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:gap-16")}>
           <div>
             <p className={marketingEyebrow}>Circles</p>
-            <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
-              Circles: where healthcare finds its{" "}
+            <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
+              Where healthcare finds its{" "}
               <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">people.</span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
               Join healthcare-specific, topic-based circles — premium rooms with high-signal threads. Share what lands
               with you straight back to My Pulse on your Pulse Page.
             </p>
@@ -82,34 +70,26 @@ export function FeatureCirclesLanding() {
               </span>
             </div>
           </div>
-          <div className="relative">
-            <PulseDecor className="absolute -right-4 top-8 w-[110%] max-w-none opacity-60 sm:top-12" />
-            <div className="relative mx-auto grid max-w-lg gap-4 sm:max-w-none sm:grid-cols-2">
-              <div
-                className={cn(
-                  "rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.85)] p-4 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-md",
-                  "sm:translate-y-6",
-                )}
-              >
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Circles · preview</p>
-                <div className="mt-3 space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                      <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary/40 to-[#0066ff]/30" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">Thread preview {i}</p>
-                        <p className="truncate text-xs text-muted-foreground">Reactions · clinician-moderated</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.75)] p-4 ring-1 ring-white/[0.04] backdrop-blur-md">
-                <p className="text-xs text-muted-foreground">Featured rooms</p>
-                <p className="mt-2 text-2xl font-bold text-foreground">25K+</p>
-                <p className="text-sm text-[var(--accent)]">active circles</p>
-              </div>
-            </div>
+
+          <div className="relative lg:-mr-6 xl:-mr-12">
+            <SpotlightBeam tone="blue" intensity="strong" />
+            <OrbitDots tone="blue" preset="circles" />
+            <PosterFrame
+              src="/marketing/hero-circles.png"
+              alt="PulseVerse Circles — discover popular circles, your circles, and trending topics"
+              width={1024}
+              height={576}
+              glow="blue"
+              size="dramatic"
+              priority
+              sizes="(max-width: 1024px) 100vw, 760px"
+              tag={{ label: "Circles · iPhone" }}
+            />
+            <PosterCaptionStrip
+              device="iPhone"
+              context="Discover · Popular Circles · Trending Topics"
+              tone="blue"
+            />
           </div>
         </div>
       </section>
