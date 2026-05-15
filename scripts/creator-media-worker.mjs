@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+/* eslint-env node */
+import { Buffer } from 'node:buffer';
+
 /**
  * Poll worker for `public.creator_media_jobs` (service role).
  *
