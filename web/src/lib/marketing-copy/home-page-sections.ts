@@ -39,6 +39,16 @@ export type HomeCreatorHubCopy = {
   ctaSecondary: string;
 };
 
+export type HomeSparksDiamondsCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  posterTag: string;
+  posterCaption: string;
+  ctaPrimary: string;
+  ctaSecondary: string;
+};
+
 export type HomeTrustVoice = { quote: string; role: string };
 
 export type HomeTrustCopy = {
@@ -174,6 +184,35 @@ const creatorHub: Record<Locale, HomeCreatorHubCopy> = {
 };
 
 /* ------------------------------------------------------------------------- */
+/*  Sparks & Diamonds — economy explainer (poster-led).                       */
+/*  The infographic carries the full breakdown (Sparks, Diamonds, tiers,     */
+/*  KYC). Section copy stays short so the poster is the lede.                 */
+/* ------------------------------------------------------------------------- */
+
+const sparksDiamonds: Record<Locale, HomeSparksDiamondsCopy> = {
+  en: {
+    eyebrow: "Sparks & Diamonds",
+    title: "How connection turns into recognition.",
+    description:
+      "Sparks let anyone show love and start conversations. Diamonds reward the people who show up, share knowledge, and lift the community.",
+    posterTag: "Sparks & Diamonds · Explainer",
+    posterCaption: "Send Sparks  ·  Earn Diamonds  ·  Unlock tiers",
+    ctaPrimary: "See creator tools",
+    ctaSecondary: "Visit Pulse Shop",
+  },
+  es: {
+    eyebrow: "Sparks y Diamonds",
+    title: "Cómo la conexión se convierte en reconocimiento.",
+    description:
+      "Los Sparks permiten mostrar cariño e iniciar conversaciones. Los Diamonds recompensan a quienes aparecen, comparten conocimiento y levantan a la comunidad.",
+    posterTag: "Sparks y Diamonds · Explicación",
+    posterCaption: "Envía Sparks  ·  Gana Diamonds  ·  Desbloquea tiers",
+    ctaPrimary: "Ver herramientas de creador",
+    ctaSecondary: "Visita Pulse Shop",
+  },
+};
+
+/* ------------------------------------------------------------------------- */
 /*  Trust / proof section — slimmed: commitments + ONE voice.                 */
 /* ------------------------------------------------------------------------- */
 
@@ -232,6 +271,10 @@ export function getHomeCirclesSpotlightCopy(locale: Locale): HomeCirclesSpotligh
 
 export function getHomeCreatorHubCopy(locale: Locale): HomeCreatorHubCopy {
   return creatorHub[locale] ?? creatorHub.en;
+}
+
+export function getHomeSparksDiamondsCopy(locale: Locale): HomeSparksDiamondsCopy {
+  return sparksDiamonds[locale] ?? sparksDiamonds.en;
 }
 
 export function getHomeTrustCopy(locale: Locale): HomeTrustCopy {
