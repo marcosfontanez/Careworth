@@ -52,6 +52,7 @@ import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate'
 import { BorderCompactMetaRow } from '@/components/shop/border/BorderCompactMetaRow';
 import { compactSourceLabel } from '@/lib/shop/borderDisplayModel';
 import type { BorderSourceType } from '@/lib/shop/borderCatalogTaxonomy';
+import { BORDER_CATEGORY_LABELS, type BorderCategory } from '@/lib/borders/category';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -81,6 +82,17 @@ const SOURCE_FILTER_LABELS: Record<BorderSourceType, string> = {
 };
 const AVAIL = ['active', 'limited', 'legacy', 'retired', 'exclusive'] as const;
 const VISUAL = ['static', 'enhanced', 'reactive', 'animated'] as const;
+/** Quick filter strip — only the categories users typically slice by. */
+const QUICK_CATEGORIES: BorderCategory[] = [
+  'holiday',
+  'premium',
+  'charity',
+  'advertiser',
+  'leaderboard',
+  'reward',
+  'beta',
+  'legacy',
+];
 
 const SORT_LABELS: Record<InventorySortKey, string> = {
   recent: 'Recent',
@@ -442,6 +454,30 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
         {ownershipChip('unequipped', 'Vault')}
       </ScrollView>
 
+      <Text style={styles.sectionKicker}>Category</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+        <TouchableOpacity
+          style={[styles.chip, !filter.category && styles.chipOn]}
+          onPress={() => setFilter((f) => ({ ...f, category: null }))}
+          activeOpacity={0.88}
+        >
+          <Text style={styles.chipText}>All</Text>
+        </TouchableOpacity>
+        {QUICK_CATEGORIES.map((cat) => {
+          const on = filter.category === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.chip, on && styles.chipOn]}
+              onPress={() => setFilter((f) => ({ ...f, category: on ? null : cat }))}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.chipText}>{BORDER_CATEGORY_LABELS[cat]}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
       <Text style={styles.sectionKicker}>Arrange</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
         {renderSortChip('equipped_first')}
@@ -761,6 +797,25 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
                     onPress={() => setFilter((f) => ({ ...f, visualTier: v }))}
                   >
                     <Text style={styles.pillText}>{v.charAt(0).toUpperCase() + v.slice(1)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.pickerSection}>Category</Text>
+              <View style={styles.pickerWrap}>
+                <TouchableOpacity
+                  style={[styles.pill, !filter.category && styles.pillOn]}
+                  onPress={() => setFilter((f) => ({ ...f, category: null }))}
+                >
+                  <Text style={styles.pillText}>Any</Text>
+                </TouchableOpacity>
+                {QUICK_CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.pill, filter.category === cat && styles.pillOn]}
+                    onPress={() => setFilter((f) => ({ ...f, category: cat }))}
+                  >
+                    <Text style={styles.pillText}>{BORDER_CATEGORY_LABELS[cat]}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

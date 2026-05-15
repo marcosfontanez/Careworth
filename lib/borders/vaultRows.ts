@@ -30,6 +30,9 @@ function pulseMatchesAdvancedFilters(row: VaultRow, f: InventoryFilterState): bo
   if (f.source) return false;
   if (f.availability) return false;
   if (f.visualTier) return false;
+  // Pulse-frame rows are leaderboard prizes by definition; surface them only when
+  // the user is explicitly browsing the leaderboard category (or no category filter).
+  if (f.category && f.category !== 'leaderboard') return false;
   return true;
 }
 

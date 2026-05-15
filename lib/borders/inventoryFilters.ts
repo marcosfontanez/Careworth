@@ -2,6 +2,7 @@ import type { OwnedBorderEntry } from '@/lib/borders/ownedTypes';
 import type { BorderAvailabilityStatus } from '@/lib/shop/borderCatalogTaxonomy';
 import { effectiveRarityKey, isFreeShopBorder } from '@/lib/shop/catalogUtils';
 import { rarityTierSortKey } from '@/lib/shop/borderBadgeTheme';
+import { deriveBorderCategory, type BorderCategory } from '@/lib/borders/category';
 
 export type OwnershipFilter = 'all' | 'equipped' | 'unequipped';
 
@@ -15,6 +16,8 @@ export type InventoryFilterState = {
   source: string | null;
   availability: string | null;
   visualTier: string | null;
+  /** Border product category — derived per row (`lib/borders/category.ts`). */
+  category: BorderCategory | null;
 };
 
 export const defaultInventoryFilterState = (): InventoryFilterState => ({
@@ -24,6 +27,7 @@ export const defaultInventoryFilterState = (): InventoryFilterState => ({
   source: null,
   availability: null,
   visualTier: null,
+  category: null,
 });
 
 export type InventorySortKey =
@@ -78,6 +82,7 @@ export function filterOwnedBorderEntries(
     if (f.source && (e.item.source_type ?? '') !== f.source) return false;
     if (!matchesAvailability(e, f.availability)) return false;
     if (f.visualTier && (e.item.visual_tier ?? '') !== f.visualTier) return false;
+    if (f.category && deriveBorderCategory(e.item, null) !== f.category) return false;
     return true;
   });
 }
@@ -134,6 +139,7 @@ export function countActiveAdvancedFilters(f: InventoryFilterState): number {
   if (f.source) n++;
   if (f.availability) n++;
   if (f.visualTier) n++;
+  if (f.category) n++;
   return n;
 }
 
