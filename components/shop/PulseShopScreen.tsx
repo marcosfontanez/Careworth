@@ -34,6 +34,7 @@ import {
   useSparkBalanceNumber,
   useDiamondBalanceNumber,
   usePurchaseReceipts,
+  useRetiredBorders,
 } from '@/hooks/useShopEconomy';
 import { purchaseService } from '@/services/shop/purchaseService';
 import type { PurchaseReceiptRow, ShopItemRow } from '@/lib/shop/types';
@@ -62,10 +63,8 @@ import { PremiumCardSparkBorder } from '@/components/shop/premium/PremiumCardSpa
 import { BorderCard } from '@/components/shop/border/BorderCard';
 import { BorderDetailModal } from '@/components/shop/border/BorderDetailModal';
 import { useBorderCollectionsMap } from '@/hooks/useBorderCollectionsMap';
-import { MonthlyHeroRail, type MonthlyHeroEntry } from '@/components/borders/MonthlyHeroRail';
-import { deriveBorderCategory, type BorderCategory } from '@/lib/borders/category';
-import { readCampaignWindow } from '@/lib/borders/campaignWindow';
 import { useBorderCatalogLists } from '@/hooks/useBorderCatalogFilters';
+import { sortBorderItems } from '@/lib/shop/borderDisplayModel';
 import { ShopResultModal } from '@/components/shop/ShopResultModal';
 import { ShopCatalogSkeleton } from '@/components/shop/ShopLoadingSkeleton';
 import { DiamondsInfoModal } from '@/components/shop/DiamondsInfoModal';
@@ -248,46 +247,30 @@ export default function PulseShopScreen() {
   const browseList = featured ? browseBorders : borders;
 
   /**
-   * Monthly hero rail — surfaces ONE hero per active border program (free
-   * holiday, premium drop, charity, partner). Limits to 4 to keep the rail
-   * focused; sorts by category priority then `sort_order`. Hidden when only
-   * 0–1 categories are live (the single big featured hero below covers it).
+   * "Retired" drawer — when active, the browse strip swaps to a separate query of
+   * borders that are no longer purchasable. Lazy-fetched so the drawer is free
+   * unless the user opens it. Owned/Equipped state still resolves correctly via
+   * `borderOwnershipFor`, so users can spot retired borders they already hold.
    */
-  const monthlyHeroEntries = useMemo<MonthlyHeroEntry[]>(() => {
-    if (!borders.length) return [];
-    const CAT_PRIORITY: Record<BorderCategory, number> = {
-      holiday: 0,
-      charity: 1,
-      advertiser: 2,
-      premium: 3,
-      reward: 4,
-      leaderboard: 5,
-      beta: 6,
-      legacy: 9,
-    };
-    const seen = new Set<BorderCategory>();
-    const candidates: MonthlyHeroEntry[] = [];
-    for (const b of [...borders].sort((a, c) => a.sort_order - c.sort_order)) {
-      const collection = b.collection_id ? collectionsQ.rowById.get(b.collection_id) ?? null : null;
-      const cat = deriveBorderCategory(b, collection);
-      // Skip categories that read awkwardly as a "monthly drop" hero.
-      if (cat === 'beta' || cat === 'leaderboard' || cat === 'legacy') continue;
-      if (seen.has(cat)) continue;
-      const win = readCampaignWindow(b);
-      if (win.isClosed) continue; // hide expired drops from the rail
-      seen.add(cat);
-      candidates.push({ item: b, collection, category: cat });
-    }
-    return candidates
-      .sort((a, c) => CAT_PRIORITY[a.category!] - CAT_PRIORITY[c.category!])
-      .slice(0, 4);
-  }, [borders, collectionsQ.rowById]);
+  const [showRetired, setShowRetired] = useState(false);
+  const retiredQ = useRetiredBorders(showRetired);
+  const retiredBorders = useMemo(
+    () => (retiredQ.data ?? []) as ShopItemRow[],
+    [retiredQ.data],
+  );
 
-  /** Show the rail when 2+ programs are running this month. */
-  const showMonthlyHeroRail = monthlyHeroEntries.length >= 2;
-
-  const { processed: browseProcessed, filter: borderFilter, setFilter: setBorderFilter, sort: borderSort, setSort: setBorderSort } =
+  const { processed: browseProcessedActive, filter: borderFilter, setFilter: setBorderFilter, sort: borderSort, setSort: setBorderSort } =
     useBorderCatalogLists(browseList, invState.ownsBorder);
+
+  /**
+   * Final list rendered in the browse strip. Retired drawer applies the same
+   * sort selection but skips the active-catalog acquisition / owned filter (every
+   * row in this list is, by definition, no longer purchasable).
+   */
+  const browseProcessed = useMemo(
+    () => (showRetired ? sortBorderItems(retiredBorders, borderSort) : browseProcessedActive),
+    [showRetired, retiredBorders, borderSort, browseProcessedActive],
+  );
 
   const collectionNameFor = (b: ShopItemRow) =>
     b.collection_id ? collectionsQ.nameById.get(b.collection_id) ?? null : null;
@@ -418,16 +401,6 @@ export default function PulseShopScreen() {
           <>
             {tab === 'borders' && feat ? (
               <View style={styles.tabPane}>
-                {showMonthlyHeroRail ? (
-                  <View style={styles.monthlyRailWrap}>
-                    <MonthlyHeroRail
-                      entries={monthlyHeroEntries}
-                      onOpenDetail={(it) => setBorderDetailItem(it)}
-                      ownsBorder={(id) => invState.ownsBorder(id)}
-                      equippedShopItemId={equipped?.shop_item_id ?? null}
-                    />
-                  </View>
-                ) : null}
                 <View
                   style={styles.featuredSparkHost}
                   collapsable={false}
@@ -622,16 +595,28 @@ export default function PulseShopScreen() {
                   <TouchableOpacity
                     style={[
                       styles.filterChip,
-                      borderFilter.acquisition === 'all' && !borderFilter.ownedOnly && styles.filterChipOn,
+                      !showRetired &&
+                        borderFilter.acquisition === 'all' &&
+                        !borderFilter.ownedOnly &&
+                        styles.filterChipOn,
                     ]}
-                    onPress={() => setBorderFilter({ acquisition: 'all', ownedOnly: false })}
+                    onPress={() => {
+                      setShowRetired(false);
+                      setBorderFilter({ acquisition: 'all', ownedOnly: false });
+                    }}
                     activeOpacity={0.88}
                   >
                     <Text style={styles.filterChipText}>All</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.filterChip, borderFilter.ownedOnly && styles.filterChipOn]}
-                    onPress={() => setBorderFilter({ acquisition: 'all', ownedOnly: true })}
+                    style={[
+                      styles.filterChip,
+                      !showRetired && borderFilter.ownedOnly && styles.filterChipOn,
+                    ]}
+                    onPress={() => {
+                      setShowRetired(false);
+                      setBorderFilter({ acquisition: 'all', ownedOnly: true });
+                    }}
                     activeOpacity={0.88}
                   >
                     <Text style={styles.filterChipText}>My borders</Text>
@@ -639,9 +624,15 @@ export default function PulseShopScreen() {
                   <TouchableOpacity
                     style={[
                       styles.filterChip,
-                      borderFilter.acquisition === 'shop' && !borderFilter.ownedOnly && styles.filterChipOn,
+                      !showRetired &&
+                        borderFilter.acquisition === 'shop' &&
+                        !borderFilter.ownedOnly &&
+                        styles.filterChipOn,
                     ]}
-                    onPress={() => setBorderFilter({ acquisition: 'shop', ownedOnly: false })}
+                    onPress={() => {
+                      setShowRetired(false);
+                      setBorderFilter({ acquisition: 'shop', ownedOnly: false });
+                    }}
                     activeOpacity={0.88}
                   >
                     <Text style={styles.filterChipText}>Shop</Text>
@@ -649,12 +640,36 @@ export default function PulseShopScreen() {
                   <TouchableOpacity
                     style={[
                       styles.filterChip,
-                      borderFilter.acquisition === 'earned' && !borderFilter.ownedOnly && styles.filterChipOn,
+                      !showRetired &&
+                        borderFilter.acquisition === 'earned' &&
+                        !borderFilter.ownedOnly &&
+                        styles.filterChipOn,
                     ]}
-                    onPress={() => setBorderFilter({ acquisition: 'earned', ownedOnly: false })}
+                    onPress={() => {
+                      setShowRetired(false);
+                      setBorderFilter({ acquisition: 'earned', ownedOnly: false });
+                    }}
                     activeOpacity={0.88}
                   >
                     <Text style={styles.filterChipText}>Earned</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.filterChip, showRetired && styles.filterChipOn]}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setShowRetired(true);
+                      analytics.track('shop_retired_borders_viewed');
+                    }}
+                    activeOpacity={0.88}
+                    accessibilityLabel="Browse retired borders"
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={13}
+                      color={colors.dark.text}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text style={styles.filterChipText}>Retired</Text>
                   </TouchableOpacity>
                 </ScrollView>
 
@@ -694,21 +709,51 @@ export default function PulseShopScreen() {
                   </TouchableOpacity>
                 </ScrollView>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.browseStrip}>
-                  {browseProcessed.map((b) => (
-                    <BorderCard
-                      key={b.id}
-                      item={b}
-                      collectionName={collectionNameFor(b)}
-                      width={browseTileW}
-                      isWeb={Platform.OS === 'web'}
-                      ownership={borderOwnershipFor(b)}
-                      onOpenDetail={() => setBorderDetailItem(b)}
-                      onBuy={() => startBorderShopCheckout(b)}
-                      onGift={() => setGiftBorderItem(b)}
-                    />
-                  ))}
-                </ScrollView>
+                {showRetired && retiredQ.isLoading && retiredBorders.length === 0 ? (
+                  <View style={styles.retiredStateCard}>
+                    <ActivityIndicator color={pulseverse.electric} />
+                    <Text style={styles.retiredStateHint}>Loading retired borders…</Text>
+                  </View>
+                ) : showRetired && retiredBorders.length === 0 ? (
+                  <View style={styles.retiredStateCard}>
+                    <Ionicons name="time-outline" size={26} color={colors.dark.textMuted} />
+                    <Text style={styles.retiredStateTitle}>Nothing retired yet</Text>
+                    <Text style={styles.retiredStateBody}>
+                      When a drop ends, it shows up here so people can see what was available.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    {showRetired ? (
+                      <View style={styles.retiredHintRow}>
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={14}
+                          color={colors.dark.textMuted}
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={styles.retiredHintText}>
+                          These borders are no longer for sale — browsing only.
+                        </Text>
+                      </View>
+                    ) : null}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.browseStrip}>
+                      {browseProcessed.map((b) => (
+                        <BorderCard
+                          key={b.id}
+                          item={b}
+                          collectionName={collectionNameFor(b)}
+                          width={browseTileW}
+                          isWeb={Platform.OS === 'web'}
+                          ownership={borderOwnershipFor(b)}
+                          onOpenDetail={() => setBorderDetailItem(b)}
+                          onBuy={() => startBorderShopCheckout(b)}
+                          onGift={() => setGiftBorderItem(b)}
+                        />
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
 
                 <View style={styles.footerBannerIap}>
                   <Ionicons name="shield-checkmark-outline" size={20} color={pulseverse.storeAccent} style={{ marginRight: 10 }} />
@@ -1328,9 +1373,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: spacing['2xl'] + 4,
   },
-  monthlyRailWrap: {
-    marginBottom: spacing.xl,
-  },
   featuredNeonRing: {
     borderRadius: borderRadius['2xl'] + 3,
     padding: 1.5,
@@ -1569,6 +1611,8 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: borderRadius.full,
@@ -1581,6 +1625,56 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34,211,238,0.09)',
   },
   filterChipText: { fontSize: 12, fontWeight: '800', color: colors.dark.text },
+  retiredHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(148,163,184,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.18)',
+    marginBottom: 12,
+  },
+  retiredHintText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    lineHeight: 16,
+  },
+  retiredStateCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 22,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+    marginBottom: 8,
+  },
+  retiredStateTitle: {
+    marginTop: 10,
+    fontSize: 15,
+    fontWeight: '900',
+    color: colors.dark.text,
+  },
+  retiredStateBody: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  retiredStateHint: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.dark.textMuted,
+  },
   filterStaticLabel: {
     fontSize: 12,
     fontWeight: '800',

@@ -28,6 +28,7 @@ type EventName =
   | 'report_submitted'
   | 'shop_opened'
   | 'shop_tab_viewed'
+  | 'shop_retired_borders_viewed'
   | 'border_viewed'
   | 'border_purchase_started'
   | 'border_purchase_recipient_self'

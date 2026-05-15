@@ -15,6 +15,20 @@ export function useShopCatalog() {
   });
 }
 
+/**
+ * Retired-border drawer — slow-moving list of borders that were once for sale
+ * but can no longer be purchased. Lazy: pass `enabled = true` only when the
+ * shop's "Retired" chip is selected so we don't pay for it on every shop open.
+ */
+export function useRetiredBorders(enabled: boolean) {
+  return useQuery({
+    queryKey: shopKeys.retiredBorders(),
+    queryFn: () => shopQueriesService.getRetiredBorders(),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useSparkWallet(userId: string | undefined) {
   return useQuery({
     queryKey: shopKeys.sparkWallet(userId),

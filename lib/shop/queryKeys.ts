@@ -3,6 +3,12 @@
 export const shopKeys = {
   root: () => ['shop'] as const,
   catalog: () => ['shop', 'catalog'] as const,
+  /**
+   * Retired-border drawer in Pulse Shop. Separate from `catalog` because the
+   * active catalog query filters retired/expired rows out — see
+   * `shopQueriesService.getActiveCatalog`. Slow-moving list; safe to cache aggressively.
+   */
+  retiredBorders: () => ['shop', 'retiredBorders'] as const,
   borderCollections: () => ['shop', 'borderCollections'] as const,
   sparkWallet: (userId: string | undefined) => ['shop', 'sparkWallet', userId ?? ''] as const,
   diamondWallet: (userId: string | undefined) => ['shop', 'diamondWallet', userId ?? ''] as const,

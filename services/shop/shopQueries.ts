@@ -79,6 +79,52 @@ export const shopQueriesService = {
     });
   },
 
+  /**
+   * Borders that were once available but can no longer be purchased — powers the
+   * Pulse Shop "Retired" drawer so people can browse what they missed. Captures any
+   * of the four retired signals the catalog uses:
+   *   - `is_active = false`               (admin pulled the row)
+   *   - `expires_at <= now`               (campaign window closed)
+   *   - `is_retired = true`               (explicit flag)
+   *   - `availability_status = 'retired'` (taxonomy enum)
+   *
+   * Limited to a recent slice so this cheap drawer never balloons. The same row
+   * that's already in the active catalog (e.g. `is_retired=true` + still active by
+   * mistake) is filtered out client-side as a defensive guard against duplicates.
+   */
+  async getRetiredBorders(limit = 80): Promise<ShopItemRow[]> {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('shop_items' as any)
+      .select('*')
+      .eq('type', 'border')
+      .or(
+        [
+          'is_active.eq.false',
+          `expires_at.lte.${nowIso}`,
+          'is_retired.eq.true',
+          'availability_status.eq.retired',
+        ].join(','),
+      )
+      .order('expires_at', { ascending: false, nullsFirst: false })
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as ShopItemRow[];
+    const now = Date.now();
+    return rows.filter((row) => {
+      // Defensive: keep only rows that are genuinely *not* purchasable right now.
+      if (row.is_active === false) return true;
+      if (row.is_retired === true) return true;
+      if (row.availability_status === 'retired') return true;
+      if (row.expires_at) {
+        const t = new Date(row.expires_at).getTime();
+        if (!Number.isNaN(t) && t <= now) return true;
+      }
+      return false;
+    });
+  },
+
   async getSparkWallet(userId: string): Promise<SparkWalletRow | null> {
     const { data, error } = await supabase
       .from('spark_wallets' as any)
