@@ -48,12 +48,6 @@ export function FeatureCirclesLanding() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
-                <Link href="/features" className="inline-flex items-center gap-2">
-                  <Search className="h-4 w-4" />
-                  Explore Circles
-                </Link>
-              </Button>
             </div>
             <div className="mt-10 flex flex-wrap gap-6 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2">

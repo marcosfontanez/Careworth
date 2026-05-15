@@ -34,7 +34,7 @@ export function MarketingFooter({ locale }: { locale: Locale }) {
                 <nav className="mt-4" aria-labelledby={navId}>
                   <ul className="space-y-2.5">
                     {col.links.map((l) => (
-                      <li key={`${col.title}-${l.href}`}>
+                      <li key={`${col.title}-${l.label}`}>
                         <Link href={l.href} className="text-sm text-muted-foreground transition hover:text-primary">
                           {l.label}
                         </Link>

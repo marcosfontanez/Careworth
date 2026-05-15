@@ -2,7 +2,6 @@ import dynamic from "next/dynamic";
 
 import { HeroSection } from "@/components/marketing/hero-section";
 import { HomeFeatureShowcase } from "@/components/marketing/home-feature-showcase";
-import { HomeSignatureOverview } from "@/components/marketing/home-signature-overview";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
@@ -35,7 +34,6 @@ export default async function HomePage() {
   return (
     <>
       <HeroSection locale={locale} />
-      <HomeSignatureOverview locale={locale} />
       <HomeFeatureShowcase locale={locale} />
       <HomePulseDuo locale={locale} />
       <HomeCirclesSpotlight locale={locale} />

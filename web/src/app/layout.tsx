@@ -55,7 +55,7 @@ export default async function RootLayout({
   const htmlLang = raw && isLocale(raw) ? raw : DEFAULT_LOCALE;
 
   return (
-    <html lang={htmlLang} className={`dark ${inter.variable} min-h-dvh`}>
+    <html lang={htmlLang} className={`dark ${inter.variable} min-h-dvh scroll-smooth`}>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
         <Script id="pv-auth-callback-redirect" strategy="beforeInteractive">
           {`

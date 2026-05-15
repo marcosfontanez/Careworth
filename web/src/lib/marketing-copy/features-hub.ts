@@ -11,6 +11,12 @@ export type FeatureSpotlight = {
 
 export type FeatureGridItem = { href: string; title: string; desc: string };
 
+export type CreatorEconomyBlock = {
+  title: string;
+  lead: string;
+  bullets: readonly string[];
+};
+
 export type ComparisonVariant = "full" | "partial" | "no" | "limited";
 
 export type FeaturesComparisonRow = { label: string; us: ComparisonVariant; them: ComparisonVariant };
@@ -28,7 +34,12 @@ export type FeaturesHubCopy = {
   allSurfacesBody: string;
   spotlights: FeatureSpotlight[];
   grid: FeatureGridItem[];
-  hubBanner: string;
+  creatorEconomy: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    blocks: readonly CreatorEconomyBlock[];
+  };
   compareEyebrow: string;
   compareTitle: string;
   compareBody: string;
@@ -55,7 +66,7 @@ const en: FeaturesHubCopy = {
     eyebrow: "Features overview",
     title: "Explore everything PulseVerse can do.",
     description:
-      "Feed, Circles, Live, Pulse Page, and My Pulse — one account, one trust model, and surfaces tuned to how healthcare culture actually moves (with Media Hub living right on your Pulse Page).",
+      "Feed, Circles, Live, Pulse Page, My Pulse, and the Creator Hub — one account, one trust model, and surfaces tuned to how healthcare culture actually moves (with Media Hub living right on your Pulse Page).",
   },
   join: "Join PulseVerse",
   partner: "Partner with us",
@@ -65,8 +76,9 @@ const en: FeaturesHubCopy = {
     "Feed discovery, premium Circles rooms, Live momentum, and Pulse identity with My Pulse + Media Hub — start anywhere, stay in one network.",
   explore: "Explore",
   allSurfacesEyebrow: "All surfaces",
-  allSurfacesTitle: "Five pillars, one product",
-  allSurfacesBody: "Same account, same trust model — swap context without switching apps.",
+  allSurfacesTitle: "Six surfaces, one account",
+  allSurfacesBody:
+    "Feed, Circles, Live, Pulse Page, My Pulse, and the Creator Hub — same login, same trust model, no context switching.",
   spotlights: [
     {
       tag: "Feed",
@@ -125,8 +137,47 @@ const en: FeaturesHubCopy = {
       title: "My Pulse",
       desc: "Rolling five-item update feed on your Pulse Page — Thought, Clip, Link, Pics — always current.",
     },
+    {
+      href: "/features#creator-economy",
+      title: "Creator Hub",
+      desc: "Hub, Pulse Shop, borders, gifting, leaderboards, and Live tools — one creator surface in-app.",
+    },
   ],
-  hubBanner: "Beta Phase starting soon. Download the app now to take part.",
+  creatorEconomy: {
+    eyebrow: "Creator economy",
+    title: "Hub, Shop, and creator tools — how it works",
+    description:
+      "PulseVerse keeps commerce and creativity inside native app-store rails. Here is the shape of the creator layer — no beta banner, no filler grids.",
+    blocks: [
+      {
+        title: "Creator Hub & tools",
+        lead: "Publish and host from one healthcare-native home — not a bolted-on studio.",
+        bullets: [
+          "Record or upload video, photo layouts, and posts that sync with Pulse Page and My Pulse.",
+          "Enter Live with Featured, Top Now, Rising, and topic browse tuned for licensed audiences.",
+          "Keep your identity polished with customization, borders, and Media Hub moments.",
+        ],
+      },
+      {
+        title: "Pulse Shop",
+        lead: "Premium cosmetics and creator support — ownership verified in-app, purchases through Apple & Google.",
+        bullets: [
+          "Featured monthly drops, browse-all borders, Sparks/Gifts tabs, and a retired archive for collectors.",
+          "Rarity, animation hints, and equip flows mirror what players see in production builds.",
+          "Charity, premium, partner, and community drops rotate on a predictable monthly rhythm.",
+        ],
+      },
+      {
+        title: "Sparks & Diamonds",
+        lead: "Two currencies: generosity in the moment, recognition over time.",
+        bullets: [
+          "Send Sparks from Feed, Circles, Live, comments, DMs, and profiles to show love or start a conversation.",
+          "Earn Diamonds through consistency, engagement, received Sparks, and impact milestones.",
+          "Diamond tiers unlock exclusives, cosmetics, and creator perks — detailed on the homepage infographic.",
+        ],
+      },
+    ],
+  },
   compareEyebrow: "Compare",
   compareTitle: "More than a platform. A better way to connect.",
   compareBody:
@@ -156,7 +207,7 @@ const es: FeaturesHubCopy = {
     eyebrow: "Panorama de funciones",
     title: "Descubre todo lo que PulseVerse puede hacer.",
     description:
-      "Feed, Circles, Live, Pulse Page y My Pulse — una cuenta, un modelo de confianza y superficies pensadas para cómo se mueve la cultura sanitaria (con Media Hub en tu Pulse Page).",
+      "Feed, Circles, Live, Pulse Page, My Pulse y Creator Hub — una cuenta, un modelo de confianza y superficies pensadas para cómo se mueve la cultura sanitaria (con Media Hub en tu Pulse Page).",
   },
   join: "Unirte a PulseVerse",
   partner: "Colaborar con nosotros",
@@ -166,8 +217,9 @@ const es: FeaturesHubCopy = {
       "Descubrimiento en Feed, salas Circles premium, impulso en Live e identidad Pulse con My Pulse y Media Hub — empieza donde quieras, en una sola red.",
   explore: "Explorar",
   allSurfacesEyebrow: "Todas las superficies",
-  allSurfacesTitle: "Cinco pilares, un producto",
-  allSurfacesBody: "La misma cuenta y el mismo modelo de confianza — cambia de contexto sin cambiar de app.",
+  allSurfacesTitle: "Seis superficies, una cuenta",
+  allSurfacesBody:
+    "Feed, Circles, Live, Pulse Page, My Pulse y Creator Hub — el mismo acceso y modelo de confianza.",
   spotlights: en.spotlights.map((s, i) => ({
     ...s,
     href: sharedSpotlightHrefs[i],
@@ -213,8 +265,47 @@ const es: FeaturesHubCopy = {
       title: "My Pulse",
       desc: "Cinco novedades en tu Pulse Page — Thought, Clip, Link, Pics — siempre al día.",
     },
+    {
+      href: "/features#creator-economy",
+      title: "Creator Hub",
+      desc: "Hub, Pulse Shop, bordes, regalos, leaderboards y Live — una superficie de creador en la app.",
+    },
   ],
-  hubBanner: "La fase beta empieza pronto. Descarga la app ahora para participar.",
+  creatorEconomy: {
+    eyebrow: "Economía de creador",
+    title: "Hub, tienda y herramientas — cómo encaja",
+    description:
+      "PulseVerse mantiene el comercio y la creación dentro de los rails nativos de la tienda de apps. Así está organizada la capa de creadores.",
+    blocks: [
+      {
+        title: "Creator Hub y herramientas",
+        lead: "Publica y emite desde un hogar pensado para la sanidad.",
+        bullets: [
+          "Graba o sube vídeo, diseños de fotos y publicaciones enlazadas a Pulse Page y My Pulse.",
+          "Live con descubrimiento destacado, top ahora, en ascenso y por tema.",
+          "Personalización, bordes y Media Hub para mantener tu identidad viva.",
+        ],
+      },
+      {
+        title: "Pulse Shop",
+        lead: "Cosméticos premium y apoyo a creadores — compras con Apple y Google.",
+        bullets: [
+          "Drops mensuales destacados, cuadrícula de bordes, pestañas Sparks y Regalos y archivo de retirados.",
+          "Rareza, animación y equipado coherentes con la app.",
+          "Campañas benéficas, premium y de marca en cadencia mensual.",
+        ],
+      },
+      {
+        title: "Sparks y Diamonds",
+        lead: "Dos monedas: generosidad al momento y reconocimiento con el tiempo.",
+        bullets: [
+          "Envía Sparks desde Feed, Circles, Live, comentarios y perfiles.",
+          "Gana Diamonds con impacto, constancia y engagement.",
+          "Los niveles de Diamonds desbloquean extras — ver infografía en la página principal.",
+        ],
+      },
+    ],
+  },
   compareEyebrow: "Comparar",
   compareTitle: "Más que una plataforma. Una mejor forma de conectar.",
   compareBody:

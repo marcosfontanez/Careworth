@@ -122,7 +122,20 @@ export function FeatureLiveLanding() {
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {liveFeaturedSessions.map((s) => (
             <div key={s.title} className={cn("overflow-hidden rounded-2xl border border-white/10", marketingCardMuted)}>
-              <div className="relative aspect-video bg-gradient-to-br from-slate-800 to-slate-950">
+              <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", s.thumbClass)}>
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(255,255,255,0.12),transparent_55%)]"
+                />
+                <div aria-hidden className="absolute bottom-6 left-1/2 flex h-10 -translate-x-1/2 items-end gap-0.5 opacity-45">
+                  {[4, 7, 5, 9, 6, 8, 5, 7, 4, 6].map((h, i) => (
+                    <span
+                      key={`${s.title}-bar-${i}`}
+                      className="w-1 rounded-full bg-white/75"
+                      style={{ height: `${h * 4}px` }}
+                    />
+                  ))}
+                </div>
                 <div className="absolute left-3 top-3">
                   <span className="rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                     Live

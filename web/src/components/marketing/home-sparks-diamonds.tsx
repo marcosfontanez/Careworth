@@ -62,7 +62,7 @@ export function HomeSparksDiamonds({ locale }: { locale: Locale }) {
             className="h-11 rounded-full bg-primary px-6 font-semibold text-primary-foreground hover:bg-primary/90"
             asChild
           >
-            <Link href="/features" className="inline-flex items-center gap-2">
+            <Link href="/features#creator-economy" className="inline-flex items-center gap-2">
               {c.ctaPrimary}
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
@@ -73,7 +73,7 @@ export function HomeSparksDiamonds({ locale }: { locale: Locale }) {
             className="h-11 rounded-full border-white/15 bg-white/[0.03] px-6 font-semibold hover:bg-white/[0.07]"
             asChild
           >
-            <Link href="/features/live">{c.ctaSecondary}</Link>
+            <Link href="/#pulse-shop">{c.ctaSecondary}</Link>
           </Button>
         </div>
       </div>

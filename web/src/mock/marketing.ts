@@ -283,13 +283,21 @@ export const circlesWhyBetter = [
 
 /** Live marketing landing */
 export const liveFeaturedSessions = [
-  { title: "ICU check-in", host: "Dr. Arjun Patel", status: "live" as const, viewers: "1.2K", specialty: "Critical care" },
+  {
+    title: "ICU check-in",
+    host: "Dr. Arjun Patel",
+    status: "live" as const,
+    viewers: "1.2K",
+    specialty: "Critical care",
+    thumbClass: "from-teal-950 via-slate-950 to-cyan-950",
+  },
   {
     title: "New grad residency prep",
     host: "Jordan Lee, RN",
     status: "live" as const,
     viewers: "420",
     specialty: "Education",
+    thumbClass: "from-indigo-950 via-slate-950 to-violet-950",
   },
   {
     title: "Wellness after 12s",
@@ -297,15 +305,14 @@ export const liveFeaturedSessions = [
     status: "live" as const,
     viewers: "640",
     specialty: "Wellness",
+    thumbClass: "from-rose-950/80 via-slate-950 to-amber-950/70",
   },
 ] as const;
 
 export const liveRisingLives = [
-  { title: "Pharmacy counter stories", host: "Sam Okonkwo", viewers: "up 3.1×" },
-  { title: "Night shift debrief", host: "Anonymous RN", viewers: "up 2.4×" },
-  { title: "Ask a cards attending", host: "Dr. Arjun Patel", viewers: "up 1.9×" },
-  { title: "OR teamwork wins", host: "Maya Chen", viewers: "up 1.6×" },
-  { title: "Med school AMA", host: "Faculty panel", viewers: "up 1.4×" },
+  { title: "OR teamwork wins", host: "Maya Chen, RN", viewers: "up 3.1×" },
+  { title: "Med school AMA", host: "Faculty panel", viewers: "up 2.4×" },
+  { title: "Burnout circle drop-in", host: "Priya Patel", viewers: "up 1.9×" },
 ] as const;
 
 export const liveTopNow = [

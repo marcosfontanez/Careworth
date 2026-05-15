@@ -77,10 +77,8 @@ export type HomePulseShopCopy = {
   eyebrow: string;
   title: string;
   description: string;
-  bannerTag: string;
-  bannerCaption: string;
-  mobileTag: string;
-  mobileCaption: string;
+  posterTag: string;
+  posterCaption: string;
   ctaPrimary: string;
   ctaSecondary: string;
 };
@@ -222,10 +220,9 @@ const creatorHub: Record<Locale, HomeCreatorHubCopy> = {
 };
 
 /* ------------------------------------------------------------------------- */
-/*  Pulse Shop spotlight (NEW).                                              */
-/*  Uses two paired marketing renders — cinematic featured-drop banner and   */
-/*  the in-app shop UI — so the shop earns its own moment instead of being   */
-/*  buried inside Creator Hub or Borders.                                    */
+/*  Pulse Shop spotlight — single flagship render (full mobile shop UI).      */
+/*  We dropped the paired banner because both assets showed nearly the same  */
+/*  Emerald Renewal screen side-by-side, which read as duplicate product art.   */
 /* ------------------------------------------------------------------------- */
 
 const pulseShop: Record<Locale, HomePulseShopCopy> = {
@@ -234,10 +231,8 @@ const pulseShop: Record<Locale, HomePulseShopCopy> = {
     title: "Premium borders. Real rewards.",
     description:
       "Limited drops, exclusive borders, and creator support — through your app store.",
-    bannerTag: "Featured drop",
-    bannerCaption: "Direct purchase · App Store / Google Play",
-    mobileTag: "Inside Pulse Shop",
-    mobileCaption: "Borders · Sparks · Gifts",
+    posterTag: "Inside Pulse Shop",
+    posterCaption: "Featured drop · Browse borders · Sparks & Gifts tabs",
     ctaPrimary: "Open Pulse Shop",
     ctaSecondary: "What are Sparks?",
   },
@@ -246,10 +241,8 @@ const pulseShop: Record<Locale, HomePulseShopCopy> = {
     title: "Bordes premium. Recompensas reales.",
     description:
       "Drops limitados, bordes exclusivos y apoyo a creadores — desde tu tienda de apps.",
-    bannerTag: "Drop destacado",
-    bannerCaption: "Compra directa · App Store / Google Play",
-    mobileTag: "Dentro de Pulse Shop",
-    mobileCaption: "Bordes · Sparks · Regalos",
+    posterTag: "Dentro de Pulse Shop",
+    posterCaption: "Drop destacado · Explorar bordes · Pestañas Sparks y regalos",
     ctaPrimary: "Abrir Pulse Shop",
     ctaSecondary: "¿Qué son los Sparks?",
   },
