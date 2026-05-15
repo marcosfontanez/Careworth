@@ -38,6 +38,8 @@ import {
   type CustomizeMoreTabsHandle,
 } from '@/components/mypage/CustomizeMoreTabs';
 import { MyBordersScreen } from '@/components/borders/inventory/MyBordersScreen';
+import { EquippedBorderPanel } from '@/components/borders/EquippedBorderPanel';
+import { useOwnedBorderEntries } from '@/hooks/useOwnedBorderEntries';
 import { useProfileCustomization } from '@/store/useProfileCustomization';
 
 const DEFAULT_BANNER =
@@ -71,6 +73,32 @@ function parseIdentityTags(raw: string): string[] {
 /** Total characters across accepted tags — what the counter UI displays. */
 function tagsCharCount(tags: string[]): number {
   return tags.reduce((n, t) => n + t.length, 0);
+}
+
+/**
+ * Lightweight wrapper that fetches the owned-border count and renders the
+ * shared `EquippedBorderPanel` above the embedded vault. Kept as a tiny
+ * inner component so the hook fires only once the Borders area is mounted.
+ */
+function BorderEquippedPanelStrip({
+  uid,
+  avatarUrl,
+  equippedFrame,
+}: {
+  uid: string;
+  avatarUrl: string | null;
+  equippedFrame: import('@/types').PulseAvatarFrame | null;
+}) {
+  const { entries } = useOwnedBorderEntries(uid);
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <EquippedBorderPanel
+        frame={equippedFrame}
+        avatarUrl={avatarUrl ?? undefined}
+        ownedCount={entries.length}
+      />
+    </View>
+  );
 }
 
 export default function MyPageAppearanceScreen() {
@@ -533,6 +561,11 @@ export default function MyPageAppearanceScreen() {
             Shop purchases, gifts, leaderboard prizes, beta rewards, and events — equip anything you&apos;ve unlocked.
             Top-five monthly Pulse winners get exclusive rings; those live here alongside Pulse Shop borders.
           </Text>
+          <BorderEquippedPanelStrip
+            uid={uid}
+            avatarUrl={avatarPreview ?? profile.avatarUrl ?? null}
+            equippedFrame={profile.pulseAvatarFrame ?? null}
+          />
           <MyBordersScreen embedded onInventoryChanged={() => void refreshProfile()} />
         </View>
 
