@@ -4,10 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, layout, shadows, pulseverse } from '@/theme';
 import type { OwnedBorderEntry } from '@/lib/borders/ownedTypes';
-import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
-import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
 import { compactSourceLabel } from '@/lib/shop/borderDisplayModel';
+import { AvatarDisplay } from '@/components/profile/AvatarBuilder';
+import { pulseFrameStyleForShopBorder } from '@/lib/borders/frameSlug';
 
 const SCREEN_W = Dimensions.get('window').width;
 const GAP = 12;
@@ -19,11 +19,22 @@ type Props = {
   equipped: boolean;
   onPress: () => void;
   onEquipPress?: () => void;
+  /**
+   * Viewer's avatar URL, composited *inside* the border so the tile shows the
+   * user how the border will actually look on their photo (matches the prize
+   * tile behavior).
+   */
+  avatarUrl?: string;
 };
 
-export function BorderInventoryTile({ entry, equipped, onPress, onEquipPress }: Props) {
+export function BorderInventoryTile({
+  entry,
+  equipped,
+  onPress,
+  onEquipPress,
+  avatarUrl,
+}: Props) {
   const { item, collectionName, inventory } = entry;
-  const ring = ringPreviewColor(item);
   const motion =
     item.visual_tier === 'animated' ||
     item.visual_tier === 'reactive' ||
@@ -31,6 +42,8 @@ export function BorderInventoryTile({ entry, equipped, onPress, onEquipPress }: 
   const src = compactSourceLabel(item.source_type);
   const isGifted = inventory.acquisition_source === 'gifted';
   const legacyOrRetired = item.availability_status === 'legacy' || item.is_retired;
+  const pulseFrameStyle = pulseFrameStyleForShopBorder(item);
+  const showRank = typeof item.rank_place === 'number' && item.rank_place > 0;
 
   return (
     <TouchableOpacity
@@ -51,13 +64,25 @@ export function BorderInventoryTile({ entry, equipped, onPress, onEquipPress }: 
         </LinearGradient>
       ) : null}
       <View style={[styles.previewBlock, equipped ? styles.previewBlockWithBar : styles.previewBlockNoBar]}>
-        <BorderPreviewPlate
-          ringColor={ring}
-          size={68}
-          rankPlace={item.rank_place}
-          showMotionHint={motion}
-          shopItem={item}
-        />
+        <View style={styles.previewStage}>
+          <AvatarDisplay
+            size={68}
+            avatarUrl={avatarUrl}
+            prioritizeRemoteAvatar
+            ringColor={pulseFrameStyle.ringColor}
+            pulseFrame={pulseFrameStyle}
+          />
+          {showRank ? (
+            <View style={styles.rankBadge}>
+              <Text style={styles.rankText}>#{item.rank_place}</Text>
+            </View>
+          ) : null}
+          {motion ? (
+            <View style={styles.motionDot} accessibilityLabel="Animated or reactive border">
+              <Ionicons name="sparkles" size={11} color="#FDE68A" />
+            </View>
+          ) : null}
+        </View>
       </View>
       <Text style={styles.name} numberOfLines={2}>
         {item.name}
@@ -140,6 +165,38 @@ const styles = StyleSheet.create({
   previewBlock: { alignItems: 'center' },
   previewBlockWithBar: { marginTop: 22 },
   previewBlockNoBar: { marginTop: 4 },
+  previewStage: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(15,23,42,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,166,58,0.55)',
+    zIndex: 6,
+  },
+  rankText: { fontSize: 11, fontWeight: '900', color: '#FDE68A' },
+  motionDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15,23,42,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(250,204,21,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
+  },
   name: {
     marginTop: 12,
     fontSize: 14,

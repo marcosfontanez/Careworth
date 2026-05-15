@@ -42,18 +42,17 @@ import {
   sortVaultRows,
   vaultCollectionStats,
 } from '@/lib/borders/vaultRows';
-import { resolveShopBorderFrameSlug } from '@/lib/borders/frameSlug';
 import { pulseAvatarFramesService } from '@/services/supabase/pulseAvatarFrames';
 import type { EarnedPulseAvatarFrame } from '@/services/supabase/pulseAvatarFrames';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderRarityBadge, RarityTierBadge } from '@/components/shop/border/BorderRarityBadge';
-import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
 import { BorderCompactMetaRow } from '@/components/shop/border/BorderCompactMetaRow';
 import { compactSourceLabel } from '@/lib/shop/borderDisplayModel';
 import type { BorderSourceType } from '@/lib/shop/borderCatalogTaxonomy';
 import { BORDER_CATEGORY_LABELS, type BorderCategory } from '@/lib/borders/category';
+import { resolveShopBorderFrameSlug, pulseFrameStyleForShopBorder } from '@/lib/borders/frameSlug';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -350,16 +349,12 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
             </>
           ) : equippedEntry ? (
             <>
-              <BorderPreviewPlate
-                ringColor={ringPreviewColor(equippedEntry.item)}
+              <AvatarDisplay
                 size={108}
-                rankPlace={equippedEntry.item.rank_place}
-                showMotionHint={
-                  equippedEntry.item.visual_tier === 'animated' ||
-                  equippedEntry.item.visual_tier === 'reactive' ||
-                  equippedEntry.item.is_animated === true
-                }
-                shopItem={equippedEntry.item}
+                avatarUrl={avatarUrlForVault}
+                prioritizeRemoteAvatar
+                ringColor={ringPreviewColor(equippedEntry.item)}
+                pulseFrame={pulseFrameStyleForShopBorder(equippedEntry.item)}
               />
               <Text style={styles.heroName}>{equippedEntry.item.name}</Text>
               {equippedEntry.collectionName ? (
@@ -532,6 +527,7 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
                 <BorderInventoryTile
                   entry={row.entry}
                   equipped={equipped}
+                  avatarUrl={avatarUrlForVault}
                   onPress={() => openDetail(row.entry)}
                   onEquipPress={
                     equipped ? undefined : () => void handleEquip(row.entry.inventory.id)
@@ -953,6 +949,7 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
                 <BorderInventoryTile
                   entry={item.entry}
                   equipped={equipped}
+                  avatarUrl={avatarUrlForVault}
                   onPress={() => openDetail(item.entry)}
                   onEquipPress={
                     equipped ? undefined : () => void handleEquip(item.entry.inventory.id)

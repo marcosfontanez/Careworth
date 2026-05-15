@@ -261,6 +261,7 @@ export function BordersCollectionStrip({ onInventoryChanged }: BordersCollection
                     <BorderInventoryTile
                       entry={row.entry}
                       equipped={equipped}
+                      avatarUrl={avatarUrlForVault}
                       onPress={() => openDetail(row.entry)}
                       onEquipPress={
                         equipped ? undefined : () => void handleEquip(row.entry.inventory.id)
