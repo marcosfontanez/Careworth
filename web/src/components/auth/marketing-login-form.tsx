@@ -11,7 +11,7 @@ import type { LoginPageCopy } from "@/lib/marketing-copy/login-page";
 import { marketingInlineLink } from "@/lib/ui-classes";
 import type { Locale } from "@/lib/i18n";
 
-export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: Locale; c: LoginPageCopy; nextPath: string }) {
+export function MarketingLoginForm({ locale, c, nextPath }: { locale: Locale; c: LoginPageCopy; nextPath: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -64,7 +64,7 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
   }
 
   return (
-    <>
+    <div lang={locale}>
       {error ? (
         <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-red-200">
           {error}
@@ -81,7 +81,7 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
             autoComplete="username"
             placeholder={c.emailPlaceholder}
             disabled={loading}
-            className="border-white/10 bg-white/[0.04]"
+            className="border-white/10 bg-white/4"
           />
         </div>
         <div className="space-y-2">
@@ -93,7 +93,7 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
             required
             autoComplete="current-password"
             disabled={loading}
-            className="border-white/10 bg-white/[0.04]"
+            className="border-white/10 bg-white/4"
           />
         </div>
         <Button
@@ -115,6 +115,6 @@ export function MarketingLoginForm({ locale: _locale, c, nextPath }: { locale: L
           {c.staffLink}
         </Link>
       </p>
-    </>
+    </div>
   );
 }

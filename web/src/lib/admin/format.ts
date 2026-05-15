@@ -1,5 +1,4 @@
-export function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+/**
+ * Admin metric formatting — re-export from monorepo root so K/M suffix rules match the mobile app.
+ */
+export { formatCount } from "../../../../utils/format";

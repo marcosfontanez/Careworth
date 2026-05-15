@@ -72,7 +72,7 @@ export async function grantPulseAvatarFrameAction(input: {
         entityId: targetUserId,
         metadata: { frame_id: frameId, slug: frame.slug, label: frame.label },
       });
-      revalidatePath("/admin/avatar-borders");
+      revalidatePath("/admin/merchandising");
       return { ok: true, note: "User already had this border; set it as equipped." };
     }
     return { ok: false, error: "User already has this border unlocked." };
@@ -108,6 +108,6 @@ export async function grantPulseAvatarFrameAction(input: {
     },
   });
 
-  revalidatePath("/admin/avatar-borders");
+  revalidatePath("/admin/merchandising");
   return { ok: true };
 }

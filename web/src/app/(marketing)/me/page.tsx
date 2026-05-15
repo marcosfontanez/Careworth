@@ -53,9 +53,18 @@ export default async function MePage() {
     typeof profile?.pulse_score_current === "number" ? Math.round(profile.pulse_score_current) : null;
 
   return (
-    <div className={cn(marketingGutterX, "mx-auto max-w-2xl py-12 sm:py-16")}>
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 shadow-[0_24px_80px_-48px_rgba(20,184,166,0.35)]">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+    <div className="relative isolate">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_70%_45%_at_50%_-15%,rgba(20,184,166,0.10),transparent_55%)]"
+      />
+      <div className={cn(marketingGutterX, "mx-auto max-w-2xl py-12 sm:py-16")}>
+      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.65)] p-8 ring-1 ring-white/[0.04] shadow-[0_30px_90px_-30px_rgba(20,184,166,0.45),0_0_0_1px_rgba(20,184,166,0.10)] backdrop-blur-xl">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_85%_60%_at_50%_-10%,rgba(255,255,255,0.05),transparent_55%)]"
+        />
+        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-start">
           <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-white/15 bg-secondary/50 sm:size-28">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -119,6 +128,7 @@ export default async function MePage() {
             </button>
           </form>
         </div>
+      </div>
       </div>
     </div>
   );

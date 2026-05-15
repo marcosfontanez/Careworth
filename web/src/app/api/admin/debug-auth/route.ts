@@ -21,9 +21,14 @@ export async function GET(req: NextRequest) {
       { status: 401 },
     );
   }
-  return NextResponse.json({
+  const body: Record<string, unknown> = {
     ok: true,
     staffUserId: g.adminUserId,
-    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-  });
+  };
+  // Avoid disclosing server env layout in production (defense in depth; route is admin-only).
+  if (process.env.NODE_ENV !== "production") {
+    body.hasServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  }
+
+  return NextResponse.json(body);
 }

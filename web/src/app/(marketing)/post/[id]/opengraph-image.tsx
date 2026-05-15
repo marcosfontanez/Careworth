@@ -76,6 +76,8 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         }}
       >
         {bgDataUrl ? (
+          // next/image is not supported inside `ImageResponse` (Satori); data-URL src is required here.
+          // eslint-disable-next-line @next/next/no-img-element -- OG image generation, not a page LCP path
           <img
             alt=""
             src={bgDataUrl}

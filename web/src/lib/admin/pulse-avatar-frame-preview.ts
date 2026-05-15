@@ -12,7 +12,9 @@ export function pulseAvatarFramePreviewPath(slug: string, prizeTier: string): st
 
   if (s === "pride-month-2026-border") return "/pulse-rings/pride-month-2026-border.png";
   if (s === "beta-tester-border") return "/pulse-rings/beta-tester-border.png";
+  if (s === "mothers-day-2026-border") return "/pulse-rings/mothers-day-2026-border.png";
   if (s === "juneteenth-2026-border") return "/pulse-rings/juneteenth-2026-border.png";
+  if (s === "emerald-renewal-may-2026-border") return "/pulse-rings/emerald-renewal-may-2026-border.png";
 
   if (t === "gold") return "/pulse-rings/podium-gold.png";
   if (t === "silver") return "/pulse-rings/podium-silver.png";

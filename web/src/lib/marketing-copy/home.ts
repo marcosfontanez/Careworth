@@ -1,16 +1,12 @@
 import type { Locale } from "@/lib/i18n";
 
 export type HomeHeroCopy = {
-  headlineLead: string;
-  headlineAccent: string;
+  eyebrow: string;
   subhead: string;
   primaryCta: string;
   secondaryCta: string;
-  bulletSafe: string;
-  bulletConnections: string;
-  bulletLive: string;
-  tagline: string;
-  framesCaption: string;
+  posterTag: string;
+  posterCaption: string;
 };
 
 export type HomeCtaCopy = {
@@ -22,82 +18,44 @@ export type HomeCtaCopy = {
 
 const hero: Record<Locale, HomeHeroCopy> = {
   en: {
-    headlineLead: "Healthcare culture,",
-    headlineAccent: "all in one place.",
+    eyebrow: "Healthcare's first social home",
     subhead:
-      "The social platform for the global healthcare community — Feed, Circles, Live, and Pulse Page with Current Vibe, My Pulse, and Media Hub. Built for professionals who want real connection, not another stiff directory.",
+      "Verified clinicians, students, and creators — in your specialty, on your terms.",
     primaryCta: "Join PulseVerse",
-    secondaryCta: "Explore Pulse Page",
-    bulletSafe: "Safe & verified",
-    bulletConnections: "Real connections",
-    bulletLive: "Live & on-demand",
-    tagline: "where clinicians, students, and teams build culture that lasts.",
-    framesCaption: "Product frames · swap for marketing captures anytime",
+    secondaryCta: "See it in the browser",
+    posterTag: "Live product render",
+    posterCaption: "Login · Profile · Circles · Creator Hub",
   },
   es: {
-    headlineLead: "Cultura en salud,",
-    headlineAccent: "todo en un solo lugar.",
+    eyebrow: "El primer hogar social de la salud",
     subhead:
-      "La plataforma social para la comunidad sanitaria global — Feed, Circles, Live y Pulse Page con Current Vibe, My Pulse y Media Hub. Pensada para profesionales que buscan vínculos reales, no otro directorio rígido.",
+      "Clínicos, estudiantes y creadores verificados — en tu especialidad, en tus términos.",
     primaryCta: "Unirte a PulseVerse",
-    secondaryCta: "Explorar Pulse Page",
-    bulletSafe: "Seguro y verificado",
-    bulletConnections: "Conexiones reales",
-    bulletLive: "En vivo y a la carta",
-    tagline: "donde clínicos, estudiantes y equipos construyen cultura que perdura.",
-    framesCaption: "Maquetas del producto · sustituye por capturas cuando quieras",
+    secondaryCta: "Verla en el navegador",
+    posterTag: "Renderizado real",
+    posterCaption: "Login · Perfil · Circles · Creator Hub",
   },
 };
 
 const bottomCta: Record<Locale, HomeCtaCopy> = {
   en: {
-    title: "Your community. Your voice. Your Pulse.",
-    description:
-      "Join clinicians, students, and teams building healthcare culture — with trust, clarity, and room to breathe.",
-    primaryLabel: "Join PulseVerse now",
-    secondaryLabel: "Talk to partnerships",
+    title: "Make it your Pulse.",
+    description: "Join the clinicians, students, and creators already inside.",
+    primaryLabel: "Join PulseVerse",
+    secondaryLabel: "Partner with us",
   },
   es: {
-    title: "Tu comunidad. Tu voz. Tu Pulse.",
-    description:
-      "Únete a clínicos, estudiantes y equipos que impulsan la cultura sanitaria — con confianza, claridad y espacio para respirar.",
+    title: "Hazlo tu Pulse.",
+    description: "Únete a los clínicos, estudiantes y creadores que ya están dentro.",
     primaryLabel: "Unirte a PulseVerse",
-    secondaryLabel: "Hablar con alianzas",
+    secondaryLabel: "Aliarte con nosotros",
   },
 };
 
 export function getHomeHeroCopy(locale: Locale): HomeHeroCopy {
-  return hero[locale];
+  return hero[locale] ?? hero.en;
 }
 
 export function getHomeCtaCopy(locale: Locale): HomeCtaCopy {
-  return bottomCta[locale];
-}
-
-export type HomeSpotlightSectionCopy = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  learnMore: string;
-};
-
-const spotlightSection: Record<Locale, HomeSpotlightSectionCopy> = {
-  en: {
-    eyebrow: "Feature spotlight",
-    title: "Feed, Circles, Live, Pulse Page — where culture lives.",
-    description:
-      "Discovery, premium topic rooms, real-time Live, and a creator-grade Pulse Page with My Pulse and Media Hub — without flattening you into a badge.",
-    learnMore: "Learn more",
-  },
-  es: {
-    eyebrow: "Funciones destacadas",
-    title: "Feed, Circles, Live, Pulse Page — donde vive la cultura.",
-    description:
-      "Descubrimiento, salas temáticas premium, Live en tiempo real y una Pulse Page de nivel creador con My Pulse y Media Hub — sin reducirte a una insignia.",
-    learnMore: "Saber más",
-  },
-};
-
-export function getHomeSpotlightSectionCopy(locale: Locale): HomeSpotlightSectionCopy {
-  return spotlightSection[locale] ?? spotlightSection.en;
+  return bottomCta[locale] ?? bottomCta.en;
 }

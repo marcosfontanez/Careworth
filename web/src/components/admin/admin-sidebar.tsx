@@ -3,7 +3,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Flag,
-  Frame,
   LayoutDashboard,
   Layers,
   Megaphone,
@@ -40,8 +39,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { href: "/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/admin/platform", label: "Platform", icon: Layers },
-      { href: "/admin/shop-catalog", label: "Shop catalog", icon: ShoppingBag },
-      { href: "/admin/avatar-borders", label: "Avatar borders", icon: Frame },
+      { href: "/admin/merchandising", label: "Shop & borders", icon: ShoppingBag },
     ],
   },
   {
@@ -84,8 +82,8 @@ export function AdminSidebar({
   health: AdminHealthStrip;
 }) {
   return (
-    <aside className="flex w-[16.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex min-h-[5rem] items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2">
+    <aside className="flex w-66 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <div className="flex min-h-20 items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2">
         <MarketingLogo variant="admin" className="min-w-0" />
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Admin</span>
       </div>
@@ -115,7 +113,7 @@ export function AdminSidebar({
                     <Icon className="h-4 w-4 shrink-0 opacity-90" />
                     <span className="flex-1 truncate">{label}</span>
                     {badge != null ? (
-                      <Badge className="h-5 min-w-[1.25rem] justify-center border-amber-500/30 bg-amber-500/20 px-1 text-[10px] font-semibold text-amber-200">
+                      <Badge className="h-5 min-w-5 justify-center border-amber-500/30 bg-amber-500/20 px-1 text-[10px] font-semibold text-amber-200">
                         {badge}
                       </Badge>
                     ) : null}

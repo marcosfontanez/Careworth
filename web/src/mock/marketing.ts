@@ -242,7 +242,7 @@ export const featureDetailExtras: Record<
 
 /** Circles marketing landing — featured row + discovery chrome */
 export const circlesFeaturedShowcase = [
-  { name: "Funny Medical Memes", members: "24.3K", emoji: "😂", tint: "from-amber-400/25 to-yellow-500/10" },
+  { name: "Memes", members: "24.3K", emoji: "😂", tint: "from-amber-400/25 to-yellow-500/10" },
   { name: "Nursing", members: "78.6K", emoji: "🩺", tint: "from-sky-500/25 to-blue-600/10" },
   { name: "ICU", members: "31.2K", emoji: "📟", tint: "from-teal-400/25 to-cyan-600/10" },
   { name: "ER", members: "29.8K", emoji: "🚑", tint: "from-red-500/25 to-rose-600/10" },

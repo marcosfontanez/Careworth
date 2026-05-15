@@ -304,7 +304,7 @@ export const mockModerationQueue: ModerationItem[] = [
 export const mockCircles: CircleAdmin[] = [
   {
     id: "c1",
-    name: "Funny Medical Memes",
+    name: "Memes",
     slug: "memes",
     members: 12400,
     posts24h: 820,

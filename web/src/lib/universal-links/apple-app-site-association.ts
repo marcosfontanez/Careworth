@@ -21,7 +21,6 @@ export function buildAppleAppSiteAssociation(appId: string): {
             "/community/*",
             "/post/*",
             "/profile/*",
-            "/jobs/*",
             "/messages/*",
             "/comments/*",
           ],

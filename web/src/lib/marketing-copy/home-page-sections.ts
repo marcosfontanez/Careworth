@@ -2,108 +2,89 @@ import type { Locale } from "@/lib/i18n";
 
 export type HomePillar = { title: string; body: string };
 
-export type HomeProductOverviewCopy = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  pillars: readonly HomePillar[];
-};
-
 export type HomePulseDuoCopy = {
   eyebrow: string;
   title: string;
-  pulsePageLabel: string;
-  myPulseLabel: string;
-  pulsePage: string;
-  myPulse: string;
+  description: string;
+  posterTag: string;
+  posterCaption: string;
   links: readonly { label: string; href: string }[];
 };
 
-export type HomeStatsSplitCopy = {
-  titleLead: string;
-  titleCare: string;
-  titleMid: string;
-  titleEmpower: string;
-  description: string;
-  statLabels: readonly [string, string, string, string];
+export type HomeSignatureOverviewItem = { title: string; kicker: string };
+
+export type HomeSignatureOverviewCopy = {
+  eyebrow: string;
+  items: readonly HomeSignatureOverviewItem[];
 };
 
-export type HomeTestimonial = { quote: string; role: string };
-
-export type HomeTestimonialsCopy = {
+export type HomeCirclesSpotlightCopy = {
   eyebrow: string;
   title: string;
   description: string;
-  items: readonly HomeTestimonial[];
-};
-
-export type MyPulseSlot = { type: string; preview: string };
-
-export type HomeMyPulseSignatureCopy = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  slotsCaption: string;
-  subheading: string;
-  bullets: readonly { lead: string; rest: string }[];
+  posterTag: string;
+  posterCaption: string;
   ctaPrimary: string;
   ctaSecondary: string;
-  slots: readonly MyPulseSlot[];
 };
 
-const productOverview: Record<Locale, HomeProductOverviewCopy> = {
+export type HomeCreatorHubCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  posterTag: string;
+  posterCaption: string;
+  pillars: readonly HomePillar[];
+  ctaPrimary: string;
+  ctaSecondary: string;
+};
+
+export type HomeTrustVoice = { quote: string; role: string };
+
+export type HomeTrustCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  commitments: readonly HomePillar[];
+  voice: HomeTrustVoice;
+  disclaimer: string;
+};
+
+/* ------------------------------------------------------------------------- */
+/*  Signature overview — compact 4-icon strip directly under the hero.        */
+/*  Title + 3-word kicker only. No body copy (kept on the home).              */
+/* ------------------------------------------------------------------------- */
+
+const signatureOverview: Record<Locale, HomeSignatureOverviewCopy> = {
   en: {
-    eyebrow: "Product overview",
-    title: "Built for healthcare life — not another corporate graph.",
-    description:
-      "PulseVerse stitches together what clinicians use after the pager stops: short-form Feed culture, premium Circles, discovery-first Live, and Pulse Page identity with Current Vibe, My Pulse, and Media Hub.",
-    pillars: [
-      {
-        title: "Culture-first",
-        body: "Humor, grief, education, and night-shift solidarity — moderated with clinical context in mind.",
-      },
-      {
-        title: "Creator-ready",
-        body: "Hosts and storytellers get formats people already love — short video, live AMA, threaded Circles.",
-      },
-      {
-        title: "Trust by design",
-        body: "Reports, appeals, and live tooling built for a licensed audience — not an anything-goes feed.",
-      },
+    eyebrow: "What makes it PulseVerse",
+    items: [
+      { title: "Verified by license", kicker: "No fake-pro accounts" },
+      { title: "Built for the floor", kicker: "Shift-aware, not sterile" },
+      { title: "Creators rewarded", kicker: "Borders, gifting, leaderboards" },
     ],
   },
   es: {
-    eyebrow: "Panorama del producto",
-    title: "Pensada para la vida sanitaria — no para otro grafo corporativo.",
-    description:
-      "PulseVerse une lo que los clínicos usan cuando cesa el busca: cultura en Feed breve, Circles premium, Live pensado para descubrir, e identidad en Pulse Page con Current Vibe, My Pulse y Media Hub.",
-    pillars: [
-      {
-        title: "Cultura primero",
-        body: "Humor, duelo, formación y compañía en el turno nocturno — con moderación consciente del contexto clínico.",
-      },
-      {
-        title: "Lista para creadores",
-        body: "Anfitriones y narradores usan formatos que la gente ya quiere — vídeo breve, AMA en vivo, Circles en hilo.",
-      },
-      {
-        title: "Confianza en el diseño",
-        body: "Reportes, apelaciones y herramientas de vivo pensadas para un público colegiado — no un feed sin reglas.",
-      },
+    eyebrow: "Lo que la hace PulseVerse",
+    items: [
+      { title: "Verificado por licencia", kicker: "Sin cuentas falsas" },
+      { title: "Hecho para la planta", kicker: "Consciente del turno" },
+      { title: "Creadores recompensados", kicker: "Bordes, regalos, leaderboards" },
     ],
   },
 };
+
+/* ------------------------------------------------------------------------- */
+/*  Pulse Page vs My Pulse explainer.                                        */
+/* ------------------------------------------------------------------------- */
 
 const pulseDuo: Record<Locale, HomePulseDuoCopy> = {
   en: {
     eyebrow: "Pulse Page · My Pulse",
-    title: "One identity home — many ways to show up.",
-    pulsePageLabel: "Pulse Page",
-    myPulseLabel: "My Pulse",
-    pulsePage:
-      "Pulse Page is your professional and personal hub: verification, creator-style layout, Current Vibe (a premium mini music player), Media Hub, and the social energy of a living profile.",
-    myPulse:
-      "My Pulse sits on your Pulse Page as a rolling feed of your latest five updates — Thought, Clip, Link, or Pics — newest first, designed to stay fresh instead of turning into a stale wall.",
+    title: "One identity home. Two ways to show up.",
+    description: "Pulse Page is the room. My Pulse is what's playing in it.",
+    posterTag: "Side-by-side",
+    posterCaption: "Live product render · iPhone",
     links: [
       { label: "Pulse Page", href: "/features/pulse-page" },
       { label: "My Pulse", href: "/features/my-pulse" },
@@ -111,13 +92,10 @@ const pulseDuo: Record<Locale, HomePulseDuoCopy> = {
   },
   es: {
     eyebrow: "Pulse Page · My Pulse",
-    title: "Una casa de identidad — muchas formas de aparecer.",
-    pulsePageLabel: "Pulse Page",
-    myPulseLabel: "My Pulse",
-    pulsePage:
-      "Pulse Page es tu centro profesional y personal: verificación, maquetación estilo creador, Current Vibe (reproductor musical mini premium), Media Hub y la energía social de un perfil vivo.",
-    myPulse:
-      "My Pulse vive en tu Pulse Page como un feed con tus cinco novedades más recientes — Thought, Clip, Link o Pics — primero lo nuevo, pensado para mantenerse fresco y no convertirse en un muro obsoleto.",
+    title: "Un hogar de identidad. Dos formas de aparecer.",
+    description: "Pulse Page es la sala. My Pulse es lo que suena dentro.",
+    posterTag: "Lado a lado",
+    posterCaption: "Renderizado real · iPhone",
     links: [
       { label: "Pulse Page", href: "/features/pulse-page" },
       { label: "My Pulse", href: "/features/my-pulse" },
@@ -125,131 +103,137 @@ const pulseDuo: Record<Locale, HomePulseDuoCopy> = {
   },
 };
 
-const statsSplit: Record<Locale, HomeStatsSplitCopy> = {
+/* ------------------------------------------------------------------------- */
+/*  Circles spotlight.                                                       */
+/* ------------------------------------------------------------------------- */
+
+const circlesSpotlight: Record<Locale, HomeCirclesSpotlightCopy> = {
   en: {
-    titleLead: "A community that",
-    titleCare: "cares.",
-    titleMid: "A network that",
-    titleEmpower: "empowers.",
+    eyebrow: "Circles",
+    title: "Your specialty has a room.",
     description:
-      "PulseVerse grows where clinicians already show up — with rooms, live moments, and profiles worth revisiting.",
-    statLabels: ["Healthcare professionals", "Countries", "Active Circles", "Live sessions hosted"],
+      "Specialties, study spaces, identity rooms, and the humor only insiders get — not a noisy global feed.",
+    posterTag: "Inside Circles",
+    posterCaption: "Discover · Your Circles · Trending",
+    ctaPrimary: "Explore Circles",
+    ctaSecondary: "See all features",
   },
   es: {
-    titleLead: "Una comunidad que",
-    titleCare: "importa.",
-    titleMid: "Una red que",
-    titleEmpower: "empodera.",
+    eyebrow: "Circles",
+    title: "Tu especialidad tiene una sala.",
     description:
-      "PulseVerse crece donde ya están los clínicos — con salas, momentos en vivo y perfiles que merece la pena revisitar.",
-    statLabels: ["Profesionales de la salud", "Países", "Circles activos", "Sesiones Live alojadas"],
+      "Especialidades, salas de estudio, espacios de identidad y el humor que solo entienden los de dentro — no un feed global ruidoso.",
+    posterTag: "Dentro de Circles",
+    posterCaption: "Descubre · Tus Circles · Tendencias",
+    ctaPrimary: "Explorar Circles",
+    ctaSecondary: "Ver todas las funciones",
   },
 };
 
-const testimonials: Record<Locale, HomeTestimonialsCopy> = {
+/* ------------------------------------------------------------------------- */
+/*  Creator / Live / Shop / Rewards section.                                 */
+/* ------------------------------------------------------------------------- */
+
+const creatorHub: Record<Locale, HomeCreatorHubCopy> = {
   en: {
-    eyebrow: "Social proof",
-    title: "Voices from the floor",
-    description: "Placeholders from pilot cohorts — swap for verified testimonials when you launch.",
-    items: [
-      { quote: "Finally somewhere that feels like our unit chat — but with room to breathe.", role: "ICU RN · anonymized beta" },
-      { quote: "Live AMAs hit different when the audience actually speaks the same language.", role: "Cards fellow · pilot cohort" },
-      { quote: "We needed culture infrastructure, not another wellness PDF.", role: "PharmD · early access" },
+    eyebrow: "Creator economy",
+    title: "Why creators stay.",
+    description:
+      "The creator hub itself is on the right — these are the receipts behind it.",
+    posterTag: "Creator Hub",
+    posterCaption: "Pulse Shop · Borders · Leaderboards",
+    pillars: [
+      { title: "License-verified", body: "Creator features unlock after license verification." },
+      { title: "Native store payments", body: "Pulse Shop runs through Apple and Google. No off-platform funnels." },
+      { title: "Limited drops, real scarcity", body: "Time-limited borders aren't re-released. Once gone, gone." },
+      { title: "Earned ≠ purchased", body: "Sparks earned through gifting stay separate from purchased credits." },
+      { title: "Per-creator ledger", body: "Every gift, tip, and tier change tracked per creator." },
+      { title: "HIPAA-aware moderation", body: "Same lens on Live, Circles, and Pulse Page." },
     ],
+    ctaPrimary: "See creator tools",
+    ctaSecondary: "Open Live",
   },
   es: {
-    eyebrow: "Prueba social",
-    title: "Voces del territorio",
-    description: "Textos de ejemplo de pilotos — sustituye por testimonios verificados al lanzar.",
-    items: [
-      { quote: "Por fin un sitio que se parece al chat de la unidad — pero con espacio para respirar.", role: "Enf. UCI · beta anónima" },
-      { quote: "Los AMA en vivo cambian cuando el público habla el mismo idioma de verdad.", role: "Adjunto de cards · piloto" },
-      { quote: "Necesitábamos infraestructura cultural, no otro PDF de bienestar.", role: "Farmacéutico clínico · acceso anticipado" },
+    eyebrow: "Economía de creador",
+    title: "Por qué se quedan los creadores.",
+    description:
+      "El propio Creator Hub está a la derecha — esto son los recibos detrás.",
+    posterTag: "Creator Hub",
+    posterCaption: "Pulse Shop · Bordes · Leaderboards",
+    pillars: [
+      { title: "Verificado por licencia", body: "Las funciones de creador se desbloquean tras verificar la licencia." },
+      { title: "Pagos en tienda nativa", body: "Pulse Shop usa Apple y Google. Sin embudos externos." },
+      { title: "Drops limitados, escasez real", body: "Los bordes limitados no se reeditan. Cuando se van, se van." },
+      { title: "Ganado ≠ comprado", body: "Los Sparks ganados con regalos se mantienen separados del crédito comprado." },
+      { title: "Libro mayor por creador", body: "Cada regalo, propina y cambio de tier queda registrado por creador." },
+      { title: "Moderación con conciencia HIPAA", body: "El mismo criterio en Live, Circles y Pulse Page." },
     ],
+    ctaPrimary: "Ver herramientas de creador",
+    ctaSecondary: "Abrir Live",
   },
 };
 
-const myPulseSignature: Record<Locale, HomeMyPulseSignatureCopy> = {
+/* ------------------------------------------------------------------------- */
+/*  Trust / proof section — slimmed: commitments + ONE voice.                 */
+/* ------------------------------------------------------------------------- */
+
+const trust: Record<Locale, HomeTrustCopy> = {
   en: {
-    eyebrow: "My Pulse",
-    title: "Keep your Pulse fresh — five slots, zero clutter.",
+    eyebrow: "Built for healthcare life",
+    title: "Designed with the floor in mind — not a press release.",
     description:
-      "Thought. Clip. Link. Pics. Only your newest five updates stay visible on Pulse Page; add a sixth and the oldest quietly rolls off so your identity always reads as current.",
-    slotsCaption: "Newest first · illustrative order",
-    subheading: "Built for healthcare identity, not dashboards.",
-    bullets: [
-      {
-        lead: "Clips",
-        rest: " come from PulseVerse — your posts or moments you saved from the Feed.",
-      },
-      {
-        lead: "Links",
-        rest: " head outward with optional commentary so context travels with the URL.",
-      },
-      {
-        lead: "Pics",
-        rest: " capture day-to-day human moments the way clinicians already share off-shift.",
-      },
+      "Privacy, moderation, and the creator economy aren't afterthoughts here. They're the product.",
+    commitments: [
+      { title: "Healthcare context", body: "Surfaces and moderation tuned for licensed users. HIPAA-aware reporting." },
+      { title: "Privacy by design", body: "Identity, verification, and visibility live in one place — yours to control." },
+      { title: "Honest safety", body: "Clear standards, fast appeals, and human review on the hardest reports." },
+      { title: "Creators keep theirs", body: "Pulse Shop, gifting, and rewards built so creators keep what they earn." },
     ],
-    ctaPrimary: "How My Pulse works",
-    ctaSecondary: "See Pulse Page",
-    slots: [
-      { type: "Thought", preview: "Grateful for the team that stayed late." },
-      { type: "Clip", preview: "From Feed · cath lab teaching moment" },
-      { type: "Link", preview: "New guideline + why it matters on our floor" },
-      { type: "Pics", preview: "Coffee before rounds (de-identified)" },
-      { type: "Thought", preview: "Oldest visible slot — adding one more drops this item" },
-    ],
+    voice: {
+      quote: "Finally somewhere that feels like our unit chat — with room to breathe.",
+      role: "ICU RN · early access",
+    },
+    disclaimer: "Quote from an early-access participant. We don't run paid testimonials.",
   },
   es: {
-    eyebrow: "My Pulse",
-    title: "Mantén tu Pulse fresco — cinco huecos, cero desorden.",
+    eyebrow: "Pensada para la vida sanitaria",
+    title: "Diseñada con la planta en mente — no para una nota de prensa.",
     description:
-      "Thought. Clip. Link. Pics. Solo tus cinco novedades más recientes se ven en Pulse Page; al publicar la sexta, la más antigua sale con calma para que tu identidad siga sonando actual.",
-    slotsCaption: "Primero lo nuevo · orden ilustrativo",
-    subheading: "Pensado para identidad sanitaria, no para cuadros de mando.",
-    bullets: [
-      {
-        lead: "Clips",
-        rest: " vienen de PulseVerse: tus publicaciones o momentos guardados del Feed.",
-      },
-      {
-        lead: "Links",
-        rest: " salen hacia fuera con comentario opcional para que el contexto viaje con la URL.",
-      },
-      {
-        lead: "Pics",
-        rest: " recogen momentos humanos del día a día como ya se comparten fuera de turno.",
-      },
+      "Privacidad, moderación y economía de creador no son extras aquí. Son el producto.",
+    commitments: [
+      { title: "Contexto sanitario", body: "Superficies y moderación pensadas para usuarios colegiados. Reportes con conciencia de HIPAA." },
+      { title: "Privacidad desde el diseño", body: "Identidad, verificación y visibilidad en un mismo sitio — tuyas para controlar." },
+      { title: "Seguridad honesta", body: "Estándares claros, apelaciones rápidas y revisión humana en los reportes más duros." },
+      { title: "El creador conserva lo suyo", body: "Pulse Shop, regalos y recompensas pensados para que los creadores conserven lo que ganan." },
     ],
-    ctaPrimary: "Cómo funciona My Pulse",
-    ctaSecondary: "Ver Pulse Page",
-    slots: [
-      { type: "Thought", preview: "Agradecida al equipo que se quedó hasta tarde." },
-      { type: "Clip", preview: "Del Feed · momento docente en el laboratorio de cateterismo" },
-      { type: "Link", preview: "Nueva guía + por qué importa en nuestra planta" },
-      { type: "Pics", preview: "Café antes de rondas (sin identificación)" },
-      { type: "Thought", preview: "Hueco visible más antiguo — al añadir otro, este sale" },
-    ],
+    voice: {
+      quote: "Por fin un sitio que se parece al chat de la unidad — con espacio para respirar.",
+      role: "Enf. UCI · acceso anticipado",
+    },
+    disclaimer: "Frase de un participante en acceso anticipado. No publicamos testimonios pagados.",
   },
 };
 
-export function getHomeProductOverviewCopy(locale: Locale): HomeProductOverviewCopy {
-  return productOverview[locale] ?? productOverview.en;
+/* ------------------------------------------------------------------------- */
+/*  Exports                                                                  */
+/* ------------------------------------------------------------------------- */
+
+export function getHomeSignatureOverviewCopy(locale: Locale): HomeSignatureOverviewCopy {
+  return signatureOverview[locale] ?? signatureOverview.en;
 }
 
 export function getHomePulseDuoCopy(locale: Locale): HomePulseDuoCopy {
   return pulseDuo[locale] ?? pulseDuo.en;
 }
 
-export function getHomeStatsSplitCopy(locale: Locale): HomeStatsSplitCopy {
-  return statsSplit[locale] ?? statsSplit.en;
+export function getHomeCirclesSpotlightCopy(locale: Locale): HomeCirclesSpotlightCopy {
+  return circlesSpotlight[locale] ?? circlesSpotlight.en;
 }
 
-export function getHomeTestimonialsCopy(locale: Locale): HomeTestimonialsCopy {
-  return testimonials[locale] ?? testimonials.en;
+export function getHomeCreatorHubCopy(locale: Locale): HomeCreatorHubCopy {
+  return creatorHub[locale] ?? creatorHub.en;
 }
 
-export function getHomeMyPulseSignatureCopy(locale: Locale): HomeMyPulseSignatureCopy {
-  return myPulseSignature[locale] ?? myPulseSignature.en;
+export function getHomeTrustCopy(locale: Locale): HomeTrustCopy {
+  return trust[locale] ?? trust.en;
 }

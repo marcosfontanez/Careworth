@@ -51,7 +51,11 @@ export function PulseAvatarBordersConsole({ frames }: { frames: AdminPulseAvatar
           <CardTitle>Gift a border</CardTitle>
           <p className="text-xs text-muted-foreground">
             Unlocks the catalog row for a user (same as earning it in-app). Optional: set it as their equipped border.
-            Copy user ids from the{" "}
+            For <strong className="font-medium text-foreground">shop_items</strong> borders and Sparks packs, use the{" "}
+            <Link href="/admin/merchandising?section=shop" className="text-primary underline-offset-2 hover:underline">
+              Pulse Shop catalog
+            </Link>{" "}
+            section above. Copy user ids from the{" "}
             <Link href="/admin/users" className="text-primary underline-offset-2 hover:underline">
               Users
             </Link>{" "}

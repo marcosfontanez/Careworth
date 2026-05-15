@@ -1,5 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 
+type FeatureCardCopy = { title: string; desc: string };
+
 export type HomeFeatureShowcaseCopy = {
   eyebrow: string;
   title: string;
@@ -7,39 +9,31 @@ export type HomeFeatureShowcaseCopy = {
   explore: string;
   liveLabel: string;
   cards: {
-    feed: { title: string; desc: string };
-    circles: { title: string; desc: string };
-    live: { title: string; desc: string };
-    myPulse: { title: string; desc: string };
+    feed: FeatureCardCopy;
+    circles: FeatureCardCopy;
+    live: FeatureCardCopy;
+    pulsePage: FeatureCardCopy;
+    myPulse: FeatureCardCopy;
+    creator: FeatureCardCopy;
   };
+  /** Legacy slot kept so existing non-home callers keep compiling. */
   myPulseRows: [string, string][];
 };
 
 const copy: Record<Locale, HomeFeatureShowcaseCopy> = {
   en: {
-    eyebrow: "Platform",
-    title: "Built for healthcare culture — end to end.",
-    subtitle:
-      "Feed, Circles, Live, and Pulse identity — Media Hub and My Pulse live on your Pulse Page, sharing one account and one trust model.",
+    eyebrow: "Platform map",
+    title: "Six surfaces. One account.",
+    subtitle: "Tap any surface to dive in — the rest of the page covers the headliners.",
     explore: "Explore",
     liveLabel: "Live",
     cards: {
-      feed: {
-        title: "Feed",
-        desc: "Short-form discovery tuned for healthcare — stay close to what matters on shift.",
-      },
-      circles: {
-        title: "Circles",
-        desc: "Healthcare-specific topic spaces — high-signal threads that feel premium and connect back to your Pulse Page.",
-      },
-      live: {
-        title: "Live",
-        desc: "Featured Live, Top Live Now, Rising Lives, and browse by topic — social discovery for healthcare culture in real time.",
-      },
-      myPulse: {
-        title: "My Pulse",
-        desc: "The five newest updates on your Pulse Page — Thought, Clip, Link, or Pics — freshest on top, never cluttered.",
-      },
+      feed: { title: "Feed", desc: "" },
+      circles: { title: "Circles", desc: "" },
+      live: { title: "Live", desc: "" },
+      pulsePage: { title: "Pulse Page", desc: "" },
+      myPulse: { title: "My Pulse", desc: "" },
+      creator: { title: "Creator Hub", desc: "" },
     },
     myPulseRows: [
       ["Thought", "Night shift gratitude"],
@@ -50,29 +44,18 @@ const copy: Record<Locale, HomeFeatureShowcaseCopy> = {
     ],
   },
   es: {
-    eyebrow: "Plataforma",
-    title: "Hecha para la cultura sanitaria, de punta a punta.",
-    subtitle:
-      "Feed, Circles, Live e identidad Pulse — Media Hub y My Pulse viven en tu Pulse Page, con una sola cuenta y un mismo modelo de confianza.",
+    eyebrow: "Mapa de la plataforma",
+    title: "Seis superficies. Una cuenta.",
+    subtitle: "Toca cualquier superficie para entrar — el resto de la página cubre las protagonistas.",
     explore: "Explorar",
     liveLabel: "En vivo",
     cards: {
-      feed: {
-        title: "Feed",
-        desc: "Descubrimiento breve pensado para la salud — mantente cerca de lo que importa en el turno.",
-      },
-      circles: {
-        title: "Circles",
-        desc: "Espacios temáticos para la salud — hilos de alta señal, sensación premium y conexión con tu Pulse Page.",
-      },
-      live: {
-        title: "Live",
-        desc: "Destacados, tendencias y exploración por tema — descubrimiento social para la cultura sanitaria en tiempo real.",
-      },
-      myPulse: {
-        title: "My Pulse",
-        desc: "Las cinco novedades más recientes en tu Pulse Page — Thought, Clip, Link o Pics — las últimas arriba, sin ruido.",
-      },
+      feed: { title: "Feed", desc: "" },
+      circles: { title: "Circles", desc: "" },
+      live: { title: "Live", desc: "" },
+      pulsePage: { title: "Pulse Page", desc: "" },
+      myPulse: { title: "My Pulse", desc: "" },
+      creator: { title: "Creator Hub", desc: "" },
     },
     myPulseRows: [
       ["Thought", "Gratitud tras el turno nocturno"],
@@ -85,5 +68,5 @@ const copy: Record<Locale, HomeFeatureShowcaseCopy> = {
 };
 
 export function getHomeFeatureShowcaseCopy(locale: Locale): HomeFeatureShowcaseCopy {
-  return copy[locale];
+  return copy[locale] ?? copy.en;
 }

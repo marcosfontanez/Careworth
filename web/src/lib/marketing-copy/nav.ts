@@ -4,34 +4,12 @@ const linkDefs = [
   {
     id: "features",
     href: "/features",
-    match: (p: string) =>
-      p === "/features" ||
-      (p.startsWith("/features") &&
-        !p.startsWith("/features/feed") &&
-        !p.startsWith("/features/circles") &&
-        !p.startsWith("/features/live") &&
-        !p.startsWith("/features/pulse-page") &&
-        !p.startsWith("/features/my-pulse")),
+    match: (p: string) => p === "/features" || p.startsWith("/features"),
   },
   {
     id: "webApp",
     href: "/web-app",
     match: (p: string) => p === "/web-app" || p.startsWith("/web-app/"),
-  },
-  {
-    id: "circles",
-    href: "/features/circles",
-    match: (p: string) => p.startsWith("/features/circles"),
-  },
-  {
-    id: "live",
-    href: "/features/live",
-    match: (p: string) => p.startsWith("/features/live"),
-  },
-  {
-    id: "pulsePage",
-    href: "/features/pulse-page",
-    match: (p: string) => p.startsWith("/features/pulse-page"),
   },
   {
     id: "support",
@@ -51,18 +29,12 @@ const labels: Record<Locale, Record<LinkId, string>> = {
   en: {
     features: "Features",
     webApp: "Web app",
-    circles: "Circles",
-    live: "Live",
-    pulsePage: "Pulse Page",
     support: "Support",
     advertisers: "Advertisers",
   },
   es: {
     features: "Funciones",
     webApp: "App web",
-    circles: "Circles",
-    live: "Live",
-    pulsePage: "Pulse Page",
     support: "Ayuda",
     advertisers: "Anunciantes",
   },

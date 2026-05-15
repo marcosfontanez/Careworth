@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, HelpCircle, Shield } from "lucide-react";
+import { Bell, HelpCircle } from "lucide-react";
 
 import type { AdminNotificationDigest } from "@/types/admin";
 import { Badge } from "@/components/ui/badge";
@@ -46,11 +46,6 @@ export function AdminTopbar({
 
   return (
     <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border bg-[rgba(5,10,20,0.72)] px-4 backdrop-blur-md md:gap-6 md:px-6">
-      <Button variant="ghost" size="icon" className="hidden shrink-0 text-muted-foreground sm:flex" asChild>
-        <Link href="/admin/moderation" aria-label="Moderation">
-          <Shield className="h-5 w-5" />
-        </Link>
-      </Button>
       <nav
         className="mx-auto flex w-full max-w-2xl min-w-0 flex-1 flex-wrap items-center justify-center gap-1.5 sm:justify-start"
         aria-label="Quick navigation"
@@ -92,7 +87,7 @@ export function AdminTopbar({
           >
             <Bell className="h-5 w-5" />
             {count > 0 ? (
-              <Badge className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] justify-center border-primary/30 bg-primary px-0.5 p-0 text-[9px] font-bold leading-none text-primary-foreground">
+              <Badge className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-4 justify-center border-primary/30 bg-primary px-0.5 p-0 text-[9px] font-bold leading-none text-primary-foreground">
                 {count > 99 ? "99+" : count}
               </Badge>
             ) : null}
@@ -101,7 +96,7 @@ export function AdminTopbar({
             <div
               role="dialog"
               aria-label="Ops queue"
-              className="absolute right-0 top-full z-[100] mt-1.5 w-[min(22rem,calc(100vw-2rem))] max-h-[min(24rem,70vh)] overflow-y-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+              className="absolute right-0 top-full z-100 mt-1.5 w-[min(22rem,calc(100vw-2rem))] max-h-[min(24rem,70vh)] overflow-y-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
             >
               <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Ops queue</p>
               <div className="border-t border-border pt-1" />
@@ -150,7 +145,7 @@ export function AdminTopbar({
         </Button>
         <div className="ml-1 flex items-center gap-2.5 rounded-lg py-1 pl-1 pr-2">
           <div
-            className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-primary to-[#0066ff] ring-2 ring-white/10"
+            className="h-9 w-9 shrink-0 rounded-full bg-linear-to-br from-primary to-[#0066ff] ring-2 ring-white/10"
             aria-hidden
           />
           <div className="hidden min-w-0 leading-tight lg:block">

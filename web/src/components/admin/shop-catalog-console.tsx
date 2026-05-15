@@ -69,6 +69,12 @@ export function ShopCatalogConsole({
             <strong className="font-medium text-foreground">shop inventory</strong>. Recipient can be a UUID or @handle.
             Optional <strong className="font-medium text-foreground">idempotency key</strong> avoids double credits when
             you reuse the same key. Other catalog types are listed below but must be handled manually until automated.
+            For migration-defined <strong className="font-medium text-foreground">avatar frame</strong> rows (direct
+            equip), use the{" "}
+            <Link href="/admin/merchandising?section=frames" className="text-primary underline-offset-2 hover:underline">
+              Avatar frame grants
+            </Link>{" "}
+            section below on this page.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">

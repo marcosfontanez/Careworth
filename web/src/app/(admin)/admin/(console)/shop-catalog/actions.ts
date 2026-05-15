@@ -100,7 +100,7 @@ export async function grantShopCatalogItemAction(input: {
     : payload?.kind === "spark_pack" && payload.spark_amount != null
       ? `Credited ${payload.spark_amount} promo Sparks.`
       : payload?.kind === "border"
-        ? "Border added to shop inventory."
+        ? "Border queued as an in-app gift. It does not appear in Pulse Shop inventory until the recipient opens the app and taps Open on the gift prompt (works from any screen, not only the Feed tab)."
         : undefined;
 
   const admin = await createAdminDataSupabaseClient();
@@ -117,6 +117,6 @@ export async function grantShopCatalogItemAction(input: {
     },
   });
 
-  revalidatePath("/admin/shop-catalog");
+  revalidatePath("/admin/merchandising");
   return { ok: true, detail };
 }

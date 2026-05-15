@@ -56,6 +56,21 @@ const nextConfig: NextConfig = {
     return config;
   },
   poweredByHeader: false,
+  /** Legacy staff URLs from before `/admin/merchandising` consolidation. */
+  async redirects() {
+    return [
+      {
+        source: "/admin/shop-catalog",
+        destination: "/admin/merchandising?section=shop",
+        permanent: true,
+      },
+      {
+        source: "/admin/avatar-borders",
+        destination: "/admin/merchandising?section=frames",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
