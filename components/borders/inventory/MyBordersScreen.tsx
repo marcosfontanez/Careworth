@@ -42,6 +42,7 @@ import {
   sortVaultRows,
   vaultCollectionStats,
 } from '@/lib/borders/vaultRows';
+import { resolveShopBorderFrameSlug } from '@/lib/borders/frameSlug';
 import { pulseAvatarFramesService } from '@/services/supabase/pulseAvatarFrames';
 import type { EarnedPulseAvatarFrame } from '@/services/supabase/pulseAvatarFrames';
 import { shopKeys } from '@/lib/shop/queryKeys';
@@ -148,7 +149,25 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
 
   const equippedShopItemId = invState.equippedBorder?.shop_item_id ?? null;
   const selectedPulseFrameId = profile?.selectedPulseAvatarFrameId ?? null;
+  /**
+   * Slug of the user's currently-equipped pulse frame. Used as the secondary
+   * "Equipped" signal for shop tiles whose border is mirrored into
+   * `user_pulse_avatar_frames` — keeps exactly one tile lit even when the user
+   * equipped via the prize path (`set_selected_pulse_avatar_frame`) instead of
+   * the shop path (`economy_equip_border`).
+   */
+  const selectedPulseFrameSlug = profile?.pulseAvatarFrame?.slug ?? null;
   const avatarUrlForVault = profile?.avatarUrl?.trim() ? profile.avatarUrl.trim() : '';
+
+  const isShopEntryEquipped = useCallback(
+    (entry: OwnedBorderEntry) => {
+      if (equippedShopItemId === entry.item.id) return true;
+      if (!selectedPulseFrameSlug) return false;
+      const mirroredSlug = resolveShopBorderFrameSlug(entry.item);
+      return mirroredSlug !== null && mirroredSlug === selectedPulseFrameSlug;
+    },
+    [equippedShopItemId, selectedPulseFrameSlug],
+  );
 
   const merged = useMemo(() => buildVaultRows(entries, pulseEarned), [entries, pulseEarned]);
 
@@ -167,9 +186,18 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
   const isLoading = entriesLoading || pulseQ.isLoading;
 
   const equippedEntry = useMemo(() => {
+    // Prefer matching by mirrored pulse-frame slug (the avatar's actual source of
+    // truth) so the hero panel stays in sync when the user equipped via the prize
+    // path; fall back to the shop-side flag for borders without a frame mirror.
+    if (selectedPulseFrameSlug) {
+      const bySlug = entries.find(
+        (e) => resolveShopBorderFrameSlug(e.item) === selectedPulseFrameSlug,
+      );
+      if (bySlug) return bySlug;
+    }
     if (!equippedShopItemId) return null;
     return entries.find((e) => e.item.id === equippedShopItemId) ?? null;
-  }, [entries, equippedShopItemId]);
+  }, [entries, equippedShopItemId, selectedPulseFrameSlug]);
 
   const advancedCount = countActiveAdvancedFilters(filter);
 
@@ -498,16 +526,19 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
       {sorted.map((row) => (
         <React.Fragment key={row.kind === 'shop' ? row.entry.inventory.id : `pulse-${row.earned.frame.id}`}>
           {row.kind === 'shop' ? (
-            <BorderInventoryTile
-              entry={row.entry}
-              equipped={equippedShopItemId === row.entry.item.id}
-              onPress={() => openDetail(row.entry)}
-              onEquipPress={
-                equippedShopItemId === row.entry.item.id
-                  ? undefined
-                  : () => void handleEquip(row.entry.inventory.id)
-              }
-            />
+            (() => {
+              const equipped = isShopEntryEquipped(row.entry);
+              return (
+                <BorderInventoryTile
+                  entry={row.entry}
+                  equipped={equipped}
+                  onPress={() => openDetail(row.entry)}
+                  onEquipPress={
+                    equipped ? undefined : () => void handleEquip(row.entry.inventory.id)
+                  }
+                />
+              );
+            })()
           ) : (
             <PulseFrameInventoryTile
               earned={row.earned}
@@ -915,19 +946,21 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semantic.accentCyan} />
           }
           ListEmptyComponent={filterEmptyBlock}
-          renderItem={({ item }) =>
-            item.kind === 'shop' ? (
-              <BorderInventoryTile
-                entry={item.entry}
-                equipped={equippedShopItemId === item.entry.item.id}
-                onPress={() => openDetail(item.entry)}
-                onEquipPress={
-                  equippedShopItemId === item.entry.item.id
-                    ? undefined
-                    : () => void handleEquip(item.entry.inventory.id)
-                }
-              />
-            ) : (
+          renderItem={({ item }) => {
+            if (item.kind === 'shop') {
+              const equipped = isShopEntryEquipped(item.entry);
+              return (
+                <BorderInventoryTile
+                  entry={item.entry}
+                  equipped={equipped}
+                  onPress={() => openDetail(item.entry)}
+                  onEquipPress={
+                    equipped ? undefined : () => void handleEquip(item.entry.inventory.id)
+                  }
+                />
+              );
+            }
+            return (
               <PulseFrameInventoryTile
                 earned={item.earned}
                 equipped={selectedPulseFrameId === item.earned.frame.id}
@@ -939,8 +972,8 @@ export function MyBordersScreen({ embedded = false, onInventoryChanged }: MyBord
                     : () => void handleEquipPulse(item.earned.frame.id)
                 }
               />
-            )
-          }
+            );
+          }}
         />
       )}
 

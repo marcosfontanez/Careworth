@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-env node */
 import { Buffer } from 'node:buffer';
 
 /**

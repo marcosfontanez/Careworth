@@ -29,6 +29,7 @@ import { RarityTierBadge } from '@/components/shop/border/BorderRarityBadge';
 import { acquisitionSummaryLine, formatAcquiredAtLabel } from '@/lib/borders/acquisitionCopy';
 import type { OwnedBorderEntry } from '@/lib/borders/ownedTypes';
 import { buildVaultRows, sortVaultRows } from '@/lib/borders/vaultRows';
+import { resolveShopBorderFrameSlug } from '@/lib/borders/frameSlug';
 import { pulseAvatarFramesService } from '@/services/supabase/pulseAvatarFrames';
 import type { EarnedPulseAvatarFrame } from '@/services/supabase/pulseAvatarFrames';
 import { shopKeys } from '@/lib/shop/queryKeys';
@@ -100,7 +101,19 @@ export function BordersCollectionStrip({ onInventoryChanged }: BordersCollection
 
   const equippedShopItemId = invState.equippedBorder?.shop_item_id ?? null;
   const selectedPulseFrameId = profile?.selectedPulseAvatarFrameId ?? null;
+  /** Avatar's actual source of truth — see notes in `MyBordersScreen`. */
+  const selectedPulseFrameSlug = profile?.pulseAvatarFrame?.slug ?? null;
   const avatarUrlForVault = profile?.avatarUrl?.trim() ? profile.avatarUrl.trim() : '';
+
+  const isShopEntryEquipped = useCallback(
+    (entry: OwnedBorderEntry) => {
+      if (equippedShopItemId === entry.item.id) return true;
+      if (!selectedPulseFrameSlug) return false;
+      const mirroredSlug = resolveShopBorderFrameSlug(entry.item);
+      return mirroredSlug !== null && mirroredSlug === selectedPulseFrameSlug;
+    },
+    [equippedShopItemId, selectedPulseFrameSlug],
+  );
 
   const merged = useMemo(() => buildVaultRows(entries, pulseEarned), [entries, pulseEarned]);
   const sorted = useMemo(
@@ -242,16 +255,19 @@ export function BordersCollectionStrip({ onInventoryChanged }: BordersCollection
               style={styles.tileWrap}
             >
               {row.kind === 'shop' ? (
-                <BorderInventoryTile
-                  entry={row.entry}
-                  equipped={equippedShopItemId === row.entry.item.id}
-                  onPress={() => openDetail(row.entry)}
-                  onEquipPress={
-                    equippedShopItemId === row.entry.item.id
-                      ? undefined
-                      : () => void handleEquip(row.entry.inventory.id)
-                  }
-                />
+                (() => {
+                  const equipped = isShopEntryEquipped(row.entry);
+                  return (
+                    <BorderInventoryTile
+                      entry={row.entry}
+                      equipped={equipped}
+                      onPress={() => openDetail(row.entry)}
+                      onEquipPress={
+                        equipped ? undefined : () => void handleEquip(row.entry.inventory.id)
+                      }
+                    />
+                  );
+                })()
               ) : (
                 <PulseFrameInventoryTile
                   earned={row.earned}

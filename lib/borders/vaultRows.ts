@@ -9,6 +9,7 @@ import {
 } from '@/lib/borders/inventoryFilters';
 import { effectiveRarityKey } from '@/lib/shop/catalogUtils';
 import { rarityTierSortKey } from '@/lib/shop/borderBadgeTheme';
+import { resolveShopBorderFrameSlug } from '@/lib/borders/frameSlug';
 
 export type VaultRow =
   | { kind: 'shop'; entry: OwnedBorderEntry }
@@ -49,12 +50,33 @@ function pulseMatchesOwnership(
   return true;
 }
 
+/**
+ * Merge owned shop borders + earned pulse-frame prizes into the vault list.
+ *
+ * Dedupe rule: when a shop border is mirrored into `user_pulse_avatar_frames`
+ * by the migration-133 trigger (`_economy_sync_user_pulse_frame_from_shop_item`),
+ * we get *two* rows for the same cosmetic — one shop, one pulse. The shop
+ * entry carries richer metadata (Owned/Gifted tags, collection, price,
+ * rarity badge), so we keep the shop entry and drop the pulse mirror. Pulse
+ * rows that have no shop counterpart (true leaderboard / campaign prizes)
+ * are kept as-is.
+ *
+ * The dedupe key is `pulse_avatar_frames.slug` — the same column the SQL
+ * trigger joins on — so client + server stay in lock-step.
+ */
 export function buildVaultRows(
   shopEntries: OwnedBorderEntry[],
   pulseEarned: EarnedPulseAvatarFrame[],
 ): VaultRow[] {
   const shop = shopEntries.map((entry) => ({ kind: 'shop' as const, entry }));
-  const pulse = pulseEarned.map((earned) => ({ kind: 'pulse' as const, earned }));
+  const shopMirroredFrameSlugs = new Set<string>();
+  for (const entry of shopEntries) {
+    const slug = resolveShopBorderFrameSlug(entry.item);
+    if (slug) shopMirroredFrameSlugs.add(slug);
+  }
+  const pulse = pulseEarned
+    .filter((earned) => !shopMirroredFrameSlugs.has(earned.frame.slug))
+    .map((earned) => ({ kind: 'pulse' as const, earned }));
   return [...shop, ...pulse];
 }
 
@@ -212,8 +234,18 @@ export function vaultCollectionStats(
   pulseEarned: EarnedPulseAvatarFrame[],
 ) {
   const base = inventoryCollectionStats(shopEntries);
+  // Match `buildVaultRows` dedupe: a pulse frame mirrored from a shop border
+  // counts once, not twice.
+  const shopMirroredFrameSlugs = new Set<string>();
+  for (const entry of shopEntries) {
+    const slug = resolveShopBorderFrameSlug(entry.item);
+    if (slug) shopMirroredFrameSlugs.add(slug);
+  }
+  const distinctPulseOnly = pulseEarned.filter(
+    (earned) => !shopMirroredFrameSlugs.has(earned.frame.slug),
+  );
   return {
     ...base,
-    totalOwned: base.totalOwned + pulseEarned.length,
+    totalOwned: base.totalOwned + distinctPulseOnly.length,
   };
 }
