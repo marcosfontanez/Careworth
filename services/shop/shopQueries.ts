@@ -88,6 +88,13 @@ export const shopQueriesService = {
    *   - `is_retired = true`               (explicit flag)
    *   - `availability_status = 'retired'` (taxonomy enum)
    *
+   * Excluded by design: monthly Pulse leaderboard prize borders (gold/silver/
+   * bronze podium frames) and one-off reward grants (beta tester etc.). These
+   * rotate every month and would clutter the drawer; users can still see them
+   * in their personal Border Vault under the Earned filter. The drawer is for
+   * borders that were *available to acquire* in the past — holiday drops,
+   * charity drops, premium / featured purchases, advertiser-sponsored drops.
+   *
    * Limited to a recent slice so this cheap drawer never balloons. The same row
    * that's already in the active catalog (e.g. `is_retired=true` + still active by
    * mistake) is filtered out client-side as a defensive guard against duplicates.
@@ -112,17 +119,31 @@ export const shopQueriesService = {
     if (error) throw error;
     const rows = (data ?? []) as unknown as ShopItemRow[];
     const now = Date.now();
-    return rows.filter((row) => {
-      // Defensive: keep only rows that are genuinely *not* purchasable right now.
-      if (row.is_active === false) return true;
-      if (row.is_retired === true) return true;
-      if (row.availability_status === 'retired') return true;
-      if (row.expires_at) {
-        const t = new Date(row.expires_at).getTime();
-        if (!Number.isNaN(t) && t <= now) return true;
-      }
-      return false;
-    });
+    return rows
+      .filter((row) => {
+        // Defensive: keep only rows that are genuinely *not* purchasable right now.
+        if (row.is_active === false) return true;
+        if (row.is_retired === true) return true;
+        if (row.availability_status === 'retired') return true;
+        if (row.expires_at) {
+          const t = new Date(row.expires_at).getTime();
+          if (!Number.isNaN(t) && t <= now) return true;
+        }
+        return false;
+      })
+      .filter((row) => {
+        // Hide monthly leaderboard prize borders + other earned-only grants —
+        // these rotate constantly and would clutter the drawer.
+        if (row.source_type === 'leaderboard_reward') return false;
+        if (row.source_type === 'beta_reward') return false;
+        if (row.unlock_method === 'leaderboard_rank') return false;
+        if (row.unlock_method === 'beta_tester_grant') return false;
+        if (row.rank_place != null) return false;
+        // `is_earned_only` items were never on shop shelves to begin with —
+        // hiding them keeps the drawer focused on past-but-once-available drops.
+        if (row.is_earned_only === true && row.is_shop_item !== true) return false;
+        return true;
+      });
   },
 
   async getSparkWallet(userId: string): Promise<SparkWalletRow | null> {
