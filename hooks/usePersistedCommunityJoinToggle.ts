@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
-import { communityService } from '@/services/community';
+import { communityService } from '@/services';
 import { communityKeys } from '@/lib/queryKeys';
 import { useToast } from '@/components/ui/Toast';
 

@@ -26,7 +26,7 @@ import { CirclePostCard } from '@/components/circles/CirclePostCard';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { communityService } from '@/services/community';
+import { communityService } from '@/services';
 import { communitiesService, postsService } from '@/services/supabase';
 import { colors } from '@/theme';
 import { shareCommunity, sharePostMenu } from '@/lib/share';
@@ -81,7 +81,19 @@ export default function CommunityDetailScreen() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
-  const { data: community, isPending, isError, refetch } = useCommunity(slug);
+  const { data: community, isPending, isError, isFetching, refetch } = useCommunity(slug);
+  const slugNorm = slug.trim().toLowerCase();
+  /** Ignore cached rows from another slug (defense if anything primes the wrong key). */
+  const activeCommunity =
+    community && community.slug?.trim().toLowerCase() === slugNorm ? community : undefined;
+  const staleSlugMismatch = Boolean(
+    community && community.slug?.trim().toLowerCase() !== slugNorm,
+  );
+  const showRoomLoadingShell =
+    !!slug &&
+    !isError &&
+    !activeCommunity &&
+    (isPending || isFetching || staleSlugMismatch);
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const setCommunityJoined = useAppStore((s) => s.setCommunityJoined);
 
@@ -98,7 +110,7 @@ export default function CommunityDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const cid = community?.id;
+      const cid = activeCommunity?.id;
       if (!cid || !user?.id) return;
       const sig = cid;
       if (popularityBumpKeyRef.current === sig) return;
@@ -107,7 +119,7 @@ export default function CommunityDetailScreen() {
       return () => {
         popularityBumpKeyRef.current = null;
       };
-    }, [community?.id, user?.id]),
+    }, [activeCommunity?.id, user?.id]),
   );
 
   /** Local liked-set hydrated from the server query (mirrors feed.tsx so a
@@ -124,13 +136,13 @@ export default function CommunityDetailScreen() {
     refetch: refetchPosts,
     isPending: postsPending,
     isError: postsError,
-  } = useCommunityPosts(community?.id ?? '');
+  } = useCommunityPosts(activeCommunity?.id ?? '');
   const postsStillLoading = postsPending && allPosts === undefined;
   const {
     data: circleThreadsRaw,
     refetch: refetchThreads,
     isPending: threadsPending,
-  } = useCircleThreads(slug, community?.id);
+  } = useCircleThreads(slug, activeCommunity?.id);
   const circleThreads = circleThreadsRaw ?? [];
 
   useEffect(() => {
@@ -140,32 +152,32 @@ export default function CommunityDetailScreen() {
   }, [slug]);
 
   useEffect(() => {
-    if (!feedPerfEnabled || !community?.id || perfRoomT0Ref.current == null) return;
+    if (!feedPerfEnabled || !activeCommunity?.id || perfRoomT0Ref.current == null) return;
     feedPerfLog('circleRoom:community', perfRoomT0Ref.current, slug);
-  }, [community?.id, slug]);
+  }, [activeCommunity?.id, slug]);
 
   useEffect(() => {
     if (
       !feedPerfEnabled ||
-      !community?.id ||
+      !activeCommunity?.id ||
       allPosts === undefined ||
       perfRoomT0Ref.current == null
     ) {
       return;
     }
-    const sig = `${community.id}:${allPosts.length}`;
+    const sig = `${activeCommunity.id}:${allPosts.length}`;
     if (perfPostsLoggedRef.current === sig) return;
     perfPostsLoggedRef.current = sig;
     feedPerfLog('circleRoom:wallPosts', perfRoomT0Ref.current, `${allPosts.length} posts`);
-  }, [allPosts, community?.id]);
+  }, [allPosts, activeCommunity?.id]);
 
   const { data: liveStats } = useQuery({
-    queryKey: ['communityCardStats', community?.id],
+    queryKey: ['communityCardStats', activeCommunity?.id],
     queryFn: async () => {
-      const m = await communitiesService.getCardStatsForIds([community!.id]);
-      return m.get(community!.id) ?? null;
+      const m = await communitiesService.getCardStatsForIds([activeCommunity!.id]);
+      return m.get(activeCommunity!.id) ?? null;
     },
-    enabled: !!community?.id,
+    enabled: !!activeCommunity?.id,
     staleTime: 30_000,
   });
 
@@ -240,7 +252,7 @@ export default function CommunityDetailScreen() {
     };
   }, [focusPostId, mode, postsList, slug, postsStillLoading]);
 
-  const { data: viewerReactionsMap = {} } = useCircleViewerPostReactions(community?.id ?? '', wallPostIds);
+  const { data: viewerReactionsMap = {} } = useCircleViewerPostReactions(activeCommunity?.id ?? '', wallPostIds);
 
   const viewerReactionForPost = useCallback(
     (postId: string): PostReactionKind | null => {
@@ -280,7 +292,7 @@ export default function CommunityDetailScreen() {
   }, [threadsSorted]);
 
   useEffect(() => {
-    const cid = community?.id;
+    const cid = activeCommunity?.id;
     setShowCirclesNavHint(false);
     if (!cid) return;
     void (async () => {
@@ -300,26 +312,26 @@ export default function CommunityDetailScreen() {
       setShowQuestionsHint(!hint);
       setRoomMuted(muted);
     })();
-  }, [community?.id, user?.id, joinedIds]);
+  }, [activeCommunity?.id, user?.id, joinedIds]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!community?.id) return;
+      if (!activeCommunity?.id) return;
       void refetchPosts();
       void refetchThreads();
-    }, [community?.id, refetchPosts, refetchThreads]),
+    }, [activeCommunity?.id, refetchPosts, refetchThreads]),
   );
 
   /**
-   * Web + first paint: `useFocusEffect` can run before `community?.id` exists and never
+   * Web + first paint: `useFocusEffect` can run before `activeCommunity?.id` exists and never
    * re-fire when the id hydrates (screen already focused). Kick wall + threads once the
    * room identity is known so the list does not sit on “Loading…” until a manual back/re-enter.
    */
   useEffect(() => {
-    if (!slug || !community?.id) return;
+    if (!slug || !activeCommunity?.id) return;
     void refetchPosts();
     void refetchThreads();
-  }, [slug, community?.id, refetchPosts, refetchThreads]);
+  }, [slug, activeCommunity?.id, refetchPosts, refetchThreads]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -332,7 +344,7 @@ export default function CommunityDetailScreen() {
       router.push('/auth/login');
       return;
     }
-    const cid = community?.id;
+    const cid = activeCommunity?.id;
     if (!cid) return;
     const wasJoined = joinedIds.has(cid);
 
@@ -353,7 +365,7 @@ export default function CommunityDetailScreen() {
         else await setCommunityMuted(cid, true);
         await afterJoinInvalidate();
         if (joined && !wasJoined) {
-          toast.show(`You're in ${community?.name ?? 'this circle'}!`, 'success');
+          toast.show(`You're in ${activeCommunity?.name ?? 'this circle'}!`, 'success');
           setShowCirclesNavHint(true);
         }
       } catch {
@@ -385,8 +397,8 @@ export default function CommunityDetailScreen() {
     }
   }, [
     user,
-    community?.id,
-    community?.name,
+    activeCommunity?.id,
+    activeCommunity?.name,
     slug,
     joinedIds,
     setCommunityJoined,
@@ -397,29 +409,29 @@ export default function CommunityDetailScreen() {
 
   const handleCreatePost = useCallback(
     (intent?: 'meme' | 'thread' | 'question' | 'video') => {
-      if (!community) return;
+      if (!activeCommunity) return;
       const params = new URLSearchParams({
-        communityId: community.id,
-        communityName: community.name,
-        communitySlug: community.slug,
+        communityId: activeCommunity.id,
+        communityName: activeCommunity.name,
+        communitySlug: activeCommunity.slug,
       });
       if (intent) params.set('intent', intent);
       router.push(`/communities/create-post?${params.toString()}`);
     },
-    [community, router],
+    [activeCommunity, router],
   );
 
   /* ---------- Per-card actions (reuse the same patterns as feed.tsx) ---------- */
 
   const handleCircleWallReaction = useCallback(
     async (post: Post, kind: PostReactionKind) => {
-      if (!user?.id || !community?.id) return;
+      if (!user?.id || !activeCommunity?.id) return;
       const cur = viewerReactionForPost(post.id);
       const next = cur === kind ? null : kind;
 
       patchPostReactionCounts(post.id, cur, next);
       queryClient.setQueryData(
-        circleContentKeys.viewerPostReactions(community.id, user.id, postIdsSig),
+        circleContentKeys.viewerPostReactions(activeCommunity.id, user.id, postIdsSig),
         (old: Partial<Record<string, PostReactionKind>> | undefined) => {
           const o = { ...(old ?? {}) };
           if (next == null) delete o[post.id];
@@ -440,7 +452,7 @@ export default function CommunityDetailScreen() {
       } catch {
         patchPostReactionCounts(post.id, next, cur);
         queryClient.setQueryData(
-          circleContentKeys.viewerPostReactions(community.id, user.id, postIdsSig),
+          circleContentKeys.viewerPostReactions(activeCommunity.id, user.id, postIdsSig),
           (old: Partial<Record<string, PostReactionKind>> | undefined) => {
             const o = { ...(old ?? {}) };
             if (cur == null) delete o[post.id];
@@ -460,7 +472,7 @@ export default function CommunityDetailScreen() {
         }).catch(() => {});
       }
     },
-    [user?.id, community?.id, viewerReactionForPost, postIdsSig, queryClient],
+    [user?.id, activeCommunity?.id, viewerReactionForPost, postIdsSig, queryClient],
   );
 
   const handleShare = useCallback(
@@ -490,7 +502,7 @@ export default function CommunityDetailScreen() {
 
   const handleDeletePostInCircle = useCallback(
     (post: Post) => {
-      if (!user?.id || !community?.id) return;
+      if (!user?.id || !activeCommunity?.id) return;
       Alert.alert('Delete Post', 'Are you sure you want to delete this post? This cannot be undone.', [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -501,7 +513,7 @@ export default function CommunityDetailScreen() {
               await postsService.deleteOwnPost(post.id, user.id);
               await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
               queryClient.setQueryData(
-                circleContentKeys.communityPosts(community.id, user.id),
+                circleContentKeys.communityPosts(activeCommunity.id, user.id),
                 (old: Post[] | undefined) => (old ? old.filter((p) => p.id !== post.id) : old),
               );
               toast.show('Post deleted', 'success');
@@ -512,7 +524,7 @@ export default function CommunityDetailScreen() {
         },
       ]);
     },
-    [user?.id, community?.id, queryClient, toast],
+    [user?.id, activeCommunity?.id, queryClient, toast],
   );
 
   const openCirclePostOwnerMenu = useCallback(
@@ -529,7 +541,7 @@ export default function CommunityDetailScreen() {
 
   const handleSaveCaptionFromCircle = useCallback(
     async (nextCaption: string) => {
-      if (!user?.id || !community?.id || !captionEditPost) {
+      if (!user?.id || !activeCommunity?.id || !captionEditPost) {
         throw new Error('Couldn’t save your edit. Try again.');
       }
       try {
@@ -538,7 +550,7 @@ export default function CommunityDetailScreen() {
         });
         await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
         queryClient.setQueryData(
-          circleContentKeys.communityPosts(community.id, user.id),
+          circleContentKeys.communityPosts(activeCommunity.id, user.id),
           (old: Post[] | undefined) => (old ? old.map((p) => (p.id === updated.id ? updated : p)) : old),
         );
         toast.show('Caption updated', 'success');
@@ -547,7 +559,7 @@ export default function CommunityDetailScreen() {
         throw e;
       }
     },
-    [user?.id, community?.id, captionEditPost, queryClient, toast],
+    [user?.id, activeCommunity?.id, captionEditPost, queryClient, toast],
   );
 
   if (!slug) {
@@ -571,7 +583,7 @@ export default function CommunityDetailScreen() {
   }
 
   const shellAccent = getCircleAccent(slug);
-  if (isPending && community == null) {
+  if (showRoomLoadingShell) {
     return (
       <View style={styles.container}>
         <CircleRoomHeader
@@ -598,7 +610,7 @@ export default function CommunityDetailScreen() {
     );
   }
 
-  if (community == null) {
+  if (!activeCommunity) {
     return (
       <ErrorState
         title="Circle not found"
@@ -608,11 +620,11 @@ export default function CommunityDetailScreen() {
     );
   }
 
-  const isJoined = joinedIds.has(community.id);
+  const isJoined = joinedIds.has(activeCommunity.id);
   const isAnonCircle = isAnonymousConfessionCircle(slug);
-  const accent = getCircleAccent(slug, community.accentColor);
+  const accent = getCircleAccent(slug, activeCommunity.accentColor);
 
-  const memberCountLive = liveStats?.memberCount ?? community.memberCount;
+  const memberCountLive = liveStats?.memberCount ?? activeCommunity.memberCount;
   const onlineCount = liveStats?.onlineCount ?? 0;
 
   const flatData: (Post | CircleThread)[] = mode === 'questions' ? threadsSorted : postsList;
@@ -624,18 +636,18 @@ export default function CommunityDetailScreen() {
     <View>
       <CircleRoomHeader
         insetTop={insets.top}
-        iconEmoji={community.icon}
-        name={community.name}
+        iconEmoji={activeCommunity.icon}
+        name={activeCommunity.name}
         /** Prefer the curated brief description when the room has one, so
          *  the banner reads cleaner than the older free-form DB blurb. */
-        description={accent.description ?? community.description}
+        description={accent.description ?? activeCommunity.description}
         memberCount={memberCountLive}
         onlineCount={onlineCount}
         isJoined={isJoined}
         accent={accent}
         showShare={!isAnonCircle}
         onBack={() => router.back()}
-        onShare={() => shareCommunity(community.slug, community.name)}
+        onShare={() => shareCommunity(activeCommunity.slug, activeCommunity.name)}
         onMore={() => setShowAbout((v) => !v)}
         onJoin={handleJoinPress}
         onCreatePost={() => handleCreatePost()}
@@ -661,15 +673,15 @@ export default function CommunityDetailScreen() {
       {showAbout && (
         <AboutSheet
           accent={accent.color}
-          description={community.description}
-          categories={community.categories}
+          description={activeCommunity.description}
+          categories={activeCommunity.categories}
           isMember={isJoined}
           notificationsMuted={roomMuted}
           onToggleNotificationsMuted={async (next) => {
             if (!user?.id) return;
             try {
-              await setCommunityMuted(community.id, next);
-              await communityService.setCirclePostAlerts(community.id, !next);
+              await setCommunityMuted(activeCommunity.id, next);
+              await communityService.setCirclePostAlerts(activeCommunity.id, !next);
               setRoomMuted(next);
               toast.show(
                 next ? 'Circle alerts off (no new posts in your bell)' : 'Circle alerts on for new posts',
@@ -692,8 +704,8 @@ export default function CommunityDetailScreen() {
         /** Anonymous rooms must never out a "Top Creator" — defeats the
          *  purpose of the room. Suppress the card entirely. */
         hideTopCreator={isAnonCircle}
-        onSelectPost={(id) => router.push(hrefPost(id, community.slug))}
-        onSelectThread={(id) => router.push(hrefCommunityThread(community.slug, id))}
+        onSelectPost={(id) => router.push(hrefPost(id, activeCommunity.slug))}
+        onSelectThread={(id) => router.push(hrefCommunityThread(activeCommunity.slug, id))}
         onSelectCreator={(uid) => router.push(`/profile/${uid}`)}
       />
 
@@ -739,8 +751,8 @@ export default function CommunityDetailScreen() {
           });
         }}
         onLayout={() => {
-          if (!feedPerfEnabled || perfRoomT0Ref.current == null || community == null) return;
-          const sig = `${slug}:${community.id}`;
+          if (!feedPerfEnabled || perfRoomT0Ref.current == null) return;
+          const sig = `${slug}:${activeCommunity.id}`;
           if (perfListLaidOutRef.current === sig) return;
           perfListLaidOutRef.current = sig;
           feedPerfLog('circleRoom:listFirstLayout', perfRoomT0Ref.current, slug);
@@ -749,7 +761,7 @@ export default function CommunityDetailScreen() {
           mode === 'questions' ? (
             <CircleThreadCard
               thread={item as CircleThread}
-              circleName={community.name}
+              circleName={activeCommunity.name}
               accent={accent.color}
               isAnonymousRoom={isAnonCircle}
               hasNewActivity={(() => {
@@ -758,7 +770,7 @@ export default function CommunityDetailScreen() {
                 return typeof last === 'number' && last >= 0 && t.replyCount > last;
               })()}
               onPress={() =>
-                router.push(hrefCommunityThread(community.slug, (item as CircleThread).id))
+                router.push(hrefCommunityThread(activeCommunity.slug, (item as CircleThread).id))
               }
               onProfile={() => router.push(`/profile/${(item as CircleThread).authorId}` as never)}
             />
@@ -773,13 +785,13 @@ export default function CommunityDetailScreen() {
               jumpHighlight={jumpHighlightPostId === (item as Post).id}
               onPress={() =>
                 router.push(
-                  `/post/${(item as Post).id}?circle=${encodeURIComponent(community.slug)}` as any,
+                  `/post/${(item as Post).id}?circle=${encodeURIComponent(activeCommunity.slug)}` as any,
                 )
               }
               onProfile={() => router.push(`/profile/${(item as Post).creatorId}`)}
               onReply={() =>
                 router.push(
-                  `/post/${(item as Post).id}?circle=${encodeURIComponent(community.slug)}&focusComments=1` as any,
+                  `/post/${(item as Post).id}?circle=${encodeURIComponent(activeCommunity.slug)}&focusComments=1` as any,
                 )
               }
               onPickReaction={(k) => {

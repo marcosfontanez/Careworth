@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 250",
     "db:types": "node scripts/gen-supabase-types.mjs",
+    "db:types:check": "node scripts/check-db-types-fresh.mjs",
     "worker:media": "node scripts/creator-media-worker.mjs",
     "assets:pride-border": "node scripts/process-pride-border.mjs",
     "assets:app-icon": "node scripts/build-app-icon.cjs",

@@ -1,3 +1,9 @@
+/**
+ * Canonical circles/communities API for the mobile app.
+ * Wraps `communitiesService` with auth-aware helpers (`toggleJoin`, alerts).
+ * Prefer `import { communityService } from '@/services'` (not direct `@/services/supabase` imports)
+ * unless you need raw rows without session helpers.
+ */
 import type { Community } from '@/types';
 import { communitiesService } from './supabase';
 import { supabase } from '@/lib/supabase';
@@ -7,14 +13,15 @@ export const communityService = {
     return communitiesService.getAll();
   },
 
-  async getBySlug(slug: string): Promise<Community | undefined> {
+  /** Use `null` for missing rows — TanStack Query must not settle `undefined` from `queryFn`. */
+  async getBySlug(slug: string): Promise<Community | null> {
     const live = await communitiesService.getBySlug(slug);
-    return live ?? undefined;
+    return live ?? null;
   },
 
-  async getById(id: string): Promise<Community | undefined> {
+  async getById(id: string): Promise<Community | null> {
     const live = await communitiesService.getById(id);
-    return live ?? undefined;
+    return live ?? null;
   },
 
   async getFeatured(): Promise<Community[]> {

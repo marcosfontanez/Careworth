@@ -44,6 +44,7 @@ export function CoinShopModal({
   const [flashMessage, setFlashMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!__DEV__) return;
     if (!visible) return;
     let cancelled = false;
     (async () => {
@@ -87,6 +88,8 @@ export function CoinShopModal({
       setBuyingSku(null);
     }
   };
+
+  if (!__DEV__) return null;
 
   return (
     <Modal

@@ -10,6 +10,9 @@ export type FeedListWindowConfig = {
  * Vertical feed pre-mounts neighbor cells so the next video buffers early.
  * Android tends to hit decoder / surface contention sooner than iOS — use a
  * slightly smaller window so scroll stays closer to 60fps on mid-tier devices.
+ *
+ * When tuning: compare `[feedPerf]` timings (`lib/feedPerf.ts`) on a physical
+ * mid-tier Android device before widening these numbers.
  */
 export function getFeedVideoListWindow(): FeedListWindowConfig {
   if (Platform.OS === 'android') {

@@ -2,7 +2,7 @@
 
 **Built for Healthcare Life.**
 
-PulseVerse is a TikTok-style short-form social platform purpose-built for nurses, CNAs, patient care technicians, and bedside healthcare workers. It combines personalized content feeds, specialty-based communities, live streaming, professional identity, and jobs discovery into a premium dark-themed mobile experience.
+PulseVerse is a TikTok-style short-form social platform purpose-built for nurses, CNAs, patient care technicians, and bedside healthcare workers. It combines personalized content feeds, specialty-based communities, live streaming, and professional identity tools into a premium dark-themed mobile experience.
 
 ## Stack
 
@@ -66,20 +66,18 @@ PulseVerse/
 │   ├── create/             # Post creation flows
 │   ├── live/               # Live stream viewer & go-live
 │   ├── feed/               # Post detail [id]
-│   ├── jobs/               # Job detail [id]
-│   ├── onboarding/         # Multi-step onboarding
 │   ├── profile/            # Creator profile [id]
 │   ├── notifications.tsx   # Notifications screen
 │   └── search.tsx          # Search/discover screen
 ├── components/
-│   ├── cards/              # Card components (Job, Community, Comment, etc.)
+│   ├── cards/              # Card components (Community, Comment, etc.)
 │   ├── feed/               # Feed-specific components (VideoFeedPost, ActionRail)
 │   ├── profile/            # Profile components (ProfileHeader)
 │   └── ui/                 # Reusable UI primitives (badges, pills, search, etc.)
 ├── constants/              # App constants (roles, specialties, interests)
 ├── hooks/                  # React Query hooks
-├── mock/                   # Mock data (creators, posts, communities, jobs, streams)
-├── services/               # Service layer (feed, community, job, user, streams)
+├── mock/                   # Mock data (creators, posts, communities, streams)
+├── services/               # Service layer (feed, community, user, streams)
 ├── store/                  # Zustand stores
 ├── theme/                  # Design tokens (colors, spacing, typography)
 ├── types/                  # TypeScript domain models
@@ -115,20 +113,45 @@ PulseVerse/
 - Community memberships, tabbed content (Posts, Saved, Communities, Likes)
 - Follower/Following stats, post grid
 
-### Auth & Onboarding
+### Auth & onboarding
 - Email, Google, and Apple sign-in
-- 5-step onboarding flow
+- Optional onboarding flows may ship in dedicated routes when enabled (see `app/` and release notes)
+
+## Database types & migrations
+
+After editing `supabase/migrations/*.sql`, regenerate client types and verify freshness locally:
+
+```bash
+npm run db:types
+npm run db:types:check
+```
+
+(`db:types` needs `npx supabase login` or `SUPABASE_ACCESS_TOKEN`. CI does not run the mtime check because git checkouts do not preserve stable file timestamps.)
+
+## EAS Android submit (Play Console)
+
+`eas.json` uses **`serviceAccountKeyPath`: `./google-services.json`** for Android submit. That file must be your **Google Play Console service account JSON** (API access), not Firebase `google-services.json` unless you deliberately reuse the same file. Keep it **local or in EAS Secrets** — do not commit secrets.
+
+## Security checklist (Supabase)
+
+- **RLS / admin**: Moderation and admin RPCs gate on `profiles.role_admin` (e.g. migrations `002_reporting_analytics.sql`, `066_moderation_staff_notes_and_admin_delete.sql`, `149_profiles_lock_privilege_columns.sql`). Re-review when adding tables or client-callable RPCs.
+- **Clients**: Only the **anon** Supabase key belongs in the mobile app; never ship `service_role` in client bundles.
+- **Economy**: Production IAP flows use Edge fulfillment (`pulse-shop-fulfillment`); mock live-coin purchases are **dev-only** (`services/live/coinPurchase.ts`).
+
+## Dependencies
+
+`npm audit` may show **PostCSS** advisories via Expo / Next transitive deps. Avoid **`npm audit fix --force`** — it can pin incompatible Expo/Next versions. Prefer upgrading Expo / Next when upstream clears the chain.
 
 ## Brand
 
-| Token | Value |
-|-------|-------|
-| Dark BG | `#0A1628` |
-| Dark Card | `#0F2035` |
-| Primary Navy | `#0B1F3A` |
-| Royal Blue | `#1E4ED8` |
-| Teal | `#14B8A6` |
-| Gold | `#D4A63A` |
+| Token | Theme reference | Value |
+|-------|-----------------|-------|
+| Dark BG | `colors.dark.bg` | `#060E1A` |
+| Dark Card | `colors.dark.card` | `#0F1C30` |
+| Primary Navy | `colors.primary.navy` | `#0B1F3A` |
+| Royal Blue | `colors.primary.royal` | `#1E4ED8` |
+| Teal | `colors.primary.teal` | `#14B8A6` |
+| Gold | `colors.primary.gold` | `#D4A63A` |
 
 ## License
 

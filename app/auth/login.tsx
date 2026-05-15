@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
-import { colors, borderRadius, iconSize, spacing, typography } from '@/theme';
+import { colors, borderRadius, iconSize, spacing, typography, pulseverse } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { profilesService } from '@/services/supabase';
 import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
@@ -32,10 +32,18 @@ import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 
-const CYAN = '#22d3ee';
-
 const AUTH_SPLASH_BG = require('@/assets/images/auth-splash-background.png');
 const AUTH_LOGO_MARK = require('@/assets/images/pulseverse-premium-logo.png');
+
+/** Primary pill gradient — royal → teal → electric (PulseVerse chrome). */
+const PRIMARY_ACTION_GRADIENT = [
+  colors.primary.royal,
+  colors.primary.teal,
+  pulseverse.electricMuted,
+] as const;
+
+/** Segmented control active chip — navy royal → teal. */
+const SEGMENT_ACTIVE_GRADIENT = [colors.primary.royal, colors.primary.teal] as const;
 
 /** Smooth full-width capsule (same tap target for Log In / Create account / social CTAs). */
 const PRIMARY_PILL_H = 52;
@@ -65,7 +73,7 @@ function PrimaryActionButton({
     >
       <View style={[styles.primaryPillShadow, { borderRadius: PRIMARY_PILL_RADIUS }]}>
         <LinearGradient
-          colors={['#2563eb', '#0891b2', '#06b6d4']}
+          colors={[...PRIMARY_ACTION_GRADIENT]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={[
@@ -362,7 +370,7 @@ export default function LoginScreen() {
             >
               {authTab === 'login' ? (
                 <LinearGradient
-                  colors={['#1d4ed8', '#0e7490']}
+                  colors={[...SEGMENT_ACTIVE_GRADIENT]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
                   style={styles.segmentActive}
@@ -383,7 +391,7 @@ export default function LoginScreen() {
             >
               {authTab === 'signup' ? (
                 <LinearGradient
-                  colors={['#1d4ed8', '#0e7490']}
+                  colors={[...SEGMENT_ACTIVE_GRADIENT]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
                   style={styles.segmentActive}
@@ -400,9 +408,9 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
               {authTab === 'signup' && (
-                <AccentComposerFrame accentColor={CYAN} hint="Full name" compact noShadow>
+                <AccentComposerFrame accentColor={pulseverse.electric} hint="Full name" compact noShadow>
                   <View style={styles.fieldRow}>
-                    <Ionicons name="person-outline" size={iconSize.md} color={CYAN} />
+                    <Ionicons name="person-outline" size={iconSize.md} color={pulseverse.electric} />
                     <TextInput
                       style={styles.input}
                       placeholder="Full name"
@@ -416,7 +424,7 @@ export default function LoginScreen() {
               )}
 
               {authTab === 'signup' && (
-                <AccentComposerFrame accentColor={CYAN} hint="Your @handle" compact noShadow>
+                <AccentComposerFrame accentColor={pulseverse.electric} hint="Your @handle" compact noShadow>
                   <View style={styles.fieldRow}>
                     <Text style={styles.atPrefix}>@</Text>
                     <TextInput
@@ -437,9 +445,9 @@ export default function LoginScreen() {
 
               {authTab === 'signup' ? <SignupHandleHint handle={handle} status={handleStatus} /> : null}
 
-              <AccentComposerFrame accentColor={CYAN} hint="Email address" compact noShadow>
+              <AccentComposerFrame accentColor={pulseverse.electric} hint="Email address" compact noShadow>
                 <View style={styles.fieldRow}>
-                  <Ionicons name="mail-outline" size={iconSize.md} color={CYAN} />
+                  <Ionicons name="mail-outline" size={iconSize.md} color={pulseverse.electric} />
                   <TextInput
                     style={styles.input}
                     placeholder="Email address"
@@ -455,9 +463,9 @@ export default function LoginScreen() {
               </AccentComposerFrame>
 
               {authTab === 'signup' && (
-                <AccentComposerFrame accentColor={CYAN} hint="Confirm email" compact noShadow>
+                <AccentComposerFrame accentColor={pulseverse.electric} hint="Confirm email" compact noShadow>
                   <View style={styles.fieldRow}>
-                    <Ionicons name="mail-outline" size={iconSize.md} color={CYAN} />
+                    <Ionicons name="mail-outline" size={iconSize.md} color={pulseverse.electric} />
                     <TextInput
                       style={styles.input}
                       placeholder="Confirm email address"
@@ -474,9 +482,9 @@ export default function LoginScreen() {
                 </AccentComposerFrame>
               )}
 
-              <AccentComposerFrame accentColor={CYAN} hint="Password" compact noShadow>
+              <AccentComposerFrame accentColor={pulseverse.electric} hint="Password" compact noShadow>
                 <View style={styles.fieldRow}>
-                  <Ionicons name="lock-closed-outline" size={iconSize.md} color={CYAN} />
+                  <Ionicons name="lock-closed-outline" size={iconSize.md} color={pulseverse.electric} />
                   <TextInput
                     style={styles.input}
                     placeholder="Password"
@@ -495,16 +503,16 @@ export default function LoginScreen() {
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={22}
-                      color={CYAN}
+                      color={pulseverse.electric}
                     />
                   </TouchableOpacity>
                 </View>
               </AccentComposerFrame>
 
               {authTab === 'signup' && (
-                <AccentComposerFrame accentColor={CYAN} hint="Confirm password" compact noShadow>
+                <AccentComposerFrame accentColor={pulseverse.electric} hint="Confirm password" compact noShadow>
                   <View style={styles.fieldRow}>
-                    <Ionicons name="lock-closed-outline" size={iconSize.md} color={CYAN} />
+                    <Ionicons name="lock-closed-outline" size={iconSize.md} color={pulseverse.electric} />
                     <TextInput
                       style={styles.input}
                       placeholder="Confirm password"
@@ -526,7 +534,7 @@ export default function LoginScreen() {
                       <Ionicons
                         name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                         size={22}
-                        color={CYAN}
+                        color={pulseverse.electric}
                       />
                     </TouchableOpacity>
                   </View>
@@ -538,7 +546,8 @@ export default function LoginScreen() {
                   <Ionicons name="mail-unread-outline" size={22} color={colors.primary.teal} />
                   <Text style={styles.signupNoticeText}>
                     We sent a verification link to <Text style={styles.signupNoticeEm}>{email}</Text>. Open your email,
-                    tap confirm, then sign in here with the same address and password.
+                    tap confirm, then sign in here with the same address and password. If you don't see it within a
+                    minute, check your spam or junk folder — providers sometimes file it there.
                   </Text>
                 </View>
               )}
@@ -618,7 +627,7 @@ export default function LoginScreen() {
             </View>
 
           <View style={styles.secureRow}>
-            <Ionicons name="shield-checkmark" size={20} color={CYAN} />
+            <Ionicons name="shield-checkmark" size={20} color={pulseverse.electric} />
             <Text style={styles.secureText}>
               Your data is protected with enterprise-grade encryption and secure authentication.
             </Text>
@@ -721,7 +730,7 @@ const styles = StyleSheet.create({
   atPrefix: {
     fontSize: 17,
     fontWeight: '800',
-    color: CYAN,
+    color: pulseverse.electric,
     marginRight: 2,
   },
   handleHintRow: {
@@ -739,7 +748,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   forgot: {
-    color: CYAN,
+    color: pulseverse.electric,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'right',
@@ -774,7 +783,7 @@ const styles = StyleSheet.create({
   },
   primaryPillShadow: {
     overflow: 'visible',
-    shadowColor: '#2563eb',
+    shadowColor: colors.primary.royal,
     shadowOpacity: 0.45,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
@@ -840,7 +849,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
   },
-  link: { ...typography.bodySmall, color: CYAN, fontWeight: '700' },
+  link: { ...typography.bodySmall, color: pulseverse.electric, fontWeight: '700' },
   linkSep: { color: colors.form.hint },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   checkBox: {
@@ -848,7 +857,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: `${CYAN}AA`,
+    borderColor: `${pulseverse.electric}AA`,
     marginTop: 2,
     alignItems: 'center',
     justifyContent: 'center',

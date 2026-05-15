@@ -123,8 +123,26 @@ export const MockCoinPurchaseProvider: CoinPurchaseProvider = {
   },
 };
 
-// Swap this when real IAP ships.
-export const coinPurchaseProvider: CoinPurchaseProvider = MockCoinPurchaseProvider;
+/** Production-safe stub — no SKUs, purchases rejected (live coins must use real IAP / Edge fulfillment). */
+export const ProductionCoinPurchaseProvider: CoinPurchaseProvider = {
+  async init() {},
+  async listPacks() {
+    return [];
+  },
+  async purchase() {
+    return {
+      success: false,
+      error: 'Coin packs are not enabled in this build. Use Sparks / shop IAP where available.',
+    };
+  },
+  async restorePending() {},
+};
+
+// Mock credits wallets only in dev; release builds must never ship mock purchases.
+export const coinPurchaseProvider: CoinPurchaseProvider =
+  typeof __DEV__ !== 'undefined' && __DEV__
+    ? MockCoinPurchaseProvider
+    : ProductionCoinPurchaseProvider;
 
 /** Convenience wrapper for the default provider. */
 export const coinPurchaseService = {
