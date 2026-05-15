@@ -28,9 +28,8 @@ export default function PrivacyPage() {
       <h2 id="intro">Introduction</h2>
       <p>
         This Privacy Policy describes how PulseVerse (“we”, “us”) handles information when you use our websites and
-        applications. It is intended for a professional audience in healthcare.{" "}
-        <strong>Have this document reviewed by qualified legal counsel</strong> before treating it as final for your
-        launch. Effective date: {legalDocumentsLastUpdatedDisplay}.
+        applications. It is intended for a professional audience in healthcare. Effective date:{" "}
+        {legalDocumentsLastUpdatedDisplay}.
       </p>
       <p>
         For a plain-language overview of moderation, reporting, and safety expectations, see our{" "}
@@ -57,14 +56,13 @@ export default function PrivacyPage() {
         <a href="#subprocessors" className={marketingInlineLink}>
           Subprocessors
         </a>{" "}
-        for vendors that typically handle personal data in our stack. Update this list when you onboard vendors or
-        change regions with counsel review.
+        for vendors that typically handle personal data in our stack.
       </p>
       <h2 id="subprocessors">Subprocessors</h2>
       <p>
         The table below describes primary infrastructure and observability providers used to operate the web app and
-        APIs. Actual legal roles (processor v. subprocessor) and data locations depend on your contracts and Supabase
-        project region — validate before publish.
+        APIs. Actual legal roles (processor v. subprocessor) and data locations depend on the relevant contracts and
+        the data region of our Supabase project.
       </p>
       <div className={cn("mt-4 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]")}>
         <table>
@@ -103,8 +101,7 @@ export default function PrivacyPage() {
       <p>
         We retain information for as long as needed to operate the service, comply with law or regulation, resolve
         disputes, enforce safety policies, and maintain the integrity of trust &amp; safety records. For moderation,
-        audit, or legal processes, certain records may be held beyond a normal deletion cycle where required — have
-        counsel align this language with your retention schedule.
+        audit, or legal processes, certain records may be held beyond a normal deletion cycle where required.
       </p>
       <h2 id="rights">Your rights</h2>
       <p>

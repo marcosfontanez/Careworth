@@ -115,7 +115,6 @@ export function FeatureMyPulseLanding() {
         <div className="mx-auto mt-10 max-w-xl space-y-3">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 ring-1 ring-white/[0.04]">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">On your Pulse Page · newest first</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">Illustrative content · not a live account</p>
           </div>
           {myPulseFeedSlots.map((slot, i) => {
             const Icon = typeIcon[slot.type];

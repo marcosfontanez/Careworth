@@ -21,8 +21,7 @@ export default function TermsPage() {
     <LegalDoc title="Terms of Service" toc={toc} breadcrumbPath="/terms">
       <h2 id="intro">Introduction</h2>
       <p>
-        These Terms of Service govern access to and use of PulseVerse websites and applications.{" "}
-        <strong>Have them reviewed and approved by your counsel</strong> before launch. Effective date:{" "}
+        These Terms of Service govern access to and use of PulseVerse websites and applications. Effective date:{" "}
         {legalDocumentsLastUpdatedDisplay}.
       </p>
       <p className="text-sm text-muted-foreground">{getLegalNotice()}</p>
@@ -58,8 +57,7 @@ export default function TermsPage() {
       <h2 id="disclaimers">Disclaimers</h2>
       <p>
         The service is provided “as is.” To the maximum extent permitted by law, we disclaim implied warranties and
-        limit liability as set forth in a counsel-approved agreement. Nothing here limits liability that cannot be
-        limited under applicable law.
+        limit our liability. Nothing here limits liability that cannot be limited under applicable law.
       </p>
       <h2 id="termination">Termination</h2>
       <p>

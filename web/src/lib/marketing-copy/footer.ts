@@ -76,8 +76,7 @@ const copy: Record<Locale, FooterCopy> = {
     phiBetween: "and",
     phiFaq: "FAQ",
     phiGuidelines: "Community guidelines",
-    legalBlurb:
-      "Legal & community documents last updated {date}. Review with counsel before relying on them as your sole policies.",
+    legalBlurb: "Legal & community documents last updated {date}.",
     privacy: "Privacy",
     terms: "Terms",
     rights: "All rights reserved.",
@@ -137,8 +136,7 @@ const copy: Record<Locale, FooterCopy> = {
     phiBetween: "y las",
     phiFaq: "FAQ",
     phiGuidelines: "normas de la comunidad",
-    legalBlurb:
-      "Documentos legales y de comunidad actualizados por última vez el {date}. Revísalos con asesoría legal antes de usarlos como políticas únicas.",
+    legalBlurb: "Documentos legales y de comunidad actualizados por última vez el {date}.",
     privacy: "Privacidad",
     terms: "Términos",
     rights: "Todos los derechos reservados.",

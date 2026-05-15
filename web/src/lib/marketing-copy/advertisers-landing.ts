@@ -117,7 +117,7 @@ const en: AdvertisersLandingCopy = {
     },
     {
       title: "Roadmap: credible Data & Insights",
-      body: "Directional reach, resonance, and segment reporting is being built with consent boundaries — ask partnerships for the latest partner analytics posture.",
+      body: "Directional reach, resonance, and segment reporting — built with consent boundaries from day one.",
     },
   ],
   whyFooter:
@@ -167,7 +167,7 @@ const en: AdvertisersLandingCopy = {
     eyebrow: "For your RFP or leadership review",
     title: "Partner deliverables & reporting",
     intro:
-      "We can package materials for procurement, legal, and brand safety teams. Final metrics, segment definitions, and pricing are aligned with your objectives and privacy requirements — ask partnerships for the latest partner data posture.",
+      "We can package materials for procurement, legal, and brand safety teams. Final metrics, segment definitions, and pricing are aligned with your objectives and privacy requirements.",
     deliverables: [
       {
         title: "Positioning & placement one-pager",
@@ -178,7 +178,7 @@ const en: AdvertisersLandingCopy = {
         body: "How professional content is reviewed, live escalation, and paths for brand concerns.",
       },
       {
-        title: "Illustrative flight structure",
+        title: "Flight structure & previews",
         body: "Example pacing, creative specs, and preview workflow — customized per campaign.",
       },
       {
@@ -186,7 +186,7 @@ const en: AdvertisersLandingCopy = {
         body: "Directional reach, engagement, and context narrative as available for your flight.",
       },
     ],
-    reportingTitle: "What we aim to report",
+    reportingTitle: "What we report",
     reporting: [
       {
         title: "Exposure & attention",
@@ -248,7 +248,7 @@ const es: AdvertisersLandingCopy = {
     },
     {
       title: "Hoja de ruta: Data & Insights creíble",
-      body: "Alcance direccional, resonancia e informes por segmentos se construyen con límites de consentimiento — pide a alianzas la postura analítica más reciente.",
+      body: "Alcance direccional, resonancia e informes por segmentos — construidos con límites de consentimiento desde el primer día.",
     },
   ],
   whyFooter:
@@ -303,7 +303,7 @@ const es: AdvertisersLandingCopy = {
     eyebrow: "Para tu RFP o revisión interna",
     title: "Entregables para socios e informes",
     intro:
-      "Podemos empaquetar materiales para compras, legal y brand safety. Las métricas finales, definiciones de segmentos y precios se alinean con tus objetivos y requisitos de privacidad — pide a alianzas la postura de datos más reciente.",
+      "Podemos empaquetar materiales para compras, legal y brand safety. Las métricas finales, definiciones de segmentos y precios se alinean con tus objetivos y requisitos de privacidad.",
     deliverables: [
       {
         title: "One-pager de posicionamiento y ubicaciones",
@@ -314,7 +314,7 @@ const es: AdvertisersLandingCopy = {
         body: "Cómo se revisa el contenido profesional, escalado en vivo y vías para dudas de marca.",
       },
       {
-        title: "Estructura de vuelo ilustrativa",
+        title: "Estructura del vuelo y previews",
         body: "Ejemplo de pacing, especificaciones creativas y flujo de preview — personalizado por campaña.",
       },
       {
@@ -322,7 +322,7 @@ const es: AdvertisersLandingCopy = {
         body: "Alcance direccional, engagement y narrativa de contexto según disponibilidad para tu vuelo.",
       },
     ],
-    reportingTitle: "Qué aspiramos a informar",
+    reportingTitle: "Qué informamos",
     reporting: [
       {
         title: "Exposición y atención",

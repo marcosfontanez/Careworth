@@ -31,7 +31,7 @@ const copy: Record<Locale, PartnersPageCopy> = {
       },
       {
         title: "Research-ready analytics",
-        body: "Directional engagement and segment visibility with consent boundaries, evolving toward credible partner Data & Insights — expand under your data agreement.",
+        body: "Directional engagement and segment visibility with consent boundaries, evolving toward credible partner Data & Insights.",
       },
     ],
     contactLead: "Enterprise pathways, BAAs, and regional rollouts — start on the",
@@ -56,7 +56,7 @@ const copy: Record<Locale, PartnersPageCopy> = {
       },
       {
         title: "Analítica lista para investigación",
-        body: "Compromiso direccional y visibilidad por segmentos con límites de consentimiento, evolucionando hacia Data & Insights creíble para socios — amplía bajo tu acuerdo de datos.",
+        body: "Compromiso direccional y visibilidad por segmentos con límites de consentimiento, evolucionando hacia Data & Insights creíble para socios.",
       },
     ],
     contactLead: "Vías enterprise, BAAs y despliegues por región — empieza en el",
