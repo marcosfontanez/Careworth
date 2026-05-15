@@ -58,31 +58,11 @@ export function HomeBordersFlagship({ locale }: { locale: Locale }) {
           description={c.description}
         />
 
-        {/* Tone kicker — cyan / gold / violet / green = the four drop palettes. */}
-        <div className="mx-auto mt-8 flex max-w-xl flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5 text-emerald-300">
-            <Gift className="h-3.5 w-3.5" aria-hidden />
-            Free monthly
-          </span>
-          <span aria-hidden className="hidden h-px w-5 bg-white/15 sm:block" />
-          <span className="inline-flex items-center gap-1.5 text-[var(--accent)]">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            Premium
-          </span>
-          <span aria-hidden className="hidden h-px w-5 bg-white/15 sm:block" />
-          <span className="inline-flex items-center gap-1.5 text-amber-300">
-            <Heart className="h-3.5 w-3.5" aria-hidden />
-            Charity
-          </span>
-          <span aria-hidden className="hidden h-px w-5 bg-white/15 sm:block" />
-          <span className="inline-flex items-center gap-1.5 text-violet-300">
-            <Megaphone className="h-3.5 w-3.5" aria-hidden />
-            Partner drop
-          </span>
-        </div>
-
-        {/* Flagship infographic — full-width centerpiece, dramatic glow. */}
-        <div className="relative mt-14 sm:mt-16">
+        {/* Flagship infographic — full-width centerpiece, dramatic glow.
+            (Top kicker chip row was retired: the new infographic already
+            bakes in "Free monthly / Premium / Charity / Partner drop"
+            labels along its top band.) */}
+        <div className="relative mt-12 sm:mt-14">
           <SpotlightBeam tone="cyan" intensity="strong" />
           <OrbitDots tone="cyan" preset="hero" />
           <PosterFrame

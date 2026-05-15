@@ -73,6 +73,18 @@ export type HomeBordersCopy = {
   ctaSecondary: string;
 };
 
+export type HomePulseShopCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  bannerTag: string;
+  bannerCaption: string;
+  mobileTag: string;
+  mobileCaption: string;
+  ctaPrimary: string;
+  ctaSecondary: string;
+};
+
 export type HomeTrustVoice = { quote: string; role: string };
 
 export type HomeTrustCopy = {
@@ -116,7 +128,7 @@ const pulseDuo: Record<Locale, HomePulseDuoCopy> = {
   en: {
     eyebrow: "Pulse Page · My Pulse",
     title: "One identity home. Two ways to show up.",
-    description: "Pulse Page is the room. My Pulse is what's playing in it.",
+    description: "One profile. Fresh expression, always evolving.",
     posterTag: "Side-by-side",
     posterCaption: "Live product render · iPhone",
     links: [
@@ -127,7 +139,7 @@ const pulseDuo: Record<Locale, HomePulseDuoCopy> = {
   es: {
     eyebrow: "Pulse Page · My Pulse",
     title: "Un hogar de identidad. Dos formas de aparecer.",
-    description: "Pulse Page es la sala. My Pulse es lo que suena dentro.",
+    description: "Un perfil. Expresión fresca, siempre en evolución.",
     posterTag: "Lado a lado",
     posterCaption: "Renderizado real · iPhone",
     links: [
@@ -146,7 +158,7 @@ const circlesSpotlight: Record<Locale, HomeCirclesSpotlightCopy> = {
     eyebrow: "Circles",
     title: "Your specialty has a room.",
     description:
-      "Specialties, study spaces, identity rooms, and the humor only insiders get — not a noisy global feed.",
+      "Specialties, study spaces, and the humor only insiders get.",
     posterTag: "Inside Circles",
     posterCaption: "Discover · Your Circles · Trending",
     ctaPrimary: "Explore Circles",
@@ -156,7 +168,7 @@ const circlesSpotlight: Record<Locale, HomeCirclesSpotlightCopy> = {
     eyebrow: "Circles",
     title: "Tu especialidad tiene una sala.",
     description:
-      "Especialidades, salas de estudio, espacios de identidad y el humor que solo entienden los de dentro — no un feed global ruidoso.",
+      "Especialidades, salas de estudio y el humor que solo entienden los de dentro.",
     posterTag: "Dentro de Circles",
     posterCaption: "Descubre · Tus Circles · Tendencias",
     ctaPrimary: "Explorar Circles",
@@ -171,39 +183,75 @@ const circlesSpotlight: Record<Locale, HomeCirclesSpotlightCopy> = {
 const creatorHub: Record<Locale, HomeCreatorHubCopy> = {
   en: {
     eyebrow: "Creator economy",
-    title: "Why creators stay.",
+    title: "Create. Customize. Get rewarded.",
     description:
-      "The creator hub itself is on the right — these are the receipts behind it.",
+      "Every tool the healthcare creator economy needs — built into one hub.",
     posterTag: "Creator Hub",
-    posterCaption: "Pulse Shop · Borders · Leaderboards",
+    posterCaption: "Pulse Shop · Borders · Leaderboards · Live",
+    /* Slim "credibility receipts" strip rendered as a single horizontal line under the banner.
+       Each pillar is icon + short title only — full bodies live on the /features deep dives. */
     pillars: [
-      { title: "License-verified", body: "Creator features unlock after license verification." },
-      { title: "Native store payments", body: "Pulse Shop runs through Apple and Google. No off-platform funnels." },
-      { title: "Limited drops, real scarcity", body: "Time-limited borders aren't re-released. Once gone, gone." },
-      { title: "Earned ≠ purchased", body: "Sparks earned through gifting stay separate from purchased credits." },
-      { title: "Per-creator ledger", body: "Every gift, tip, and tier change tracked per creator." },
-      { title: "HIPAA-aware moderation", body: "Same lens on Live, Circles, and Pulse Page." },
+      { title: "License-verified", body: "" },
+      { title: "Native store payments", body: "" },
+      { title: "Limited drops", body: "" },
+      { title: "Earned ≠ purchased", body: "" },
+      { title: "Per-creator ledger", body: "" },
+      { title: "HIPAA-aware moderation", body: "" },
     ],
     ctaPrimary: "See creator tools",
     ctaSecondary: "Open Live",
   },
   es: {
     eyebrow: "Economía de creador",
-    title: "Por qué se quedan los creadores.",
+    title: "Crea. Personaliza. Sé recompensado.",
     description:
-      "El propio Creator Hub está a la derecha — esto son los recibos detrás.",
+      "Todas las herramientas que necesita la economía de creador en sanidad — en un solo hub.",
     posterTag: "Creator Hub",
-    posterCaption: "Pulse Shop · Bordes · Leaderboards",
+    posterCaption: "Pulse Shop · Bordes · Leaderboards · Live",
     pillars: [
-      { title: "Verificado por licencia", body: "Las funciones de creador se desbloquean tras verificar la licencia." },
-      { title: "Pagos en tienda nativa", body: "Pulse Shop usa Apple y Google. Sin embudos externos." },
-      { title: "Drops limitados, escasez real", body: "Los bordes limitados no se reeditan. Cuando se van, se van." },
-      { title: "Ganado ≠ comprado", body: "Los Sparks ganados con regalos se mantienen separados del crédito comprado." },
-      { title: "Libro mayor por creador", body: "Cada regalo, propina y cambio de tier queda registrado por creador." },
-      { title: "Moderación con conciencia HIPAA", body: "El mismo criterio en Live, Circles y Pulse Page." },
+      { title: "Verificado por licencia", body: "" },
+      { title: "Pagos en tienda nativa", body: "" },
+      { title: "Drops limitados", body: "" },
+      { title: "Ganado ≠ comprado", body: "" },
+      { title: "Libro por creador", body: "" },
+      { title: "Moderación con HIPAA", body: "" },
     ],
     ctaPrimary: "Ver herramientas de creador",
     ctaSecondary: "Abrir Live",
+  },
+};
+
+/* ------------------------------------------------------------------------- */
+/*  Pulse Shop spotlight (NEW).                                              */
+/*  Uses two paired marketing renders — cinematic featured-drop banner and   */
+/*  the in-app shop UI — so the shop earns its own moment instead of being   */
+/*  buried inside Creator Hub or Borders.                                    */
+/* ------------------------------------------------------------------------- */
+
+const pulseShop: Record<Locale, HomePulseShopCopy> = {
+  en: {
+    eyebrow: "Pulse Shop",
+    title: "Premium borders. Real rewards.",
+    description:
+      "Limited drops, exclusive borders, and creator support — through your app store.",
+    bannerTag: "Featured drop",
+    bannerCaption: "Direct purchase · App Store / Google Play",
+    mobileTag: "Inside Pulse Shop",
+    mobileCaption: "Borders · Sparks · Gifts",
+    ctaPrimary: "Open Pulse Shop",
+    ctaSecondary: "What are Sparks?",
+  },
+  es: {
+    eyebrow: "Pulse Shop",
+    title: "Bordes premium. Recompensas reales.",
+    description:
+      "Drops limitados, bordes exclusivos y apoyo a creadores — desde tu tienda de apps.",
+    bannerTag: "Drop destacado",
+    bannerCaption: "Compra directa · App Store / Google Play",
+    mobileTag: "Dentro de Pulse Shop",
+    mobileCaption: "Bordes · Sparks · Regalos",
+    ctaPrimary: "Abrir Pulse Shop",
+    ctaSecondary: "¿Qué son los Sparks?",
   },
 };
 
@@ -217,8 +265,7 @@ const sparksDiamonds: Record<Locale, HomeSparksDiamondsCopy> = {
   en: {
     eyebrow: "Sparks & Diamonds",
     title: "How connection turns into recognition.",
-    description:
-      "Sparks let anyone show love and start conversations. Diamonds reward the people who show up, share knowledge, and lift the community.",
+    description: "Sparks fuel connection. Diamonds reward impact.",
     posterTag: "Sparks & Diamonds · Explainer",
     posterCaption: "Send Sparks  ·  Earn Diamonds  ·  Unlock tiers",
     ctaPrimary: "See creator tools",
@@ -227,8 +274,7 @@ const sparksDiamonds: Record<Locale, HomeSparksDiamondsCopy> = {
   es: {
     eyebrow: "Sparks y Diamonds",
     title: "Cómo la conexión se convierte en reconocimiento.",
-    description:
-      "Los Sparks permiten mostrar cariño e iniciar conversaciones. Los Diamonds recompensan a quienes aparecen, comparten conocimiento y levantan a la comunidad.",
+    description: "Los Sparks alimentan la conexión. Los Diamonds premian el impacto.",
     posterTag: "Sparks y Diamonds · Explicación",
     posterCaption: "Envía Sparks  ·  Gana Diamonds  ·  Desbloquea tiers",
     ctaPrimary: "Ver herramientas de creador",
@@ -248,7 +294,7 @@ const borders: Record<Locale, HomeBordersCopy> = {
     eyebrow: "PulseVerse Borders",
     title: "Your identity. Everywhere.",
     description:
-      "Borders frame your avatar across the app — feed, circles, comments, profiles. Every month, four ways to get a new one.",
+      "Borders frame your avatar everywhere — feed, circles, comments, profiles.",
     posterTag: "Borders · Overview",
     posterCaption: "Pulse Shop  ·  My Pulse  ·  Border Vault",
     drops: [
@@ -289,7 +335,7 @@ const borders: Record<Locale, HomeBordersCopy> = {
     eyebrow: "Bordes de PulseVerse",
     title: "Tu identidad. En todas partes.",
     description:
-      "Los bordes enmarcan tu avatar en toda la app — feed, circles, comentarios, perfiles. Cada mes, cuatro formas de conseguir uno nuevo.",
+      "Los bordes enmarcan tu avatar en todas partes — feed, circles, comentarios, perfiles.",
     posterTag: "Bordes · Vista general",
     posterCaption: "Pulse Shop  ·  My Pulse  ·  Cofre de Bordes",
     drops: [
@@ -387,6 +433,10 @@ export function getHomeCirclesSpotlightCopy(locale: Locale): HomeCirclesSpotligh
 
 export function getHomeCreatorHubCopy(locale: Locale): HomeCreatorHubCopy {
   return creatorHub[locale] ?? creatorHub.en;
+}
+
+export function getHomePulseShopCopy(locale: Locale): HomePulseShopCopy {
+  return pulseShop[locale] ?? pulseShop.en;
 }
 
 export function getHomeSparksDiamondsCopy(locale: Locale): HomeSparksDiamondsCopy {

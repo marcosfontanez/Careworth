@@ -34,10 +34,9 @@ export function HomeCirclesSpotlight({ locale }: { locale: Locale }) {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary/90">
               {c.eyebrow}
             </p>
-            <h2 className="mt-3 text-balance font-heading text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem] lg:leading-[1.08]">
-              {c.title}
-            </h2>
-            <p className="mt-5 text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+            {/* Image already carries the giant "Circles" wordmark — H2 is sr-only for SEO so we don't double up visually. */}
+            <h2 className="sr-only">{c.title}</h2>
+            <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
               {c.description}
             </p>
 

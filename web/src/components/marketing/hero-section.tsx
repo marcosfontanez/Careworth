@@ -41,7 +41,12 @@ export function HeroSection({ locale }: { locale: Locale }) {
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               {t.eyebrow}
             </span>
-            <p className="mt-6 max-w-md text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+            {/* Visible H1 — mirrors the headline baked into the hero image for SEO + screen readers
+                (Google won't reliably read text-as-pixels). Kept compact so the poster stays the lede. */}
+            <h1 className="mt-4 max-w-md text-balance font-heading text-3xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem]">
+              {t.headline}
+            </h1>
+            <p className="mt-5 max-w-md text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
               {t.subhead}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">

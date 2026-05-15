@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Diamond, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import {
   OrbitDots,
@@ -35,20 +35,9 @@ export function HomeSparksDiamonds({ locale }: { locale: Locale }) {
       <div className={marketingGutterX}>
         <PremiumSectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
 
-        {/* Two-icon kicker — sets the language: pink Sparks, cyan Diamonds. */}
-        <div className="mx-auto mt-8 flex max-w-md items-center justify-center gap-4 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5 text-[#E0639A]">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            Sparks
-          </span>
-          <span aria-hidden className="h-px w-6 bg-white/15" />
-          <span className="inline-flex items-center gap-1.5 text-[var(--accent)]">
-            <Diamond className="h-3.5 w-3.5" aria-hidden />
-            Diamonds
-          </span>
-        </div>
-
-        {/* Flagship infographic — full-width centerpiece, dramatic glow. */}
+        {/* Flagship infographic — full-width centerpiece, dramatic glow.
+            (Kicker chip row was retired: the new infographic bakes its own
+            "SPARKS & DIAMONDS — Power connection. Reward impact." brand bar.) */}
         <div className="relative mt-14 sm:mt-16">
           <SpotlightBeam tone="cyan" intensity="strong" />
           <OrbitDots tone="cyan" preset="hero" />

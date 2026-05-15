@@ -2,6 +2,8 @@ import type { Locale } from "@/lib/i18n";
 
 export type HomeHeroCopy = {
   eyebrow: string;
+  /** Visible H1 above the eyebrow (mirrors the headline baked into the hero image for SEO + screen readers). */
+  headline: string;
   subhead: string;
   primaryCta: string;
   secondaryCta: string;
@@ -19,8 +21,9 @@ export type HomeCtaCopy = {
 const hero: Record<Locale, HomeHeroCopy> = {
   en: {
     eyebrow: "Healthcare's first social home",
+    headline: "Healthcare culture has a home.",
     subhead:
-      "Verified clinicians, students, and creators — in your specialty, on your terms.",
+      "Verified clinicians, students, and creators — together in one place.",
     primaryCta: "Join PulseVerse",
     secondaryCta: "See it in the browser",
     posterTag: "Live product render",
@@ -28,8 +31,9 @@ const hero: Record<Locale, HomeHeroCopy> = {
   },
   es: {
     eyebrow: "El primer hogar social de la salud",
+    headline: "La cultura sanitaria tiene un hogar.",
     subhead:
-      "Clínicos, estudiantes y creadores verificados — en tu especialidad, en tus términos.",
+      "Clínicos, estudiantes y creadores verificados — en un mismo lugar.",
     primaryCta: "Unirte a PulseVerse",
     secondaryCta: "Verla en el navegador",
     posterTag: "Renderizado real",
