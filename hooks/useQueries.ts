@@ -422,9 +422,17 @@ export function useComments(postId: string) {
     queryKey: commentKeys.byPost(postId, user?.id ?? null),
     queryFn: () => commentService.getByPostId(postId, user?.id),
     enabled: !!postId,
-    staleTime: 20_000,
+    /**
+     * Comments are the highest-touch surface in the app — a 20s stale
+     * window plus `refetchOnMount: false` meant a user could tap a
+     * "you got a comment" notification, land on the thread, and see
+     * the previously-cached empty list (or yesterday's snapshot)
+     * with no automatic refresh. Now: every mount triggers a fresh
+     * fetch, so the list is always current the moment the screen opens.
+     */
+    staleTime: 0,
     gcTime: 1000 * 60 * 15,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
   });
 }
 

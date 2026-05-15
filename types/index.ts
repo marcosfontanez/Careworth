@@ -493,6 +493,13 @@ export interface Post {
   scheduledStatus?: string;
   coverAltUrl?: string;
   moodPreset?: string;
+  /**
+   * Optional on-video sticker line (<=80 chars) added in the video composer.
+   * The feed renders this as a centered <Text> on top of the video player
+   * so what creators see in the editor preview also appears on the posted
+   * video. Not baked into the underlying MP4 — pure runtime overlay.
+   */
+  videoOverlayText?: string;
 }
 
 export interface SponsorInfo {

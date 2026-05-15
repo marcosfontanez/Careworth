@@ -210,7 +210,7 @@ export default function CreateVideoScreen() {
   const [evidenceLabel, setEvidenceLabel] = useState('');
   /** Shorts-style headline — prepended to caption on post. */
   const [shortTitle, setShortTitle] = useState('');
-  /** On-preview sticker; also prepended to caption (not burned into video file). */
+  /** On-video sticker line; sent as `video_overlay_text` and rendered live over the feed video. */
   const [overlayLine, setOverlayLine] = useState('');
   const [filterPreset, setFilterPreset] = useState<FilterPreset>('none');
   const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
@@ -641,7 +641,17 @@ export default function CreateVideoScreen() {
   ]);
 
   const handlePost = async () => {
-    let composedCaption = [shortTitle.trim(), overlayLine.trim(), caption.trim()]
+    /**
+     * `overlayLine` (the "On-video text" sticker) used to be prepended into
+     * the caption here so it was at least visible *somewhere* after posting.
+     * That created a confusing UX -- the editor showed the line as a sticker
+     * over the video, but on the feed it appeared as plain caption text below.
+     *
+     * It's now sent as a dedicated `video_overlay_text` field on the post and
+     * rendered on top of the feed video player (see VideoFeedPost.tsx), so
+     * what creators see in the editor matches what viewers see on the feed.
+     */
+    let composedCaption = [shortTitle.trim(), caption.trim()]
       .filter(Boolean)
       .join('\n\n')
       .trim();
@@ -816,6 +826,8 @@ export default function CreateVideoScreen() {
         scheduled_status: scheduleIso ? 'scheduled' : 'live',
         cover_alt_url: coverAltRemote,
         mood_preset: moodId ?? undefined,
+        video_overlay_text:
+          postType === 'video' && overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
         ...soundPayload,
         ...ownSoundPayload,
         ...duetPayload,
@@ -1277,7 +1289,7 @@ export default function CreateVideoScreen() {
               style={styles.inputPlain}
               value={overlayLine}
               onChangeText={setOverlayLine}
-              placeholder="Sticker-style line on the preview — also added to caption when you post"
+              placeholder="Sticker-style line drawn on top of your video — appears on the feed exactly like the preview"
               placeholderTextColor={colors.dark.textMuted}
               editable={!posting}
               maxLength={80}

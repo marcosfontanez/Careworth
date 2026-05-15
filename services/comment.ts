@@ -76,18 +76,37 @@ function buildTree(
 }
 
 export const commentService = {
+  /**
+   * Loads the thread for a post + the viewer's previously-picked reaction
+   * per comment.
+   *
+   * Error handling — this matters because of a real bug:
+   *   The previous implementation wrapped EVERYTHING in `try { ... } catch { return []; }`.
+   *   That meant any failure in `getViewerReactionsForComments` (a non-essential
+   *   side query) silently emptied the entire thread, AND React Query cached
+   *   that `[]` as a "successful" result. Users would receive a comment
+   *   notification, open the post, and see "No comments yet" forever.
+   *
+   * New behavior:
+   *   - Comment fetch failure -> THROW. React Query will retry, surface the
+   *     error, and never cache `[]` as a real success.
+   *   - Viewer-reaction fetch failure -> log + degrade (return comments
+   *     without picked-reaction state). Viewer can still see the thread.
+   */
   async getByPostId(postId: string, viewerId?: string | null): Promise<Comment[]> {
-    try {
-      const data = await supaComments.getByPostId(postId);
-      const ids = data.map((r) => r.id);
-      const viewerMap =
-        viewerId && ids.length > 0
-          ? await supaComments.getViewerReactionsForComments(viewerId, ids)
-          : {};
-      return buildTree(data, viewerMap);
-    } catch {
-      return [];
+    const data = await supaComments.getByPostId(postId);
+    const ids = data.map((r) => r.id);
+    let viewerMap: Partial<Record<string, PostReactionKind>> = {};
+    if (viewerId && ids.length > 0) {
+      try {
+        viewerMap = await supaComments.getViewerReactionsForComments(viewerId, ids);
+      } catch (e) {
+        if (__DEV__) {
+          console.warn('[commentService.getByPostId] viewer reactions failed (degrading):', e);
+        }
+      }
     }
+    return buildTree(data, viewerMap);
   },
 
   async addComment(postId: string, content: string, parentId?: string, mediaUrl?: string | null) {

@@ -20,6 +20,7 @@ import { useMessengerInbox } from '@/hooks/useMessengerInbox';
 import { MessengerInboxPanel } from '@/components/messenger/MessengerInboxPanel';
 import { notificationService } from '@/services';
 import { queryClient } from '@/lib/queryClient';
+import { commentKeys, postKeys } from '@/lib/queryKeys';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import { getNotificationSectionListWindow } from '@/lib/feedVideoListWindow';
 import { colors, typography, spacing } from '@/theme';
@@ -141,6 +142,15 @@ export default function NotificationsScreen() {
             router.push('/(tabs)/circles');
           }
         } else {
+          /**
+           * Comment notifications often arrive faster than the cached
+           * thread can stale-time out. Invalidate the comments + post
+           * caches before navigating so the screen we're about to mount
+           * always shows the freshly-arrived comment instead of a
+           * previously-cached "no comments yet" snapshot.
+           */
+          queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(notification.targetId) });
+          queryClient.invalidateQueries({ queryKey: postKeys.byId(notification.targetId) });
           router.push(`/post/${notification.targetId}?focusComments=1` as any);
         }
       } else if (

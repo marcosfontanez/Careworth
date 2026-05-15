@@ -188,6 +188,9 @@ function rowToPost(row: any): Post {
     scheduledStatus: row.scheduled_status != null ? String(row.scheduled_status) : undefined,
     coverAltUrl: normalizeMediaUrl(row.cover_alt_url),
     moodPreset: row.mood_preset?.trim() || undefined,
+    videoOverlayText: typeof row.video_overlay_text === 'string'
+      ? row.video_overlay_text.trim() || undefined
+      : undefined,
   };
 }
 
@@ -271,6 +274,8 @@ const POST_SELECT = [
   'scheduled_status',
   'cover_alt_url',
   'mood_preset',
+  // On-video sticker text (rendered as <Text> overlay on the feed video)
+  'video_overlay_text',
   // Joined creator profile — explicit columns to avoid shipping email,
   // push tokens, role_admin flag, etc. to the client.
   'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
@@ -316,6 +321,7 @@ const POST_SELECT_FEED = [
   'scheduled_status',
   'cover_alt_url',
   'mood_preset',
+  'video_overlay_text',
   'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
@@ -1133,6 +1139,8 @@ export const postsService = {
     cover_alt_url?: string | null;
     mood_preset?: string | null;
     additional_media?: string[] | null;
+    /** On-video sticker line (<=80 chars). Rendered live on the feed video; not baked. */
+    video_overlay_text?: string | null;
   }): Promise<Post> {
     let roleCtx = post.role_context;
     let specCtx = post.specialty_context;
@@ -1171,6 +1179,7 @@ export const postsService = {
       cover_alt_url: coverAltUrlIn,
       mood_preset: moodPresetIn,
       additional_media: additionalMediaIn,
+      video_overlay_text: videoOverlayTextIn,
       ...postRest
     } = post;
 
@@ -1241,6 +1250,13 @@ export const postsService = {
     if (Array.isArray(additionalMediaIn) && additionalMediaIn.length) {
       insertPayload.additional_media = additionalMediaIn;
     }
+    /**
+     * Goes into `extensionPayload` (retried-stripped on missing column) so
+     * environments that haven't run migration 153 yet still let the post
+     * through — they'll just lose the on-video sticker line.
+     */
+    const vot = typeof videoOverlayTextIn === 'string' ? videoOverlayTextIn.trim() : '';
+    if (vot) extensionPayload.video_overlay_text = vot.slice(0, 80);
 
     const fullPayload = { ...insertPayload, ...extensionPayload };
 

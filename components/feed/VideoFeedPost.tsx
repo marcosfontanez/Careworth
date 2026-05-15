@@ -271,6 +271,16 @@ function VideoFeedPostInner({
               onFailed={() => setAttributedSoundFailed(true)}
             />
           ) : null}
+          {post.videoOverlayText?.trim() ? (
+            <View
+              pointerEvents="none"
+              style={[styles.videoOverlayWrap, { bottom: chromeBottom.content + 220 }]}
+            >
+              <Text style={styles.videoOverlayText} numberOfLines={3}>
+                {post.videoOverlayText.trim()}
+              </Text>
+            </View>
+          ) : null}
         </>
       ) : showImageCarousel ? (
         <View style={styles.bg}>
@@ -979,6 +989,34 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 24,
     lineHeight: 18,
+  },
+  /**
+   * On-video sticker line (post.videoOverlayText). Positioned a comfortable
+   * distance above the action rail / caption strip and centered horizontally,
+   * matching the editor's preview sticker so what creators see while composing
+   * matches what viewers see on the feed.
+   */
+  videoOverlayWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 80,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  videoOverlayText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+    maxWidth: '100%',
   },
   confessionBg: {
     backgroundColor: colors.community?.confessions ?? colors.dark.cardAlt,

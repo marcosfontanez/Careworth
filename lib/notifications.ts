@@ -5,6 +5,8 @@ import { supabase } from './supabase';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { parseAndNavigate } from './deepLink';
+import { queryClient } from './queryClient';
+import { commentKeys, postKeys } from './queryKeys';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -141,6 +143,15 @@ export async function initPushNotifications(userId: string) {
           }
         | undefined;
       if (data?.postId) {
+        /**
+         * Invalidate the comments + post caches BEFORE navigating so the
+         * thread the user is about to land on always refetches. Without
+         * this, a previously-cached "no comments yet" snapshot survives
+         * across the navigation and the user sees an empty thread even
+         * though the notification proves a new comment exists.
+         */
+        queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(data.postId) });
+        queryClient.invalidateQueries({ queryKey: postKeys.byId(data.postId) });
         router.push(`/post/${data.postId}`);
       } else if (data?.circleSlug && data?.threadId) {
         router.push(`/communities/${data.circleSlug}/thread/${data.threadId}` as any);

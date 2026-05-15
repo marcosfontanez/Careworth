@@ -176,6 +176,7 @@ export interface Database {
           scheduled_status: string;
           cover_alt_url: string | null;
           mood_preset: string | null;
+          video_overlay_text: string | null;
         };
         Insert: {
           id?: string;
@@ -208,6 +209,7 @@ export interface Database {
           scheduled_status?: string;
           cover_alt_url?: string | null;
           mood_preset?: string | null;
+          video_overlay_text?: string | null;
         };
         Update: Partial<Database['public']['Tables']['posts']['Insert']>;
         Relationships: [];
