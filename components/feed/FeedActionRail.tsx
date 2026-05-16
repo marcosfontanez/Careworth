@@ -34,6 +34,8 @@ export function FeedActionRail({
     fn();
   };
 
+  const commentsLocked = post.commentsDisabled === true;
+
   return (
     <View style={[styles.rail, bottomInset != null && { bottom: bottomInset }]}>
       <View style={styles.avatarWrap}>
@@ -71,9 +73,11 @@ export function FeedActionRail({
       />
       <ActionButton
         icon="chatbubble-ellipses-outline"
+        color={commentsLocked ? 'rgba(255,255,255,0.42)' : '#FFF'}
         count={post.commentCount}
         onPress={action(onComment)}
-        accessibilityLabel="Comments"
+        accessibilityLabel={commentsLocked ? 'Comments off — view thread' : 'Comments'}
+        muted={commentsLocked}
       />
       <ActionButton
         icon={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -102,18 +106,28 @@ export function FeedActionRail({
 }
 
 function ActionButton({
-  icon, count, color = '#FFF', onPress, accessibilityLabel,
-}: { icon: string; count: number; color?: string; onPress: () => void; accessibilityLabel: string }) {
+  icon, count, color = '#FFF', onPress, accessibilityLabel, muted = false,
+}: {
+  icon: string;
+  count: number;
+  color?: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+  /** Softer rail cue (e.g. comments disabled — thread is view-only). */
+  muted?: boolean;
+}) {
   return (
     <TouchableOpacity
-      style={styles.actionBtn}
+      style={[styles.actionBtn, muted && styles.actionBtnMuted]}
       onPress={onPress}
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
-      <Ionicons name={icon as any} size={25} color={color} />
-      {count >= 0 && <Text style={styles.actionCount}>{formatCount(count)}</Text>}
+      <Ionicons name={icon as any} size={25} color={color} style={muted ? styles.actionIconMuted : undefined} />
+      {count >= 0 && (
+        <Text style={[styles.actionCount, muted && styles.actionCountMuted]}>{formatCount(count)}</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -144,9 +158,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.85)',
   },
   actionBtn: { alignItems: 'center', gap: 3, minWidth: 34 },
+  actionBtnMuted: { opacity: 0.92 },
+  actionIconMuted: { opacity: 0.72 },
   actionCount: {
     color: 'rgba(255,255,255,0.88)',
     ...typography.count,
     ...textShadow,
   },
+  actionCountMuted: { opacity: 0.72 },
 });

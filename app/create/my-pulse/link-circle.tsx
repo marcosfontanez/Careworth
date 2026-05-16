@@ -62,6 +62,9 @@ export default function MyPulseLinkCircleScreen() {
       showToast('Discussion linked on My Pulse', 'success');
       router.replace('/(tabs)/my-pulse');
     },
+    onError: (err: Error) => {
+      showToast(err.message || 'Could not link discussion — try again.', 'error');
+    },
   });
 
   const submit = useCallback(() => {

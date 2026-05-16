@@ -142,7 +142,12 @@ export default function FeedPostScreen() {
         isSaved={savedPostIds.has(post.id)}
         isFollowing={followedCreatorIds.has(post.creatorId)}
         onLike={handleLike}
-        onComment={() => router.push(`/comments/${post.id}` as any)}
+        onComment={() => {
+          if (post.commentsDisabled) {
+            toast.show('Comments are off — you can still read the thread.', 'info');
+          }
+          router.push(`/comments/${post.id}` as any);
+        }}
         onSave={handleSave}
         /**
          * Carry the optional `circle` slug through to the share menu so

@@ -109,7 +109,7 @@ export function CircleSettingsCard({
             <Ionicons name="star-outline" size={18} color={colors.primary.gold} />
           }
           title="Pin to Circle Highlights"
-          subtitle="Feature this post in the circle highlights"
+          subtitle="Staff only — surfaces this post in the circle highlights row"
           right={
             <Switch
               value={settings.pinToHighlights}

@@ -81,6 +81,7 @@ function ComposableVideoPreview({
   overlayText,
   previewMuted = true,
   previewVolume = 0,
+  brandKit,
 }: {
   uri: string;
   playbackRate: number;
@@ -89,6 +90,7 @@ function ComposableVideoPreview({
   /** When false, play original audio (e.g. hear your upload while picking a separate sound). */
   previewMuted?: boolean;
   previewVolume?: number;
+  brandKit?: BrandKit | null;
 }) {
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
@@ -126,7 +128,7 @@ function ComposableVideoPreview({
           <Text style={styles.previewStickerText}>{overlayText.trim()}</Text>
         </View>
       ) : null}
-      <VideoBrandWatermark compact position="bottom-center" edgeOffset={10} variant="subtle" />
+      <VideoBrandWatermark brandKit={brandKit} compact position="bottom-center" edgeOffset={10} variant="subtle" />
     </>
   );
 }
@@ -140,10 +142,12 @@ function ComposableVideoPreviewFrozen({
   posterUri,
   filter,
   overlayText,
+  brandKit,
 }: {
   posterUri: string | null;
   filter: FilterPreset;
   overlayText: string;
+  brandKit?: BrandKit | null;
 }) {
   const tint = tintForLook(filter);
   return (
@@ -166,7 +170,7 @@ function ComposableVideoPreviewFrozen({
           <Text style={styles.previewStickerText}>{overlayText.trim()}</Text>
         </View>
       ) : null}
-      <VideoBrandWatermark compact position="bottom-center" edgeOffset={10} variant="subtle" />
+      <VideoBrandWatermark brandKit={brandKit} compact position="bottom-center" edgeOffset={10} variant="subtle" />
     </>
   );
 }
@@ -730,8 +734,9 @@ export default function CreateVideoScreen() {
               type: 'image/jpeg',
               name: `poster_${Date.now()}.jpg`,
             });
-          } catch {
-            /* feed still works without custom poster */
+          } catch (thumbErr) {
+            if (__DEV__) console.warn('[video] thumbnail upload', thumbErr);
+            toast.show('Poster upload skipped — feed will use a default thumbnail.', 'info');
           }
         }
       }
@@ -742,8 +747,9 @@ export default function CreateVideoScreen() {
             type: 'image/jpeg',
             name: `poster_alt_${Date.now()}.jpg`,
           });
-        } catch {
-          /* A/B cover optional */
+        } catch (coverErr) {
+          if (__DEV__) console.warn('[video] alt cover upload', coverErr);
+          toast.show('Alternate cover upload skipped.', 'info');
         }
       }
 
@@ -828,6 +834,7 @@ export default function CreateVideoScreen() {
         mood_preset: moodId ?? undefined,
         video_overlay_text:
           postType === 'video' && overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
+        comments_disabled: !commentsOn || undefined,
         ...soundPayload,
         ...ownSoundPayload,
         ...duetPayload,
@@ -900,7 +907,7 @@ export default function CreateVideoScreen() {
     >
       <SuccessAnimation
         visible={showSuccess}
-        message="Posted!"
+        message={scheduledAt ? 'Scheduled!' : 'Posted!'}
         onComplete={() => router.replace('/(tabs)/feed')}
       />
 
@@ -1079,6 +1086,7 @@ export default function CreateVideoScreen() {
                   posterUri={composerPreviewPosterUri}
                   filter={filterPreset}
                   overlayText={overlayLine}
+                  brandKit={brandKit}
                 />
               ) : (
                 <ComposableVideoPreview
@@ -1089,6 +1097,7 @@ export default function CreateVideoScreen() {
                   overlayText={overlayLine}
                   previewMuted={Boolean(soundPostIdTrim) || !originalAudioOn}
                   previewVolume={originalAudioOn && !soundPostIdTrim ? originalAudioMix : 0}
+                  brandKit={brandKit}
                 />
               )}
             {durationStr ? (

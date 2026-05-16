@@ -145,6 +145,14 @@ export function BetaTesterBorderGate() {
           return;
         }
 
+        /** Already granted on another device/session — don’t repeat the full-screen gift UX. */
+        if (!res.newlyGranted) {
+          await markBetaTesterGiftModalDismissed(effectUserId);
+          useAppStore.getState().clearBetaTesterGiftPending();
+          await queryClient.invalidateQueries({ queryKey: userKeys.detail(effectUserId) });
+          return;
+        }
+
         useAppStore.getState().setBetaTesterGiftPending({ userId: effectUserId, frame: res.frame });
 
         if (!onFeedRef.current || inAuthRef.current) {

@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/theme';
+import { useToast } from '@/components/ui/Toast';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { VIDEO_MAX_SECONDS, type MediaAsset } from '@/lib/media';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
@@ -62,6 +63,7 @@ export default function CreateVideoCameraScreen() {
   const soundPostIdTrim =
     (Array.isArray(soundPostIdRaw) ? soundPostIdRaw[0] : soundPostIdRaw)?.trim() ?? '';
   const insets = useSafeAreaInsets();
+  const showToast = useToast((s) => s.show);
   const camRef = useRef<CameraView>(null);
   const [camPerm, requestCam] = useCameraPermissions();
   const [micPerm, requestMic] = useMicrophonePermissions();
@@ -104,14 +106,15 @@ export default function CreateVideoCameraScreen() {
           creatorName: dn,
           thumbnailUrl: post.thumbnailUrl ?? undefined,
         });
-      } catch {
-        /* ignore missing sound */
+      } catch (e) {
+        if (__DEV__) console.warn('[video-camera] sound preload', e);
+        showToast('Sound unavailable — open Sound picker or continue without it.', 'info');
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [soundPostIdTrim]);
+  }, [soundPostIdTrim, showToast]);
 
   useEffect(() => {
     if (!camPerm?.granted) void requestCam();
@@ -192,12 +195,14 @@ export default function CreateVideoCameraScreen() {
       });
       const result = await p;
       if (result?.uri) await finishAndNavigate(result.uri);
-    } catch {
+    } catch (e) {
+      if (__DEV__) console.warn('[video-camera] recording', e);
+      showToast('Recording failed — check camera/mic permission and try again.', 'error');
       setRecording(false);
       recordPromiseRef.current = null;
       recordingBusyRef.current = false;
     }
-  }, [camReady, countdownMode, finishAndNavigate, maxCap]);
+  }, [camReady, countdownMode, finishAndNavigate, maxCap, showToast]);
 
   const toggleRecord = useCallback(() => {
     if (recording) {

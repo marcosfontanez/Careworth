@@ -10,7 +10,13 @@ const KEY = `@pulseverse/beta_tester_gift_modal_seen_${BETA_TESTER_GIFT_MODAL_ST
 
 /**
  * After the user dismisses {@link BetaTesterBorderGate}, we remember so we don’t
- * re-show on next launch. Device-local only (beta UX).
+ * re-show on next launch.
+ *
+ * **Cross-device:** This map is **device-local** (AsyncStorage). Another device
+ * won’t see it until you dismiss there — **unless** the server reports the beta
+ * border was already granted (`claim_pulse_beta_border.newly_granted = false`), in
+ * which case {@link BetaTesterBorderGate} skips the modal and seeds this flag so we
+ * don’t nag after every login on fresh installs.
  */
 export async function hasDismissedBetaTesterGiftModal(userId: string): Promise<boolean> {
   if (!userId) return true;

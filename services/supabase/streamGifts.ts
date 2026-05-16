@@ -57,7 +57,7 @@ export const streamGiftsService = {
   async send(input: SendGiftInput): Promise<LiveGiftEvent | null> {
     const { streamId, gift, quantity, idempotencyKey } = input;
 
-    const { data: giftId, error: rpcError } = await supabase.rpc('economy_send_live_stream_gift' as any, {
+    const { data: giftId, error: rpcError } = await supabase.rpc('economy_send_live_stream_gift', {
       p_stream_id: streamId,
       p_gift_id: gift.id,
       p_gift_name: gift.name,

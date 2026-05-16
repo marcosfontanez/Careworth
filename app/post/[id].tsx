@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { sharePostMenu } from '@/lib/share';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { postKeys, commentKeys, likedPostKeys, profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
-import { postsService } from '@/services/supabase/posts';
+import { looksLikeRlsPolicyDenial, postsService } from '@/services/supabase/posts';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { commentService } from '@/services/comment';
 import { useToast } from '@/components/ui/Toast';
@@ -228,6 +228,23 @@ export default function PostDetailScreen() {
     setImageAspect(null);
   }, [id]);
 
+  /**
+   * Comment-focused deep links (`focusComments=1`) — My Pulse linked clips,
+   * notification taps, etc. When the owner turned comments off, we still
+   * land on the post but explain why the composer did not auto-focus.
+   */
+  const focusCommentsLockedToastShown = useRef(false);
+  useEffect(() => {
+    focusCommentsLockedToastShown.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (!post || !shouldFocusComments || post.commentsDisabled !== true) return;
+    if (focusCommentsLockedToastShown.current) return;
+    focusCommentsLockedToastShown.current = true;
+    toast.show('Comments are off — you can still read the thread.', 'info');
+  }, [post, shouldFocusComments, toast]);
+
   const imageMediaHeight = useMemo(() => {
     if (imageAspect != null && imageAspect > 0) {
       return Math.min(SCREEN_W / imageAspect, POST_DETAIL_MEDIA_MAX_H);
@@ -374,6 +391,36 @@ export default function PostDetailScreen() {
     [authUser, post, queryClient, toast],
   );
 
+  const promptToggleComments = useCallback(() => {
+    if (!authUser?.id || !post) return;
+    const nextDisabled = !post.commentsDisabled;
+    const apply = async () => {
+      try {
+        const updated = await postsService.updateOwnPost(post.id, authUser.id, {
+          commentsDisabled: nextDisabled,
+        });
+        const key = postKeys.detail(post.id, authUser.id);
+        queryClient.setQueryData(key, updated);
+        await invalidatePostRelatedQueries(queryClient, { creatorId: authUser.id });
+        toast.show(nextDisabled ? 'Comments are off' : 'Comments are on', 'success');
+      } catch {
+        toast.show('Could not update comments', 'error');
+      }
+    };
+    if (nextDisabled) {
+      Alert.alert(
+        'Turn off comments?',
+        'New comments will be blocked. Existing comments stay visible.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Turn off', style: 'destructive', onPress: () => void apply() },
+        ],
+      );
+    } else {
+      void apply();
+    }
+  }, [authUser, post, queryClient, toast]);
+
   /**
    * Opens the owner's action menu (Edit + Delete + Cancel). We swap the
    * always-visible trash icon for a single ellipsis so the header
@@ -382,12 +429,17 @@ export default function PostDetailScreen() {
    * a one-line change.
    */
   const openOwnerMenu = useCallback(() => {
+    if (!post) return;
     Alert.alert('Your post', undefined, [
       { text: 'Edit caption', onPress: () => setEditCaptionOpen(true) },
+      {
+        text: post.commentsDisabled ? 'Turn comments on' : 'Turn comments off',
+        onPress: promptToggleComments,
+      },
       { text: 'Delete post', style: 'destructive', onPress: handleDelete },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [handleDelete]);
+  }, [handleDelete, promptToggleComments, post]);
 
   if (!id) {
     return (
@@ -638,11 +690,27 @@ export default function PostDetailScreen() {
             </View>
           )}
 
-          {/* Stat row */}
+          {/* Stat row — comments opens full thread route (parity with feed / Saved). */}
           <View style={styles.statsRow}>
             <Text style={styles.statText}>{formatCount(post.likeCount)} likes</Text>
             <View style={styles.statDot} />
-            <Text style={styles.statText}>{formatCount(post.commentCount)} comments</Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (post.commentsDisabled) {
+                  toast.show('Comments are off — you can still read the thread.', 'info');
+                }
+                router.push(`/comments/${post.id}` as never);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                post.commentsDisabled
+                  ? 'View comments. New comments are turned off.'
+                  : 'Open comments'
+              }
+            >
+              <Text style={styles.statText}>{formatCount(post.commentCount)} comments</Text>
+            </TouchableOpacity>
             <View style={styles.statDot} />
             <Text style={styles.statText}>{formatCount(post.shareCount)} shares</Text>
           </View>
@@ -722,7 +790,8 @@ export default function PostDetailScreen() {
           authUserId={authUser?.id}
           authorIsAnonymous={maskIdentity}
           onComposerFocus={scrollComposerIntoView}
-          autoFocusComposer={shouldFocusComments}
+          autoFocusComposer={shouldFocusComments && !post.commentsDisabled}
+          commentsDisabled={post.commentsDisabled === true}
         />
 
         {isOwnPost ? (
@@ -811,6 +880,7 @@ function CommentsCard({
   authorIsAnonymous,
   onComposerFocus,
   autoFocusComposer = false,
+  commentsDisabled = false,
 }: {
   postId: string;
   comments: Comment[];
@@ -832,6 +902,8 @@ function CommentsCard({
   onComposerFocus?: () => void;
   /** Opened from circle wall comment icon — scroll to composer and focus once. */
   autoFocusComposer?: boolean;
+  /** When true, no new comments/replies (existing thread stays visible). */
+  commentsDisabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -957,6 +1029,7 @@ function CommentsCard({
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if ((!trimmed && !pendingAttach) || sending) return;
+    if (commentsDisabled) return;
     if (!authUserId) {
       Alert.alert('Sign in required', 'Log in to post a comment.');
       return;
@@ -1000,12 +1073,20 @@ function CommentsCard({
         queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(postId) }),
         queryClient.invalidateQueries({ queryKey: postKeys.byId(postId) }),
       ]);
-    } catch {
+    } catch (e: unknown) {
       try {
         if (pendingAttach) {
           toast.show('Photo comments need a connection. Try again when you’re online.', 'error');
           setSending(false);
           return;
+        }
+        if (looksLikeRlsPolicyDenial(e)) {
+          const disabled = await postsService.getCommentsDisabledSnapshot(postId);
+          if (disabled === true) {
+            toast.show('Comments were turned off — your comment wasn’t saved.', 'info');
+            setSending(false);
+            return;
+          }
         }
         await enqueueAction({
           type: 'create_comment',
@@ -1024,7 +1105,7 @@ function CommentsCard({
       }
     }
     setSending(false);
-  }, [text, sending, postId, replyTo, authUserId, queryClient, toast, pendingAttach]);
+  }, [text, sending, postId, replyTo, authUserId, queryClient, toast, pendingAttach, commentsDisabled]);
 
   const handleReplyTo = useCallback(
     (id: string, name: string) => {
@@ -1041,9 +1122,18 @@ function CommentsCard({
         <Text style={styles.commentsCount}>{formatCount(comments.length)}</Text>
       </View>
 
+      {commentsDisabled ? (
+        <View style={styles.commentsLockedBanner}>
+          <Ionicons name="chatbox-outline" size={18} color={colors.dark.textMuted} />
+          <Text style={styles.commentsLockedText}>Comments are turned off for this post.</Text>
+        </View>
+      ) : null}
+
       {comments.length === 0 ? (
         <Text style={styles.commentsEmpty}>
-          Be the first to share your thoughts on this post.
+          {commentsDisabled
+            ? 'No comments yet — new ones are disabled.'
+            : 'Be the first to share your thoughts on this post.'}
         </Text>
       ) : (
         <View style={{ marginTop: 4 }}>
@@ -1057,6 +1147,7 @@ function CommentsCard({
               onReply={handleReplyTo}
               currentUserId={authUserId}
               canSeeOwnership={!authorIsAnonymous}
+              commentsLocked={commentsDisabled}
               onDelete={handleDelete}
               onEdit={handleEdit}
               onReport={(cid) => setReportCommentId(cid)}
@@ -1066,7 +1157,7 @@ function CommentsCard({
       )}
 
       {/* Reply context strip — slim, dismissible, only when replying. */}
-      {replyTo && (
+      {!commentsDisabled && replyTo && (
         <View style={[styles.replyStrip, { backgroundColor: `${accent}14`, borderColor: `${accent}55` }]}>
           <Text style={[styles.replyStripText, { color: accent }]} numberOfLines={1}>
             Replying to {replyTo.name}
@@ -1078,6 +1169,7 @@ function CommentsCard({
       )}
 
       {/* Inline composer — same accent card chrome as Circle create/replies. */}
+      {!commentsDisabled ? (
       <AccentComposerFrame
         accentColor={accent}
         allowOverflow
@@ -1156,6 +1248,7 @@ function CommentsCard({
           </TouchableOpacity>
         </View>
       </AccentComposerFrame>
+      ) : null}
       <ReportModal
         visible={!!reportCommentId}
         onClose={() => setReportCommentId(null)}
@@ -1181,6 +1274,7 @@ function CommentNode({
   onReply,
   currentUserId,
   canSeeOwnership,
+  commentsLocked = false,
   onDelete,
   onEdit,
   onReport,
@@ -1199,6 +1293,8 @@ function CommentNode({
    * (only they would see the menu).
    */
   canSeeOwnership: boolean;
+  /** Parent post has comments disabled — hide Reply affordances. */
+  commentsLocked?: boolean;
   onDelete: (commentId: string) => void;
   /**
    * Author-only edit hook wired by the parent. Rejected promises surface
@@ -1424,7 +1520,7 @@ function CommentNode({
               onPick={onReactionPick}
             />
             <View style={styles.commentActionRow}>
-              {depth === 0 && (
+              {depth === 0 && !commentsLocked ? (
                 <TouchableOpacity
                   onPress={() => onReply(comment.id, displayName)}
                   activeOpacity={0.7}
@@ -1432,7 +1528,7 @@ function CommentNode({
                 >
                   <Text style={styles.commentReplyText}>Reply</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
           </View>
         ) : null}
@@ -1468,6 +1564,7 @@ function CommentNode({
                 onReply={onReply}
                 currentUserId={currentUserId}
                 canSeeOwnership={canSeeOwnership}
+                commentsLocked={commentsLocked}
                 onDelete={onDelete}
                 onEdit={onEdit}
                 onReport={onReport}
@@ -1685,6 +1782,25 @@ const styles = StyleSheet.create({
   },
   commentsTitle: { fontSize: 14, fontWeight: '800', color: colors.dark.text, letterSpacing: -0.2 },
   commentsCount: { fontSize: 12, fontWeight: '700', color: colors.dark.textMuted },
+  commentsLockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(12,18,32,0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+    marginBottom: 8,
+  },
+  commentsLockedText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+    lineHeight: 18,
+  },
   commentsEmpty: {
     fontSize: 13,
     color: colors.dark.textMuted,

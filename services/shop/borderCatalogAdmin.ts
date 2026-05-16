@@ -7,7 +7,7 @@ export type BorderCatalogAdminBorder = ShopItemRow;
 export const borderCatalogAdminService = {
   async listCollections(): Promise<BorderCollectionRow[]> {
     const { data, error } = await supabase
-      .from('border_collections' as any)
+      .from('border_collections')
       .select('*')
       .order('season_code', { ascending: false, nullsFirst: false });
     if (error) throw error;
@@ -16,7 +16,7 @@ export const borderCatalogAdminService = {
 
   async listBorderItems(): Promise<ShopItemRow[]> {
     const { data, error } = await supabase
-      .from('shop_items' as any)
+      .from('shop_items')
       .select('*')
       .eq('type', 'border')
       .order('sort_order', { ascending: true });

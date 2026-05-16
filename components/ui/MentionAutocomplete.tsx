@@ -26,6 +26,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { profilesService } from '@/services/supabase/profiles';
+import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius, layout, shadows, spacing } from '@/theme';
 import { profileHandleDisplay } from '@/utils/profileHandle';
 import type { UserProfile } from '@/types';
@@ -89,6 +90,7 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
     },
     ref,
   ) {
+    const showToast = useToast((s) => s.show);
     const inputRef = useRef<TextInput | null>(null);
     const [selection, setSelection] = useState<{ start: number; end: number }>({
       start: value.length,
@@ -186,8 +188,12 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
               return next;
             });
           }
-        } catch {
-          if (!cancelled) setSuggestions([]);
+        } catch (e) {
+          if (!cancelled) {
+            setSuggestions([]);
+            if (__DEV__) console.warn('[MentionAutocomplete] search failed', e);
+            showToast('Could not load @mentions — try again.', 'info');
+          }
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -196,7 +202,7 @@ export const MentionAutocomplete = forwardRef<MentionRef, Props>(
         cancelled = true;
         clearTimeout(t);
       };
-    }, [activeFragment, maxSuggestions]);
+    }, [activeFragment, maxSuggestions, showToast]);
 
     const handleSelectionChange = useCallback(
       (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {

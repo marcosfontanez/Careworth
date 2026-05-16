@@ -26,6 +26,7 @@ export default function CreateConfessionScreen() {
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
   const [phiAck, setPhiAck] = useState(false);
+  const [commentsOn, setCommentsOn] = useState(true);
   const MAX_CHARS = 2000;
 
   const phiFindings = useMemo(() => scanForPhi(content), [content]);
@@ -60,6 +61,7 @@ export default function CreateConfessionScreen() {
         privacy_mode: 'alias',
         communities: ['shift-confessions'],
         feed_type_eligible: ['forYou'],
+        comments_disabled: !commentsOn || undefined,
       });
 
       analytics.track('post_created', { type: 'confession' });
@@ -126,6 +128,23 @@ export default function CreateConfessionScreen() {
 
           <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
 
+          <View style={styles.optionsRow}>
+            <TouchableOpacity
+              style={[styles.optionChip, !commentsOn && styles.optionChipActive]}
+              activeOpacity={0.7}
+              onPress={() => setCommentsOn(!commentsOn)}
+            >
+              <Ionicons
+                name={commentsOn ? 'chatbubble-outline' : 'chatbubble-ellipses-outline'}
+                size={18}
+                color={commentsOn ? colors.dark.textSecondary : '#EF4444'}
+              />
+              <Text style={[styles.optionText, !commentsOn && { color: '#EF4444' }]}>
+                {commentsOn ? 'Comments On' : 'Comments Off'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.footer}>
             <Ionicons name="shield-checkmark" size={iconSize.sm} color={colors.form.iconMuted} />
             <Text style={styles.footerText}>
@@ -154,6 +173,20 @@ const styles = StyleSheet.create({
   postBtn: { ...typography.button, fontSize: 15, fontWeight: '800', color: colors.primary.gold },
   postBtnDisabled: { opacity: 0.35 },
   content: { padding: layout.screenPadding },
+  optionsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  optionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.form.glassSurface,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.form.glassBorderInner,
+  },
+  optionText: { fontSize: 13, fontWeight: '600', color: colors.form.subtitle },
+  optionChipActive: { borderColor: colors.primary.gold },
   anonBadge: {
     flexDirection: 'row',
     alignItems: 'center',

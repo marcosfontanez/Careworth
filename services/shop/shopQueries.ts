@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { rpcEconomyCreateOrGetWallets } from '@/services/shop/economyRpc';
 import type {
   ShopItemRow,
   UserInventoryRow,
@@ -44,7 +45,7 @@ export const shopQueriesService = {
     const results = await Promise.all(
       types.map((type) =>
         supabase
-          .from('shop_items' as any)
+          .from('shop_items')
           .select('*')
           .eq('is_active', true)
           .eq('type', type)
@@ -80,29 +81,26 @@ export const shopQueriesService = {
   },
 
   /**
-   * Borders that were once available but can no longer be purchased — powers the
-   * Pulse Shop "Retired" drawer so people can browse what they missed. Captures any
-   * of the four retired signals the catalog uses:
-   *   - `is_active = false`               (admin pulled the row)
-   *   - `expires_at <= now`               (campaign window closed)
-   *   - `is_retired = true`               (explicit flag)
-   *   - `availability_status = 'retired'` (taxonomy enum)
+   * Pulse Shop "Retired" chip — browse archive of borders that are no longer sold.
    *
-   * Excluded by design: monthly Pulse leaderboard prize borders (gold/silver/
-   * bronze podium frames) and one-off reward grants (beta tester etc.). These
-   * rotate every month and would clutter the drawer; users can still see them
-   * in their personal Border Vault under the Earned filter. The drawer is for
-   * borders that were *available to acquire* in the past — holiday drops,
-   * charity drops, premium / featured purchases, advertiser-sponsored drops.
+   * **Currently disabled:** the broad DB query also pulled leaderboard / earned-only
+   * frames that aren’t “retired shop drops.” Until we curate a dedicated signal (or
+   * query) for real retired catalog items, this returns an empty list so the Retired
+   * UI stays available but shows nothing.
    *
-   * Limited to a recent slice so this cheap drawer never balloons. The same row
-   * that's already in the active catalog (e.g. `is_retired=true` + still active by
-   * mistake) is filtered out client-side as a defensive guard against duplicates.
+   * When re-enabled, the query captures retired signals:
+   * `is_active = false`, `expires_at <= now`, `is_retired`, `availability_status = retired`,
+   * with client-side filters to exclude leaderboard / beta / earned-only clutter.
    */
   async getRetiredBorders(limit = 80): Promise<ShopItemRow[]> {
+    const RETIRED_SHOP_DRAWER_QUERY_ENABLED = false;
+    if (!RETIRED_SHOP_DRAWER_QUERY_ENABLED) {
+      return [];
+    }
+
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
-      .from('shop_items' as any)
+      .from('shop_items')
       .select('*')
       .eq('type', 'border')
       .or(
@@ -148,7 +146,7 @@ export const shopQueriesService = {
 
   async getSparkWallet(userId: string): Promise<SparkWalletRow | null> {
     const { data, error } = await supabase
-      .from('spark_wallets' as any)
+      .from('spark_wallets')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
@@ -158,7 +156,7 @@ export const shopQueriesService = {
 
   async getDiamondWallet(userId: string): Promise<DiamondWalletRow | null> {
     const { data, error } = await supabase
-      .from('diamond_wallets' as any)
+      .from('diamond_wallets')
       .select('*')
       .eq('creator_id', userId)
       .maybeSingle();
@@ -168,7 +166,7 @@ export const shopQueriesService = {
 
   async getUserInventory(userId: string): Promise<UserInventoryRow[]> {
     const { data, error } = await supabase
-      .from('user_inventory' as any)
+      .from('user_inventory')
       .select('*')
       .eq('user_id', userId)
       .order('acquired_at', { ascending: false });
@@ -213,7 +211,7 @@ export const shopQueriesService = {
     for (let i = 0; i < unique.length; i += chunkSize) {
       const chunk = unique.slice(i, i + chunkSize);
       const { data, error } = await supabase
-        .from('shop_items' as any)
+        .from('shop_items')
         .select('*')
         .in('id', chunk);
       if (error) throw error;
@@ -258,7 +256,7 @@ export const shopQueriesService = {
 
   async getPurchaseReceipts(userId: string, limit = 30): Promise<PurchaseReceiptRow[]> {
     const { data, error } = await supabase
-      .from('purchase_receipts' as any)
+      .from('purchase_receipts')
       .select('id, user_id, platform, store_product_id, external_transaction_id, shop_item_id, validation_status, processed_at, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -268,9 +266,7 @@ export const shopQueriesService = {
   },
 
   async ensureWallets(userId: string): Promise<void> {
-    const { error } = await supabase.rpc('economy_create_or_get_wallets' as any, {
-      p_user_id: userId,
-    });
+    const { error } = await rpcEconomyCreateOrGetWallets(userId);
     if (error) throw error;
   },
 };

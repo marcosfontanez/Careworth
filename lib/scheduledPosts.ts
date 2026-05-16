@@ -6,7 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 
-export type ScheduledStatus = 'live' | 'scheduled' | 'sending' | 'failed';
+export type ScheduledStatus = 'live' | 'scheduled' | 'sending' | 'failed' | 'cancelled';
 
 export interface ScheduledPostRow {
   id: string;
@@ -50,12 +50,12 @@ export async function listScheduledPosts(userId: string): Promise<ScheduledPostR
   }
 }
 
-/** Cancel a queued post — marks `failed` and clears time so it is not auto-published or shown in feeds. */
+/** Cancel a queued post — marks `cancelled` and clears time so it is not auto-published or listed as queued. */
 export async function cancelScheduledPost(postId: string): Promise<boolean> {
   try {
     const { error } = await supabase
       .from('posts')
-      .update({ scheduled_at: null, scheduled_status: 'failed' })
+      .update({ scheduled_at: null, scheduled_status: 'cancelled' })
       .eq('id', postId);
     return !error;
   } catch {

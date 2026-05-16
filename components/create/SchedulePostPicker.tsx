@@ -114,9 +114,9 @@ export function SchedulePostPicker({ scheduledAt, onChange }: Props) {
               </TouchableOpacity>
             ) : null}
             <Text style={styles.helper}>
-              Note: scheduled posts go out via the dispatcher. If you don&apos;t see it post on time,
-              the dispatcher edge function may not be deployed yet — your post is saved as a
-              scheduled draft and will go live as soon as it runs.
+              Note: scheduled posts go live when the dispatch-scheduled edge function runs on a timer.
+              Production requires DISPATCH_SCHEDULED_SECRET and the matching x-cron-secret header on that job.
+              If nothing posts on time, your draft stays queued until the dispatcher runs — check deployment and cron configuration.
             </Text>
           </View>
         </View>

@@ -330,7 +330,7 @@ export function RecentMediaThumb({
       return (
         <View style={[style, styles.videoTile]}>
           <WebVideoGridPoster publicUrl={v} />
-          <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
+          <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );
     }
@@ -349,14 +349,14 @@ export function RecentMediaThumb({
             layoutSizeCss={hubTileCss}
             contentFit={hubImageContentFit}
           />
-          <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
+          <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );
     }
     return (
       <View style={[style, styles.videoTile]}>
         <PausedVideoFrame publicUrl={v} style={StyleSheet.absoluteFillObject} contentFit="contain" />
-        <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
+        <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
       </View>
     );
   }

@@ -177,6 +177,7 @@ export interface Database {
           cover_alt_url: string | null;
           mood_preset: string | null;
           video_overlay_text: string | null;
+          comments_disabled: boolean;
         };
         Insert: {
           id?: string;
@@ -210,9 +211,18 @@ export interface Database {
           cover_alt_url?: string | null;
           mood_preset?: string | null;
           video_overlay_text?: string | null;
+          comments_disabled?: boolean;
         };
         Update: Partial<Database['public']['Tables']['posts']['Insert']>;
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'posts_creator_id_fkey';
+            columns: ['creator_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       creator_media_jobs: {
         Row: {
@@ -1294,7 +1304,15 @@ export interface Database {
           reviewed_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['reports']['Insert']>;
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'reports_reporter_id_fkey';
+            columns: ['reporter_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
 
       sound_context_votes: {
@@ -1523,6 +1541,252 @@ export interface Database {
         Relationships: [];
       };
 
+      /** Economy / Pulse Shop — codegen refreshes preferred (`npm run db:types`). */
+      border_collections: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          collection_type: string;
+          season_code: string | null;
+          release_at: string | null;
+          expires_at: string | null;
+          is_retired: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string | null;
+          collection_type: string;
+          season_code?: string | null;
+          release_at?: string | null;
+          expires_at?: string | null;
+          is_retired?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['border_collections']['Insert']>;
+        Relationships: [];
+      };
+
+      border_gifts: {
+        Row: {
+          id: string;
+          shop_item_id: string;
+          sender_user_id: string;
+          recipient_user_id: string;
+          wallet_transaction_id: string | null;
+          status: string;
+          note: string | null;
+          delivered_at: string | null;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          shop_item_id: string;
+          sender_user_id: string;
+          recipient_user_id: string;
+          wallet_transaction_id?: string | null;
+          status?: string;
+          note?: string | null;
+          delivered_at?: string | null;
+          accepted_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['border_gifts']['Insert']>;
+        Relationships: [];
+      };
+
+      diamond_wallets: {
+        Row: {
+          creator_id: string;
+          diamonds_pending: number;
+          diamonds_available: number;
+          diamonds_paid_out: number;
+          total_diamonds_earned: number;
+          updated_at: string;
+        };
+        Insert: {
+          creator_id: string;
+          diamonds_pending?: number;
+          diamonds_available?: number;
+          diamonds_paid_out?: number;
+          total_diamonds_earned?: number;
+        };
+        Update: Partial<Database['public']['Tables']['diamond_wallets']['Insert']>;
+        Relationships: [];
+      };
+
+      purchase_receipts: {
+        Row: {
+          id: string;
+          user_id: string;
+          platform: string;
+          store_product_id: string;
+          external_transaction_id: string;
+          shop_item_id: string | null;
+          receipt_payload: Json;
+          validation_status: string;
+          processed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          platform: string;
+          store_product_id: string;
+          external_transaction_id: string;
+          shop_item_id?: string | null;
+          receipt_payload?: Json;
+          validation_status?: string;
+          processed_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['purchase_receipts']['Insert']>;
+        Relationships: [];
+      };
+
+      shop_items: {
+        Row: {
+          id: string;
+          slug: string;
+          type: string;
+          category: string | null;
+          name: string;
+          description: string;
+          rarity: string | null;
+          image_url: string | null;
+          animation_url: string | null;
+          spark_price: number | null;
+          spark_amount: number | null;
+          real_money_display_price: string | null;
+          store_product_id_ios: string | null;
+          store_product_id_android: string | null;
+          is_active: boolean;
+          is_giftable: boolean;
+          is_limited: boolean;
+          inventory_count: number | null;
+          release_at: string | null;
+          expires_at: string | null;
+          sort_order: number;
+          gift_contexts: string[] | null;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+          collection_id: string | null;
+          rarity_tier: string | null;
+          source_type: string | null;
+          visual_tier: string | null;
+          availability_status: string | null;
+          unlock_method: string | null;
+          is_animated: boolean;
+          is_tradable: boolean;
+          is_shop_item: boolean;
+          is_earned_only: boolean;
+          price_type: string | null;
+          season_code: string | null;
+          rank_place: number | null;
+          is_retired: boolean;
+          prestige_score: number;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          type: string;
+          category?: string | null;
+          name: string;
+          description?: string;
+          rarity?: string | null;
+          image_url?: string | null;
+          animation_url?: string | null;
+          spark_price?: number | null;
+          spark_amount?: number | null;
+          real_money_display_price?: string | null;
+          store_product_id_ios?: string | null;
+          store_product_id_android?: string | null;
+          is_active?: boolean;
+          is_giftable?: boolean;
+          is_limited?: boolean;
+          inventory_count?: number | null;
+          release_at?: string | null;
+          expires_at?: string | null;
+          sort_order?: number;
+          gift_contexts?: string[] | null;
+          metadata?: Json;
+          collection_id?: string | null;
+          rarity_tier?: string | null;
+          source_type?: string | null;
+          visual_tier?: string | null;
+          availability_status?: string | null;
+          unlock_method?: string | null;
+          is_animated?: boolean;
+          is_tradable?: boolean;
+          is_shop_item?: boolean;
+          is_earned_only?: boolean;
+          price_type?: string | null;
+          season_code?: string | null;
+          rank_place?: number | null;
+          is_retired?: boolean;
+          prestige_score?: number;
+        };
+        Update: Partial<Database['public']['Tables']['shop_items']['Insert']>;
+        Relationships: [];
+      };
+
+      spark_wallets: {
+        Row: {
+          user_id: string;
+          paid_sparks_balance: number;
+          promo_sparks_balance: number;
+          total_sparks_spent: number;
+          total_sparks_purchased: number;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          paid_sparks_balance?: number;
+          promo_sparks_balance?: number;
+          total_sparks_spent?: number;
+          total_sparks_purchased?: number;
+        };
+        Update: Partial<Database['public']['Tables']['spark_wallets']['Insert']>;
+        Relationships: [];
+      };
+
+      user_inventory: {
+        Row: {
+          id: string;
+          user_id: string;
+          shop_item_id: string;
+          item_kind: string;
+          acquisition_source: string;
+          acquisition_txn_id: string | null;
+          gifted_by_user_id: string | null;
+          gifted_to_user_id: string | null;
+          is_equipped: boolean;
+          is_transferable: boolean;
+          acquired_at: string;
+          metadata: Json;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          shop_item_id: string;
+          item_kind?: string;
+          acquisition_source: string;
+          acquisition_txn_id?: string | null;
+          gifted_by_user_id?: string | null;
+          gifted_to_user_id?: string | null;
+          is_equipped?: boolean;
+          is_transferable?: boolean;
+          acquired_at?: string;
+          metadata?: Json;
+        };
+        Update: Partial<Database['public']['Tables']['user_inventory']['Insert']>;
+        Relationships: [];
+      };
+
       user_subscriptions: {
         Row: {
           id: string;
@@ -1555,6 +1819,50 @@ export interface Database {
       get_top_events: {
         Args: { days_back?: number };
         Returns: { name: string; count: number }[];
+      };
+      get_daily_active_users: {
+        Args: { days_back?: number };
+        Returns: { day: string; active_users: number }[];
+      };
+      admin_profile_set_is_verified: {
+        Args: { p_target_user_id: string; p_is_verified: boolean };
+        Returns: undefined;
+      };
+      admin_profile_set_role_admin: {
+        Args: { p_target_user_id: string; p_role_admin: boolean };
+        Returns: undefined;
+      };
+      admin_post_set_privacy_mode: {
+        Args: { p_post_id: string; p_privacy_mode: string };
+        Returns: undefined;
+      };
+      economy_create_or_get_wallets: {
+        Args: { p_user_id: string };
+        Returns: undefined;
+      };
+      economy_claim_free_shop_border: {
+        Args: { p_shop_item_id: string };
+        Returns: Json;
+      };
+      economy_equip_border: {
+        Args: { p_inventory_item_id: string };
+        Returns: undefined;
+      };
+      economy_accept_pending_border_gift: {
+        Args: { p_border_gift_id: string };
+        Returns: Json;
+      };
+      economy_send_live_stream_gift: {
+        Args: {
+          p_stream_id: string;
+          p_gift_id: string;
+          p_gift_name: string;
+          p_gift_emoji: string;
+          p_unit_spark_cost: number;
+          p_quantity: number;
+          p_idempotency_key: string;
+        };
+        Returns: string;
       };
       get_for_you_post_ids: {
         Args: { viewer_uuid: string; result_limit?: number };

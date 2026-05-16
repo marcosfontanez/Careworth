@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/Toast';
 import { saveDraft, loadDraft, clearDraft, type DraftData } from '@/lib/drafts';
 import { subscribeComposerDraftFlush } from '@/lib/draftAppStateFlush';
 import type { MediaAsset } from '@/lib/media';
+import { analytics } from '@/lib/analytics';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { communityKeys } from '@/lib/queryKeys';
@@ -433,7 +434,8 @@ export default function CreateImageScreen() {
 
       const citeBlock =
         educationOn && citations.length > 0 ? buildSourcesBlock(citations.slice(0, 5)) : '';
-      let composed = [head, over, cap].filter(Boolean).join('\n\n');
+      /** On-photo sticker uses `video_overlay_text` in feed — keep out of caption (WYSIWYG). */
+      let composed = [head, cap].filter(Boolean).join('\n\n');
       if (beforeAfter && images.length >= 2) {
         composed = [composed, '📸 Before & After (swipe both in the carousel)'].filter(Boolean).join('\n\n');
       }
@@ -476,6 +478,7 @@ export default function CreateImageScreen() {
         type: mediaUrl ? 'image' : 'text',
         caption: composed,
         media_url: mediaUrl,
+        video_overlay_text: over ? over.slice(0, 80) : undefined,
         additional_media: additionalUrls.length ? additionalUrls : undefined,
         hashtags: tags.length > 0 ? tags : undefined,
         communities: communityId ? [communityId] : undefined,
@@ -497,9 +500,11 @@ export default function CreateImageScreen() {
         scheduled_at: scheduleIso,
         scheduled_status: scheduleIso ? 'scheduled' : 'live',
         mood_preset: moodId ?? undefined,
+        comments_disabled: !commentsOn || undefined,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      analytics.track('post_created', { type: mediaUrl ? 'image' : 'text' });
       clearDraft('image');
       await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
       if (communityId) {
@@ -527,7 +532,7 @@ export default function CreateImageScreen() {
     >
       <SuccessAnimation
         visible={showSuccess}
-        message="Posted!"
+        message={scheduledAt ? 'Scheduled!' : 'Posted!'}
         onComplete={() => {
           if (params.communitySlug) {
             router.replace(`/communities/${params.communitySlug}`);

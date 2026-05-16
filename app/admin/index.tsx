@@ -70,6 +70,15 @@ interface DailyMetric {
 
 type ReportFilter = 'all' | 'pending' | 'action_taken' | 'dismissed';
 
+function rpcToastMessage(message: string): string {
+  const m = message.toLowerCase();
+  if (/not_allowed|42501/.test(m)) return 'Not allowed (staff session required).';
+  if (/user_not_found/.test(m)) return 'User not found.';
+  if (/post_not_found/.test(m)) return 'Post not found.';
+  if (/invalid_privacy_mode/.test(m)) return 'Invalid privacy mode.';
+  return message || 'Request failed';
+}
+
 export default function AdminPanel() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -136,39 +145,45 @@ export default function AdminPanel() {
           .order('created_at', { ascending: false })
           .limit(100);
         if (reportFilter !== 'all') query = query.eq('status', reportFilter);
-        const { data } = await query;
-
-        const enriched = await Promise.all(
-          (data ?? []).map(async (r: any) => {
-            let target_content = null;
-            try {
-              if (r.target_type === 'post') {
-                const { data: post } = await supabase
-                  .from('posts')
-                  .select('caption, media_url, type')
-                  .eq('id', r.target_id)
-                  .single();
-                target_content = post;
-              } else if (r.target_type === 'comment') {
-                const { data: comment } = await supabase
-                  .from('comments')
-                  .select('content')
-                  .eq('id', r.target_id)
-                  .single();
-                target_content = comment;
-              } else if (r.target_type === 'profile') {
-                const { data: profile } = await supabase
-                  .from('profiles')
-                  .select('display_name, avatar_url')
-                  .eq('id', r.target_id)
-                  .single();
-                target_content = profile;
+        const { data, error: repErr } = await query;
+        if (repErr) {
+          toast.show(repErr.message ?? 'Could not load reports', 'error');
+          setReports([]);
+        } else {
+          const enriched = await Promise.all(
+            (data ?? []).map(async (r: Report & Record<string, unknown>) => {
+              let target_content = null;
+              try {
+                if (r.target_type === 'post') {
+                  const { data: post } = await supabase
+                    .from('posts')
+                    .select('caption, media_url, type')
+                    .eq('id', r.target_id)
+                    .single();
+                  target_content = post;
+                } else if (r.target_type === 'comment') {
+                  const { data: comment } = await supabase
+                    .from('comments')
+                    .select('content')
+                    .eq('id', r.target_id)
+                    .single();
+                  target_content = comment;
+                } else if (r.target_type === 'profile') {
+                  const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('display_name, avatar_url')
+                    .eq('id', r.target_id)
+                    .single();
+                  target_content = profile;
+                }
+              } catch {
+                /* skip enrichment failures */
               }
-            } catch {}
-            return { ...r, target_content };
-          })
-        );
-        setReports(enriched);
+              return { ...r, target_content };
+            })
+          );
+          setReports(enriched);
+        }
       } else if (tab === 'users') {
         let query = supabase
           .from('profiles')
@@ -178,8 +193,13 @@ export default function AdminPanel() {
         if (userSearch.trim()) {
           query = query.ilike('display_name', `%${userSearch.trim()}%`);
         }
-        const { data } = await query;
-        setUsers((data as any) ?? []);
+        const { data, error: usersErr } = await query;
+        if (usersErr) {
+          toast.show(usersErr.message ?? 'Could not load users', 'error');
+          setUsers([]);
+        } else {
+          setUsers((data as UserRow[]) ?? []);
+        }
       } else if (tab === 'content') {
         let query = supabase
           .from('posts')
@@ -189,8 +209,13 @@ export default function AdminPanel() {
         if (contentSearch.trim()) {
           query = query.ilike('caption', `%${contentSearch.trim()}%`);
         }
-        const { data } = await query;
-        setContent((data as any) ?? []);
+        const { data, error: postsErr } = await query;
+        if (postsErr) {
+          toast.show(postsErr.message ?? 'Could not load posts', 'error');
+          setContent([]);
+        } else {
+          setContent((data as ContentRow[]) ?? []);
+        }
       } else if (tab === 'stats') {
         const [usersRes, postsRes, reportsRes, communitiesRes, pendingRes, bansRes] = await Promise.all([
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
@@ -200,6 +225,17 @@ export default function AdminPanel() {
           supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
           supabase.from('user_bans').select('id', { count: 'exact', head: true }),
         ]);
+
+        const statsErr =
+          usersRes.error ??
+          postsRes.error ??
+          reportsRes.error ??
+          communitiesRes.error ??
+          pendingRes.error ??
+          bansRes.error;
+        if (statsErr) {
+          toast.show(statsErr.message ?? 'Could not load stats', 'error');
+        }
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -215,8 +251,8 @@ export default function AdminPanel() {
           communities: communitiesRes.count ?? 0,
           pendingReports: pendingRes.count ?? 0,
           activeBans: bansRes.count ?? 0,
-          newUsersToday: newUsersRes.count ?? 0,
-          postsToday: postsTodayRes.count ?? 0,
+          newUsersToday: newUsersRes.error ? 0 : (newUsersRes.count ?? 0),
+          postsToday: postsTodayRes.error ? 0 : (postsTodayRes.count ?? 0),
         });
 
         // Last 7 days user signups
@@ -236,11 +272,12 @@ export default function AdminPanel() {
         }
         setDailyUsers(days);
 
-        try {
-          const { data: events } = await supabase.rpc('get_top_events', { days_back: 7 });
-          setTopEvents(events ?? []);
-        } catch {
+        const { data: events, error: evErr } = await supabase.rpc('get_top_events', { days_back: 7 });
+        if (evErr) {
           setTopEvents([]);
+          toast.show(rpcToastMessage(evErr.message ?? 'Analytics unavailable'), 'error');
+        } else {
+          setTopEvents(events ?? []);
         }
       } else if (tab === 'revenue') {
         const [campaigns, subs, tipStats] = await Promise.all([
@@ -276,22 +313,29 @@ export default function AdminPanel() {
 
   // ─── Report Actions ───
   const handleReportAction = async (report: Report, action: 'action_taken' | 'dismissed' | 'reviewed') => {
-    try {
-      await supabase
-        .from('reports')
-        .update({ status: action, reviewed_by: user?.id, reviewed_at: new Date().toISOString() })
-        .eq('id', report.id);
-
-      if (action === 'action_taken' && report.target_type === 'post') {
-        await supabase.from('posts').update({ privacy_mode: 'private' }).eq('id', report.target_id);
-      }
-
-      toast.show(`Report ${action === 'action_taken' ? 'actioned' : action === 'dismissed' ? 'dismissed' : 'reviewed'}`, 'success');
-      setSelectedReport(null);
-      loadData();
-    } catch {
-      toast.show('Failed to update report', 'error');
+    const repUpdate = await supabase
+      .from('reports')
+      .update({ status: action, reviewed_by: user?.id ?? null, reviewed_at: new Date().toISOString() })
+      .eq('id', report.id);
+    if (repUpdate.error) {
+      toast.show(repUpdate.error.message ?? 'Could not update report', 'error');
+      return;
     }
+
+    if (action === 'action_taken' && report.target_type === 'post') {
+      const hide = await supabase.rpc('admin_post_set_privacy_mode', {
+        p_post_id: report.target_id,
+        p_privacy_mode: 'private',
+      });
+      if (hide.error) {
+        toast.show(rpcToastMessage(hide.error.message ?? 'Could not hide post'), 'error');
+        return;
+      }
+    }
+
+    toast.show(`Report ${action === 'action_taken' ? 'actioned' : action === 'dismissed' ? 'dismissed' : 'reviewed'}`, 'success');
+    setSelectedReport(null);
+    void loadData();
   };
 
   const handleDeleteContent = async (report: Report) => {
@@ -299,19 +343,29 @@ export default function AdminPanel() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            if (report.target_type === 'post') {
-              await supabase.from('posts').delete().eq('id', report.target_id);
-            } else if (report.target_type === 'comment') {
-              await supabase.from('comments').delete().eq('id', report.target_id);
+          if (report.target_type === 'post') {
+            const del = await supabase.from('posts').delete().eq('id', report.target_id);
+            if (del.error) {
+              toast.show(del.error.message ?? 'Could not delete post', 'error');
+              return;
             }
-            await supabase.from('reports')
-              .update({ status: 'action_taken', reviewed_by: user?.id, reviewed_at: new Date().toISOString() })
-              .eq('id', report.id);
-            toast.show('Content deleted', 'success');
-            setSelectedReport(null);
-            loadData();
-          } catch { toast.show('Failed to delete content', 'error'); }
+          } else if (report.target_type === 'comment') {
+            const del = await supabase.from('comments').delete().eq('id', report.target_id);
+            if (del.error) {
+              toast.show(del.error.message ?? 'Could not delete comment', 'error');
+              return;
+            }
+          }
+          const repUpdate = await supabase.from('reports')
+            .update({ status: 'action_taken', reviewed_by: user?.id ?? null, reviewed_at: new Date().toISOString() })
+            .eq('id', report.id);
+          if (repUpdate.error) {
+            toast.show(repUpdate.error.message ?? 'Content deleted but report status not updated', 'error');
+            return;
+          }
+          toast.show('Content deleted', 'success');
+          setSelectedReport(null);
+          void loadData();
         },
       },
     ]);
@@ -367,16 +421,18 @@ export default function AdminPanel() {
       toast.show('Sign in as admin to ban users', 'error');
       return;
     }
-    try {
-      await supabase.from('user_bans').insert({
-        user_id: targetId,
-        banned_by: user.id,
-        reason,
-      });
-      toast.show('User banned', 'success');
-      setSelectedUser(null);
-      loadData();
-    } catch { toast.show('Failed to ban user', 'error'); }
+    const { error } = await supabase.from('user_bans').insert({
+      user_id: targetId,
+      banned_by: user.id,
+      reason,
+    });
+    if (error) {
+      toast.show(error.message ?? 'Failed to ban user', 'error');
+      return;
+    }
+    toast.show('User banned', 'success');
+    setSelectedUser(null);
+    void loadData();
   };
 
   const handleToggleAdmin = async (userRow: UserRow) => {
@@ -387,12 +443,20 @@ export default function AdminPanel() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm', onPress: async () => {
-            try {
-              await supabase.from('profiles').update({ role_admin: newVal }).eq('id', userRow.id);
+          text: 'Confirm', onPress: () => {
+            void (async () => {
+              const { error } = await supabase.rpc('admin_profile_set_role_admin', {
+                p_target_user_id: userRow.id,
+                p_role_admin: newVal,
+              });
+              if (error) {
+                toast.show(rpcToastMessage(error.message ?? 'Failed to update role'), 'error');
+                return;
+              }
               toast.show(`Admin ${newVal ? 'granted' : 'revoked'}`, 'success');
-              loadData();
-            } catch { toast.show('Failed to update role', 'error'); }
+              setSelectedUser(null);
+              void loadData();
+            })();
           },
         },
       ]
@@ -400,11 +464,18 @@ export default function AdminPanel() {
   };
 
   const handleToggleVerify = async (userRow: UserRow) => {
-    try {
-      await supabase.from('profiles').update({ is_verified: !userRow.is_verified }).eq('id', userRow.id);
-      toast.show(userRow.is_verified ? 'Verification removed' : 'User verified', 'success');
-      loadData();
-    } catch { toast.show('Failed to update verification', 'error'); }
+    const next = !userRow.is_verified;
+    const { error } = await supabase.rpc('admin_profile_set_is_verified', {
+      p_target_user_id: userRow.id,
+      p_is_verified: next,
+    });
+    if (error) {
+      toast.show(rpcToastMessage(error.message ?? 'Failed to update verification'), 'error');
+      return;
+    }
+    toast.show(next ? 'User verified' : 'Verification removed', 'success');
+    setSelectedUser(null);
+    void loadData();
   };
 
   // ─── Content Actions ───
@@ -413,11 +484,13 @@ export default function AdminPanel() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            await supabase.from('posts').delete().eq('id', post.id);
-            toast.show('Post deleted', 'success');
-            loadData();
-          } catch { toast.show('Failed to delete post', 'error'); }
+          const { error } = await supabase.from('posts').delete().eq('id', post.id);
+          if (error) {
+            toast.show(error.message ?? 'Failed to delete post', 'error');
+            return;
+          }
+          toast.show('Post deleted', 'success');
+          void loadData();
         },
       },
     ]);
@@ -425,11 +498,16 @@ export default function AdminPanel() {
 
   const handleHidePost = async (post: ContentRow) => {
     const newMode = post.privacy_mode === 'private' ? 'public' : 'private';
-    try {
-      await supabase.from('posts').update({ privacy_mode: newMode }).eq('id', post.id);
-      toast.show(newMode === 'private' ? 'Post hidden' : 'Post restored', 'success');
-      loadData();
-    } catch { toast.show('Failed to update post', 'error'); }
+    const { error } = await supabase.rpc('admin_post_set_privacy_mode', {
+      p_post_id: post.id,
+      p_privacy_mode: newMode,
+    });
+    if (error) {
+      toast.show(rpcToastMessage(error.message ?? 'Failed to update post'), 'error');
+      return;
+    }
+    toast.show(newMode === 'private' ? 'Post hidden' : 'Post restored', 'success');
+    void loadData();
   };
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -622,14 +700,14 @@ export default function AdminPanel() {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: u.is_verified ? colors.neutral.midGray : colors.primary.teal }]}
-                onPress={() => { handleToggleVerify(u); setSelectedUser(null); }}
+                onPress={() => { void handleToggleVerify(u); }}
               >
                 <Ionicons name={u.is_verified ? 'close-circle-outline' : 'checkmark-circle-outline'} size={16} color={colors.dark.text} />
                 <Text style={styles.modalBtnText}>{u.is_verified ? 'Unverify' : 'Verify'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: u.role_admin ? colors.status.warning : colors.primary.royal }]}
-                onPress={() => { handleToggleAdmin(u); setSelectedUser(null); }}
+                onPress={() => { handleToggleAdmin(u); }}
               >
                 <Ionicons name="shield-outline" size={16} color={colors.dark.text} />
                 <Text style={styles.modalBtnText}>{u.role_admin ? 'Remove Admin' : 'Make Admin'}</Text>
@@ -1070,7 +1148,10 @@ export default function AdminPanel() {
               </View>
 
               <View style={styles.featureFlagSection}>
-                <Text style={styles.sectionTitle}>Feature Flags</Text>
+                <Text style={styles.sectionTitle}>Feature flags (this device only)</Text>
+                <Text style={{ fontSize: 12, color: colors.dark.textMuted, marginBottom: 10, lineHeight: 16 }}>
+                  These switches only affect PulseVerse on this phone — they are not server-side controls.
+                </Text>
                 <FlagToggle label="Live streaming (tab + rooms)" flag="liveStreaming" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />

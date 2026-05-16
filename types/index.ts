@@ -1,4 +1,5 @@
 import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
+import type { BrandKit } from '@/lib/brandKit';
 
 export type Role =
   | ''
@@ -425,6 +426,8 @@ export interface CreatorSummary {
   city: string;
   state: string;
   isVerified: boolean;
+  /** From `profiles.brand_kit` when set — feed watermark / overlays. */
+  brandKit?: BrandKit;
   /** Denormalized Pulse Score v2 tier (see migration 059). */
   pulseTier?: string;
   pulseScoreCurrent?: number;
@@ -461,6 +464,8 @@ export interface Post {
   /** Per-emoji tallies when loaded (community wall uses full set). */
   reactionCounts?: PostReactionCounts;
   commentCount: number;
+  /** When true, new comments are blocked (see posts.comments_disabled). */
+  commentsDisabled?: boolean;
   shareCount: number;
   viewCount: number;
   saveCount: number;

@@ -35,6 +35,8 @@ interface Props {
   /** Required when `anonymousMode` — same id as parent post for stable names. */
   saltPostId?: string;
   onReply?: (commentId: string, authorName: string) => void;
+  /** Hide reply affordances (parent post has comments disabled). */
+  commentsLocked?: boolean;
   /** Open moderation report for someone else's comment. */
   onReport?: (commentId: string) => void;
 }
@@ -46,6 +48,7 @@ export function CommentItem({
   anonymousMode,
   saltPostId,
   onReply,
+  commentsLocked = false,
   onReport,
 }: Props) {
   const [showReplies, setShowReplies] = useState(depth === 0 && comment.replies.length > 0);
@@ -367,13 +370,15 @@ export function CommentItem({
               onPick={onReactionPick}
             />
             <View style={styles.replyRow}>
-              <TouchableOpacity
-                style={styles.replyBtn}
-                activeOpacity={0.7}
-                onPress={() => onReply?.(comment.id, displayName)}
-              >
-                <Text style={styles.replyText}>Reply</Text>
-              </TouchableOpacity>
+              {onReply && !commentsLocked ? (
+                <TouchableOpacity
+                  style={styles.replyBtn}
+                  activeOpacity={0.7}
+                  onPress={() => onReply(comment.id, displayName)}
+                >
+                  <Text style={styles.replyText}>Reply</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         ) : !editing ? (
@@ -396,7 +401,8 @@ export function CommentItem({
             accentColor={accentColor}
             anonymousMode={anonymousMode}
             saltPostId={saltPostId}
-            onReply={onReply}
+            onReply={commentsLocked ? undefined : onReply}
+            commentsLocked={commentsLocked}
             onReport={onReport}
           />
         ))}

@@ -108,7 +108,8 @@ export async function clearQueue(): Promise<void> {
  *     already-deleted row is also a no-op.
  *   - create_comment has no natural idempotency key, but since the user only
  *     ever lands here from a single failed network call we accept the small
- *     risk of a duplicate vs. losing the comment.
+ *     risk of a duplicate vs. losing the comment. Queued comments are dropped
+ *     (without endless retries) when the parent post has comments_disabled.
  */
 export function createOfflineExecutor() {
   const { supabase } = require('@/lib/supabase');
@@ -194,6 +195,21 @@ export function createOfflineExecutor() {
         return !error;
       }
       case 'create_comment': {
+        const postId = String(action.payload.postId ?? '');
+        const peekCommentsClosed = async (): Promise<boolean> => {
+          const { data } = await supabase
+            .from('posts')
+            .select('comments_disabled')
+            .eq('id', postId)
+            .maybeSingle();
+          return data?.comments_disabled === true;
+        };
+
+        if (await peekCommentsClosed()) {
+          if (__DEV__) console.warn('[offlineQueue] discard create_comment: comments_disabled');
+          return true;
+        }
+
         /**
          * Re-cap on replay. Any comment queued before the 300-char cap
          * shipped (or by a stale client that bypassed the input
@@ -214,7 +230,16 @@ export function createOfflineExecutor() {
             parent_id: action.payload.parentId ?? null,
             media_url: action.payload.mediaUrl ?? null,
           });
-        return !error;
+        if (!error) return true;
+
+        if (await peekCommentsClosed()) {
+          if (__DEV__) {
+            console.warn('[offlineQueue] discard create_comment after insert denial (comments off)');
+          }
+          return true;
+        }
+
+        return false;
       }
       case 'share_post': {
         /**

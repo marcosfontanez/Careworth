@@ -43,13 +43,16 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  backdropClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** Merged into `DialogOverlay` (e.g. darker scrim for image lightboxes). */
+  backdropClassName?: string
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={backdropClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

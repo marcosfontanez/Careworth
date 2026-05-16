@@ -3,11 +3,12 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
-import { colors, layout, spacing, typography } from '@/theme';
+import { borderRadius, colors, layout, spacing, typography } from '@/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { postsService } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -27,6 +28,7 @@ export default function CreateTextScreen() {
   const [posting, setPosting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [phiAck, setPhiAck] = useState(false);
+  const [commentsOn, setCommentsOn] = useState(true);
   const toast = useToast();
 
   const phiFindings = useMemo(
@@ -63,6 +65,7 @@ export default function CreateTextScreen() {
         caption: content.trim(),
         hashtags: tags,
         feed_type_eligible: ['forYou', 'following'],
+        comments_disabled: !commentsOn || undefined,
       });
 
       analytics.track('post_created', { type: 'discussion' });
@@ -155,6 +158,23 @@ export default function CreateTextScreen() {
             editable={!posting}
           />
         </AccentComposerFrame>
+
+        <View style={styles.optionsRow}>
+          <TouchableOpacity
+            style={[styles.optionChip, !commentsOn && styles.optionChipActive]}
+            activeOpacity={0.7}
+            onPress={() => setCommentsOn(!commentsOn)}
+          >
+            <Ionicons
+              name={commentsOn ? 'chatbubble-outline' : 'chatbubble-ellipses-outline'}
+              size={18}
+              color={commentsOn ? colors.dark.textSecondary : '#EF4444'}
+            />
+            <Text style={[styles.optionText, !commentsOn && { color: '#EF4444' }]}>
+              {commentsOn ? 'Comments On' : 'Comments Off'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -180,4 +200,18 @@ const styles = StyleSheet.create({
     color: colors.dark.text,
     paddingVertical: 4,
   },
+  optionsRow: { flexDirection: 'row', gap: spacing.sm },
+  optionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.dark.card,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  optionText: { fontSize: 13, fontWeight: '600', color: colors.dark.textSecondary },
+  optionChipActive: { borderColor: colors.primary.teal },
 });

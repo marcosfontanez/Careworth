@@ -81,9 +81,9 @@ class AnalyticsService {
       ...e,
     }));
 
-    try {
-      await supabase.from('analytics_events').insert(rows);
-    } catch {
+    const { error } = await supabase.from('analytics_events').insert(rows);
+    if (error) {
+      if (__DEV__) console.warn('[analytics] flush failed:', error.message);
       this.queue.unshift(...events);
     }
   }

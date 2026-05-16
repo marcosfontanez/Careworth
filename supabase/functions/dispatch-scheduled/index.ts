@@ -2,6 +2,9 @@
 //
 // Intended caller: Supabase Scheduled Function (cron) or external cron POST.
 // Uses service role to flip `scheduled_posts_due_v1` rows to `scheduled_status = 'live'`.
+//
+// Security: set DISPATCH_SCHEDULED_SECRET in the function env; every invocation must send the same
+// value in the `x-cron-secret` header (503 if the secret is unset).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -24,8 +27,17 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const secret = Deno.env.get("DISPATCH_SCHEDULED_SECRET");
-  if (secret && req.headers.get("x-cron-secret") !== secret) {
+  const secret = Deno.env.get("DISPATCH_SCHEDULED_SECRET")?.trim();
+  if (!secret) {
+    return json(
+      {
+        error:
+          "DISPATCH_SCHEDULED_SECRET is not set — configure a shared secret and send it as header x-cron-secret.",
+      },
+      503,
+    );
+  }
+  if (req.headers.get("x-cron-secret") !== secret) {
     return json({ error: "unauthorized" }, 401);
   }
 

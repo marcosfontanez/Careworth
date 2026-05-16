@@ -13,6 +13,7 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 
+import { MarketingExpandableMedia } from "@/components/marketing/marketing-image-lightbox";
 import { marketingEyebrow } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -440,6 +441,7 @@ export function ScreenshotShowcaseCard({
   cornerTrace = false,
   topHighlight = true,
   haloIntensity = "normal",
+  expandable = true,
 }: {
   src: string;
   alt: string;
@@ -454,6 +456,8 @@ export function ScreenshotShowcaseCard({
   cornerTrace?: boolean;
   topHighlight?: boolean;
   haloIntensity?: "soft" | "normal" | "strong";
+  /** Tap or click opens a full-size dialog (default on). */
+  expandable?: boolean;
 }) {
   const tone = TONE[glow];
   const veilOpacity = {
@@ -463,7 +467,15 @@ export function ScreenshotShowcaseCard({
   }[haloIntensity];
 
   return (
-    <figure className={cn("relative", className)}>
+    <MarketingExpandableMedia
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      expandable={expandable}
+      priority={priority}
+    >
+      <figure className={cn("relative", className)}>
       {cornerTrace && <PosterCornerTrace tone={glow} position="corners" />}
       <div
         className={cn(
@@ -526,6 +538,7 @@ export function ScreenshotShowcaseCard({
         <figcaption className="mt-3 text-center text-xs text-muted-foreground/80">{caption}</figcaption>
       )}
     </figure>
+    </MarketingExpandableMedia>
   );
 }
 
@@ -548,6 +561,7 @@ export function PosterFrame({
   priority,
   cornerTrace = true,
   size = "default",
+  expandable = true,
 }: {
   src: string;
   alt: string;
@@ -562,6 +576,8 @@ export function PosterFrame({
   cornerTrace?: boolean;
   /** "dramatic" amplifies the glow and adds a brighter top edge — use for true flagship images. */
   size?: "default" | "dramatic";
+  /** Tap or click opens a full-size dialog (default on). */
+  expandable?: boolean;
 }) {
   const tone = TONE[glow];
   const dramaticGlow: Record<string, string> = {
@@ -573,7 +589,15 @@ export function PosterFrame({
   const glowClass = size === "dramatic" ? dramaticGlow[glow] : tone.glow;
 
   return (
-    <figure className={cn("relative", className)}>
+    <MarketingExpandableMedia
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      expandable={expandable}
+      priority={priority}
+    >
+      <figure className={cn("relative", className)}>
       {/* Big positioned glow halo behind the frame. */}
       <ScreenshotHalo tone={glow} size="lg" />
       {cornerTrace && <PosterCornerTrace tone={glow} position="all" />}
@@ -640,6 +664,7 @@ export function PosterFrame({
         </figcaption>
       )}
     </figure>
+    </MarketingExpandableMedia>
   );
 }
 

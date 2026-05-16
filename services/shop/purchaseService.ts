@@ -5,6 +5,11 @@ import { initIapConnection, platformPrefix, purchaseSku, restorePurchasesFromSto
 import { Platform } from 'react-native';
 import { shopQueriesService } from '@/services/shop/shopQueries';
 import { supabase } from '@/lib/supabase';
+import {
+  rpcEconomyAcceptPendingBorderGift,
+  rpcEconomyClaimFreeShopBorder,
+  rpcEconomyEquipBorder,
+} from '@/services/shop/economyRpc';
 
 export type PurchaseOutcome =
   | { ok: true; data: Record<string, unknown> }
@@ -55,9 +60,7 @@ export const purchaseService = {
 
   async purchaseBorderForSelf(item: ShopItemRow): Promise<PurchaseOutcome> {
     if (isFreeShopBorder(item)) {
-      const { data, error } = await supabase.rpc('economy_claim_free_shop_border' as any, {
-        p_shop_item_id: item.id,
-      });
+      const { data, error } = await rpcEconomyClaimFreeShopBorder(item.id);
       if (error) {
         const msg = error.message ?? '';
         const code =
@@ -190,9 +193,7 @@ export const purchaseService = {
   },
 
   async equipBorder(inventoryItemId: string): Promise<PurchaseOutcome> {
-    const { data, error } = await supabase.rpc('economy_equip_border' as any, {
-      p_inventory_item_id: inventoryItemId,
-    });
+    const { data, error } = await rpcEconomyEquipBorder(inventoryItemId);
     if (error) {
       return mapEdgeError(error.code ?? 'RPC_ERROR', error.message);
     }
@@ -200,9 +201,7 @@ export const purchaseService = {
   },
 
   async acceptPendingTeamBorderGift(borderGiftId: string): Promise<PurchaseOutcome> {
-    const { data, error } = await supabase.rpc('economy_accept_pending_border_gift' as any, {
-      p_border_gift_id: borderGiftId,
-    });
+    const { data, error } = await rpcEconomyAcceptPendingBorderGift(borderGiftId);
     if (error) {
       return mapEdgeError(error.code ?? 'RPC_ERROR', error.message);
     }

@@ -25,6 +25,24 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   fontKey: 'system',
 };
 
+/**
+ * Maps `profiles.brand_kit` jsonb to a {@link BrandKit}, or `undefined` when the column is unset / empty.
+ * Used by profile joins so feed/composer can render watermarks without an extra round-trip.
+ */
+export function brandKitFromProfileColumn(raw: unknown): BrandKit | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (Object.keys(r).length === 0) return undefined;
+  return {
+    primary: typeof r.primary === 'string' ? r.primary : DEFAULT_BRAND_KIT.primary,
+    accent: typeof r.accent === 'string' ? r.accent : DEFAULT_BRAND_KIT.accent,
+    scrubs: typeof r.scrubs === 'string' ? r.scrubs : DEFAULT_BRAND_KIT.scrubs,
+    logoUrl: typeof r.logoUrl === 'string' ? r.logoUrl : null,
+    fontKey: typeof r.fontKey === 'string' ? r.fontKey : DEFAULT_BRAND_KIT.fontKey,
+  };
+}
+
 const cache = new Map<string, BrandKit>();
 
 export async function loadBrandKit(userId: string | null | undefined): Promise<BrandKit> {
@@ -55,16 +73,23 @@ export async function loadBrandKit(userId: string | null | undefined): Promise<B
 
 export async function saveBrandKit(userId: string, next: BrandKit): Promise<BrandKit> {
   const merged = { ...DEFAULT_BRAND_KIT, ...next };
-  cache.set(userId, merged);
   try {
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ brand_kit: merged as never })
       .eq('id', userId);
-  } catch {
-    // brand kit is best-effort persistence; in-memory cache still serves the session
+    if (error) {
+      cache.delete(userId);
+      if (__DEV__) console.warn('[saveBrandKit]', error.message);
+      return loadBrandKit(userId);
+    }
+    cache.set(userId, merged);
+    return merged;
+  } catch (e) {
+    cache.delete(userId);
+    if (__DEV__) console.warn('[saveBrandKit]', e);
+    return loadBrandKit(userId);
   }
-  return merged;
 }
 
 /** Hex/HSL helpers for dark-mode safe overlays. */

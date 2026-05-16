@@ -97,6 +97,9 @@ export default function MyPulseLinkPostScreen() {
       showToast('Clip pinned on My Pulse', 'success');
       router.replace('/(tabs)/my-pulse');
     },
+    onError: (err: Error) => {
+      showToast(err.message || 'Could not pin clip — try again.', 'error');
+    },
   });
 
   const submit = useCallback(() => {

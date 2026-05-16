@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
+import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { postsService } from '@/services/supabase';
 import { useAppStore } from '@/store/useAppStore';
@@ -28,6 +29,7 @@ const GRID_SIZE = (SCREEN_W - layout.screenPadding * 2 - GRID_GAP * 2) / 3;
 export default function SavedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const { user } = useAuth();
   const toggleSavePost = useAppStore((s) => s.toggleSavePost);
   const queryClient = useQueryClient();
@@ -116,7 +118,12 @@ export default function SavedScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.gridItem}
-              onPress={() => router.push(`/comments/${item.id}`)}
+              onPress={() => {
+                if (item.commentsDisabled) {
+                  toast.show('Comments are off — you can still read the thread.', 'info');
+                }
+                router.push(`/comments/${item.id}`);
+              }}
               activeOpacity={0.8}
             >
               <RecentMediaThumb

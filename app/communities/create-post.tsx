@@ -50,7 +50,7 @@ export default function CommunityCreatePostScreen() {
     intent?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const toast = useToast();
 
   const communityName = params.communityName ?? 'Community';
@@ -107,7 +107,10 @@ export default function CommunityCreatePostScreen() {
 
   const pickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') {
+      toast.show('Photo library access is needed to attach media.', 'info');
+      return;
+    }
     const wantVideos = postType === 'video';
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: wantVideos ? ['videos'] : ['images'],
@@ -188,7 +191,21 @@ export default function CommunityCreatePostScreen() {
         feed_type_eligible: ['community'],
         privacy_mode: 'public',
         is_anonymous: isConfessions,
+        comments_disabled: !settings.allowComments || undefined,
       });
+
+      /* Circle highlights — curated pins table (RLS: PulseVerse staff only). */
+      if (
+        settings.pinToHighlights &&
+        created?.id &&
+        params.communityId &&
+        profile?.roleAdmin === true
+      ) {
+        const pinned = await communitiesService.pinPostToCommunityHighlights(params.communityId, created.id);
+        if (!pinned) {
+          toast.show('Posted — highlight pin did not save (staff queue only).', 'info');
+        }
+      }
 
       /* My Pulse mirror — only when the user explicitly opted in.
        * Deliberately swallow errors so the post itself isn't lost if the
@@ -202,8 +219,9 @@ export default function CommunityCreatePostScreen() {
             linkedPostId: created.id,
             linkedCircleSlug: params.communitySlug,
           });
-        } catch {
-          /* Non-fatal: post still went through. */
+        } catch (mirrorErr) {
+          console.warn('[community-create-post] My Pulse mirror failed', mirrorErr);
+          toast.show('Posted to the circle — My Pulse pin did not save. You can pin it later from your profile.', 'info');
         }
       }
 
@@ -366,6 +384,7 @@ export default function CommunityCreatePostScreen() {
         <View style={styles.settingsWrap}>
           <CircleSettingsCard
             settings={settings}
+            canPin={profile?.roleAdmin === true}
             onChange={onChangeSettings}
           />
         </View>

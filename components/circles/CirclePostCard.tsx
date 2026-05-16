@@ -265,9 +265,11 @@ export const CirclePostCard = React.memo(function CirclePostCard({
       <View style={styles.actions}>
         <ActionButton
           icon="chatbubble-outline"
-          tint={colors.dark.textMuted}
+          tint={post.commentsDisabled ? 'rgba(148,163,184,0.65)' : colors.dark.textMuted}
           count={post.commentCount}
           onPress={onReply}
+          muted={post.commentsDisabled === true}
+          accessibilityLabel={post.commentsDisabled ? 'Comments off — view post' : 'Open comments'}
         />
         {canDownloadMedia ? (
           <ActionButton
@@ -296,6 +298,7 @@ function ActionButton({
   label,
   onPress,
   disabled,
+  muted,
   accessibilityLabel: accessibilityLabelProp,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -304,6 +307,8 @@ function ActionButton({
   label?: string;
   onPress?: () => void;
   disabled?: boolean;
+  /** Dimmed cue (e.g. comments disabled). */
+  muted?: boolean;
   accessibilityLabel?: string;
 }) {
   const text =
@@ -311,7 +316,7 @@ function ActionButton({
   const accessibilityLabel =
     accessibilityLabelProp ?? (typeof label === 'string' ? label : undefined);
   const inner = (
-    <View style={[styles.actionBtn, disabled && { opacity: 0.35 }]}>
+    <View style={[styles.actionBtn, disabled && { opacity: 0.35 }, muted && !disabled && { opacity: 0.5 }]}>
       <Ionicons name={icon} size={16} color={tint} />
       {text ? <Text style={[styles.actionText, { color: tint }]}>{text}</Text> : null}
     </View>

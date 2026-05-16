@@ -65,7 +65,7 @@ import { BorderDetailModal } from '@/components/shop/border/BorderDetailModal';
 import { useBorderCollectionsMap } from '@/hooks/useBorderCollectionsMap';
 import { useBorderCatalogLists } from '@/hooks/useBorderCatalogFilters';
 import { sortBorderItems } from '@/lib/shop/borderDisplayModel';
-import { ShopResultModal } from '@/components/shop/ShopResultModal';
+import { ShopResultModal, type PulseShopCelebrationPayload } from '@/components/shop/ShopResultModal';
 import { ShopCatalogSkeleton } from '@/components/shop/ShopLoadingSkeleton';
 import { DiamondsInfoModal } from '@/components/shop/DiamondsInfoModal';
 import { queryClient } from '@/lib/queryClient';
@@ -88,14 +88,7 @@ const TABS: { key: ShopTabKey; label: string; icon: keyof typeof Ionicons.glyphM
   { key: 'more', label: 'More', icon: 'ellipsis-horizontal' },
 ];
 
-type Celebration =
-  | null
-  | {
-      kind: 'border' | 'spark' | 'gift_sent';
-      title: string;
-      message?: string;
-      equipInventoryId?: string;
-    };
+type Celebration = null | PulseShopCelebrationPayload;
 
 export default function PulseShopScreen() {
   const router = useRouter();
@@ -717,9 +710,10 @@ export default function PulseShopScreen() {
                 ) : showRetired && retiredBorders.length === 0 ? (
                   <View style={styles.retiredStateCard}>
                     <Ionicons name="time-outline" size={26} color={colors.dark.textMuted} />
-                    <Text style={styles.retiredStateTitle}>Nothing retired yet</Text>
+                    <Text style={styles.retiredStateTitle}>Retired archive</Text>
                     <Text style={styles.retiredStateBody}>
-                      When a drop ends, it shows up here so people can see what was available.
+                      Real retired shop drops will appear here later. Leaderboard and earned rewards stay in My
+                      Borders.
                     </Text>
                   </View>
                 ) : (
@@ -1096,12 +1090,13 @@ export default function PulseShopScreen() {
             });
             equipInventoryId = inv.find((i) => i.shop_item_id === buyItem.id)?.id;
           }
-          setCelebration({
-            kind: 'border',
-            title: 'Border unlocked',
-            message: `${buyItem?.name} is yours. Equip it to show it off.`,
-            equipInventoryId,
-          });
+          if (buyItem) {
+            setCelebration({
+              kind: 'border_purchase',
+              borderItem: buyItem,
+              equipInventoryId,
+            });
+          }
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           showToast('Border unlocked!', 'success');
         }}
@@ -1149,12 +1144,11 @@ export default function PulseShopScreen() {
           onSuccess={async (recipient) => {
             await refreshAfterPurchase();
             analytics.track('border_gift_completed', { recipient });
-          setCelebration({
-            kind: 'gift_sent',
-            title: 'Gift sent',
-            message: `Border gift on its way to ${recipient}.`,
-          });
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setCelebration({
+              kind: 'gift_sent',
+              recipient,
+            });
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }}
         />
       ) : null}
@@ -1189,9 +1183,8 @@ export default function PulseShopScreen() {
           await refreshAfterPurchase();
           analytics.track('spark_pack_purchase_completed', { shop_item_id: creditItem?.id ?? '' });
           setCelebration({
-            kind: 'spark',
-            title: 'Sparks added',
-            message: 'Your balance is updated from the server.',
+            kind: 'spark_pack',
+            sparksAmount: creditItem?.spark_amount ?? 0,
           });
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }}
@@ -1200,22 +1193,24 @@ export default function PulseShopScreen() {
       <ShopResultModal
         visible={!!celebration}
         variant="success"
-        title={celebration?.title ?? ''}
-        message={celebration?.message}
-        primaryLabel={
-          celebration?.kind === 'border' && celebration.equipInventoryId ? 'Equip now' : undefined
-        }
+        title=""
+        pulseCelebration={celebration}
+        onSparkSendGift={() => {
+          setCelebration(null);
+          setTab('gifts');
+        }}
         onPrimary={
-          celebration?.kind === 'border' && celebration.equipInventoryId
+          celebration?.kind === 'border_purchase' && celebration.equipInventoryId
             ? async () => {
-                await handleEquip(celebration.equipInventoryId!);
+                const id = celebration.equipInventoryId;
+                if (!id) return;
+                await handleEquip(id);
                 setCelebration(null);
               }
             : undefined
         }
-        tertiaryLabel={celebration?.kind === 'border' ? 'My borders' : undefined}
         onTertiary={
-          celebration?.kind === 'border'
+          celebration?.kind === 'border_purchase'
             ? () => {
                 setCelebration(null);
                 router.push('/my-borders' as any);

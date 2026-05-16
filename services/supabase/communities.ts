@@ -231,4 +231,24 @@ export const communitiesService = {
       .eq('community_id', communityId);
     if (error && __DEV__) console.warn('[communitiesService.setMemberNotifyNewPosts]', error.message);
   },
+
+  /**
+   * Curated circle highlights (`community_post_pins`). RLS allows inserts only for
+   * `profiles.role_admin` — used when staff toggles “Pin to Circle Highlights” on create.
+   */
+  async pinPostToCommunityHighlights(communityId: string, postId: string, sortOrder = 0): Promise<boolean> {
+    const cid = communityId.trim();
+    const pid = postId.trim();
+    if (!cid || !pid) return false;
+    const { error } = await supabase.from('community_post_pins').insert({
+      community_id: cid,
+      post_id: pid,
+      sort_order: sortOrder,
+    });
+    if (error) {
+      if (__DEV__) console.warn('[communitiesService.pinPostToCommunityHighlights]', error.message);
+      return false;
+    }
+    return true;
+  },
 };

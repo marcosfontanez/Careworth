@@ -9,8 +9,6 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { GradientOverlay } from '@/components/ui/GradientOverlay';
-import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
-import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { HeartBurst } from '@/components/ui/SuccessAnimation';
 import { SponsoredBadge } from './SponsoredBadge';
 import { FeedActionRail } from './FeedActionRail';
@@ -33,6 +31,8 @@ import { usePost } from '@/hooks/useQueries';
 import { useRouter } from 'expo-router';
 import { DuetParentPreview } from '@/components/feed/DuetParentPreview';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
+import type { BrandKit } from '@/lib/brandKit';
+import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SCRUB_HIT_SLOP = 24;
@@ -261,6 +261,7 @@ function VideoFeedPostInner({
             muteEmbeddedAudio={useAttributedSoundPip}
             speedUp={speedUp}
             progressBarBottom={chromeBottom.progress}
+            creatorBrandKit={post.creator.brandKit ?? null}
           />
           {useAttributedSoundPip ? (
             <FeedAttributedSoundPlayer
@@ -312,14 +313,36 @@ function VideoFeedPostInner({
               />
             ))}
           </View>
+          {post.videoOverlayText?.trim() ? (
+            <View
+              pointerEvents="none"
+              style={[styles.videoOverlayWrap, { bottom: chromeBottom.content + 220 }]}
+            >
+              <Text style={styles.videoOverlayText} numberOfLines={3}>
+                {post.videoOverlayText.trim()}
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : posterUri || (post.type === 'image' && post.mediaUrl) ? (
-        <Image
-          source={{ uri: posterUri || post.mediaUrl }}
-          style={styles.bg}
-          contentFit="cover"
-          {...pulseImageFeedHeroProps}
-        />
+        <View style={styles.bg}>
+          <Image
+            source={{ uri: posterUri || post.mediaUrl }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="cover"
+            {...pulseImageFeedHeroProps}
+          />
+          {post.videoOverlayText?.trim() ? (
+            <View
+              pointerEvents="none"
+              style={[styles.videoOverlayWrap, { bottom: chromeBottom.content + 220 }]}
+            >
+              <Text style={styles.videoOverlayText} numberOfLines={3}>
+                {post.videoOverlayText.trim()}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       ) : (
         <View style={[styles.bg, styles.textBg]}>
           {post.type === 'video' && !videoUri ? (
@@ -383,15 +406,6 @@ function VideoFeedPostInner({
               <Text style={styles.creatorHandle} numberOfLines={1}>
                 {profileHandleLineForCreator(post.creator)}
               </Text>
-              <ProfileNeonPills
-                tags={buildNeonPillTags(post.creator)}
-                style={styles.neonPillsCompact}
-              />
-              {[post.creator.city, post.creator.state].filter(Boolean).length > 0 ? (
-                <Text style={[styles.location, typography.overlayQuiet]} numberOfLines={1}>
-                  {[post.creator.city, post.creator.state].filter(Boolean).join(', ')}
-                </Text>
-              ) : null}
             </View>
           </View>
         )}
@@ -555,6 +569,10 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
 
   const pc = p.creator;
   const nc = n.creator;
+  const pf = pc.pulseAvatarFrame?.id ?? '';
+  const nf = nc.pulseAvatarFrame?.id ?? '';
+  if (pf !== nf) return false;
+
   if (
     pc.displayName !== nc.displayName ||
     pc.username !== nc.username ||
@@ -563,10 +581,15 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     pc.specialty !== nc.specialty ||
     pc.city !== nc.city ||
     pc.state !== nc.state ||
-    pc.isVerified !== nc.isVerified
+    pc.isVerified !== nc.isVerified ||
+    JSON.stringify(pc.brandKit ?? null) !== JSON.stringify(nc.brandKit ?? null)
   ) {
     return false;
   }
+
+  const pcit = JSON.stringify(p.educationCitations ?? []);
+  const ncit = JSON.stringify(n.educationCitations ?? []);
+  if (pcit !== ncit) return false;
 
   if (
     p.type !== n.type ||
@@ -574,6 +597,10 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.mediaUrl !== n.mediaUrl ||
     p.thumbnailUrl !== n.thumbnailUrl ||
     p.coverAltUrl !== n.coverAltUrl ||
+    (p.videoOverlayText ?? '') !== (n.videoOverlayText ?? '') ||
+    (p.evidenceUrl ?? '') !== (n.evidenceUrl ?? '') ||
+    (p.evidenceLabel ?? '') !== (n.evidenceLabel ?? '') ||
+    (p.scheduledStatus ?? '') !== (n.scheduledStatus ?? '') ||
     p.isEducation !== n.isEducation ||
     p.seriesPart !== n.seriesPart ||
     p.seriesTotal !== n.seriesTotal ||
@@ -591,6 +618,7 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.shareCount !== n.shareCount ||
     p.viewCount !== n.viewCount ||
     p.saveCount !== n.saveCount ||
+    (p.commentsDisabled ?? false) !== (n.commentsDisabled ?? false) ||
     (p.duetParentId ?? '') !== (n.duetParentId ?? '')
   ) {
     return false;
@@ -737,6 +765,7 @@ function FeedAttributedSoundPlayer({
 
 function FeedVideoPlayer({
   uri, paused, isActive, muteEmbeddedAudio = false, speedUp = false, progressBarBottom = 82,
+  creatorBrandKit = null,
 }: {
   uri: string;
   paused: boolean;
@@ -745,6 +774,7 @@ function FeedVideoPlayer({
   muteEmbeddedAudio?: boolean;
   speedUp?: boolean;
   progressBarBottom?: number;
+  creatorBrandKit?: BrandKit | null;
 }) {
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -886,6 +916,13 @@ function FeedVideoPlayer({
           <Text style={styles.playbackErrorText}>Could not load this video (check Storage access).</Text>
         </View>
       )}
+
+      <VideoBrandWatermark
+        brandKit={creatorBrandKit}
+        position="bottom-center"
+        edgeOffset={progressBarBottom + 26}
+        variant="subtle"
+      />
 
       <View
         ref={barRef}
@@ -1134,20 +1171,12 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
-  neonPillsCompact: { marginTop: 4, flexWrap: 'wrap' },
   displayName: {
     color: colors.onVideo.primary,
     flexShrink: 1,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
-  },
-  location: {
-    color: colors.onVideo.soft,
-    marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   anonRow: {
     flexDirection: 'row',

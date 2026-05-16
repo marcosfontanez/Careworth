@@ -19,6 +19,8 @@
     "eas:build:dev:ios": "eas build --profile development --platform ios",
     "eas:build:dev:android": "eas build --profile development --platform android",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint . --max-warnings 250",
     "db:types": "node scripts/gen-supabase-types.mjs",
     "db:types:check": "node scripts/check-db-types-fresh.mjs",
@@ -93,7 +95,8 @@
     "eslint-config-expo": "^10.0.0",
     "jimp": "^1.6.1",
     "patch-package": "^8.0.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
   },
   "private": true
 }

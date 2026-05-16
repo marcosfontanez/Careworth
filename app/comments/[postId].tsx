@@ -14,6 +14,7 @@ import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { useComments, usePost } from '@/hooks/useQueries';
 import { commentService } from '@/services/comment';
+import { looksLikeRlsPolicyDenial, postsService } from '@/services/supabase/posts';
 import { queryClient } from '@/lib/queryClient';
 import { commentKeys, postKeys } from '@/lib/queryKeys';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -194,6 +195,8 @@ export default function CommentsScreen() {
 
   const accentColor = useMemo(() => getCircleAccent(circle).color, [circle]);
 
+  const commentsLocked = post?.commentsDisabled === true;
+
   const pickCommentAttach = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
@@ -216,6 +219,7 @@ export default function CommentsScreen() {
 
   const handleSend = async () => {
     if (!postId) return;
+    if (commentsLocked) return;
     const trimmed = text.trim();
     if ((!trimmed && !pendingAttach) || sending) return;
     if (!user) {
@@ -257,7 +261,7 @@ export default function CommentsScreen() {
       bumpPostCount(postId, 'commentCount', 1);
       queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(postId) });
       queryClient.invalidateQueries({ queryKey: postKeys.byId(postId) });
-    } catch (e: any) {
+    } catch (e: unknown) {
       /**
        * Comment send failed (network blip, server error, RLS hiccup, etc.).
        * Queue the comment so processQueue() can replay it on reconnect, and
@@ -272,6 +276,16 @@ export default function CommentsScreen() {
           );
           return;
         }
+        if (looksLikeRlsPolicyDenial(e)) {
+          const disabled = await postsService.getCommentsDisabledSnapshot(postId);
+          if (disabled === true) {
+            Alert.alert(
+              'Comments turned off',
+              'Comments were turned off for this post, so your message wasn’t saved.',
+            );
+            return;
+          }
+        }
         await enqueueAction({
           type: 'create_comment',
           payload: {
@@ -285,7 +299,8 @@ export default function CommentsScreen() {
         setReplyTo(null);
         Alert.alert('Saved', 'Network hiccup — your comment will post automatically once you’re back online.');
       } catch {
-        Alert.alert('Comment failed', e?.message ?? 'Could not post your comment.');
+        const msg = e instanceof Error ? e.message : 'Could not post your comment.';
+        Alert.alert('Comment failed', msg);
       }
     } finally {
       setSending(false);
@@ -354,7 +369,8 @@ export default function CommentsScreen() {
               accentColor={accentColor}
               anonymousMode={maskAuthors}
               saltPostId={postId}
-              onReply={(id, name) => handleReply(id, name)}
+              commentsLocked={commentsLocked}
+              onReply={(cid, name) => handleReply(cid, name)}
               onReport={(cid) => setReportCommentId(cid)}
             />
           )}
@@ -362,10 +378,28 @@ export default function CommentsScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            <EmptyState icon="💬" title="No comments yet" subtitle="Be the first to share your thoughts!" />
+            commentsLocked ? (
+              <EmptyState
+                icon="💬"
+                title="No comments yet"
+                subtitle="New comments are disabled for this post."
+              />
+            ) : (
+              <EmptyState icon="💬" title="No comments yet" subtitle="Be the first to share your thoughts!" />
+            )
           }
           ListHeaderComponent={
-            post && postId ? <CommentsMediaHeader post={post} postId={postId} circleSlug={circle ?? null} /> : null
+            <>
+              {commentsLocked ? (
+                <View style={styles.threadLockedBanner}>
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.dark.textMuted} />
+                  <Text style={styles.threadLockedText}>
+                    Comments are off — you can read what&apos;s already here, but new replies are blocked.
+                  </Text>
+                </View>
+              ) : null}
+              {post && postId ? <CommentsMediaHeader post={post} postId={postId} circleSlug={circle ?? null} /> : null}
+            </>
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />
@@ -373,7 +407,7 @@ export default function CommentsScreen() {
         />
       )}
 
-      {replyTo && (
+      {!commentsLocked && replyTo && (
         <View
           style={[
             styles.replyBar,
@@ -390,6 +424,7 @@ export default function CommentsScreen() {
         </View>
       )}
 
+      {!commentsLocked ? (
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
         <AccentComposerFrame
           accentColor={accentColor}
@@ -453,6 +488,7 @@ export default function CommentsScreen() {
           </View>
         </AccentComposerFrame>
       </View>
+      ) : null}
       <ReportModal
         visible={!!reportCommentId}
         onClose={() => setReportCommentId(null)}
@@ -465,6 +501,26 @@ export default function CommentsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
+  threadLockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginHorizontal: layout.screenPadding,
+    marginBottom: spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(12,18,32,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+  },
+  threadLockedText: {
+    flex: 1,
+    ...typography.bodySmall,
+    color: colors.dark.textSecondary,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
   /** Required so FlatList gets a bounded height inside KeyboardAvoidingView; without it some Android builds virtualize poorly and the UI can feel frozen. */
   listFlex: { flex: 1 },
   list: { paddingHorizontal: layout.screenPadding, paddingBottom: spacing.lg },

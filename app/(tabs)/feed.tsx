@@ -435,7 +435,12 @@ export default function FeedScreen() {
         isSaved={savedPostIdsRef.current.has(item.id)}
         isFollowing={followedCreatorIdsRef.current.has(item.creatorId)}
         onLike={() => toggleLike(item.id)}
-        onComment={() => router.push(`/comments/${item.id}`)}
+        onComment={() => {
+          if (item.commentsDisabled) {
+            toast.show('Comments are off — you can still read the thread.', 'info');
+          }
+          router.push(`/comments/${item.id}`);
+        }}
         onSave={() => handleToggleSave(item.id)}
         onShare={() => sharePostMenu(item, { toast: toast.show, queryClient })}
         onFollow={() => handleToggleFollow(item.creatorId)}
@@ -462,7 +467,7 @@ export default function FeedScreen() {
         }
       />
     ),
-    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch],
+    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch, toast],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);

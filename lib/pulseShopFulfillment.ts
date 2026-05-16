@@ -3,6 +3,7 @@
  * Always send the user access token; never send service keys from the app.
  */
 
+import { parsePulseShopFulfillmentJson } from './pulseShopFulfillmentParse';
 import { supabase } from './supabase';
 
 const PROJECT_FUNCTIONS = 'functions/v1';
@@ -91,16 +92,17 @@ export async function invokePulseShopFulfillment<T extends Record<string, unknow
     body: JSON.stringify(body),
   });
 
-  const json = (await res.json().catch(() => null)) as PulseShopResponse<T> | null;
-  if (!json || typeof json !== 'object' || !('ok' in json)) {
+  const json = (await res.json().catch(() => null)) as unknown;
+  const parsed = parsePulseShopFulfillmentJson(json);
+  if (!parsed.ok && parsed.error.code === 'FULFILLMENT_FAILED' && json === null) {
     return {
       ok: false,
       error: {
         code: 'FULFILLMENT_FAILED',
         message: `Invalid response (${res.status})`,
-        details: json,
+        details: null,
       },
     };
   }
-  return json;
+  return parsed as PulseShopResponse<T>;
 }

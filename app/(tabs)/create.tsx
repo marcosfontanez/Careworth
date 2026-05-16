@@ -82,6 +82,14 @@ const GRID: CreateTile[] = [
     bg: pulseverse.hubTileBlueBg,
     href: '/create/image',
   },
+  {
+    title: 'Scheduled posts',
+    subtitle: 'Queued publish times',
+    icon: 'calendar-outline',
+    iconColor: pulseverse.storeAccent,
+    bg: `${pulseverse.storeAccent}18`,
+    href: '/create/scheduled-posts',
+  },
 ];
 
 export default function CreateScreen() {

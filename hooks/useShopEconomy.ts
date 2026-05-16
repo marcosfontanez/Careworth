@@ -16,9 +16,9 @@ export function useShopCatalog() {
 }
 
 /**
- * Retired-border drawer — slow-moving list of borders that were once for sale
- * but can no longer be purchased. Lazy: pass `enabled = true` only when the
- * shop's "Retired" chip is selected so we don't pay for it on every shop open.
+ * Retired-border drawer — lazy-loaded when the Retired chip is selected.
+ * {@link shopQueriesService.getRetiredBorders} currently returns an empty list until
+ * real retired shop drops are wired; the hook stays so flipping that flag refetches.
  */
 export function useRetiredBorders(enabled: boolean) {
   return useQuery({

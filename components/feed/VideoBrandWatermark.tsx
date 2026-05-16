@@ -1,7 +1,11 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Image } from 'expo-image';
+import type { BrandKit } from '@/lib/brandKit';
 
 type Props = {
+  /** Creator kit from profile — logo replaces wordmark when `logoUrl` is set. */
+  brandKit?: BrandKit | null;
   /** Where to anchor the mark. Default `bottom-center` (most inconspicuous). */
   position?: 'bottom-center' | 'top-left';
   /** Distance from the chosen edge in px. For `bottom-center`, lift it above progress bar / chrome. */
@@ -17,11 +21,11 @@ type Props = {
 /**
  * Persistent brand mark on in-app video playback.
  *
- * Matches the burned-in FFmpeg export wordmark: all-caps PULSEVERSE in transparent white
- * with a soft dark shadow for legibility. No pill, no logo glyph — vector-clean.
- * Defaults to bottom-center, lifted above the progress bar.
+ * Default: all-caps PULSEVERSE in transparent white with a soft dark shadow (matches burned-in export).
+ * With {@link BrandKit.logoUrl}, shows the creator logo (contained) instead.
  */
 export function VideoBrandWatermark({
+  brandKit,
   position = 'bottom-center',
   edgeOffset,
   edgeInsetLeft = 0,
@@ -35,6 +39,10 @@ export function VideoBrandWatermark({
 
   const fontSize = compact ? 11 : 22;
   const letterSpacing = compact ? 0.6 : 1.4;
+
+  const logoUri = brandKit?.logoUrl?.trim();
+  const logoH = compact ? 20 : 34;
+  const logoMaxW = compact ? 88 : 160;
 
   const positional =
     position === 'top-left'
@@ -57,9 +65,18 @@ export function VideoBrandWatermark({
       style={[styles.wrap, positional, { opacity }]}
       pointerEvents="none"
     >
-      <Text style={[styles.wordmark, { fontSize, letterSpacing }]} allowFontScaling={false}>
-        PULSEVERSE
-      </Text>
+      {logoUri ? (
+        <Image
+          source={{ uri: logoUri }}
+          style={{ height: logoH, maxWidth: logoMaxW, width: '100%' }}
+          contentFit="contain"
+          accessibilityIgnoresInvertColors
+        />
+      ) : (
+        <Text style={[styles.wordmark, { fontSize, letterSpacing }]} allowFontScaling={false}>
+          PULSEVERSE
+        </Text>
+      )}
     </View>
   );
 }

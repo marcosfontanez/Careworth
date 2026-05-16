@@ -191,6 +191,7 @@ function rowToPost(row: any): Post {
     videoOverlayText: typeof row.video_overlay_text === 'string'
       ? row.video_overlay_text.trim() || undefined
       : undefined,
+    commentsDisabled: Boolean(row.comments_disabled),
   };
 }
 
@@ -276,9 +277,10 @@ const POST_SELECT = [
   'mood_preset',
   // On-video sticker text (rendered as <Text> overlay on the feed video)
   'video_overlay_text',
+  'comments_disabled',
   // Joined creator profile — explicit columns to avoid shipping email,
   // push tokens, role_admin flag, etc. to the client.
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /**
@@ -322,7 +324,8 @@ const POST_SELECT_FEED = [
   'cover_alt_url',
   'mood_preset',
   'video_overlay_text',
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  'comments_disabled',
+  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */
@@ -899,6 +902,21 @@ export const postsService = {
   },
 
   /**
+   * Minimal fetch for comment error handlers / offline replay. Does not apply
+   * full viewer privacy shaping — only whether `comments_disabled` is set.
+   * Returns `null` when the row isn't readable (deleted, blocked, session gap).
+   */
+  async getCommentsDisabledSnapshot(postId: string): Promise<boolean | null> {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('comments_disabled')
+      .eq('id', postId)
+      .maybeSingle();
+    if (error || data == null) return null;
+    return data.comments_disabled === true;
+  },
+
+  /**
    * Batch fetch posts by id, preserving caller order and applying viewer
    * privacy filters in one round-trip. Designed for prefetching feed
    * sub-resources (sound sources, duet parents, linked-post pins) in a
@@ -1135,12 +1153,14 @@ export const postsService = {
     series_part?: number | null;
     series_total?: number | null;
     scheduled_at?: string | null;
-    scheduled_status?: 'live' | 'scheduled' | 'sending' | 'failed' | null;
+    scheduled_status?: 'live' | 'scheduled' | 'sending' | 'failed' | 'cancelled' | null;
     cover_alt_url?: string | null;
     mood_preset?: string | null;
     additional_media?: string[] | null;
     /** On-video sticker line (<=80 chars). Rendered live on the feed video; not baked. */
     video_overlay_text?: string | null;
+    /** When true, new comments are rejected for this post (migration 156). */
+    comments_disabled?: boolean;
   }): Promise<Post> {
     let roleCtx = post.role_context;
     let specCtx = post.specialty_context;
@@ -1180,6 +1200,7 @@ export const postsService = {
       mood_preset: moodPresetIn,
       additional_media: additionalMediaIn,
       video_overlay_text: videoOverlayTextIn,
+      comments_disabled: commentsDisabledIn,
       ...postRest
     } = post;
 
@@ -1223,10 +1244,22 @@ export const postsService = {
     if (isEducationIn === true) extensionPayload.is_education = true;
     if (educationCitationsIn != null) {
       const safe = (Array.isArray(educationCitationsIn) ? educationCitationsIn : [])
-        .map((c) => ({
-          label: typeof c.label === 'string' ? c.label.slice(0, 80) : null,
-          url: typeof c.url === 'string' ? c.url.trim().slice(0, 500) : '',
-        }))
+        .map((c) => {
+          const row = c as Record<string, unknown>;
+          const doiRaw = row.doi != null ? String(row.doi).trim().slice(0, 160) : '';
+          const lrRaw =
+            row.lastReviewed != null
+              ? String(row.lastReviewed).trim().slice(0, 40)
+              : row.last_reviewed != null
+                ? String(row.last_reviewed).trim().slice(0, 40)
+                : '';
+          return {
+            label: typeof row.label === 'string' ? row.label.slice(0, 80) : null,
+            url: typeof row.url === 'string' ? String(row.url).trim().slice(0, 500) : '',
+            ...(doiRaw ? { doi: doiRaw } : {}),
+            ...(lrRaw ? { last_reviewed: lrRaw } : {}),
+          };
+        })
         .filter((c) => c.url);
       if (safe.length) extensionPayload.education_citations = safe;
     }
@@ -1240,7 +1273,7 @@ export const postsService = {
     }
     const schAt = typeof scheduledAtIn === 'string' ? scheduledAtIn.trim() : '';
     if (schAt) extensionPayload.scheduled_at = schAt;
-    if (scheduledStatusIn && ['live', 'scheduled', 'sending', 'failed'].includes(scheduledStatusIn)) {
+    if (scheduledStatusIn && ['live', 'scheduled', 'sending', 'failed', 'cancelled'].includes(scheduledStatusIn)) {
       extensionPayload.scheduled_status = scheduledStatusIn;
     }
     const cau = typeof coverAltUrlIn === 'string' ? coverAltUrlIn.trim() : '';
@@ -1257,6 +1290,8 @@ export const postsService = {
      */
     const vot = typeof videoOverlayTextIn === 'string' ? videoOverlayTextIn.trim() : '';
     if (vot) extensionPayload.video_overlay_text = vot.slice(0, 80);
+
+    if (commentsDisabledIn === true) extensionPayload.comments_disabled = true;
 
     const fullPayload = { ...insertPayload, ...extensionPayload };
 
@@ -1367,7 +1402,7 @@ export const postsService = {
   async getSavedPosts(userId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from('saved_posts')
-      .select('post_id, posts(*, profiles(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current))')
+      .select('post_id, posts(*, profiles(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
       .eq('user_id', userId)
       .order('saved_at', { ascending: false });
 
@@ -1383,7 +1418,7 @@ export const postsService = {
   async getLikedPosts(userId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from('post_likes')
-      .select('created_at, posts(*, profiles(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current))')
+      .select('created_at, posts(*, profiles(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -1468,9 +1503,9 @@ export const postsService = {
   async updateOwnPost(
     postId: string,
     creatorId: string,
-    patch: { caption?: string; hashtags?: string[] },
+    patch: { caption?: string; hashtags?: string[]; commentsDisabled?: boolean },
   ): Promise<Post> {
-    const updates: Record<string, string | string[] | null> = {};
+    const updates: Record<string, string | string[] | boolean | null> = {};
     if (Object.prototype.hasOwnProperty.call(patch, 'caption')) {
       /**
        * We allow empty captions (some posts are pure media) but trim
@@ -1483,6 +1518,9 @@ export const postsService = {
       updates.hashtags = Array.isArray(patch.hashtags)
         ? patch.hashtags.map((t) => t.trim()).filter(Boolean)
         : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'commentsDisabled')) {
+      updates.comments_disabled = patch.commentsDisabled === true;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -1549,3 +1587,14 @@ export const postsService = {
       .slice(0, Math.max(1, Math.min(limit, 24)));
   },
 };
+
+/** Postgres / PostgREST failures that usually mean RLS `WITH CHECK` rejected the row. */
+export function looksLikeRlsPolicyDenial(err: unknown): boolean {
+  if (err == null || typeof err !== 'object') return false;
+  const code = String((err as { code?: string }).code ?? '');
+  const msg = String((err as { message?: string }).message ?? '').toLowerCase();
+  if (code === '42501') return true;
+  if (msg.includes('row-level security')) return true;
+  if (msg.includes('violates row-level security')) return true;
+  return false;
+}

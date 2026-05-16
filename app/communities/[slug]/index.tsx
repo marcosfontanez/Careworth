@@ -791,11 +791,16 @@ export default function CommunityDetailScreen() {
                 )
               }
               onProfile={() => router.push(`/profile/${(item as Post).creatorId}`)}
-              onReply={() =>
-                router.push(
-                  `/post/${(item as Post).id}?circle=${encodeURIComponent(activeCommunity.slug)}&focusComments=1` as any,
-                )
-              }
+              onReply={() => {
+                const p = item as Post;
+                const base = `/post/${p.id}?circle=${encodeURIComponent(activeCommunity.slug)}`;
+                if (p.commentsDisabled) {
+                  toast.show('Comments are off for this post.', 'info');
+                  router.push(base as never);
+                  return;
+                }
+                router.push(`${base}&focusComments=1` as never);
+              }}
               onPickReaction={(k) => {
                 if (!user) {
                   router.push('/auth/login');

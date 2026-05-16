@@ -7,9 +7,7 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   durationSec: number;
-  /** Called once the user confirms; the video file isn't actually re-encoded — we
-   * pass back N { startSec, endSec } slices so the parent can stage them as
-   * separate drafts later. */
+  /** Called once the user confirms; the file is not re-encoded — parent uses slices as a series plan (part count / timing hints). */
   onSplit: (slices: { startSec: number; endSec: number; index: number; total: number }[]) => void;
 }
 
@@ -42,8 +40,8 @@ export function ClipSplitterModal({ visible, onClose, durationSec, onSplit }: Pr
             </TouchableOpacity>
           </View>
           <Text style={styles.lede}>
-            Turn one long upload into a series of short posts. Each clip becomes Part 1, 2, 3 of a
-            shared series.
+            Plan how many parts your upload should span and equal-time segment markers. This updates your
+            series metadata only — it does not duplicate the file or create extra drafts.
           </Text>
 
           <View style={styles.chipRow}>
@@ -69,12 +67,13 @@ export function ClipSplitterModal({ visible, onClose, durationSec, onSplit }: Pr
           </View>
 
           <Text style={styles.helper}>
-            We&apos;ll create {n} draft posts linked as a series. You can edit each before publishing.
+            After you confirm, set Part / Total when posting (or use Advanced → series). Trim/export per part is still
+            external until in-app segment export ships.
           </Text>
 
           <TouchableOpacity style={styles.primaryBtn} onPress={split} activeOpacity={0.85}>
             <Ionicons name="cut" size={16} color="#FFF" />
-            <Text style={styles.primaryText}>Create {n} clip drafts</Text>
+            <Text style={styles.primaryText}>Apply {n}-part plan</Text>
           </TouchableOpacity>
         </View>
       </View>
