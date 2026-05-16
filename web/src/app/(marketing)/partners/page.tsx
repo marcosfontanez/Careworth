@@ -21,10 +21,10 @@ export default async function PartnersPage() {
         <SectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
         <div className="mt-12">
           <PosterFrame
-            src="/marketing/hero-circles.png"
+            src="/marketing/marketing-partners-live-collaboration.png"
             alt={c.heroVisualAlt}
-            width={1672}
-            height={941}
+            width={1024}
+            height={576}
             glow="cyan"
             tag={{ label: c.heroPosterTag }}
             sizes="(max-width: 768px) 100vw, 900px"

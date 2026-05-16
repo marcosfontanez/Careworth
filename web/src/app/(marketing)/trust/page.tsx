@@ -22,10 +22,10 @@ export default async function TrustPage() {
       <SectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
       <div className="mt-12">
         <PosterFrame
-          src="/marketing/creator-hub.png"
+          src="/marketing/marketing-trust-safety-infographic.png"
           alt={c.infographicAlt}
-          width={1672}
-          height={941}
+          width={1024}
+          height={576}
           glow="blue"
           tag={{ label: c.infographicTag, tone: "cyan" }}
           sizes="(max-width: 768px) 100vw, 900px"

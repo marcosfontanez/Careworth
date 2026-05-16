@@ -24,7 +24,7 @@ const copy: Record<Locale, TrustPageCopy> = {
     description:
       "A concise overview of moderation, reporting, and safety expectations. For enforceable rules and privacy practices, follow the documents linked below.",
     infographicAlt:
-      "PulseVerse Creator Hub showing Media Hub, monetization, and profile tools with premium dark healthcare UI.",
+      "Trust and Safety at PulseVerse infographic: central shield with six glass pillars — reporting, human moderation, identity, privacy and PHI, community standards, responsible disclosure.",
     infographicTag: "Trust surfaces",
     sections: [
       {
@@ -63,7 +63,7 @@ const copy: Record<Locale, TrustPageCopy> = {
     description:
       "Panorama breve de moderación, reportes y expectativas de seguridad. Para reglas exigibles y privacidad, usa los enlaces de abajo.",
     infographicAlt:
-      "Creator Hub de PulseVerse con Media Hub, monetización y herramientas de perfil en interfaz premium oscura.",
+      "Infografía Confianza y seguridad en PulseVerse: escudo central y seis pilares en cristal — reportes, moderación humana, identidad, privacidad y PHI, normas, divulgación responsable.",
     infographicTag: "Superficies de confianza",
     sections: [
       {

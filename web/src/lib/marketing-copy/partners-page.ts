@@ -23,8 +23,8 @@ const copy: Record<Locale, PartnersPageCopy> = {
     description:
       "Institutions, associations, and innovators reach clinicians across Feed, Circles, Live, and Pulse Page — with moderation depth, trust tooling, and identity surfaces aligned to how teams actually work.",
     heroVisualAlt:
-      "PulseVerse Circles interface showing healthcare topic communities with neon-glass cards and discovery-first layout.",
-    heroPosterTag: "Circles · communities",
+      "Partners marketing hero: live collaboration card with dual PulseVerse phone mockups for co-branded education and institutional reach.",
+    heroPosterTag: "Partner ecosystem",
     offers: [
       {
         title: "Education series",
@@ -51,8 +51,8 @@ const copy: Record<Locale, PartnersPageCopy> = {
     description:
       "Instituciones, asociaciones e innovadores llegan a clínicos en Feed, Circles, Live y Pulse Page — con moderación rigurosa, herramientas de confianza e identidad alineadas al trabajo real de los equipos.",
     heroVisualAlt:
-      "Interfaz Circles de PulseVerse con comunidades temáticas sanitarias, tarjetas neon-glass y descubrimiento primero.",
-    heroPosterTag: "Circles · comunidades",
+      "Hero de socios PulseVerse: tarjeta de colaboración en vivo con dos mockups móviles para educación co-marca e instituciones.",
+    heroPosterTag: "Ecosistema de socios",
     offers: [
       {
         title: "Series formativas",

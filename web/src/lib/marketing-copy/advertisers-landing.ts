@@ -105,7 +105,7 @@ const en: AdvertisersLandingCopy = {
     ctaMediaKit: "Request media kit",
     ctaPartnerships: "Talk to partnerships",
     ecosystemImageAlt:
-      "PulseVerse product overview showing Feed, Pulse Page profile, and My Pulse surfaces with neon-glass healthcare UI.",
+      "PulseVerse advertiser ecosystem mockup: sponsored border, live lower-third, branded feed on phone, partner drop frame, and campaign analytics with trusted brand marks.",
     ecosystemPosterTag: "Surfaces overview",
   },
   preview: {
@@ -168,7 +168,7 @@ const en: AdvertisersLandingCopy = {
     disclaimer:
       "Illustrative concepts only. Partner Drop Borders availability, specs, and labeling follow policy and inventory — confirm with partnerships before referencing in external materials.",
     imageAlt:
-      "Concept grid of PulseVerse Partner Drop profile border frames with teal and gold accent treatments on dark glass cards.",
+      "Partner Drop border concepts for FIGS, Crocs, Hoka, Dansko, Nike, and Eko — collectible profile frames with rarity tiers on dark neon-glass cards.",
     posterTag: "Concept renders",
   },
   safeEyebrow: "Brand safe · clinician trusted",
@@ -250,7 +250,7 @@ const es: AdvertisersLandingCopy = {
     ctaMediaKit: "Solicitar media kit",
     ctaPartnerships: "Hablar con alianzas",
     ecosystemImageAlt:
-      "Vista del producto PulseVerse con Feed, perfil Pulse Page y superficie My Pulse, interfaz sanitaria neon-glass.",
+      "Mockup del ecosistema publicitario PulseVerse: borde patrocinado, lower-third en vivo, feed de marca en móvil, marco partner drop y analítica de campaña.",
     ecosystemPosterTag: "Panorama de superficies",
   },
   preview: {
@@ -318,7 +318,7 @@ const es: AdvertisersLandingCopy = {
     disclaimer:
       "Solo ilustrativo. Disponibilidad, especificaciones y etiquetado de Partner Drop Borders siguen política e inventario — confirma con alianzas antes de citarlo en materiales externos.",
     imageAlt:
-      "Rejilla conceptual de marcos Partner Drop para perfil en PulseVerse con acentos teal y oro sobre tarjetas glass oscuras.",
+      "Conceptos Partner Drop para FIGS, Crocs, Hoka, Dansko, Nike y Eko — marcos de perfil coleccionables con rareza sobre tarjetas neon-glass oscuras.",
     posterTag: "Renders conceptuales",
   },
   safeEyebrow: "Marca segura · confianza clínica",

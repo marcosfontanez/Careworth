@@ -15,6 +15,8 @@ export type DownloadPageCopy = {
   faqHintBefore: string;
   faqLinkLabel: string;
   faqHintAfter: string;
+  /** Alt text for the wide early-access hero infographic (phones + value props). */
+  earlyAccessHeroAlt: string;
   footnote: string;
 };
 
@@ -38,6 +40,8 @@ const copy: Record<Locale, DownloadPageCopy> = {
     faqHintBefore: "Questions?",
     faqLinkLabel: "FAQ",
     faqHintAfter: "includes eligibility and regional rollout notes.",
+    earlyAccessHeroAlt:
+      "PulseVerse early access infographic: headline, three benefit cards, rolling-out status bar, iOS TestFlight and Android beta phone mockups with join buttons.",
     footnote:
       "Creator program: indicate on the contact form if you plan to host Live sessions or publish educational series — we'll prioritize moderator-ready cohorts.",
   },
@@ -60,6 +64,8 @@ const copy: Record<Locale, DownloadPageCopy> = {
     faqHintBefore: "¿Dudas?",
     faqLinkLabel: "FAQ",
     faqHintAfter: "incluye elegibilidad y despliegue por región.",
+    earlyAccessHeroAlt:
+      "Infografía de acceso anticipado PulseVerse: titular, tres beneficios, barra de despliegue, mockups iOS TestFlight y Android con botones para unirse.",
     footnote:
       "Programa para creadores: indícalo en el formulario de contacto si planeas Lives o series educativas — priorizamos cohortes listas para moderación.",
   },

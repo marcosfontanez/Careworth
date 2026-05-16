@@ -66,10 +66,10 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
           </div>
           <div className="relative">
             <PosterFrame
-              src="/marketing/pulse-page-vs-my-pulse.png"
+              src="/marketing/marketing-advertisers-ad-solutions.png"
               alt={c.hero.ecosystemImageAlt}
-              width={1672}
-              height={941}
+              width={1024}
+              height={576}
               priority
               glow="blue"
               size="dramatic"
@@ -177,10 +177,10 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
           <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">{c.partnerDropBorders.body}</p>
           <div className="mt-10">
             <PosterFrame
-              src="/marketing/borders-overview.png"
+              src="/marketing/marketing-partner-drop-concepts.png"
               alt={c.partnerDropBorders.imageAlt}
-              width={1536}
-              height={1024}
+              width={1024}
+              height={576}
               glow="gold"
               tag={{ label: c.partnerDropBorders.posterTag, tone: "gold" }}
               sizes="(max-width: 768px) 100vw, 1180px"

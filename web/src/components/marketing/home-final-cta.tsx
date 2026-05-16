@@ -1,8 +1,7 @@
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
-import { SplitFeatureRow } from "@/components/marketing/website-visuals";
+import { PosterFrame, SplitFeatureRow } from "@/components/marketing/website-visuals";
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/lib/i18n";
 import { getHomeCtaCopy } from "@/lib/marketing-copy/home";
@@ -10,7 +9,7 @@ import { marketingGutterX } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 /**
- * Premium homepage closing CTA — gradient panel with a split collage of product renders.
+ * Premium homepage closing CTA — gradient panel with ecosystem hero visual.
  */
 export function HomeFinalCta({ locale }: { locale: Locale }) {
   const c = getHomeCtaCopy(locale);
@@ -70,57 +69,22 @@ export function HomeFinalCta({ locale }: { locale: Locale }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:max-w-lg lg:justify-self-end">
-                <HomeCtaCollageTile alt={c.collageBannerAlt} src="/marketing/shop-banner-hero.png" ring="cyan" />
-                <HomeCtaCollageTile
-                  alt={c.collagePhoneAlt}
-                  src="/marketing/shop-mobile-frame.png"
-                  ring="blue"
-                  className="translate-y-4 sm:translate-y-6"
-                />
-              </div>
+              <PosterFrame
+                src="/marketing/marketing-home-ecosystem-hero.png"
+                alt={c.ecosystemHeroAlt}
+                width={1024}
+                height={576}
+                glow="blue"
+                size="dramatic"
+                tag={{ label: "PulseVerse", tone: "cyan" }}
+                sizes="(max-width: 1024px) 100vw, min(520px, 45vw)"
+                className="w-full max-w-xl justify-self-center lg:max-w-none lg:justify-self-end"
+                cornerTrace={false}
+              />
             </SplitFeatureRow>
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function HomeCtaCollageTile({
-  src,
-  alt,
-  ring,
-  className,
-}: {
-  src: string;
-  alt: string;
-  ring: "cyan" | "blue";
-  className?: string;
-}) {
-  const ringCls =
-    ring === "blue"
-      ? "shadow-[0_28px_70px_-22px_rgba(45,127,249,0.38)] ring-primary/25"
-      : "shadow-[0_28px_70px_-22px_rgba(20,184,166,0.38)] ring-[var(--accent)]/25";
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(8,14,26,0.65)] ring-1 backdrop-blur-sm",
-        ringCls,
-        className,
-      )}
-      style={{ aspectRatio: `${941} / ${1672}` }}
-    >
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-x-4 top-0 z-10 h-px opacity-80",
-          ring === "blue"
-            ? "bg-gradient-to-r from-transparent via-primary/60 to-transparent"
-            : "bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent",
-        )}
-      />
-      <Image src={src} alt={alt} fill className="object-cover object-top" sizes="(max-width: 768px) 42vw, 240px" />
-    </div>
   );
 }
