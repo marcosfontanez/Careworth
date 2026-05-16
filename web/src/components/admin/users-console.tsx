@@ -151,9 +151,14 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
                   <TableCell className="text-muted-foreground">{u.joinedAt}</TableCell>
                   <TableCell className="text-muted-foreground">{u.lastActive}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href="/admin/moderation">Safety queue</Link>
-                    </Button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button size="sm" variant="default" asChild>
+                        <Link href={`/admin/users/${u.id}`}>Economy audit</Link>
+                      </Button>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href="/admin/moderation">Moderation</Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
