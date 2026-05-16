@@ -10,6 +10,7 @@ Product-facing defaults are wired in `web/src/lib/site-constants.ts` and overrid
 | `support@pulseverse.app` | User support (default `NEXT_PUBLIC_SUPPORT_EMAIL`) |
 | `privacy@pulseverse.app` | Privacy / DSR (default `NEXT_PUBLIC_PRIVACY_EMAIL`) |
 | `security@pulseverse.app` | Responsible disclosure / `security.txt` (default `NEXT_PUBLIC_SECURITY_EMAIL`) |
+| `safety@pulseverse.app` | Child-safety / CSAE compliance (default `NEXT_PUBLIC_CHILD_SAFETY_EMAIL`; see `/child-safety`) |
 
 ## Store & platform
 

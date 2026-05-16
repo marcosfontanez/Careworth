@@ -14,6 +14,11 @@ export function getSecurityEmail(): string {
   return process.env.NEXT_PUBLIC_SECURITY_EMAIL?.trim() || "security@pulseverse.app";
 }
 
+/** Child-safety compliance / CSAE inquiries (Google Play and similar disclosures). */
+export function getChildSafetyComplianceEmail(): string {
+  return process.env.NEXT_PUBLIC_CHILD_SAFETY_EMAIL?.trim() || "safety@pulseverse.app";
+}
+
 export function getLegalNotice(): string {
   return `${site.name} is not a substitute for professional medical advice, diagnosis, or treatment.`;
 }

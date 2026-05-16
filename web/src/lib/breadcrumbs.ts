@@ -5,6 +5,7 @@ export const MARKETING_SEGMENT_LABELS: Record<string, string> = {
   about: "About",
   advertisers: "Advertisers",
   changelog: "Changelog",
+  "child-safety": "Child safety",
   contact: "Contact",
   communities: "Circles",
   "community-guidelines": "Community guidelines",

@@ -24,6 +24,7 @@ export type MarketingSeoKey =
   | "communityGuidelines"
   | "changelog"
   | "trust"
+  | "childSafety"
   | "privacy"
   | "terms";
 
@@ -53,6 +54,7 @@ const PATHS: Record<MarketingSeoKey, `/${string}` | "/"> = {
   communityGuidelines: "/community-guidelines",
   changelog: "/changelog",
   trust: "/trust",
+  childSafety: "/child-safety",
   privacy: "/privacy",
   terms: "/terms",
 };
@@ -168,6 +170,23 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
     description: `How ${site.name} approaches moderation, reporting, and protecting healthcare culture on the network.`,
     ogTitle: "Trust & safety",
     ogDescription: `Trust, safety, and moderation on ${site.name}.`,
+  },
+  childSafety: {
+    title: "Child Safety Standards",
+    description:
+      "PulseVerse's published standards against child sexual abuse and exploitation, reporting practices, and child-safety compliance commitments.",
+    ogTitle: "Child safety standards",
+    ogDescription:
+      "Published standards against child sexual abuse and exploitation, reporting practices, and child-safety compliance commitments.",
+    keywords: [
+      "child safety",
+      "CSAE",
+      "CSAM",
+      "child sexual abuse material",
+      "in-app reporting",
+      "NCMEC",
+      "PulseVerse",
+    ],
   },
   privacy: {
     title: "Privacy Policy",
@@ -299,6 +318,23 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
     description: `Cómo ${site.name} aborda moderación, reportes y la protección de la cultura sanitaria en la red.`,
     ogTitle: "Confianza y seguridad",
     ogDescription: `Confianza, seguridad y moderación en ${site.name}.`,
+  },
+  childSafety: {
+    title: "Normas de seguridad infantil",
+    description:
+      "Normas publicadas de PulseVerse contra el abuso y la explotación sexual infantil, prácticas de reporte y compromisos de cumplimiento en materia de seguridad infantil.",
+    ogTitle: "Seguridad infantil",
+    ogDescription:
+      "Normas publicadas contra el abuso y la explotación sexual infantil, prácticas de reporte y cumplimiento.",
+    keywords: [
+      "seguridad infantil",
+      "CSAE",
+      "CSAM",
+      "material de abuso sexual infantil",
+      "reporte en la app",
+      "NCMEC",
+      "PulseVerse",
+    ],
   },
   privacy: {
     title: "Política de privacidad",
