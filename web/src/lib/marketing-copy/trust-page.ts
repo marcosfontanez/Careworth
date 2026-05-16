@@ -6,6 +6,8 @@ export type TrustPageCopy = {
   eyebrow: string;
   title: string;
   description: string;
+  infographicAlt: string;
+  infographicTag: string;
   sections: readonly TrustSection[];
   disclosureTitle: string;
   disclosureBeforeEmail: string;
@@ -20,7 +22,10 @@ const copy: Record<Locale, TrustPageCopy> = {
     eyebrow: "Trust & safety",
     title: "How we protect healthcare culture",
     description:
-      "A short overview of moderation, reporting, and safety expectations. For enforceable rules and privacy practices, see the documents linked below.",
+      "A concise overview of moderation, reporting, and safety expectations. For enforceable rules and privacy practices, follow the documents linked below.",
+    infographicAlt:
+      "PulseVerse Creator Hub showing Media Hub, monetization, and profile tools with premium dark healthcare UI.",
+    infographicTag: "Trust surfaces",
     sections: [
       {
         title: "Healthcare-first moderation",
@@ -56,7 +61,10 @@ const copy: Record<Locale, TrustPageCopy> = {
     eyebrow: "Confianza y seguridad",
     title: "Cómo protegemos la cultura sanitaria",
     description:
-      "Panorama breve de moderación, reportes y expectativas de seguridad. Para reglas exigibles y prácticas de privacidad, consulta los documentos enlazados abajo.",
+      "Panorama breve de moderación, reportes y expectativas de seguridad. Para reglas exigibles y privacidad, usa los enlaces de abajo.",
+    infographicAlt:
+      "Creator Hub de PulseVerse con Media Hub, monetización y herramientas de perfil en interfaz premium oscura.",
+    infographicTag: "Superficies de confianza",
     sections: [
       {
         title: "Moderación centrada en la sanidad",

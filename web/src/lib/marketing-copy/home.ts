@@ -16,6 +16,8 @@ export type HomeCtaCopy = {
   description: string;
   primaryLabel: string;
   secondaryLabel: string;
+  collageBannerAlt: string;
+  collagePhoneAlt: string;
 };
 
 const hero: Record<Locale, HomeHeroCopy> = {
@@ -47,12 +49,20 @@ const bottomCta: Record<Locale, HomeCtaCopy> = {
     description: "Join the clinicians, students, and creators already inside.",
     primaryLabel: "Join PulseVerse",
     secondaryLabel: "Partner with us",
+    collageBannerAlt:
+      "PulseVerse Pulse Shop banner and storefront hero with premium teal accents on dark glass.",
+    collagePhoneAlt:
+      "PulseVerse mobile Pulse Shop frame showing browse and collectibles UI on a phone mockup.",
   },
   es: {
     title: "Hazlo tu Pulse.",
     description: "Únete a los clínicos, estudiantes y creadores que ya están dentro.",
     primaryLabel: "Unirte a PulseVerse",
     secondaryLabel: "Aliarte con nosotros",
+    collageBannerAlt:
+      "Banner hero de Pulse Shop en PulseVerse con acentos teal premium sobre glass oscuro.",
+    collagePhoneAlt:
+      "Marco móvil de Pulse Shop en PulseVerse con interfaz de exploración y coleccionables.",
   },
 };
 

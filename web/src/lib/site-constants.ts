@@ -20,3 +20,15 @@ export function getLegalNotice(): string {
 
 /** Shown on legal/community docs (Trust & “last updated” alignment). */
 export const legalDocumentsLastUpdatedDisplay = "April 27, 2026";
+
+/** Public TestFlight / web invite URL — set in hosting env; shown on /download when non-empty. */
+export function getIosTestflightUrl(): string | undefined {
+  const v = process.env.NEXT_PUBLIC_IOS_TESTFLIGHT_URL?.trim();
+  return v ? v : undefined;
+}
+
+/** Google Play open testing / internal testing opt-in URL — optional companion to TestFlight. */
+export function getAndroidOpenTestingUrl(): string | undefined {
+  const v = process.env.NEXT_PUBLIC_ANDROID_OPEN_TESTING_URL?.trim();
+  return v ? v : undefined;
+}

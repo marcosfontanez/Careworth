@@ -17,6 +17,7 @@ import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrum
 import { Button } from "@/components/ui/button";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
+import { PosterFrame } from "@/components/marketing/website-visuals";
 import type { Locale } from "@/lib/i18n";
 import { getAdvertisersLandingCopy } from "@/lib/marketing-copy/advertisers-landing";
 import { marketingCardMuted, marketingEyebrow, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
@@ -63,23 +64,19 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
               </Button>
             </div>
           </div>
-          <div className="relative grid gap-4 sm:grid-cols-2">
-            <div className={cn("rounded-2xl border border-white/10 p-5", marketingCardMuted, "sm:translate-y-8")}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">{c.preview.feedLabel}</p>
-              <div className="mt-4 space-y-2">
-                {[1, 2].map((i) => (
-                  <div key={i} className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-xs text-muted-foreground">
-                    {c.preview.sponsoredLine.replace("{n}", String(i))}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className={cn("rounded-2xl border border-white/10 p-5", marketingCardMuted)}>
-              <p className="text-xs font-semibold text-muted-foreground">{c.preview.liveLabel}</p>
-              <div className="mt-4 aspect-video rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 ring-1 ring-primary/25">
-                <div className="flex h-full items-end p-3 text-[10px] text-white/80">{c.preview.lowerThird}</div>
-              </div>
-            </div>
+          <div className="relative">
+            <PosterFrame
+              src="/marketing/pulse-page-vs-my-pulse.png"
+              alt={c.hero.ecosystemImageAlt}
+              width={1672}
+              height={941}
+              priority
+              glow="blue"
+              size="dramatic"
+              tag={{ label: c.hero.ecosystemPosterTag, tone: "cyan" }}
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="mx-auto w-full max-w-3xl lg:mx-0 lg:max-w-none"
+            />
           </div>
 
         </div>
@@ -171,6 +168,24 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        <div className="mt-16">
+          <p className={marketingEyebrow}>{c.partnerDropBorders.eyebrow}</p>
+          <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.partnerDropBorders.title}</h2>
+          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">{c.partnerDropBorders.body}</p>
+          <div className="mt-10">
+            <PosterFrame
+              src="/marketing/borders-overview.png"
+              alt={c.partnerDropBorders.imageAlt}
+              width={1536}
+              height={1024}
+              glow="gold"
+              tag={{ label: c.partnerDropBorders.posterTag, tone: "gold" }}
+              sizes="(max-width: 768px) 100vw, 1180px"
+              caption={<span className="normal-case tracking-normal">{c.partnerDropBorders.disclaimer}</span>}
+            />
           </div>
         </div>
 

@@ -50,7 +50,7 @@ export type FeaturesHubCopy = {
   compareCellDash: string;
   compareIncludedAria: string;
   comparisonRows: FeaturesComparisonRow[];
-  bottomCta: HomeCtaCopy;
+  bottomCta: Pick<HomeCtaCopy, "title" | "description" | "primaryLabel" | "secondaryLabel">;
 };
 
 const sharedSpotlightHrefs = [

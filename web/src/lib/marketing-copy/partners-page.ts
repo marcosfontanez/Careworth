@@ -6,6 +6,8 @@ export type PartnersPageCopy = {
   eyebrow: string;
   title: string;
   description: string;
+  heroVisualAlt: string;
+  heroPosterTag: string;
   offers: readonly PartnersOffer[];
   contactLead: string;
   contactLinkLabel: string;
@@ -19,7 +21,10 @@ const copy: Record<Locale, PartnersPageCopy> = {
     eyebrow: "Partners",
     title: "Build with healthcare culture",
     description:
-      "Institutions, associations, and innovators partner with PulseVerse to reach clinicians in Feed, Circles, Live, and on Pulse Page — with moderation seriousness, trust tooling, and identity surfaces that respect how teams actually connect.",
+      "Institutions, associations, and innovators reach clinicians across Feed, Circles, Live, and Pulse Page — with moderation depth, trust tooling, and identity surfaces aligned to how teams actually work.",
+    heroVisualAlt:
+      "PulseVerse Circles interface showing healthcare topic communities with neon-glass cards and discovery-first layout.",
+    heroPosterTag: "Circles · communities",
     offers: [
       {
         title: "Education series",
@@ -44,7 +49,10 @@ const copy: Record<Locale, PartnersPageCopy> = {
     eyebrow: "Socios",
     title: "Construir con la cultura sanitaria",
     description:
-      "Instituciones, asociaciones e innovadores colaboran con PulseVerse para llegar a clínicos en Feed, Circles, Live y Pulse Page — con moderación rigurosa, herramientas de confianza e identidad que respetan cómo los equipos se conectan de verdad.",
+      "Instituciones, asociaciones e innovadores llegan a clínicos en Feed, Circles, Live y Pulse Page — con moderación rigurosa, herramientas de confianza e identidad alineadas al trabajo real de los equipos.",
+    heroVisualAlt:
+      "Interfaz Circles de PulseVerse con comunidades temáticas sanitarias, tarjetas neon-glass y descubrimiento primero.",
+    heroPosterTag: "Circles · comunidades",
     offers: [
       {
         title: "Series formativas",

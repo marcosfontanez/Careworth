@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { SectionHeader } from "@/components/marketing/section-header";
+import { PosterFrame } from "@/components/marketing/website-visuals";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
 import { getTrustPageCopy } from "@/lib/marketing-copy/trust-page";
@@ -19,6 +20,17 @@ export default async function TrustPage() {
   return (
     <MarketingPageShell width="medium" breadcrumbPath="/trust">
       <SectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
+      <div className="mt-12">
+        <PosterFrame
+          src="/marketing/creator-hub.png"
+          alt={c.infographicAlt}
+          width={1672}
+          height={941}
+          glow="blue"
+          tag={{ label: c.infographicTag, tone: "cyan" }}
+          sizes="(max-width: 768px) 100vw, 900px"
+        />
+      </div>
       <div className="mt-12 grid gap-6 md:grid-cols-2">
         {c.sections.map((s) => (
           <div key={s.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>

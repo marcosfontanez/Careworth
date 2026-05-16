@@ -2,6 +2,7 @@ import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { CtaSection } from "@/components/marketing/cta-section";
+import { PosterFrame } from "@/components/marketing/website-visuals";
 import { getPartnersPageCopy } from "@/lib/marketing-copy/partners-page";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
@@ -18,6 +19,17 @@ export default async function PartnersPage() {
     <>
       <MarketingPageShell width="medium" breadcrumbPath="/partners">
         <SectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
+        <div className="mt-12">
+          <PosterFrame
+            src="/marketing/hero-circles.png"
+            alt={c.heroVisualAlt}
+            width={1672}
+            height={941}
+            glow="cyan"
+            tag={{ label: c.heroPosterTag }}
+            sizes="(max-width: 768px) 100vw, 900px"
+          />
+        </div>
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {c.offers.map((o) => (
             <div key={o.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>

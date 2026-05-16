@@ -16,12 +16,23 @@ export type AdvertisersLandingCopy = {
     body: string;
     ctaMediaKit: string;
     ctaPartnerships: string;
+    /** Alt text for the flagship hero visual (Feed · Pulse Page · My Pulse). */
+    ecosystemImageAlt: string;
+    ecosystemPosterTag: string;
   };
   preview: {
     feedLabel: string;
     sponsoredLine: string;
     liveLabel: string;
     lowerThird: string;
+  };
+  partnerDropBorders: {
+    eyebrow: string;
+    title: string;
+    body: string;
+    disclaimer: string;
+    imageAlt: string;
+    posterTag: string;
   };
   whyEyebrow: string;
   whyTitle: string;
@@ -93,6 +104,9 @@ const en: AdvertisersLandingCopy = {
     body: "PulseVerse is the premium healthcare audience platform where professionals learn, connect, and lead — with moderation and category fit baked in.",
     ctaMediaKit: "Request media kit",
     ctaPartnerships: "Talk to partnerships",
+    ecosystemImageAlt:
+      "PulseVerse product overview showing Feed, Pulse Page profile, and My Pulse surfaces with neon-glass healthcare UI.",
+    ecosystemPosterTag: "Surfaces overview",
   },
   preview: {
     feedLabel: "Feed preview",
@@ -146,6 +160,17 @@ const en: AdvertisersLandingCopy = {
     { title: "Live sponsorships", body: "Lower-thirds and labels with moderator review." },
     { title: "Circles headers", body: "Community surfaces where specialty culture gathers." },
   ],
+  partnerDropBorders: {
+    eyebrow: "Partner Drop · Borders",
+    title: "Premium frames that feel native to Pulse Page",
+    body:
+      "Concept renders for sponsored profile borders and seasonal drops — built to read as clinical-luxury adornment, not loud takeover skins. Final creative, pricing, and approval flows are scoped per partnership.",
+    disclaimer:
+      "Illustrative concepts only. Partner Drop Borders availability, specs, and labeling follow policy and inventory — confirm with partnerships before referencing in external materials.",
+    imageAlt:
+      "Concept grid of PulseVerse Partner Drop profile border frames with teal and gold accent treatments on dark glass cards.",
+    posterTag: "Concept renders",
+  },
   safeEyebrow: "Brand safe · clinician trusted",
   safeTitle: "Your brand next to content that passes the ward-room test.",
   safetyChecks: [
@@ -224,6 +249,9 @@ const es: AdvertisersLandingCopy = {
     body: "PulseVerse es la plataforma premium de audiencias sanitarias donde los profesionales aprenden, conectan y lideran — con moderación y encaje de categoría integrados.",
     ctaMediaKit: "Solicitar media kit",
     ctaPartnerships: "Hablar con alianzas",
+    ecosystemImageAlt:
+      "Vista del producto PulseVerse con Feed, perfil Pulse Page y superficie My Pulse, interfaz sanitaria neon-glass.",
+    ecosystemPosterTag: "Panorama de superficies",
   },
   preview: {
     feedLabel: "Vista previa del Feed",
@@ -282,6 +310,17 @@ const es: AdvertisersLandingCopy = {
     { title: "Patrocinios en Live", body: "Tercios inferiores y etiquetas con revisión del moderador." },
     { title: "Cabeceras en Circles", body: "Superficies donde se concentra la cultura por especialidad." },
   ],
+  partnerDropBorders: {
+    eyebrow: "Partner Drop · Borders",
+    title: "Marcos premium que se sienten nativos en Pulse Page",
+    body:
+      "Renders conceptuales para bordes de perfil patrocinados y lanzamientos estacionales — lectura de adorno clínico-lujo, no skins de takeover chillones. Creatividad final, precios y flujos de aprobación se acuerdan por alianza.",
+    disclaimer:
+      "Solo ilustrativo. Disponibilidad, especificaciones y etiquetado de Partner Drop Borders siguen política e inventario — confirma con alianzas antes de citarlo en materiales externos.",
+    imageAlt:
+      "Rejilla conceptual de marcos Partner Drop para perfil en PulseVerse con acentos teal y oro sobre tarjetas glass oscuras.",
+    posterTag: "Renders conceptuales",
+  },
   safeEyebrow: "Marca segura · confianza clínica",
   safeTitle: "Tu marca junto a contenido que supera la prueba del vestuario.",
   safetyChecks: [
