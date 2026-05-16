@@ -7,7 +7,6 @@ export type DownloadPageCopy = {
   requestInvite: string;
   appStoreSoon: string;
   playSoon: string;
-  /** Shown when NEXT_PUBLIC_IOS_TESTFLIGHT_URL is set */
   iosBetaCta: string;
   /** Shown when NEXT_PUBLIC_ANDROID_OPEN_TESTING_URL is set */
   androidBetaCta: string;
@@ -32,9 +31,9 @@ const copy: Record<Locale, DownloadPageCopy> = {
     androidBetaCta: "Join Android beta",
     betaStepsTitle: "Install the beta",
     betaSteps: [
-      "Use the Join iOS beta or Join Android beta button for your device — iOS opens in TestFlight when the link is configured.",
-      "Accept the PulseVerse beta invite and complete the store install flow.",
-      "Open the app from TestFlight or Play; sign in with your approved account and use Wi‑Fi for the first launch when possible.",
+      "Install Apple TestFlight from the App Store on the iPhone, iPad, or Mac you’ll use for testing.",
+      "On that device, tap Join iOS beta below, accept the invitation, then tap Install in TestFlight. (Android: use Join Android beta when available.)",
+      "Open PulseVerse from TestFlight or Play and sign in with your approved account — Wi‑Fi helps on first launch.",
     ],
     faqHintBefore: "Questions?",
     faqLinkLabel: "FAQ",
@@ -54,9 +53,9 @@ const copy: Record<Locale, DownloadPageCopy> = {
     androidBetaCta: "Beta Android",
     betaStepsTitle: "Instalar la beta",
     betaSteps: [
-      "Usa Beta iOS o Beta Android según tu dispositivo — iOS abre TestFlight si el enlace está configurado.",
-      "Acepta la invitación a la beta de PulseVerse y completa la instalación desde la tienda.",
-      "Abre la app desde TestFlight o Play; entra con tu cuenta aprobada y usa Wi‑Fi en el primer arranque si puedes.",
+      "Instala Apple TestFlight desde la App Store en el iPhone, iPad o Mac que usarás para probar.",
+      "En ese dispositivo, pulsa Beta iOS abajo, acepta la invitación y pulsa Instalar en TestFlight. (Android: Beta Android cuando exista.)",
+      "Abre PulseVerse desde TestFlight o Play y entra con tu cuenta aprobada — Wi‑Fi ayuda en el primer arranque.",
     ],
     faqHintBefore: "¿Dudas?",
     faqLinkLabel: "FAQ",

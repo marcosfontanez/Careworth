@@ -21,10 +21,16 @@ export function getLegalNotice(): string {
 /** Shown on legal/community docs (Trust & “last updated” alignment). */
 export const legalDocumentsLastUpdatedDisplay = "April 27, 2026";
 
-/** Public TestFlight / web invite URL — set in hosting env; shown on /download when non-empty. */
-export function getIosTestflightUrl(): string | undefined {
+/** Public TestFlight join link for PulseVerse (same URL Apple shows on the invite page). */
+export const DEFAULT_IOS_TESTFLIGHT_JOIN_URL = "https://testflight.apple.com/join/BcGqKNCj" as const;
+
+/**
+ * TestFlight public invite URL for /download and other CTAs.
+ * Override with `NEXT_PUBLIC_IOS_TESTFLIGHT_URL` when the join link changes.
+ */
+export function getIosTestflightUrl(): string {
   const v = process.env.NEXT_PUBLIC_IOS_TESTFLIGHT_URL?.trim();
-  return v ? v : undefined;
+  return v || DEFAULT_IOS_TESTFLIGHT_JOIN_URL;
 }
 
 /** Google Play open testing / internal testing opt-in URL — optional companion to TestFlight. */
