@@ -57,19 +57,21 @@ export function MarketingExpandableMedia({
           showCloseButton
           backdropClassName="bg-black/78 supports-backdrop-filter:backdrop-blur-[3px]"
           className={cn(
-            "max-h-[92vh] max-w-[calc(100vw-1rem)] gap-0 overflow-hidden border-white/10 bg-[rgba(6,10,22,0.97)] p-2 sm:max-w-[min(96vw,1440px)] sm:p-4",
+            "max-h-[98vh] w-[min(98vw,3200px)] max-w-[min(98vw,3200px)] gap-0 overflow-hidden border-white/10 bg-[rgba(6,10,22,0.97)] p-1 sm:p-2",
+            /** Wins over default dialog `sm:max-w-sm` so the lightbox can use the full viewport width. */
+            "sm:max-w-[min(98vw,3200px)]",
           )}
         >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
-          <div className="flex max-h-[88vh] items-center justify-center overflow-auto">
+          <div className="flex max-h-[min(96dvh,96vh)] w-full items-center justify-center overflow-auto overscroll-contain">
             <Image
               src={src}
               alt={alt}
               width={width}
               height={height}
               priority={open ? priority : false}
-              className="h-auto max-h-[85vh] w-auto max-w-full object-contain"
-              sizes="(max-width: 1440px) 96vw, 1440px"
+              className="h-auto w-auto max-h-[min(94dvh,94vh)] max-w-[min(96vw,3000px)] object-contain"
+              sizes="(max-width: 3000px) 96vw, 3000px"
             />
           </div>
         </DialogContent>
