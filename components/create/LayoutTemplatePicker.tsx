@@ -22,7 +22,7 @@ export function LayoutTemplatePicker({ value, onChange }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Layout guide</Text>
-      <Text style={styles.sub}>Preview framing only — posts as carousel unless you merge elsewhere.</Text>
+      <Text style={styles.sub}>Preview only — feed shows a standard carousel until templates render in-stream.</Text>
       <View style={styles.row}>
         {PRESETS.map((p) => {
           const on = p.id === value;

@@ -1,5 +1,6 @@
 import type { MediaAsset } from '@/lib/media';
 import type { VideoLookId } from '@/lib/videoFilters';
+import type { DuetLayoutMode } from '@/lib/duetLayoutMode';
 
 /**
  * In-memory handoff from the full-screen camera into `create/video.tsx`.
@@ -15,6 +16,8 @@ export interface PendingVideoCapture {
   lookId?: VideoLookId;
   soundPostId?: string;
   soundTitle?: string;
+  /** When recording from duet camera — persisted on the published post (migration 161). */
+  duetLayoutMode?: DuetLayoutMode;
 }
 
 let pending: PendingVideoCapture | null = null;

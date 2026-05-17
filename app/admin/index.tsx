@@ -1153,6 +1153,11 @@ export default function AdminPanel() {
                   These switches only affect PulseVerse on this phone — they are not server-side controls.
                 </Text>
                 <FlagToggle label="Live streaming (tab + rooms)" flag="liveStreaming" />
+                <FlagToggle
+                  label="Live hub demo streams (demo-live-* carousel)"
+                  flag="liveDiscoveryDemos"
+                />
+                <FlagToggle label="Feed creator gifting (rail)" flag="feedCreatorGifting" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />
                 <FlagToggle label="Creator Tips" flag="creatorTips" />

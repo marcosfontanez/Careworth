@@ -50,11 +50,11 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
             <p className={marketingEyebrow}>{c.eyebrow}</p>
             <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl">
               {c.heroTitleBefore}{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-accent to-primary bg-clip-text text-transparent">
                 {c.heroTitleAccent}
               </span>
             </h1>
-            <div className="mt-8 flex gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5 ring-1 ring-white/[0.05]">
+            <div className="mt-8 flex gap-2 rounded-2xl border border-white/10 bg-white/4 p-1.5 ring-1 ring-white/5">
               <div className="flex flex-1 items-center gap-2 rounded-xl bg-[rgba(5,10,20,0.6)] px-4 py-3 text-sm text-muted-foreground">
                 <Search className="h-4 w-4 shrink-0 text-primary" />
                 {c.searchPlaceholder}
@@ -73,7 +73,7 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
             </p>
           </div>
           <div className="relative flex justify-center lg:justify-end">
-            <div className="relative h-56 w-56 rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-primary/20 shadow-[0_24px_80px_-24px_rgba(45,127,249,0.45)] ring-1 ring-primary/25 sm:h-72 sm:w-72">
+            <div className="relative h-56 w-56 rounded-3xl border border-white/10 bg-linear-to-br from-slate-900/80 to-primary/20 shadow-[0_24px_80px_-24px_rgba(45,127,249,0.45)] ring-1 ring-primary/25 sm:h-72 sm:w-72">
               <div className="absolute inset-6 rounded-2xl bg-[rgba(5,10,20,0.85)] ring-1 ring-white/10" />
               <MessageCircle className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 text-[var(--accent)] opacity-90" />
             </div>
@@ -81,7 +81,7 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
         </div>
       </section>
 
-      <MarketingPageShell className="!py-0 pb-20">
+      <MarketingPageShell className="py-0! pb-20">
         <h2 className="text-2xl font-bold text-foreground">{c.sectionHelpTitle}</h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {c.helpTiles.map((tile, i) => {
@@ -169,7 +169,7 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
           })}
         </div>
 
-        <div className="relative mt-20 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-[#0c1f4a]/90 via-[rgba(5,10,20,0.95)] to-primary/20 p-8">
+        <div className="relative mt-20 overflow-hidden rounded-2xl border border-white/10 bg-linear-to-r from-[#0c1f4a]/90 via-[rgba(5,10,20,0.95)] to-primary/20 p-8">
           <h3 className="text-lg font-bold text-foreground">{c.subscribeTitle}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{c.subscribeBody}</p>
           <div className="mt-4 max-w-md">

@@ -3,7 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert } fr
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '@/theme';
-import type { MediaAsset } from '@/lib/media';
+import {
+  VIDEO_MAX_SECONDS,
+  VIDEO_MIN_SECONDS,
+  normalizePickerVideoDurationSeconds,
+  type MediaAsset,
+} from '@/lib/media';
 
 export type MultiClipStitchVariant = 'series' | 'broll';
 
@@ -23,7 +28,7 @@ const COPY: Record<
   series: {
     title: 'Multi-part series',
     lede:
-      'Posts multiple clips one after another — not merged into a single video file yet. Pick up to 4 extra clips, reorder, then post this clip first and Post each follow-up from your queue.',
+      'PulseVerse uploads each clip, creates one post, and combines them into a single video on the server (ffmpeg). Post once — wait for “Clips combined”. Requires the media worker running in your environment.',
     mainLabel: 'Main clip (Part 1)',
     extraLabel: (idx) => `Part ${idx + 2}`,
     confirmCta: 'Queue series',
@@ -31,7 +36,7 @@ const COPY: Record<
   broll: {
     title: 'B-roll cutaways',
     lede:
-      'Your upload is the main story (A-roll). Queue B-roll, then post each clip in order — this modal never merges files. After clips are in PulseVerse storage, operators can concat them with stitch/broll jobs (scripts/creator-media-worker.mjs).',
+      'Queue your main story plus cutaways — PulseVerse creates one post and concatenates A-roll then B-roll into a single MP4 on the server. Tap Post once and wait for “Clips combined”; requires the media worker.',
     mainLabel: 'A-roll (main story)',
     extraLabel: (idx) => `B-roll ${idx + 1}`,
     confirmCta: 'Queue cutaways',
@@ -39,7 +44,7 @@ const COPY: Record<
 };
 
 /**
- * Picks extra clips for a sequential posting queue. App-side merge into one MP4 is out of scope; worker stitch/broll handles concat after Storage uploads.
+ * Picks extra clips for server-side concat (`creator_media_jobs` stitch/broll).
  */
 export function MultiClipStitchModal({
   visible,
@@ -63,11 +68,26 @@ export function MultiClipStitchModal({
     }
     const r = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
-      videoMaxDuration: 60,
+      videoMaxDuration: VIDEO_MAX_SECONDS,
       quality: 1,
     });
     if (r.canceled || !r.assets?.[0]) return;
     const a = r.assets[0];
+    const durSec = normalizePickerVideoDurationSeconds(a.duration);
+    if (durSec != null && durSec < VIDEO_MIN_SECONDS) {
+      Alert.alert(
+        'Clip too short',
+        `Each queued clip must be at least ${VIDEO_MIN_SECONDS}s (same limit as the main composer).`,
+      );
+      return;
+    }
+    if (durSec != null && durSec > VIDEO_MAX_SECONDS) {
+      Alert.alert(
+        'Clip too long',
+        `Each clip can be up to ${VIDEO_MAX_SECONDS / 60} minutes — trim or pick a shorter file.`,
+      );
+      return;
+    }
     const ext = a.uri.split('.').pop()?.toLowerCase() ?? 'mp4';
     setClips((prev) => [
       ...prev,
@@ -76,7 +96,7 @@ export function MultiClipStitchModal({
         type: 'video',
         mimeType: `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`,
         fileName: `clip_${Date.now()}.${ext}`,
-        duration: a.duration ?? undefined,
+        duration: durSec,
         width: a.width,
         height: a.height,
       },

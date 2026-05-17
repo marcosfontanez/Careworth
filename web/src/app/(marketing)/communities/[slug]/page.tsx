@@ -75,7 +75,7 @@ export default async function CommunitySharePage({ params }: Props) {
     <MarketingPageShell width="medium" breadcrumbPath={`/communities/${slug}`}>
       <SectionHeader eyebrow="PulseVerse Circles" title={name} description={blurb} />
       {icon ? <p className="mt-6 text-5xl leading-none">{icon}</p> : null}
-      <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.03] p-8">
+      <div className="mt-10 rounded-2xl border border-white/10 bg-white/3 p-8">
         <OpenInPulseverseCta httpsUrl={httpsUrl} appDeepLink={appDeepLink} />
       </div>
       <p className="mt-8 text-sm leading-relaxed text-muted-foreground">

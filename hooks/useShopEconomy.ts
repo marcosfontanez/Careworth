@@ -39,6 +39,8 @@ export function useSparkWallet(userId: string | undefined) {
     },
     enabled: !!userId,
     staleTime: 15_000,
+    /** Global defaults disable focus refetch; balances change from web admin / other devices. */
+    refetchOnWindowFocus: 'always',
   });
 }
 
@@ -52,6 +54,7 @@ export function useDiamondWallet(userId: string | undefined) {
     },
     enabled: !!userId,
     staleTime: 15_000,
+    refetchOnWindowFocus: 'always',
   });
 }
 
@@ -61,6 +64,8 @@ export function useUserInventory(userId: string | undefined) {
     queryFn: () => (userId ? shopQueriesService.getUserInventory(userId) : Promise.resolve([])),
     enabled: !!userId,
     staleTime: 15_000,
+    /** Staff grants / restores can land while the app is backgrounded. */
+    refetchOnWindowFocus: 'always',
   });
 }
 

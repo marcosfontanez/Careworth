@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Alert,
   Easing,
   InteractionManager,
   Modal,
@@ -23,7 +24,9 @@ import { pulseAvatarFramesService } from '@/services/supabase/pulseAvatarFrames'
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { useAppStore } from '@/store/useAppStore';
 import { queryClient } from '@/lib/queryClient';
-import { userKeys } from '@/lib/queryKeys';
+import { userKeys, rewardDeliveryKeys } from '@/lib/queryKeys';
+import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
+import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 import type { PulseAvatarFrame } from '@/types';
 
 /**
@@ -62,6 +65,7 @@ export function BetaTesterBorderGate() {
   const { user, profile, isAuthenticated, betaGiftCheckNonce } = useAuth();
 
   const teamBorderGiftBlocking = useAppStore((s) => s.teamBorderGiftBlocking);
+  const rewardDeliveryBlocking = useAppStore((s) => s.rewardDeliveryBlocking);
 
   /** Segments alone can lag behind navigation; pathname reflects the focused route more reliably. */
   const inAuth = segments.some((s) => s === 'auth') || pathname.startsWith('/auth');
@@ -79,7 +83,8 @@ export function BetaTesterBorderGate() {
     termsComplete &&
     !inAuth &&
     onFeed &&
-    !teamBorderGiftBlocking;
+    !teamBorderGiftBlocking &&
+    !rewardDeliveryBlocking;
 
   const canShowModalRef = useRef(canShowGiftUi);
   canShowModalRef.current = canShowGiftUi;
@@ -152,6 +157,34 @@ export function BetaTesterBorderGate() {
           await queryClient.invalidateQueries({ queryKey: userKeys.detail(effectUserId) });
           return;
         }
+
+        const routedId = await rewardDeliveriesService.enqueueClient({
+          deliveryType: 'system_award',
+          itemType: 'future_item',
+          idempotencyKey: `beta_tester_border:${effectUserId}:${res.frame.slug}`,
+          metadata: {
+            kind: 'beta_tester_frame',
+            frame: res.frame as unknown as Record<string, unknown>,
+          },
+        });
+        if (routedId) {
+          await markBetaTesterGiftModalDismissed(effectUserId);
+          useAppStore.getState().clearBetaTesterGiftPending();
+          await queryClient.invalidateQueries({ queryKey: userKeys.detail(effectUserId) });
+          await queryClient.invalidateQueries({ queryKey: rewardDeliveryKeys.pendingList(effectUserId) });
+          await queryClient.refetchQueries({ queryKey: rewardDeliveryKeys.pendingList(effectUserId) });
+          return;
+        }
+
+        rewardDeliveryDebug.warn('BetaTesterBorderGate: enqueueClient returned null — legacy gift modal fallback', {
+          slug: res.frame.slug,
+        });
+
+        Alert.alert(
+          'Gift-box celebration unavailable',
+          'Your beta border was saved to your account. We could not queue the premium reward toast — open Customize My Pulse → Border to equip it.',
+          [{ text: 'OK' }],
+        );
 
         useAppStore.getState().setBetaTesterGiftPending({ userId: effectUserId, frame: res.frame });
 

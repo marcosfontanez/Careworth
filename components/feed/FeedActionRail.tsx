@@ -20,13 +20,27 @@ interface Props {
   onShare: () => void;
   onFollow: () => void;
   onProfile: () => void;
+  /** Feed Phase 2 — opens `SendCreatorGiftTray` when `feedCreatorGifting` is on */
+  onGift?: () => void;
   onReport?: () => void;
   /** TikTok-style rotating sound disc — shown below actions for video */
   videoSoundSlot?: React.ReactNode;
 }
 
 export function FeedActionRail({
-  post, bottomInset, isLiked, isSaved, isFollowing, onLike, onComment, onSave, onShare, onFollow, onProfile, onReport,
+  post,
+  bottomInset,
+  isLiked,
+  isSaved,
+  isFollowing,
+  onLike,
+  onComment,
+  onSave,
+  onShare,
+  onFollow,
+  onProfile,
+  onGift,
+  onReport,
   videoSoundSlot,
 }: Props) {
   const action = (fn: () => void) => () => {
@@ -86,6 +100,15 @@ export function FeedActionRail({
         onPress={action(onSave)}
         accessibilityLabel={isSaved ? 'Remove from saved' : 'Save'}
       />
+      {onGift ? (
+        <ActionButton
+          icon="gift-outline"
+          color="rgba(253,230,138,0.95)"
+          count={-1}
+          onPress={action(onGift)}
+          accessibilityLabel={`Send a gift to ${post.creator.displayName}`}
+        />
+      ) : null}
       <ActionButton
         icon="paper-plane-outline"
         count={post.shareCount}

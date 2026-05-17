@@ -6,7 +6,6 @@ import {
   Easing,
   InteractionManager,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,12 +26,13 @@ import { needsLegalAcknowledgment } from '@/lib/legalAck';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { shopQueriesService } from '@/services/shop/shopQueries';
 import { purchaseService } from '@/services/shop/purchaseService';
-import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
-import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
-import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { useAppStore } from '@/store/useAppStore';
 import { analytics } from '@/lib/analytics';
 import { useToast } from '@/components/ui/Toast';
+import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
+import { rewardDeliveryKeys } from '@/lib/queryKeys';
+import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetadata';
+import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 
 const TEAM_LABEL = 'Pulse Verse Team';
 
@@ -44,20 +44,6 @@ const RIM_PREMIUM = [
 ] as const;
 
 let lastTeamGiftGateUserId: string | null = null;
-
-type Phase = 'invite' | 'revealed';
-
-function formatSeasonHint(iso: string | null | undefined): string | null {
-  const raw = iso?.trim();
-  if (!raw) return null;
-  try {
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Presents a full-screen “open your gift” flow when staff grant a shop border from the web admin.
@@ -74,6 +60,7 @@ export function PulseVerseTeamBorderGiftGate() {
   const { user, profile, isAuthenticated } = useAuth();
   const betaTesterBorderBlocking = useAppStore((s) => s.betaTesterBorderBlocking);
   const pulseMonthCelebrationBlocking = useAppStore((s) => s.pulseMonthCelebrationBlocking);
+  const rewardDeliveryBlocking = useAppStore((s) => s.rewardDeliveryBlocking);
   const setTeamBorderGiftBlocking = useAppStore((s) => s.setTeamBorderGiftBlocking);
 
   const termsComplete = profile != null && !needsLegalAcknowledgment(profile);
@@ -85,7 +72,8 @@ export function PulseVerseTeamBorderGiftGate() {
     termsComplete &&
     !inAuth &&
     !betaTesterBorderBlocking &&
-    !pulseMonthCelebrationBlocking;
+    !pulseMonthCelebrationBlocking &&
+    !rewardDeliveryBlocking;
 
   const uid = user?.id;
 
@@ -94,16 +82,13 @@ export function PulseVerseTeamBorderGiftGate() {
     queryFn: () => shopQueriesService.getNextPendingTeamBorderGift(uid!),
     enabled: !!uid && canShow,
     staleTime: 8_000,
+    refetchOnWindowFocus: 'always',
   });
 
   const [open, setOpen] = useState(false);
   const [opening, setOpening] = useState(false);
-  const [phase, setPhase] = useState<Phase>('invite');
-  const [inventoryRowId, setInventoryRowId] = useState<string | null>(null);
 
   const bounce = useRef(new Animated.Value(0)).current;
-  const giftBurst = useRef(new Animated.Value(1)).current;
-  const revealScale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const id = user?.id ?? null;
@@ -111,12 +96,9 @@ export function PulseVerseTeamBorderGiftGate() {
     lastTeamGiftGateUserId = id;
     setOpen(false);
     setOpening(false);
-    setPhase('invite');
-    setInventoryRowId(null);
-    giftBurst.setValue(1);
-    revealScale.setValue(0);
+    bounce.setValue(0);
     setTeamBorderGiftBlocking(false);
-  }, [user?.id, setTeamBorderGiftBlocking, giftBurst, revealScale]);
+  }, [user?.id, setTeamBorderGiftBlocking, bounce]);
 
   useEffect(() => {
     if (!canShow && open) {
@@ -156,7 +138,7 @@ export function PulseVerseTeamBorderGiftGate() {
   }, [canShow, gift, open, opening, setTeamBorderGiftBlocking]);
 
   useEffect(() => {
-    if (!open || phase !== 'invite' || opening) return;
+    if (!open || opening) return;
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(bounce, {
@@ -175,28 +157,17 @@ export function PulseVerseTeamBorderGiftGate() {
     );
     anim.start();
     return () => anim.stop();
-  }, [open, phase, opening, bounce]);
+  }, [open, opening, bounce]);
 
-  const runRevealMotion = useCallback(() => {
-    revealScale.setValue(0.08);
-    Animated.parallel([
-      Animated.timing(giftBurst, {
-        toValue: 0,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(revealScale, {
-        toValue: 1,
-        friction: 7,
-        tension: 110,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [giftBurst, revealScale]);
+  const closeGate = useCallback(() => {
+    setOpen(false);
+    setOpening(false);
+    bounce.setValue(0);
+    setTeamBorderGiftBlocking(false);
+  }, [setTeamBorderGiftBlocking, bounce]);
 
   const onOpenGift = useCallback(async () => {
-    if (!gift || opening || phase !== 'invite') return;
+    if (!gift || opening) return;
     setOpening(true);
     try {
       const res = await purchaseService.acceptPendingTeamBorderGift(gift.giftId);
@@ -220,47 +191,41 @@ export function PulseVerseTeamBorderGiftGate() {
       await qc.invalidateQueries({ queryKey: shopKeys.pendingTeamBorderGifts(uid) });
       await qc.invalidateQueries({ queryKey: shopKeys.inventory(uid) });
 
-      setInventoryRowId(invId);
-      setPhase('revealed');
-      runRevealMotion();
+      const meta = buildBorderRewardMetadata(gift.shopItem, invId ?? undefined, {
+        border_source: 'sponsored',
+        partner_label: TEAM_LABEL,
+      });
+
+      const routedId = await rewardDeliveriesService.enqueueClient({
+        deliveryType: 'gift',
+        itemType: 'border',
+        itemId: gift.shopItem.id,
+        idempotencyKey: `team_border_gift:${gift.giftId}`,
+        metadata: meta as unknown as Record<string, unknown>,
+        sourceDisplayName: TEAM_LABEL,
+      });
+      await qc.invalidateQueries({ queryKey: rewardDeliveryKeys.pendingList(uid) });
+      await qc.refetchQueries({ queryKey: rewardDeliveryKeys.pendingList(uid) });
+      if (!routedId) {
+        rewardDeliveryDebug.warn('PulseVerseTeamBorderGiftGate: enqueueClient returned null');
+        Alert.alert(
+          'Celebration queue failed',
+          'Your border was added to your vault. The animated reward toast could not be queued — check My Borders.',
+        );
+      }
+
+      showToast('Open your reward celebration below.', 'success');
+      closeGate();
     } catch (e) {
       console.warn('[PulseVerseTeamBorderGiftGate] accept', e);
       Alert.alert('Could not open gift', 'Something went wrong. Try again in a moment.');
     } finally {
       setOpening(false);
     }
-  }, [gift, opening, phase, qc, uid, runRevealMotion]);
-
-  const closeGate = useCallback(() => {
-    setOpen(false);
-    setPhase('invite');
-    setInventoryRowId(null);
-    giftBurst.setValue(1);
-    revealScale.setValue(0);
-    setTeamBorderGiftBlocking(false);
-  }, [setTeamBorderGiftBlocking, giftBurst, revealScale]);
-
-  const onEquip = useCallback(async () => {
-    if (!inventoryRowId) {
-      showToast('Border is in your vault — equip it from Customize.', 'info');
-      closeGate();
-      return;
-    }
-    const r = await purchaseService.equipBorder(inventoryRowId);
-    if (!r.ok) {
-      Alert.alert('Could not equip', r.message);
-      return;
-    }
-    await qc.invalidateQueries({ queryKey: shopKeys.inventory(uid) });
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-    showToast('Border equipped', 'success');
-    closeGate();
-  }, [inventoryRowId, qc, uid, showToast, closeGate]);
+  }, [gift, opening, qc, uid, closeGate, showToast]);
 
   if (!open || !gift) return null;
 
-  const ring = ringPreviewColor(gift.shopItem);
-  const metaMonth = formatSeasonHint(gift.shopItem.release_at);
   const bounceY = bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
 
   return (
@@ -285,123 +250,41 @@ export function PulseVerseTeamBorderGiftGate() {
         >
           <LinearGradient colors={[...RIM_PREMIUM]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGlow}>
             <View style={styles.cardInner}>
-              {phase === 'revealed' ? (
-                <TouchableOpacity
-                  hitSlop={14}
-                  style={styles.closeX}
-                  onPress={closeGate}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                >
-                  <Ionicons name="close" size={22} color="rgba(255,255,255,0.72)" />
-                </TouchableOpacity>
-              ) : null}
+              <Text style={styles.title}>Gift received</Text>
+              <Text style={styles.subtitle}>
+                You received <Text style={styles.subGold}>{gift.shopItem.name}</Text>
+                {'\n'}
+                from <Text style={styles.subCyan}>{TEAM_LABEL}</Text>
+              </Text>
 
-              {phase === 'invite' ? (
-                <>
-                  <Text style={styles.title}>Gift received</Text>
-                  <Text style={styles.subtitle}>
-                    You received <Text style={styles.subGold}>{gift.shopItem.name}</Text>
-                    {'\n'}
-                    from <Text style={styles.subCyan}>{TEAM_LABEL}</Text>
-                  </Text>
+              <Animated.View style={[styles.giftHero, { transform: [{ translateY: bounceY }] }]}>
+                <LinearGradient colors={['rgba(45,212,191,0.95)', 'rgba(34,211,238,0.75)']} style={styles.giftOrb}>
+                  <Ionicons name="gift" size={52} color="#FDE68A" />
+                </LinearGradient>
+              </Animated.View>
 
-                  <Animated.View
-                    style={[
-                      styles.giftHero,
-                      {
-                        transform: [{ translateY: bounceY }, { scale: giftBurst }],
-                        opacity: giftBurst,
-                      },
-                    ]}
-                  >
-                    <LinearGradient colors={['rgba(45,212,191,0.95)', 'rgba(34,211,238,0.75)']} style={styles.giftOrb}>
-                      <Ionicons name="gift" size={52} color="#FDE68A" />
-                    </LinearGradient>
-                  </Animated.View>
+              <View style={styles.statusPill}>
+                <Ionicons name="star" size={14} color={pulseverse.electricSoft} style={{ marginRight: 8 }} />
+                <Text style={styles.statusPillText}>A premium gift is waiting — open it to add to your vault.</Text>
+              </View>
 
-                  <View style={styles.statusPill}>
-                    <Ionicons name="star" size={14} color={pulseverse.electricSoft} style={{ marginRight: 8 }} />
-                    <Text style={styles.statusPillText}>A premium gift is waiting — open it to add to your vault.</Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.openBtn, opening && styles.openBtnDisabled]}
-                    onPress={() => void onOpenGift()}
-                    disabled={opening}
-                    activeOpacity={0.88}
-                  >
-                    <LinearGradient colors={[...gradients.ctaSheet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.openBtnGrad}>
-                      {opening ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <Ionicons name="gift-outline" size={20} color="#fff" />
-                          <Text style={styles.openBtnText}>Open gift</Text>
-                        </View>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <View style={styles.successBadgeWrap}>
-                    <LinearGradient
-                      colors={['rgba(45,212,191,0.95)', 'rgba(34,211,238,0.85)']}
-                      style={styles.successBadge}
-                    >
-                      <Ionicons name="checkmark" size={26} color="#fff" />
-                    </LinearGradient>
-                  </View>
-
-                  <Text style={styles.title}>Gift opened</Text>
-                  <Text style={styles.bodyCenter}>
-                    <Text style={styles.bodyMuted}>{gift.shopItem.name} is now in your </Text>
-                    <Text style={styles.vaultWord}>Border Vault</Text>
-                    <Text style={styles.bodyMuted}>.</Text>
-                  </Text>
-
-                  <Animated.View style={[styles.previewWrap, { transform: [{ scale: revealScale }] }]}>
-                    <BorderPreviewPlate shopItem={gift.shopItem} ringColor={ring} size={132} frame="podium" showMotionHint />
-                  </Animated.View>
-
-                  <View style={styles.rarityRow}>
-                    <BorderRarityBadge item={gift.shopItem} compact emphasized align="center" />
-                  </View>
-                  <Text style={styles.borderName}>{gift.shopItem.name}</Text>
-                  {metaMonth ? <Text style={styles.borderMeta}>{metaMonth}</Text> : null}
-
-                  <View style={styles.infoStrip}>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="archive-outline" size={18} color={pulseverse.electricSoft} />
-                      <Text style={styles.infoText}>Added to Border Vault</Text>
+              <TouchableOpacity
+                style={[styles.openBtn, opening && styles.openBtnDisabled]}
+                onPress={() => void onOpenGift()}
+                disabled={opening}
+                activeOpacity={0.88}
+              >
+                <LinearGradient colors={[...gradients.ctaSheet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.openBtnGrad}>
+                  {opening ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Ionicons name="gift-outline" size={20} color="#fff" />
+                      <Text style={styles.openBtnText}>Open gift</Text>
                     </View>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="flash-outline" size={18} color={pulseverse.hubTileBlue} />
-                      <Text style={styles.infoText}>{TEAM_LABEL} — thank you!</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="shield-checkmark-outline" size={18} color={pulseverse.electricMuted} />
-                      <Text style={styles.infoText}>Secure grant verified</Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity style={styles.equipBtn} onPress={() => void onEquip()} activeOpacity={0.88}>
-                    <LinearGradient colors={[...gradients.ctaSheet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.equipGrad}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <View style={styles.equipMini}>
-                          <Text style={styles.equipMiniLetter}>P</Text>
-                        </View>
-                        <Text style={styles.equipText}>Equip now</Text>
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <Pressable onPress={closeGate} style={styles.keepBrowse}>
-                    <Text style={styles.keepBrowseText}>Keep browsing</Text>
-                  </Pressable>
-                </>
-              )}
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </LinearGradient>
         </ScrollView>

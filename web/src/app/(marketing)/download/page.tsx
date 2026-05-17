@@ -48,13 +48,13 @@ export default async function DownloadPage() {
               {t.requestInvite}
             </MarketingDestinationLink>
           </Button>
-          <Button size="lg" variant="outline" className="border-white/15 bg-white/[0.03]" asChild>
+          <Button size="lg" variant="outline" className="border-white/15 bg-white/3" asChild>
             <a href={iosUrl} target="_blank" rel="noopener noreferrer">
               {t.iosBetaCta}
             </a>
           </Button>
           {androidUrl ? (
-            <Button size="lg" variant="outline" className="border-white/15 bg-white/[0.03]" asChild>
+            <Button size="lg" variant="outline" className="border-white/15 bg-white/3" asChild>
               <a href={androidUrl} target="_blank" rel="noopener noreferrer">
                 {t.androidBetaCta}
               </a>

@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -71,6 +72,11 @@ import { DiamondsInfoModal } from '@/components/shop/DiamondsInfoModal';
 import { queryClient } from '@/lib/queryClient';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { shopQueriesService } from '@/services/shop/shopQueries';
+import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
+import { rewardDeliveryKeys } from '@/lib/queryKeys';
+import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetadata';
+import { readPurchaseReceiptId, readUserInventoryId } from '@/lib/rewardDelivery/fulfillmentPayload';
+import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 
 /** Shown as native browser tooltip on web when hovering the Diamonds balance pill. */
 const DIAMONDS_PILL_TOOLTIP_WEB =
@@ -796,10 +802,6 @@ export default function PulseShopScreen() {
                         key={pack.id}
                         style={[styles.packCard, styles.packCardSparks]}
                         onPress={() => {
-                          if (Platform.OS === 'web') {
-                            showToast('Spark packs are available in the iOS/Android app.', 'info');
-                            return;
-                          }
                           setCreditItem(pack);
                         }}
                         activeOpacity={0.9}
@@ -1079,26 +1081,64 @@ export default function PulseShopScreen() {
           if (!buyItem) return { ok: false as const, code: 'INVALID_INPUT', message: 'Missing item' };
           return await purchaseService.purchaseBorderForSelf(buyItem);
         }}
-        onSuccess={async () => {
+        onSuccess={async (data) => {
           await refreshAfterPurchase();
           analytics.track('border_purchase_completed', { shop_item_id: buyItem?.id ?? '' });
-          let equipInventoryId: string | undefined;
-          if (userId && buyItem) {
+          if (!buyItem || !userId) {
+            rewardDeliveryDebug.warn('Border purchase success but missing buyItem or userId — cannot enqueue celebration');
+            return;
+          }
+
+          let equipInventoryId: string | undefined = readUserInventoryId(data) ?? undefined;
+          if (!equipInventoryId) {
             const inv = await queryClient.fetchQuery({
               queryKey: shopKeys.inventory(userId),
               queryFn: () => shopQueriesService.getUserInventory(userId),
             });
             equipInventoryId = inv.find((i) => i.shop_item_id === buyItem.id)?.id;
           }
-          if (buyItem) {
-            setCelebration({
-              kind: 'border_purchase',
-              borderItem: buyItem,
-              equipInventoryId,
-            });
+          if (!equipInventoryId) {
+            await new Promise((r) => setTimeout(r, 480));
+            const invRetry = await shopQueriesService.getUserInventory(userId);
+            equipInventoryId = invRetry.find((i) => i.shop_item_id === buyItem.id)?.id;
           }
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast('Border unlocked!', 'success');
+
+          let catalogItem = buyItem;
+          try {
+            const catalogRows = await shopQueriesService.getShopItemsByIds([buyItem.id]);
+            if (catalogRows[0]) catalogItem = catalogRows[0];
+          } catch (e) {
+            rewardDeliveryDebug.warn('Catalog refresh for reward metadata failed', e);
+          }
+
+          if (!equipInventoryId) {
+            rewardDeliveryDebug.warn('enqueueBorderSelf skipped: inventory row not found after purchase');
+            Alert.alert(
+              'Reward reveal unavailable',
+              'Your border should appear in My Borders. We could not queue the celebration screen yet — try refreshing or restarting the app.',
+            );
+            showToast('Border added — check My Borders if no gift prompt appears.', 'info');
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+            return;
+          }
+
+          const meta = buildBorderRewardMetadata(catalogItem, equipInventoryId, {
+            border_source: isFreeShopBorder(buyItem) ? 'promotional' : 'purchased',
+          });
+          const rq = await rewardDeliveriesService.enqueueBorderSelf(equipInventoryId, catalogItem.id, meta);
+          if (rq) {
+            await queryClient.invalidateQueries({ queryKey: rewardDeliveryKeys.pendingList(userId) });
+            await queryClient.refetchQueries({ queryKey: rewardDeliveryKeys.pendingList(userId) });
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+            return;
+          }
+
+          Alert.alert(
+            'Celebration queue failed',
+            'Your border is saved in My Borders. The reward animation could not be queued — check your connection or try again later.',
+          );
+          showToast('Border saved — check My Borders.', 'info');
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
         }}
       />
 
@@ -1147,6 +1187,7 @@ export default function PulseShopScreen() {
             setCelebration({
               kind: 'gift_sent',
               recipient,
+              sentKind: 'border',
             });
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }}
@@ -1161,8 +1202,9 @@ export default function PulseShopScreen() {
       />
 
       <CreditPackConfirmModal
-        visible={!!creditItem && Platform.OS !== 'web'}
+        visible={!!creditItem}
         onClose={() => setCreditItem(null)}
+        mode={Platform.OS === 'web' ? 'web_info' : 'purchase'}
         packLabel={`Buy ${(creditItem?.spark_amount ?? 0).toLocaleString()} Sparks?`}
         sparksAmount={creditItem?.spark_amount ?? 0}
         tag={
@@ -1174,20 +1216,58 @@ export default function PulseShopScreen() {
               )
             : undefined
         }
-        onPurchase={async () => {
-          if (!creditItem) return { ok: false as const, code: 'INVALID_INPUT', message: 'Missing pack' };
-          analytics.track('spark_pack_purchase_started', { shop_item_id: creditItem.id });
-          return await purchaseService.purchaseSparkPack(creditItem);
-        }}
-        onSuccess={async () => {
-          await refreshAfterPurchase();
-          analytics.track('spark_pack_purchase_completed', { shop_item_id: creditItem?.id ?? '' });
-          setCelebration({
-            kind: 'spark_pack',
-            sparksAmount: creditItem?.spark_amount ?? 0,
-          });
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }}
+        onPurchase={
+          Platform.OS === 'web'
+            ? undefined
+            : async () => {
+                if (!creditItem) return { ok: false as const, code: 'INVALID_INPUT', message: 'Missing pack' };
+                analytics.track('spark_pack_purchase_started', { shop_item_id: creditItem.id });
+                return await purchaseService.purchaseSparkPack(creditItem);
+              }
+        }
+        onSuccess={
+          Platform.OS === 'web'
+            ? undefined
+            : async (data) => {
+                await refreshAfterPurchase();
+                analytics.track('spark_pack_purchase_completed', { shop_item_id: creditItem?.id ?? '' });
+                const sparksAmount = creditItem?.spark_amount ?? 0;
+                const receiptId = readPurchaseReceiptId(data);
+                if (receiptId && creditItem && userId) {
+                  const rq = await rewardDeliveriesService.enqueueSparksPack(receiptId, creditItem.id, sparksAmount, {
+                    kind: 'sparks',
+                    reason: 'purchase',
+                    quantity: sparksAmount,
+                    pack_name: creditItem.name ?? null,
+                    shop_item_id: creditItem.id,
+                  });
+                  if (rq) {
+                    await queryClient.invalidateQueries({ queryKey: rewardDeliveryKeys.pendingList(userId) });
+                    await queryClient.refetchQueries({ queryKey: rewardDeliveryKeys.pendingList(userId) });
+                    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+                    return;
+                  }
+                  Alert.alert(
+                    'Celebration queue failed',
+                    'Your Sparks balance should still update. We could not queue the reward toast.',
+                  );
+                  showToast('Sparks purchase saved — verify your balance.', 'info');
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+                  return;
+                }
+                rewardDeliveryDebug.warn('enqueueSparksPack skipped', {
+                  hasReceipt: Boolean(receiptId),
+                  hasCreditItem: Boolean(creditItem),
+                  hasUserId: Boolean(userId),
+                });
+                Alert.alert(
+                  'Celebration unavailable',
+                  'We could not attach a purchase receipt for the celebration. Your Sparks balance may still update.',
+                );
+                showToast('Purchase finished — verify Sparks balance.', 'info');
+                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+              }
+        }
       />
 
       <ShopResultModal

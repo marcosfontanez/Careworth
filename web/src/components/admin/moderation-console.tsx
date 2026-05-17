@@ -211,7 +211,7 @@ export function ModerationConsole({
                     key={r.id}
                     className={cn(
                       "cursor-pointer border-border transition-colors",
-                      active ? "bg-primary/[0.12]" : "hover:bg-white/[0.04]",
+                      active ? "bg-primary/12" : "hover:bg-white/4",
                     )}
                     onClick={() => selectReport(r.id)}
                   >
@@ -287,7 +287,7 @@ export function ModerationConsole({
 
           <div className="rounded-xl border border-white/10 bg-white/3 p-4 ring-1 ring-white/4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[#0066ff] text-sm font-semibold text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-primary to-[#0066ff] text-sm font-semibold text-white">
                 {selected.subjectDisplayName.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0">

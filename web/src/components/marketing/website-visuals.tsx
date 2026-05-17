@@ -104,7 +104,7 @@ export function PremiumSectionHeader({
   return (
     <div className={cn("max-w-3xl", align === "center" ? "mx-auto text-center" : "")}>
       {eyebrow && (
-        <p className={cn(marketingEyebrow, "tracking-[0.22em] text-[var(--accent)]/90")}>{eyebrow}</p>
+        <p className={cn(marketingEyebrow, "tracking-[0.22em] text-(--accent)/90")}>{eyebrow}</p>
       )}
       <h2
         className={cn(
@@ -203,7 +203,7 @@ export function SpotlightBeam({
       />
       {/* Ambient bloom — wider, fainter, fills the rest of the section behind the asset. */}
       <div
-        className="absolute inset-x-[-10%] top-[10%] h-[100%] blur-[80px]"
+        className="absolute inset-x-[-10%] top-[10%] h-full blur-[80px]"
         style={{
           background: `radial-gradient(ellipse 70% 50% at 50% 50%, ${ambientStop}, transparent 65%)`,
         }}
@@ -272,7 +272,7 @@ export function OrbitDots({
           : "rgba(45,212,191,0.45)";
 
   return (
-    <div aria-hidden className={cn("pointer-events-none absolute inset-0 -z-[3]", className)}>
+    <div aria-hidden className={cn("pointer-events-none absolute inset-0 z-[-3]", className)}>
       {ORBIT_PRESETS[preset].map((dot, i) => (
         <span
           key={i}
@@ -316,10 +316,10 @@ export function PosterCaptionStrip({
         className={cn(
           "h-px w-10",
           tone === "gold"
-            ? "bg-gradient-to-r from-transparent to-[#E5B84B]/40"
+            ? "bg-linear-to-r from-transparent to-[#E5B84B]/40"
             : tone === "blue"
-              ? "bg-gradient-to-r from-transparent to-primary/40"
-              : "bg-gradient-to-r from-transparent to-[var(--accent)]/40",
+              ? "bg-linear-to-r from-transparent to-primary/40"
+              : "bg-linear-to-r from-transparent to-(--accent)/40",
         )}
       />
       <span
@@ -338,10 +338,10 @@ export function PosterCaptionStrip({
         className={cn(
           "h-px w-10",
           tone === "gold"
-            ? "bg-gradient-to-l from-transparent to-[#E5B84B]/40"
+            ? "bg-linear-to-l from-transparent to-[#E5B84B]/40"
             : tone === "blue"
-              ? "bg-gradient-to-l from-transparent to-primary/40"
-              : "bg-gradient-to-l from-transparent to-[var(--accent)]/40",
+              ? "bg-linear-to-l from-transparent to-primary/40"
+              : "bg-linear-to-l from-transparent to-(--accent)/40",
         )}
       />
     </div>
@@ -373,7 +373,7 @@ export function PosterCornerTrace({
   const showTop = position === "all" || position === "top";
 
   return (
-    <div aria-hidden className={cn("pointer-events-none absolute inset-0 -z-[5]", className)}>
+    <div aria-hidden className={cn("pointer-events-none absolute inset-0 z-[-5]", className)}>
       {showAll && (
         <>
           <Corner className={cn("absolute -left-3 -top-3 h-10 w-10", stroke)} pos="tl" />
@@ -479,7 +479,7 @@ export function ScreenshotShowcaseCard({
       {cornerTrace && <PosterCornerTrace tone={glow} position="corners" />}
       <div
         className={cn(
-          "relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/[0.04] backdrop-blur-md",
+          "relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/4 backdrop-blur-md",
           tone.glow,
         )}
       >
@@ -490,10 +490,10 @@ export function ScreenshotShowcaseCard({
             className={cn(
               "pointer-events-none absolute inset-x-12 top-0 z-20 h-px opacity-70",
               glow === "gold"
-                ? "bg-gradient-to-r from-transparent via-[#E5B84B]/55 to-transparent"
+                ? "bg-linear-to-r from-transparent via-[#E5B84B]/55 to-transparent"
                 : glow === "blue"
-                  ? "bg-gradient-to-r from-transparent via-primary/55 to-transparent"
-                  : "bg-gradient-to-r from-transparent via-[var(--accent)]/55 to-transparent",
+                  ? "bg-linear-to-r from-transparent via-primary/55 to-transparent"
+                  : "bg-linear-to-r from-transparent via-(--accent)/55 to-transparent",
             )}
           />
         )}
@@ -604,7 +604,7 @@ export function PosterFrame({
 
       <div
         className={cn(
-          "relative overflow-hidden rounded-[2rem] border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/[0.04] backdrop-blur-md sm:rounded-[2.25rem]",
+          "relative overflow-hidden rounded-[2rem] border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/4 backdrop-blur-md sm:rounded-[2.25rem]",
           glowClass,
         )}
       >
@@ -615,10 +615,10 @@ export function PosterFrame({
             "pointer-events-none absolute inset-x-16 top-0 z-20 h-px",
             size === "dramatic" ? "opacity-100" : "opacity-80",
             glow === "gold"
-              ? "bg-gradient-to-r from-transparent via-[#E5B84B]/80 to-transparent"
+              ? "bg-linear-to-r from-transparent via-[#E5B84B]/80 to-transparent"
               : glow === "blue"
-                ? "bg-gradient-to-r from-transparent via-primary/80 to-transparent"
-                : "bg-gradient-to-r from-transparent via-[var(--accent)]/80 to-transparent",
+                ? "bg-linear-to-r from-transparent via-primary/80 to-transparent"
+                : "bg-linear-to-r from-transparent via-(--accent)/80 to-transparent",
           )}
         />
         {/* Cinematic veil. */}
@@ -715,13 +715,13 @@ export function FeatureTile({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.65)] p-6 ring-1 ring-white/[0.04] backdrop-blur-md transition duration-200 hover:border-[var(--accent)]/40 hover:shadow-[0_28px_70px_-28px_rgba(20,184,166,0.45)]",
+        "group relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.65)] p-6 ring-1 ring-white/4 backdrop-blur-md transition duration-200 hover:border-(--accent)/40 hover:shadow-[0_28px_70px_-28px_rgba(20,184,166,0.45)]",
         className,
       )}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-gradient-to-br from-[var(--accent)]/10 to-transparent opacity-0 transition group-hover:opacity-100"
+        className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-linear-to-br from-(--accent)/10 to-transparent opacity-0 transition group-hover:opacity-100"
       />
       <div
         className={cn(
@@ -753,7 +753,7 @@ export function TrustChip({
   body: string;
 }) {
   return (
-    <div className="flex gap-4 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-5 ring-1 ring-white/[0.03] backdrop-blur-sm">
+    <div className="flex gap-4 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-5 ring-1 ring-white/3 backdrop-blur-sm">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/25">
         <Icon className="h-5 w-5" aria-hidden />
       </div>

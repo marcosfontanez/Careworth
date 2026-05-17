@@ -37,7 +37,7 @@ export function KpiStatCard({
           {delta}
         </p>
         <div className="mt-3 h-8 w-full rounded-md bg-secondary/50">
-          <div className={cn("h-full w-[72%] rounded-md bg-gradient-to-r", barGradient)} />
+          <div className={cn("h-full w-[72%] rounded-md bg-linear-to-r", barGradient)} />
         </div>
       </CardContent>
     </AdminPanelCard>

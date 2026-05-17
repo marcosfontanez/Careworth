@@ -56,13 +56,13 @@ export default async function AdminLoginPage({
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-20 top-1/4 -z-10 h-[320px] w-[320px] rounded-full bg-[var(--accent)]/10 blur-[110px]"
+        className="pointer-events-none absolute -right-20 top-1/4 -z-10 h-[320px] w-[320px] rounded-full bg-accent/10 blur-[110px]"
       />
 
       <div
         className={cn(
           adminPanelSurface,
-          "relative w-full max-w-md overflow-hidden rounded-2xl border-white/10 bg-[rgba(12,21,36,0.78)] p-8 ring-1 ring-white/[0.04] backdrop-blur-xl",
+          "relative w-full max-w-md overflow-hidden rounded-2xl border-white/10 bg-[rgba(12,21,36,0.78)] p-8 ring-1 ring-white/4 backdrop-blur-xl",
           "shadow-[0_30px_90px_-30px_rgba(45,127,249,0.45),0_0_0_1px_rgba(45,127,249,0.10)]",
         )}
       >

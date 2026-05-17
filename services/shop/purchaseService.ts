@@ -1,14 +1,18 @@
 import { invokePulseShopFulfillment, type PulseShopRequest } from '@/lib/pulseShopFulfillment';
+import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetadata';
+import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 import { isFreeShopBorder } from '@/lib/shop/catalogUtils';
 import type { ShopItemRow } from '@/lib/shop/types';
 import { initIapConnection, platformPrefix, purchaseSku, restorePurchasesFromStore, getIosReceiptBase64 } from '@/lib/shop/iap';
 import { Platform } from 'react-native';
 import { shopQueriesService } from '@/services/shop/shopQueries';
+import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
 import { supabase } from '@/lib/supabase';
 import {
   rpcEconomyAcceptPendingBorderGift,
   rpcEconomyClaimFreeShopBorder,
   rpcEconomyEquipBorder,
+  rpcEconomySendCreatorGift,
 } from '@/services/shop/economyRpc';
 
 export type PurchaseOutcome =
@@ -170,26 +174,54 @@ export const purchaseService = {
     idempotencyKey: string;
   }): Promise<PurchaseOutcome> {
     const { giftItem, creatorUserId, contextType, contextId, idempotencyKey } = params;
-    const body: PulseShopRequest = {
-      action: 'send_creator_gift',
-      shop_item_id: giftItem.id,
-      creator_gift: {
-        creator_user_id: creatorUserId,
-        context_type: contextType,
-        context_id: contextId,
-        idempotency_key: idempotencyKey,
+    const key = idempotencyKey.trim();
+    if (key.length < 8) {
+      return { ok: false, code: 'INVALID_INPUT', message: 'Gift request invalid. Try again.' };
+    }
+    const { data, error } = await rpcEconomySendCreatorGift({
+      p_creator_user_id: creatorUserId,
+      p_gift_item_id: giftItem.id,
+      p_context_type: contextType,
+      p_context_id: contextId,
+      p_idempotency_key: key,
+    });
+    if (error) {
+      const msg = error.message ?? '';
+      const lower = msg.toLowerCase();
+      const pgCode = typeof (error as { code?: string }).code === 'string' ? (error as { code?: string }).code : '';
+      const httpStatus =
+        typeof (error as { status?: number }).status === 'number' ? (error as { status?: number }).status : undefined;
+      const looksMissingRpc =
+        httpStatus === 404 ||
+        pgCode === 'PGRST202' ||
+        lower.includes('could not find the function') ||
+        lower.includes('economy_send_creator_gift');
+      const code = lower.includes('insufficient_sparks')
+        ? 'INSUFFICIENT_SPARKS'
+        : lower.includes('self_gift')
+          ? 'SELF_GIFT_NOT_ALLOWED'
+          : lower.includes('invalid_recipient')
+            ? 'INVALID_RECIPIENT'
+            : lower.includes('item_not_active') || lower.includes('gift_not_found')
+              ? 'ITEM_INACTIVE'
+              : lower.includes('not_allowed')
+                ? 'NOT_ALLOWED'
+                : looksMissingRpc
+                  ? 'RPC_NOT_FOUND'
+                  : 'RPC_ERROR';
+      let message = msg || 'Could not send gift.';
+      if (looksMissingRpc && code === 'RPC_NOT_FOUND') {
+        message = `${message} Apply pending Supabase migrations (economy_send_creator_gift in migration 122+) so this RPC exists on your project.`;
+      }
+      return { ok: false, code, message };
+    }
+    return {
+      ok: true,
+      data: {
+        creator_gift_id: data as string,
+        sparks_spent: giftItem.spark_price,
       },
     };
-    const res = await invokePulseShopFulfillment(body);
-    if (!res.ok) {
-      return {
-        ok: false,
-        code: res.error.code,
-        message: res.error.message,
-        details: res.error.details,
-      };
-    }
-    return { ok: true, data: res.data as Record<string, unknown> };
   },
 
   async equipBorder(inventoryItemId: string): Promise<PurchaseOutcome> {
@@ -223,7 +255,8 @@ export const purchaseService = {
     }
 
     const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session?.user?.id) {
+    const userId = sessionData.session?.user?.id;
+    if (!userId) {
       return { ok: false, code: 'UNAUTHORIZED', message: 'Sign in to restore purchases.' };
     }
 
@@ -254,6 +287,17 @@ export const purchaseService = {
     let entitlementsSynced = 0;
     const notes: string[] = [];
     const triedBorderIds = new Set<string>();
+    let borderRewardCelebrationsEnqueued = 0;
+
+    let ownedBorderShopIdsBefore = new Set<string>();
+    try {
+      const invBefore = await shopQueriesService.getUserInventory(userId);
+      ownedBorderShopIdsBefore = new Set(
+        invBefore.filter((r) => r.item_kind === 'border').map((r) => r.shop_item_id),
+      );
+    } catch {
+      /* reward celebration enqueue is best-effort */
+    }
 
     const iosReceipt =
       Platform.OS === 'ios' ? (await getIosReceiptBase64())?.trim() ?? null : null;
@@ -313,11 +357,38 @@ export const purchaseService = {
       }
     }
 
+    try {
+      const invAfter = await shopQueriesService.getUserInventory(userId);
+      const newBorderRows = invAfter.filter(
+        (r) => r.item_kind === 'border' && !ownedBorderShopIdsBefore.has(r.shop_item_id),
+      );
+      if (newBorderRows.length > 0) {
+        const shopIds = [...new Set(newBorderRows.map((r) => r.shop_item_id))];
+        const catalogRows = await shopQueriesService.getShopItemsByIds(shopIds);
+        const byShopId = new Map(catalogRows.map((it) => [it.id, it]));
+        for (const row of newBorderRows) {
+          const shopItem = byShopId.get(row.shop_item_id);
+          if (!shopItem) continue;
+          const meta = buildBorderRewardMetadata(shopItem, row.id, { border_source: 'purchased' });
+          const id = await rewardDeliveriesService.enqueueBorderSelf(row.id, row.shop_item_id, meta);
+          if (id) borderRewardCelebrationsEnqueued += 1;
+          else
+            rewardDeliveryDebug.warn('restorePurchases: enqueueBorderSelf returned null', {
+              inventory_item_id: row.id,
+              shop_item_id: row.shop_item_id,
+            });
+        }
+      }
+    } catch {
+      /* best-effort — borders still synced */
+    }
+
     return {
       ok: true,
       data: {
         store_purchases_found: restored.purchases.length,
         border_entitlements_synced: entitlementsSynced,
+        border_reward_celebrations_enqueued: borderRewardCelebrationsEnqueued,
         detail_notes: notes.length ? notes : undefined,
       },
     };

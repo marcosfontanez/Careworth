@@ -31,7 +31,7 @@ export function FeatureFeedLanding() {
             <p className={marketingEyebrow}>Feed</p>
             <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.15rem]">
               Stay current with healthcare culture —{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-accent to-primary bg-clip-text text-transparent">
                 not generic noise.
               </span>
             </h1>
@@ -46,7 +46,7 @@ export function FeatureFeedLanding() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
+              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/4 px-7 font-semibold">
                 <Link href="/features/circles">Explore Circles</Link>
               </Button>
             </div>
@@ -58,7 +58,7 @@ export function FeatureFeedLanding() {
                     "rounded-full border px-3 py-1 text-xs font-medium",
                     t === "For you"
                       ? "border-primary/40 bg-primary/15 text-primary"
-                      : "border-white/10 bg-white/[0.04] text-muted-foreground",
+                      : "border-white/10 bg-white/4 text-muted-foreground",
                   )}
                 >
                   {t}

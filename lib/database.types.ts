@@ -160,6 +160,7 @@ export interface Database {
           specialty_context: string;
           location_context: string;
           duet_parent_id: string | null;
+          duet_layout_mode: string | null;
           evidence_url: string | null;
           evidence_label: string | null;
           shift_context: string | null;
@@ -176,8 +177,12 @@ export interface Database {
           scheduled_status: string;
           cover_alt_url: string | null;
           mood_preset: string | null;
+          video_look_id: string | null;
           video_overlay_text: string | null;
           comments_disabled: boolean;
+          media_processing_status: string | null;
+          media_processing_job_id: string | null;
+          media_processing_error: string | null;
         };
         Insert: {
           id?: string;
@@ -195,6 +200,7 @@ export interface Database {
           specialty_context?: string;
           location_context?: string;
           duet_parent_id?: string | null;
+          duet_layout_mode?: string | null;
           evidence_url?: string | null;
           evidence_label?: string | null;
           shift_context?: string | null;
@@ -210,8 +216,12 @@ export interface Database {
           scheduled_status?: string;
           cover_alt_url?: string | null;
           mood_preset?: string | null;
+          video_look_id?: string | null;
           video_overlay_text?: string | null;
           comments_disabled?: boolean;
+          media_processing_status?: string | null;
+          media_processing_job_id?: string | null;
+          media_processing_error?: string | null;
         };
         Update: Partial<Database['public']['Tables']['posts']['Insert']>;
         Relationships: [
@@ -1067,6 +1077,28 @@ export interface Database {
         Relationships: [];
       };
 
+      live_stream_gift_catalog: {
+        Row: {
+          gift_id: string;
+          spark_unit_cost: number;
+          display_name: string;
+          emoji: string;
+          sort_order: number;
+          is_active: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          gift_id: string;
+          spark_unit_cost: number;
+          display_name: string;
+          emoji?: string;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['live_stream_gift_catalog']['Insert']>;
+        Relationships: [];
+      };
+
       live_streams: {
         Row: {
           id: string;
@@ -1361,6 +1393,7 @@ export interface Database {
           gift_emoji: string;
           coin_cost: number;
           quantity: number;
+          idempotency_key: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -1372,6 +1405,7 @@ export interface Database {
           gift_emoji: string;
           coin_cost?: number;
           quantity?: number;
+          idempotency_key?: string | null;
         };
         Update: Partial<Database['public']['Tables']['stream_gifts']['Insert']>;
         Relationships: [];
@@ -1647,6 +1681,45 @@ export interface Database {
         Relationships: [];
       };
 
+      reward_deliveries: {
+        Row: {
+          id: string;
+          user_id: string;
+          delivery_type: string;
+          item_type: string;
+          item_id: string | null;
+          quantity: number | null;
+          source_user_id: string | null;
+          source_display_name: string | null;
+          metadata: Json;
+          status: string;
+          idempotency_key: string;
+          created_at: string;
+          toast_shown_at: string | null;
+          opened_at: string | null;
+          acknowledged_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          delivery_type: string;
+          item_type: string;
+          item_id?: string | null;
+          quantity?: number | null;
+          source_user_id?: string | null;
+          source_display_name?: string | null;
+          metadata?: Json;
+          status?: string;
+          idempotency_key: string;
+          created_at?: string;
+          toast_shown_at?: string | null;
+          opened_at?: string | null;
+          acknowledged_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['reward_deliveries']['Insert']>;
+        Relationships: [];
+      };
+
       shop_items: {
         Row: {
           id: string;
@@ -1852,6 +1925,16 @@ export interface Database {
         Args: { p_border_gift_id: string };
         Returns: Json;
       };
+      economy_send_creator_gift: {
+        Args: {
+          p_creator_user_id: string;
+          p_gift_item_id: string;
+          p_context_type: string;
+          p_context_id: string | null;
+          p_idempotency_key: string;
+        };
+        Returns: string;
+      };
       economy_send_live_stream_gift: {
         Args: {
           p_stream_id: string;
@@ -1957,6 +2040,40 @@ export interface Database {
       increment_poll_vote: {
         Args: { p_poll_id: string; p_option_id: string };
         Returns: undefined;
+      };
+      reward_deliveries_list_pending: {
+        Args: Record<string, never>;
+        Returns: Database['public']['Tables']['reward_deliveries']['Row'][];
+      };
+      reward_delivery_enqueue_border_self: {
+        Args: { p_inventory_item_id: string; p_shop_item_id: string; p_metadata?: Json };
+        Returns: string;
+      };
+      reward_delivery_enqueue_client: {
+        Args: {
+          p_delivery_type: string;
+          p_item_type: string;
+          p_idempotency_key: string;
+          p_metadata?: Json;
+          p_quantity?: number | null;
+          p_item_id?: string | null;
+          p_source_user_id?: string | null;
+          p_source_display_name?: string | null;
+        };
+        Returns: string;
+      };
+      reward_delivery_enqueue_sparks_pack: {
+        Args: {
+          p_purchase_receipt_id: string;
+          p_shop_item_id: string;
+          p_quantity: number;
+          p_metadata?: Json;
+        };
+        Returns: string;
+      };
+      reward_delivery_set_status: {
+        Args: { p_id: string; p_next: string };
+        Returns: boolean;
       };
       pin_profile_update: {
         Args: { p_update_id: string };

@@ -61,7 +61,7 @@ export default async function CircleThreadSharePage({ params }: Props) {
     return (
       <MarketingPageShell width="medium" breadcrumbPath={`/communities/${slug}/thread/${threadId}`}>
         <SectionHeader eyebrow="PulseVerse Circles" title="Circle discussion" description="Open this thread in the app." />
-        <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.03] p-8">
+        <div className="mt-10 rounded-2xl border border-white/10 bg-white/3 p-8">
           <OpenInPulseverseCta httpsUrl={httpsUrl} appDeepLink={appDeepLink} />
         </div>
         <p className="mt-8 text-sm text-muted-foreground">
@@ -103,7 +103,7 @@ export default async function CircleThreadSharePage({ params }: Props) {
         title={threadRow.title}
         description={teaserSnippet}
       />
-      <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.03] p-8">
+      <div className="mt-10 rounded-2xl border border-white/10 bg-white/3 p-8">
         <OpenInPulseverseCta httpsUrl={httpsUrl} appDeepLink={appDeepLink} />
       </div>
       <p className="mt-8 text-sm leading-relaxed text-muted-foreground">

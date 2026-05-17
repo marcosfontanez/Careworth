@@ -101,7 +101,7 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
             placeholder="Search name, role, id…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-full min-w-[12rem] bg-secondary/40 sm:w-64"
+            className="w-full min-w-48 bg-secondary/40 sm:w-64"
           />
           <Button
             variant="secondary"

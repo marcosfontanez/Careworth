@@ -1,12 +1,13 @@
 /**
- * Shared visual presets for the camera capture screen and the post-capture
- * editor preview. Both surfaces apply the tint as an overlay <View>.
+ * Shared visual presets for the camera capture screen, the post-capture
+ * editor preview, and read-side feed tint ({@link tintForLook} on `VideoFeedPost`).
+ * When `posts.video_look_id` is unset, the feed may still apply the mood preset’s
+ * bundled `look` (see `lib/moodPresets`) so photo posts match composer vibe.
+ * Fullscreen stills (`app/image-viewer`) accept optional `grade=` (resolved look id) for parity when opened from post detail.
  *
- * The "filter" tints are color-grading style washes; the "effect" entries
- * are darker / vignette-style washes so they read distinctly. None of these
- * burn into the uploaded video file yet — they're preview-only and the
- * chosen `id` is persisted with the asset so the editor can keep showing
- * the same look.
+ * Tints are color-grading style washes; effect entries are darker / vignette-style.
+ * Overlays are **not** burned into uploaded MP4s — except that the chosen look id
+ * is stored on `posts.video_look_id` (migration 162) so the feed can mirror the composer.
  */
 
 export type VideoLookKind = 'filter' | 'effect';
@@ -49,6 +50,17 @@ export const VIDEO_LOOKS: VideoLook[] = [
 
 export function tintForLook(id: VideoLookId): string | null {
   return VIDEO_LOOKS.find((f) => f.id === id)?.tint ?? null;
+}
+
+const LOOK_ID_SET = new Set<string>(VIDEO_LOOKS.map((l) => l.id));
+
+/** Maps DB / API values to a persisted grade id (`none` → undefined). */
+export function normalizeVideoLookId(raw: unknown): VideoLookId | undefined {
+  if (raw == null) return undefined;
+  const s = String(raw).trim().toLowerCase();
+  if (!LOOK_ID_SET.has(s)) return undefined;
+  if (s === 'none') return undefined;
+  return s as VideoLookId;
 }
 
 export function looksByKind(kind: VideoLookKind): VideoLook[] {

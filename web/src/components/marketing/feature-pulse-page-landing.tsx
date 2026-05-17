@@ -34,7 +34,7 @@ export function FeaturePulsePageLanding() {
             </p>
             <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
               Your{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-accent to-primary bg-clip-text text-transparent">
                 professional home
               </span>{" "}
               on PulseVerse.
@@ -50,7 +50,7 @@ export function FeaturePulsePageLanding() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
+              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/4 px-7 font-semibold">
                 <Link href="/features/my-pulse" className="inline-flex items-center gap-2">
                   <MessageSquare className="h-4 w-4" />
                   How My Pulse works
@@ -139,7 +139,7 @@ export function FeaturePulsePageLanding() {
         <div className="mt-10 grid gap-6 lg:grid-cols-3">
           {pulsePageShowcase.map((s) => (
             <div key={s.title} className={cn("flex flex-col overflow-hidden rounded-2xl", marketingCardMuted)}>
-              <div className="aspect-[16/10] bg-gradient-to-br from-slate-800 to-slate-950">
+              <div className="aspect-16/10 bg-linear-to-br from-slate-800 to-slate-950">
                 <div className="flex h-full items-end p-4">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">{s.kicker}</p>
@@ -181,7 +181,7 @@ export function FeaturePulsePageLanding() {
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {pulsePageAudienceSegments.map((seg) => (
-            <div key={seg.title} className={cn("rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-center ring-1 ring-white/[0.04]")}>
+            <div key={seg.title} className={cn("rounded-2xl border border-white/10 bg-white/2 p-5 text-center ring-1 ring-white/4")}>
               <UserCircle className="mx-auto h-8 w-8 text-[var(--accent)]" strokeWidth={1.25} />
               <p className="mt-4 text-sm font-semibold text-foreground">{seg.title}</p>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{seg.body}</p>

@@ -34,6 +34,7 @@ import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
 import { attachSupabaseAuthAutoRefreshToAppState } from '@/lib/supabaseAuthLifecycle';
 import * as Updates from 'expo-updates';
 import { attachAppResumeStaleDataRefresh } from '@/lib/appResumeQuerySync';
+import { RewardDeliveryProvider } from '@/components/rewards/RewardDeliveryProvider';
 
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();
@@ -337,7 +338,9 @@ export default function RootLayout() {
       <ErrorBoundary>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
-            <AppShell />
+            <RewardDeliveryProvider>
+              <AppShell />
+            </RewardDeliveryProvider>
           </QueryClientProvider>
         </AuthProvider>
       </ErrorBoundary>

@@ -45,7 +45,7 @@ export function LegalDoc({
       <article
         className={cn(
           hasToc ? "min-w-0" : "mx-auto max-w-3xl",
-          "rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.45)] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] ring-1 ring-white/[0.04] backdrop-blur-sm sm:p-10",
+          "rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.45)] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] ring-1 ring-white/4 backdrop-blur-sm sm:p-10",
         )}
       >
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>

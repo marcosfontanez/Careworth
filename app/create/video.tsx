@@ -13,11 +13,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system/legacy';
 import { colors } from '@/theme';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { useAuth } from '@/contexts/AuthContext';
-import { storageService, resolvePostMediaDownloadUrl } from '@/lib/storage';
-import { postsService } from '@/services/supabase';
+import { storageService, resolvePostMediaDownloadUrl, STORAGE_BUCKETS } from '@/lib/storage';
+import { postsService, enqueueCreatorMediaJob, waitForCreatorMediaJob } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
@@ -40,6 +41,7 @@ import { startNewSeries, type SeriesSelection } from '@/lib/seriesMode';
 import { requestDuetMuxMergedFile } from '@/services/export/duetMuxExportClient';
 import { isVideoExportConfigured } from '@/services/export/videoExportClient';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
+import type { DuetLayoutMode } from '@/lib/duetLayoutMode';
 
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { EducationModeToggle, type EducationCitation } from '@/components/create/EducationModeToggle';
@@ -53,6 +55,7 @@ import { ClipSplitterModal } from '@/components/create/ClipSplitterModal';
 import { MultiClipStitchModal, type MultiClipStitchVariant } from '@/components/create/MultiClipStitchModal';
 import { SpeedRampEditor } from '@/components/create/SpeedRampEditor';
 import { SmartTrimCard } from '@/components/create/SmartTrimCard';
+import { PreviewOnlyCallout } from '@/components/create/PreviewOnlyCallout';
 import { VideoHygieneCard } from '@/components/create/VideoHygieneCard';
 import { BrollInsertCard } from '@/components/create/BrollInsertCard';
 import { CoCreateRoadmapCard } from '@/components/create/CoCreateRoadmapCard';
@@ -67,6 +70,26 @@ function buildSourcesBlock(citations: EducationCitation[]): string {
     return bits.join('\n');
   });
   return `\n\nSources\n${lines.join('\n')}`;
+}
+
+async function uploadCompressedVideoForStitch(
+  userId: string,
+  asset: MediaAsset,
+  setCompressPct: (pct: number | null) => void,
+): Promise<{ publicUrl: string; storagePath: string }> {
+  const longEdge = Math.max(asset.width ?? 0, asset.height ?? 0);
+  const willCompress = longEdge > VIDEO_UPLOAD_MAX_LONG_EDGE;
+  if (willCompress) setCompressPct(0);
+  const ready = willCompress
+    ? await compressVideoIfTooLarge(asset, (p) => setCompressPct(Math.round(p * 100)))
+    : asset;
+  if (willCompress) setCompressPct(null);
+  const meta = await storageService.uploadPostMediaWithMeta(userId, {
+    uri: ready.uri,
+    type: ready.mimeType,
+    name: ready.fileName ?? `clip_${Date.now()}.mp4`,
+  });
+  return { publicUrl: meta.publicUrl, storagePath: meta.storagePath };
 }
 
 type FilterPreset = VideoLookId;
@@ -178,12 +201,21 @@ function ComposableVideoPreviewFrozen({
 export default function CreateVideoScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { mode, soundPostId: soundPostIdRaw, duetPostId: duetPostIdRaw } =
-    useLocalSearchParams<{
-      mode?: 'record' | 'upload';
-      soundPostId?: string;
-      duetPostId?: string;
-    }>();
+  const {
+    mode,
+    soundPostId: soundPostIdRaw,
+    duetPostId: duetPostIdRaw,
+    openStitch: openStitchRaw,
+    stitchSourcePostId: stitchSourcePostIdRaw,
+  } = useLocalSearchParams<{
+    mode?: 'record' | 'upload';
+    soundPostId?: string;
+    duetPostId?: string;
+    /** Deep link / menu: open MultiClip stitch flow (`series` | `broll` | truthy → series). */
+    openStitch?: string;
+    /** Feed stitch / B-roll: hydrate this post’s video as Part 1 / A-roll before the stitch modal. */
+    stitchSourcePostId?: string;
+  }>();
   const soundPostId = Array.isArray(soundPostIdRaw) ? soundPostIdRaw[0] : soundPostIdRaw;
   const soundPostIdTrim = soundPostId?.trim() ?? '';
   const duetPostId = Array.isArray(duetPostIdRaw) ? duetPostIdRaw[0] : duetPostIdRaw;
@@ -192,6 +224,15 @@ export default function CreateVideoScreen() {
   const { data: duetParentPost, isPending: duetParentLoading } = usePost(duetPostIdTrim, {
     enabled: Boolean(duetPostIdTrim),
   });
+  const stitchSourcePostId = Array.isArray(stitchSourcePostIdRaw)
+    ? stitchSourcePostIdRaw[0]
+    : stitchSourcePostIdRaw;
+  const stitchSourcePostIdTrim = stitchSourcePostId?.trim() ?? '';
+  const {
+    data: stitchSourcePost,
+    isPending: stitchSourceLoading,
+    isError: stitchSourceError,
+  } = usePost(stitchSourcePostIdTrim, { enabled: Boolean(stitchSourcePostIdTrim) });
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
@@ -220,6 +261,14 @@ export default function CreateVideoScreen() {
   const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
   const [showDraftHint, setShowDraftHint] = useState(false);
   const openedPickerRef = useRef(false);
+  /** Fulfill `/create/video?openStitch=…` once primary media exists (or prompt gallery). */
+  const stitchIntentRef = useRef<MultiClipStitchVariant | null>(null);
+  const stitchGalleryPromptedRef = useRef(false);
+  /** When `stitchSourcePostId` is set, wait for hydrate (or failure) before fallback gallery. */
+  const stitchHydrateAttemptedRef = useRef(false);
+  const stitchHydrateDownloadStartedRef = useRef(false);
+  /** Bumped when `stitchSourcePostId` changes so stale downloads never apply. */
+  const stitchHydrateGenRef = useRef(0);
   /** Skip one trim reset after hydrating clip URI from draft (same URI transition otherwise wipes trimmed markers). */
   const skipNextTrimResetRef = useRef(false);
   /** Avoid auto midpoint overwriting restored draft anchor for borrowed sounds. */
@@ -246,6 +295,8 @@ export default function CreateVideoScreen() {
   /** Tracks whether queued clips came from B-roll vs multi-part UI (for labels only). */
   const [clipQueueVariant, setClipQueueVariant] = useState<MultiClipStitchVariant | null>(null);
   const [duetMuxBusy, setDuetMuxBusy] = useState(false);
+  /** Parent chrome in feed when publishing a duet (camera PiP vs side-by-side). */
+  const [duetLayoutMode, setDuetLayoutMode] = useState<DuetLayoutMode>('strip');
   const [speedRamp, setSpeedRamp] = useState({ start: 1 as number, mid: 1 as number, end: 1 as number });
   const [followUpClips, setFollowUpClips] = useState<MediaAsset[]>([]);
   const [trimStart, setTrimStart] = useState(0);
@@ -276,6 +327,7 @@ export default function CreateVideoScreen() {
     }
     if (media) return true;
     if (followUpClips.length > 0) return true;
+    if (duetPostIdTrim && duetLayoutMode === 'floating') return true;
     if (seriesSelection) return true;
     return false;
   }, [
@@ -286,6 +338,8 @@ export default function CreateVideoScreen() {
     overlayLine,
     media,
     followUpClips.length,
+    duetPostIdTrim,
+    duetLayoutMode,
     seriesSelection,
   ]);
 
@@ -314,6 +368,132 @@ export default function CreateVideoScreen() {
   useEffect(() => {
     if (followUpClips.length === 0) setClipQueueVariant(null);
   }, [followUpClips.length]);
+
+  useEffect(() => {
+    if (!duetPostIdTrim) setDuetLayoutMode('strip');
+  }, [duetPostIdTrim]);
+
+  useEffect(() => {
+    stitchHydrateGenRef.current += 1;
+    stitchHydrateDownloadStartedRef.current = false;
+    stitchHydrateAttemptedRef.current = false;
+  }, [stitchSourcePostIdTrim]);
+
+  useEffect(() => {
+    if (!stitchSourcePostIdTrim) return;
+    if (!draftBootstrapped) return;
+    if (stitchSourceLoading) return;
+    if (stitchHydrateDownloadStartedRef.current) return;
+
+    if (stitchSourceError || !stitchSourcePost) {
+      if (!stitchHydrateAttemptedRef.current) {
+        stitchHydrateAttemptedRef.current = true;
+        toast.show('Couldn’t load this post', 'error');
+      }
+      return;
+    }
+
+    const url = stitchSourcePost.mediaUrl?.trim();
+    if (stitchSourcePost.type !== 'video' || !url) {
+      if (!stitchHydrateAttemptedRef.current) {
+        stitchHydrateAttemptedRef.current = true;
+        toast.show('This post has no video to use as your main clip', 'info');
+      }
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      if (!stitchHydrateAttemptedRef.current) {
+        stitchHydrateAttemptedRef.current = true;
+        toast.show('Stitch from a feed video isn’t available on web yet — upload a clip instead.', 'info');
+      }
+      return;
+    }
+
+    stitchHydrateDownloadStartedRef.current = true;
+    let cancelled = false;
+    const gen = stitchHydrateGenRef.current;
+
+    void (async () => {
+      try {
+        toast.show('Loading clip…', 'info');
+        const fetchUrl = await resolvePostMediaDownloadUrl(url);
+        const base = FileSystem.cacheDirectory ?? '';
+        if (!base) throw new Error('No cache directory');
+        const dest = `${base}stitch_src_${stitchSourcePostIdTrim}_${Date.now()}.mp4`;
+        const { uri } = await FileSystem.downloadAsync(fetchUrl, dest);
+        if (cancelled || gen !== stitchHydrateGenRef.current) return;
+        const meta = await probeVideoFile(uri);
+        if (cancelled || gen !== stitchHydrateGenRef.current) return;
+        skipNextTrimResetRef.current = true;
+        setMedia({
+          uri,
+          type: 'video',
+          mimeType: 'video/mp4',
+          fileName: `stitch_${stitchSourcePostIdTrim}.mp4`,
+          duration: meta.duration,
+          width: meta.width,
+          height: meta.height,
+        });
+        openedPickerRef.current = true;
+      } catch (e: unknown) {
+        if (gen !== stitchHydrateGenRef.current) return;
+        const msg = e instanceof Error ? e.message : 'Could not download video';
+        toast.show(msg.length > 120 ? `${msg.slice(0, 117)}…` : msg, 'error');
+      } finally {
+        if (!cancelled && gen === stitchHydrateGenRef.current) {
+          stitchHydrateAttemptedRef.current = true;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    draftBootstrapped,
+    stitchSourcePostIdTrim,
+    stitchSourceLoading,
+    stitchSourceError,
+    stitchSourcePost?.id,
+    stitchSourcePost?.type,
+    stitchSourcePost?.mediaUrl,
+    toast,
+  ]);
+
+  useEffect(() => {
+    const raw = Array.isArray(openStitchRaw) ? openStitchRaw[0] : openStitchRaw;
+    const v = raw?.trim().toLowerCase();
+    if (!v) return;
+    stitchIntentRef.current = v === 'broll' ? 'broll' : 'series';
+  }, [openStitchRaw]);
+
+  useEffect(() => {
+    if (!draftBootstrapped) return;
+    const intent = stitchIntentRef.current;
+    if (!intent || !media) return;
+    stitchIntentRef.current = null;
+    stitchGalleryPromptedRef.current = true;
+    setStitchVariant(intent);
+    setStitchOpen(true);
+    setAdvancedCreatorOpen(true);
+  }, [draftBootstrapped, media?.uri]);
+
+  useEffect(() => {
+    if (!draftBootstrapped) return;
+    if (!stitchIntentRef.current || media || stitchGalleryPromptedRef.current) return;
+    if (stitchSourcePostIdTrim && !stitchHydrateAttemptedRef.current) return;
+    stitchGalleryPromptedRef.current = true;
+    let cancelled = false;
+    void pickVideoFromGallery().then((asset) => {
+      if (cancelled) return;
+      if (asset) setMedia(asset);
+      else stitchIntentRef.current = null;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [draftBootstrapped, media, stitchSourcePostIdTrim]);
 
   useEffect(() => {
     if (skipNextTrimResetRef.current) {
@@ -406,6 +586,7 @@ export default function CreateVideoScreen() {
         openedPickerRef.current = true;
         if (pending.lookId) setFilterPreset(pending.lookId);
         if (pending.soundTitle && !soundPostIdTrim) setSoundTitle(pending.soundTitle);
+        if (duetPostIdTrim && pending.duetLayoutMode) setDuetLayoutMode(pending.duetLayoutMode);
       }
 
       const draft = await loadDraft('video');
@@ -435,6 +616,13 @@ export default function CreateVideoScreen() {
         if (typeof draft.soundAnchorSec === 'number' && Number.isFinite(draft.soundAnchorSec)) {
           soundAnchorInitDoneRef.current = true;
           setSoundAnchorSec(draft.soundAnchorSec);
+        }
+        if (
+          duetPostIdTrim &&
+          (draft.videoDuetLayout === 'strip' || draft.videoDuetLayout === 'floating') &&
+          !pending?.duetLayoutMode
+        ) {
+          setDuetLayoutMode(draft.videoDuetLayout);
         }
         if (draft.followUpClipUris?.length) {
           setFollowUpClips(
@@ -488,7 +676,7 @@ export default function CreateVideoScreen() {
     return () => {
       cancelled = true;
     };
-  }, [mode]);
+  }, [mode, soundPostIdTrim, duetPostIdTrim]);
 
   const buildVideoDraftData = useCallback((): DraftData => {
     const payload: DraftData = {
@@ -501,6 +689,7 @@ export default function CreateVideoScreen() {
       followUpClipUris: followUpClips.length > 0 ? followUpClips.map((c) => c.uri) : undefined,
       clipQueueVariant: clipQueueVariant ?? undefined,
       seriesSelection: seriesSelection ?? undefined,
+      ...(duetPostIdTrim ? { videoDuetLayout: duetLayoutMode } : {}),
       privacyVideo: privacy,
       commentsOnVideo: commentsOn,
     };
@@ -522,6 +711,8 @@ export default function CreateVideoScreen() {
     followUpClips,
     clipQueueVariant,
     seriesSelection,
+    duetPostIdTrim,
+    duetLayoutMode,
     privacy,
     commentsOn,
     trimStart,
@@ -668,6 +859,10 @@ export default function CreateVideoScreen() {
       toast.show(`Video can't exceed ${VIDEO_MAX_SECONDS / 60} minutes`, 'error');
       return;
     }
+    if (media?.duration != null && media.duration < VIDEO_MIN_SECONDS) {
+      toast.show(`Video must be at least ${VIDEO_MIN_SECONDS}s`, 'error');
+      return;
+    }
     if (!checkRateLimit('post')) return;
 
     if (phiFindings.length > 0 && !phiAck) {
@@ -691,6 +886,235 @@ export default function CreateVideoScreen() {
       const citeBlock =
         educationOn && citations.length > 0 ? buildSourcesBlock(citations.slice(0, 5)) : '';
       composedCaption = `${composedCaption}${citeBlock}`.trim();
+
+      const scheduleIso = scheduledAt ? scheduledAt.toISOString() : null;
+
+      /** Combine queued clips into one post via creator_media_jobs + worker (migration 159). */
+      if (media && followUpClips.length > 0 && user.id) {
+        if (scheduleIso) {
+          toast.show('Combining queued clips requires posting now — clear the schedule first.', 'error');
+          return;
+        }
+        const sid = soundPostIdTrim;
+        if (sid && soundSourceLoading) {
+          toast.show('Still loading sound — wait a moment and try again', 'info');
+          return;
+        }
+        if (duetPostIdTrim && duetParentLoading) {
+          toast.show('Still loading duet reference — wait a moment and try again', 'info');
+          return;
+        }
+        const sourceMediaEarly =
+          soundSourcePost?.soundSourceMediaUrl?.trim() || soundSourcePost?.mediaUrl?.trim();
+        if (sid && soundSourcePost && !sourceMediaEarly) {
+          toast.show('This sound has no media file to attach. Pick another sound or post without it.', 'error');
+          return;
+        }
+
+        let primaryMeta: { publicUrl: string; storagePath: string };
+        try {
+          primaryMeta = await uploadCompressedVideoForStitch(user.id, media, setCompressPct);
+        } catch (uploadErr: unknown) {
+          setCompressPct(null);
+          const msg =
+            uploadErr && typeof uploadErr === 'object' && 'message' in uploadErr
+              ? String((uploadErr as { message: string }).message)
+              : String(uploadErr);
+          toast.show(msg.length > 120 ? `${msg.slice(0, 117)}…` : msg, 'error');
+          return;
+        }
+
+        const clipPaths: string[] = [primaryMeta.storagePath];
+        for (let i = 0; i < followUpClips.length; i++) {
+          try {
+            const up = await uploadCompressedVideoForStitch(user.id, followUpClips[i]!, setCompressPct);
+            clipPaths.push(up.storagePath);
+          } catch {
+            setCompressPct(null);
+            toast.show(`Could not upload clip ${i + 2}. Check your connection and try again.`, 'error');
+            return;
+          }
+        }
+
+        const mediaUrlProvisional = primaryMeta.publicUrl.trim();
+
+        let thumbnailUrlStitch: string | undefined;
+        let coverAltRemoteStitch: string | undefined;
+        if (mediaUrlProvisional && media.uri) {
+          const localThumb = customCoverUri ?? (await makeVideoThumbnail(media.uri));
+          if (localThumb) {
+            try {
+              thumbnailUrlStitch = await storageService.uploadPostMedia(user.id, {
+                uri: localThumb,
+                type: 'image/jpeg',
+                name: `poster_${Date.now()}.jpg`,
+              });
+            } catch (thumbErr) {
+              if (__DEV__) console.warn('[video] thumbnail upload (stitch)', thumbErr);
+              toast.show('Poster upload skipped — feed will use a default thumbnail.', 'info');
+            }
+          }
+        }
+        if (coverAltUri?.trim() && user.id) {
+          try {
+            coverAltRemoteStitch = await storageService.uploadPostMedia(user.id, {
+              uri: coverAltUri,
+              type: 'image/jpeg',
+              name: `poster_alt_${Date.now()}.jpg`,
+            });
+          } catch (coverErr) {
+            if (__DEV__) console.warn('[video] alt cover upload (stitch)', coverErr);
+            toast.show('Alternate cover upload skipped.', 'info');
+          }
+        }
+
+        const postTypeStitch = 'video';
+        const sourceHandleStitch =
+          soundSourcePost?.creator?.username?.trim()
+            ? `@${soundSourcePost.creator.username.trim()}`
+            : (soundSourcePost?.creator?.displayName?.trim() ?? '');
+        const soundPayloadStitch =
+          sid && soundSourcePost && sourceMediaEarly
+            ? {
+                sound_title:
+                  soundSourcePost.soundTitle?.trim()
+                  || (sourceHandleStitch ? `Sound by ${sourceHandleStitch}` : 'Original sound'),
+                sound_source_post_id: sid,
+                sound_source_media_url: sourceMediaEarly,
+              }
+            : {};
+
+        const ownSoundPayloadStitch =
+          !sid && mediaUrlProvisional && soundTitle.trim()
+            ? { sound_title: soundTitle.trim().slice(0, 80) }
+            : {};
+
+        const evUrlStitch = evidenceUrl.trim();
+        const evLabStitch = evidenceLabel.trim();
+        const duetPayloadStitch =
+          duetPostIdTrim
+            ? {
+                duet_parent_id: duetPostIdTrim,
+                duet_layout_mode: duetLayoutMode,
+                ...(evUrlStitch
+                  ? { evidence_url: evUrlStitch.startsWith('http') ? evUrlStitch : `https://${evUrlStitch}` }
+                  : {}),
+                ...(evLabStitch ? { evidence_label: evLabStitch } : {}),
+              }
+            : {};
+
+        let createdStitch;
+        try {
+          createdStitch = await postsService.create({
+            creator_id: user.id,
+            type: postTypeStitch,
+            caption: composedCaption,
+            media_url: mediaUrlProvisional,
+            thumbnail_url: thumbnailUrlStitch,
+            hashtags: tags.length > 0 ? tags : undefined,
+            feed_type_eligible: ['forYou', 'following'],
+            privacy_mode: privacy,
+            is_education: educationOn || undefined,
+            education_citations:
+              educationOn && citations.length > 0
+                ? citations.slice(0, 5).map((c) => ({
+                    label: c.label,
+                    url: c.url,
+                    ...(c.doi ? { doi: c.doi } : {}),
+                    ...(c.lastReviewed ? { last_reviewed: c.lastReviewed } : {}),
+                  }))
+                : undefined,
+            series_id: seriesSelection?.seriesId,
+            series_part: seriesSelection?.seriesPart,
+            series_total: seriesSelection?.seriesTotal,
+            scheduled_at: null,
+            scheduled_status: 'live',
+            cover_alt_url: coverAltRemoteStitch,
+            mood_preset: moodId ?? undefined,
+            video_look_id: filterPreset !== 'none' ? filterPreset : undefined,
+            video_overlay_text: overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
+            comments_disabled: !commentsOn || undefined,
+            media_processing_status: 'queued',
+            ...soundPayloadStitch,
+            ...ownSoundPayloadStitch,
+            ...duetPayloadStitch,
+          });
+        } catch (createErr: unknown) {
+          const msg =
+            createErr && typeof createErr === 'object' && 'message' in createErr
+              ? String((createErr as { message: string }).message)
+              : String(createErr);
+          toast.show(msg.length > 140 ? `${msg.slice(0, 137)}…` : msg, 'error');
+          return;
+        }
+
+        const kind = clipQueueVariant === 'broll' ? 'broll' : 'stitch';
+        const bucket = STORAGE_BUCKETS.postMedia;
+        const payload =
+          kind === 'stitch'
+            ? { bucket, clipPaths, target_post_id: createdStitch.id }
+            : {
+                bucket,
+                mainPath: clipPaths[0]!,
+                cutawayPaths: clipPaths.slice(1),
+                target_post_id: createdStitch.id,
+              };
+
+        let jobRow;
+        try {
+          jobRow = await enqueueCreatorMediaJob({
+            userId: user.id,
+            kind,
+            payload: payload as never,
+            idempotencyKey: `stitch-post:${createdStitch.id}`,
+          });
+        } catch {
+          await postsService.updateOwnPostMediaProcessing(createdStitch.id, user.id, {
+            mediaProcessingStatus: 'failed',
+            mediaProcessingError: 'Could not start clip combine job',
+          });
+          toast.show('Post saved but clip combine could not start. Try again from your profile.', 'error');
+          await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
+          return;
+        }
+
+        try {
+          await postsService.updateOwnPostMediaProcessing(createdStitch.id, user.id, {
+            mediaProcessingJobId: jobRow.id,
+          });
+        } catch {
+          /* non-fatal — worker still runs */
+        }
+
+        try {
+          const done = await waitForCreatorMediaJob(jobRow.id, { timeoutMs: 180_000, intervalMs: 2000 });
+          if (done.status === 'failed') {
+            toast.show(done.error?.trim() ? done.error.trim().slice(0, 160) : 'Clip combine failed', 'error');
+          } else if (done.status === 'succeeded') {
+            toast.show('Clips combined — your video is ready.', 'success');
+          }
+        } catch (pollErr: unknown) {
+          const msg = pollErr instanceof Error ? pollErr.message : String(pollErr);
+          if (msg === 'TIMEOUT') {
+            toast.show(
+              'Combining clips is taking longer — open your profile or feed shortly and pull to refresh.',
+              'info',
+            );
+          } else {
+            toast.show(msg === 'JOB_NOT_FOUND' ? 'Combine job not found.' : msg, 'error');
+          }
+        }
+
+        analytics.track('post_created', { type: postTypeStitch, stitch: true });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
+
+        setFollowUpClips([]);
+        setClipQueueVariant(null);
+        clearDraft('video');
+        setShowSuccess(true);
+        return;
+      }
 
       let mediaUrl: string | undefined;
       if (media) {
@@ -799,12 +1223,11 @@ export default function CreateVideoScreen() {
         postType === 'video' && duetPostIdTrim
           ? {
               duet_parent_id: duetPostIdTrim,
+              duet_layout_mode: duetLayoutMode,
               ...(evUrl ? { evidence_url: evUrl.startsWith('http') ? evUrl : `https://${evUrl}` } : {}),
               ...(evLab ? { evidence_label: evLab } : {}),
             }
           : {};
-
-      const scheduleIso = scheduledAt ? scheduledAt.toISOString() : null;
 
       const created = await postsService.create({
         creator_id: user.id,
@@ -832,6 +1255,7 @@ export default function CreateVideoScreen() {
         scheduled_status: scheduleIso ? 'scheduled' : 'live',
         cover_alt_url: coverAltRemote,
         mood_preset: moodId ?? undefined,
+        video_look_id: postType === 'video' && filterPreset !== 'none' ? filterPreset : undefined,
         video_overlay_text:
           postType === 'video' && overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
         comments_disabled: !commentsOn || undefined,
@@ -851,33 +1275,6 @@ export default function CreateVideoScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
 
-      if (followUpClips.length > 0) {
-        const [next, ...rest] = followUpClips;
-        setFollowUpClips(rest);
-        setMedia(next);
-        setCustomCoverUri(null);
-        setCoverAltUri(null);
-        setSeriesSelection((prev) =>
-          prev
-            ? {
-                ...prev,
-                seriesPart: prev.seriesPart + 1,
-                seriesTotal: Math.max(prev.seriesTotal, prev.seriesPart + 1 + rest.length),
-              }
-            : null,
-        );
-        const nextMsg =
-          rest.length === 0
-            ? clipQueueVariant === 'broll'
-              ? 'Last B-roll posted — queue complete.'
-              : 'Last part posted — queue complete.'
-            : clipQueueVariant === 'broll'
-              ? `Story posted — ${rest.length} B-roll cutaway(s) left. Edit caption and tap Post again.`
-              : `Part posted — ${rest.length} more in queue. Edit caption and tap Post again.`;
-        toast.show(nextMsg, 'success');
-        return;
-      }
-
       clearDraft('video');
       setShowSuccess(true);
     } catch (err: any) {
@@ -888,7 +1285,12 @@ export default function CreateVideoScreen() {
   };
 
   const durationSec = media?.duration ?? 0;
-  const durationValid = !media || (durationSec >= VIDEO_MIN_SECONDS && durationSec <= VIDEO_MAX_SECONDS);
+  const durationKnown =
+    media != null && media.duration != null && Number.isFinite(media.duration);
+  const durationValid =
+    !media ||
+    !durationKnown ||
+    (durationSec >= VIDEO_MIN_SECONDS && durationSec <= VIDEO_MAX_SECONDS);
   const canPost =
     (!!media || shortTitle.trim() || overlayLine.trim() || caption.trim()) && durationValid;
 
@@ -965,8 +1367,8 @@ export default function CreateVideoScreen() {
           });
           const msg =
             stitchVariant === 'broll'
-              ? `${clips.length} B-roll clip(s) queued — post your main story first, then each cutaway.`
-              : `${clips.length} clip(s) queued — post this video first, then tap Post for each follow-up.`;
+              ? `${clips.length} B-roll clip(s) queued — tap Post once to combine with your main clip.`
+              : `${clips.length} clip(s) queued — tap Post once to combine into one video.`;
           toast.show(msg, 'success');
         }}
       />
@@ -976,7 +1378,7 @@ export default function CreateVideoScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.dark.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {mode === 'record' ? 'Record Video' : 'Upload Video'}
+          {mode === 'record' ? 'Record Video' : mode === 'upload' ? 'Upload Video' : 'Video'}
         </Text>
         <TouchableOpacity onPress={handlePost} activeOpacity={0.7} disabled={posting || !canPost}>
           {posting ? (
@@ -1044,12 +1446,12 @@ export default function CreateVideoScreen() {
           <Text style={styles.clipQueueBannerText}>
             <Text>
               {clipQueueVariant === 'broll'
-                ? `${followUpClips.length} B-roll cutaway(s) queued — publish this main clip first, then tap Post for each cutaway.`
-                : `${followUpClips.length} follow-up clip(s) queued — publish this part first, then edit caption and tap Post for each.`}
+                ? `${followUpClips.length} B-roll clip(s) queued — tap Post once to upload and combine into one video (server job).`
+                : `${followUpClips.length} follow-up clip(s) queued — tap Post once to combine all parts into one video.`}
             </Text>
             {'\n'}
             <Text style={styles.clipQueueBannerSub}>
-              Each Post publishes one clip in this order. This screen never merges into one MP4 — that needs uploads plus the media worker (scripts/creator-media-worker.mjs).
+              Requires ffmpeg worker (`scripts/creator-media-worker.mjs`). Main feeds hide the post until combining finishes.
             </Text>
           </Text>
           <TouchableOpacity
@@ -1080,6 +1482,10 @@ export default function CreateVideoScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {media ? (
           <>
+            <PreviewOnlyCallout
+              title="Preview only — not burned into upload"
+              body="Color grade chips sync to the feed as a tint overlay (not baked into the MP4). Playback speed, trim markers, sound-hook placement, and clip-split planning stay preview-only until server export matches."
+            />
             <View style={styles.videoPreviewWrap}>
               {Platform.OS === 'android' && androidFreezeComposerPreview ? (
                 <ComposableVideoPreviewFrozen
@@ -1134,7 +1540,7 @@ export default function CreateVideoScreen() {
               />
               {soundPostIdTrim ? (
                 <Text style={styles.soundWaveHint}>
-                  Gold marker lines up your hook moment vs borrowed audio — preview planner until timeline exports honor offsets server-side.
+                  Gold marker plans your hook vs borrowed audio — not exported into the file yet; timeline offsets need server-side trim/export.
                 </Text>
               ) : null}
             </View>
@@ -1210,7 +1616,7 @@ export default function CreateVideoScreen() {
             </View>
             <Text style={styles.emptyText}>Use Studio camera or Gallery to add a clip</Text>
             <Text style={styles.durationHint}>
-              Up to {VIDEO_MAX_SECONDS / 60} min  •  Go Live for longer content
+              {VIDEO_MIN_SECONDS}s–{VIDEO_MAX_SECONDS / 60} min  •  Go Live for longer content
             </Text>
           </View>
         )}
@@ -1430,6 +1836,33 @@ export default function CreateVideoScreen() {
           </TouchableOpacity>
         </View>
 
+        {media ? (
+          <View style={styles.combineRow}>
+            <TouchableOpacity
+              style={styles.combineChip}
+              activeOpacity={0.85}
+              onPress={() => {
+                setStitchVariant('series');
+                setStitchOpen(true);
+              }}
+            >
+              <Ionicons name="git-merge-outline" size={18} color={colors.primary.teal} />
+              <Text style={styles.combineChipText}>Multi-part</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.combineChip}
+              activeOpacity={0.85}
+              onPress={() => {
+                setStitchVariant('broll');
+                setStitchOpen(true);
+              }}
+            >
+              <Ionicons name="film-outline" size={18} color={colors.primary.gold} />
+              <Text style={styles.combineChipText}>B-roll</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <TouchableOpacity
           style={styles.advancedToggle}
           onPress={() => setAdvancedCreatorOpen((o) => !o)}
@@ -1438,7 +1871,7 @@ export default function CreateVideoScreen() {
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={styles.advancedToggleTitle}>Advanced creator tools</Text>
             <Text style={styles.advancedToggleSub}>
-              Color grade & speed preview, thumbnails, B-roll queue, multi-part series, education citations, scheduling…
+              Looks, hygiene, thumbnails, scheduling & citations. Combine clips uses Multi-part / B-roll above. Color grade ships to the feed; speed ramp is preview-only here.
             </Text>
           </View>
           <Ionicons
@@ -1452,7 +1885,7 @@ export default function CreateVideoScreen() {
           <>
             {media ? (
               <View style={styles.proPanel}>
-                <Text style={styles.proLabel}>Looks, audio preview & media tools</Text>
+                <Text style={styles.proLabel}>Looks, audio preview & media tools (preview-only polish)</Text>
                 <VideoHygieneCard />
                 <BrollInsertCard
                   hasPrimaryVideo={!!media}
@@ -1482,7 +1915,7 @@ export default function CreateVideoScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={styles.proSub}>Color grade (preview only)</Text>
+                <Text style={styles.proSub}>Color grade (shows on feed — same tint as composer)</Text>
                 <View style={styles.chipRow}>
                   {EDITOR_FILTER_IDS.map((f) => {
                     const meta = VIDEO_LOOKS.find((l) => l.id === f);
@@ -1565,21 +1998,6 @@ export default function CreateVideoScreen() {
                 <TouchableOpacity style={styles.secondaryFullBtn} onPress={() => setClipSplitOpen(true)} activeOpacity={0.85}>
                   <Ionicons name="albums-outline" size={18} color={colors.primary.teal} />
                   <Text style={styles.secondaryFullBtnText}>Clip split planner</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryFullBtn}
-                  onPress={() => {
-                    if (!media) {
-                      toast.show('Add a video first', 'info');
-                      return;
-                    }
-                    setStitchVariant('series');
-                    setStitchOpen(true);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="git-merge-outline" size={18} color={colors.primary.teal} />
-                  <Text style={styles.secondaryFullBtnText}>Multi-part series queue</Text>
                 </TouchableOpacity>
                 <View style={styles.soundDiscoverRow}>
                   <TouchableOpacity
@@ -1831,6 +2249,22 @@ const styles = StyleSheet.create({
   optionText: { fontSize: 13, fontWeight: '600', color: colors.dark.textSecondary },
   optionChipActive: { borderColor: colors.primary.teal },
   optionTextActive: { color: colors.primary.teal },
+
+  combineRow: { flexDirection: 'row', gap: 10 },
+  combineChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.dark.card,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  combineChipText: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
 
   advancedToggle: {
     flexDirection: 'row',

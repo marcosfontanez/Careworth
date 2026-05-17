@@ -1,11 +1,15 @@
 import { supabase } from '@/lib/supabase';
 import { feedPerfLane, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
 import { finalizePostsForViewer } from '@/lib/postViewerPrivacy';
+import { normalizeDuetLayoutMode } from '@/lib/duetLayoutMode';
+import { clampVideoOverlayText } from '@/lib/videoOverlayText';
+import { normalizeVideoLookId } from '@/lib/videoFilters';
 import { mergePinnedCommunityPosts, type CommunityPostPinRow } from '@/lib/communityPostPins';
 import type { Post, FeedType, PostType, SoundLibraryRow, ViralSoundRow, Role, Specialty, PostReactionCounts, PostReactionKind } from '@/types';
 import { normalizePostReactionKind } from '@/lib/postReactions';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { feedSignalsService } from '@/services/supabase/feedSignals';
+import { profilesService } from '@/services/supabase/profiles';
 import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
 
 /** Batches `post_views` inserts — cuts HTTPS round-trips during feed scroll (see Query Performance). */
@@ -83,6 +87,8 @@ function postIsLiveForPublicSurface(p: Post): boolean {
 /** Posts tagged only for circles must not appear in For You, Following, or Top Today (incl. author prepended slice). */
 function postAppearsInMainFeeds(p: Post): boolean {
   if (!postIsLiveForPublicSurface(p)) return false;
+  const proc = (p.mediaProcessingStatus ?? '').trim().toLowerCase();
+  if (proc === 'queued' || proc === 'running') return false;
   const tags = p.feedTypeEligible ?? [];
   return tags.some((x) => x === 'forYou' || x === 'following' || x === 'topToday');
 }
@@ -140,6 +146,9 @@ function rowToPost(row: any): Post {
     ? profileRowToCreatorSummary(row.profiles)
     : unknownCreatorSummary(row.creator_id);
 
+  const duetLay = normalizeDuetLayoutMode(row.duet_layout_mode);
+  const videoLook = normalizeVideoLookId(row.video_look_id);
+
   return {
     id: row.id,
     creatorId: row.creator_id,
@@ -168,6 +177,7 @@ function rowToPost(row: any): Post {
     soundSourcePostId: row.sound_source_post_id ?? undefined,
     soundSourceMediaUrl: normalizeMediaUrl(row.sound_source_media_url),
     duetParentId: row.duet_parent_id ? String(row.duet_parent_id) : undefined,
+    ...(duetLay ? { duetLayoutMode: duetLay } : {}),
     evidenceUrl: row.evidence_url?.trim() || undefined,
     evidenceLabel: row.evidence_label?.trim() || undefined,
     shiftContext: row.shift_context?.trim() || undefined,
@@ -188,10 +198,19 @@ function rowToPost(row: any): Post {
     scheduledStatus: row.scheduled_status != null ? String(row.scheduled_status) : undefined,
     coverAltUrl: normalizeMediaUrl(row.cover_alt_url),
     moodPreset: row.mood_preset?.trim() || undefined,
+    ...(videoLook ? { videoLookId: videoLook } : {}),
     videoOverlayText: typeof row.video_overlay_text === 'string'
       ? row.video_overlay_text.trim() || undefined
       : undefined,
     commentsDisabled: Boolean(row.comments_disabled),
+    mediaProcessingStatus:
+      row.media_processing_status != null && String(row.media_processing_status).trim()
+        ? String(row.media_processing_status).trim()
+        : undefined,
+    mediaProcessingJobId:
+      row.media_processing_job_id != null ? String(row.media_processing_job_id) : undefined,
+    mediaProcessingError:
+      typeof row.media_processing_error === 'string' ? row.media_processing_error.trim() || undefined : undefined,
   };
 }
 
@@ -262,6 +281,7 @@ const POST_SELECT = [
   'sound_source_media_url',
   // Duet / evidence / shift context (Innovation feed)
   'duet_parent_id',
+  'duet_layout_mode',
   'evidence_url',
   'evidence_label',
   'shift_context',
@@ -275,9 +295,13 @@ const POST_SELECT = [
   'scheduled_status',
   'cover_alt_url',
   'mood_preset',
+  'video_look_id',
   // On-video sticker text (rendered as <Text> overlay on the feed video)
   'video_overlay_text',
   'comments_disabled',
+  'media_processing_status',
+  'media_processing_job_id',
+  'media_processing_error',
   // Joined creator profile — explicit columns to avoid shipping email,
   // push tokens, role_admin flag, etc. to the client.
   'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
@@ -312,6 +336,7 @@ const POST_SELECT_FEED = [
   'sound_source_post_id',
   'sound_source_media_url',
   'duet_parent_id',
+  'duet_layout_mode',
   'evidence_url',
   'evidence_label',
   'is_education',
@@ -323,8 +348,12 @@ const POST_SELECT_FEED = [
   'scheduled_status',
   'cover_alt_url',
   'mood_preset',
+  'video_look_id',
   'video_overlay_text',
   'comments_disabled',
+  'media_processing_status',
+  'media_processing_job_id',
+  'media_processing_error',
   'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
@@ -454,6 +483,60 @@ function withFeedPrivacy(query: any, viewerId?: string) {
     return query.or(`privacy_mode.eq.public,creator_id.eq.${viewerId}`);
   }
   return query.eq('privacy_mode', 'public');
+}
+
+/** PostgREST `in` payloads stay smaller than giant URLs; merge chunks client-side. */
+const FOLLOWING_FEED_CREATOR_CHUNK = 100;
+
+/**
+ * Chronological posts from creators the viewer follows only.
+ * Uses `feed_type_eligible` containing `following` so opted-out posts stay out.
+ */
+async function fetchFollowingFeedPosts(args: {
+  viewerId: string;
+  limit: number;
+  cursor?: string | null;
+  excludeIds?: Set<string>;
+}): Promise<Post[]> {
+  const { viewerId, limit, cursor, excludeIds } = args;
+  const followed = await profilesService.getFollowedIdsForUser(viewerId);
+  const idList = [...followed];
+  if (idList.length === 0) return [];
+
+  const fetchChunk = async (creatorIds: string[]) => {
+    let q = supabase.from('posts').select(POST_SELECT_FEED);
+    q = withFeedPrivacy(q, viewerId);
+    q = q.contains('feed_type_eligible', ['following']).in('creator_id', creatorIds);
+    if (cursor) q = q.lt('created_at', cursor);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return (data ?? []).map(rowToPost).filter(postAppearsInMainFeeds);
+  };
+
+  let merged: Post[];
+  if (idList.length <= FOLLOWING_FEED_CREATOR_CHUNK) {
+    merged = await fetchChunk(idList);
+  } else {
+    const chunks: string[][] = [];
+    for (let i = 0; i < idList.length; i += FOLLOWING_FEED_CREATOR_CHUNK) {
+      chunks.push(idList.slice(i, i + FOLLOWING_FEED_CREATOR_CHUNK));
+    }
+    const parts = await Promise.all(chunks.map(fetchChunk));
+    merged = parts.flat();
+  }
+
+  merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+
+  const out: Post[] = [];
+  const seen = new Set<string>();
+  for (const p of merged) {
+    if (excludeIds?.has(p.id)) continue;
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    out.push(p);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 /**
@@ -704,18 +787,26 @@ export const postsService = {
         return finalizePostsForViewer(posts, userId);
       }
 
-      {
+      if (type === 'following') {
+        if (!userId?.trim()) {
+          return finalizePostsForViewer([], userId);
+        }
+        const foT0 = feedPerfNow();
+        const [rawPosts, ex] = await Promise.all([
+          fetchFollowingFeedPosts({ viewerId: userId.trim(), limit: 50 }),
+          exclusionsPromise,
+        ]);
+        feedPerfLog('getFeed:following fetched', foT0);
+        posts = await applyViewerFeedFilters(rawPosts, userId, ex);
+        return finalizePostsForViewer(posts, userId);
+      }
+
+      // Anonymous For You — chronological public posts eligible for the main feed.
+      if (type === 'forYou' && !userId) {
         let query = supabase.from('posts').select(POST_SELECT_FEED);
         query = withFeedPrivacy(query, userId);
+        query = query.contains('feed_type_eligible', ['forYou']);
         query = query.order('created_at', { ascending: false }).limit(50);
-
-        if (type === 'forYou' && !userId) {
-          query = query.contains('feed_type_eligible', ['forYou']);
-        }
-
-        if (type === 'following') {
-          query = query.contains('feed_type_eligible', ['following']);
-        }
 
         const [result, ex] = await Promise.all([query, exclusionsPromise]);
         const { data, error } = result;
@@ -728,9 +819,10 @@ export const postsService = {
           userId,
           ex,
         );
+        return finalizePostsForViewer(posts, userId);
       }
 
-      return finalizePostsForViewer(posts, userId);
+      return finalizePostsForViewer([], userId);
     } finally {
       if (__DEV__ && typeof performance !== 'undefined' && type !== 'community') {
         console.log(
@@ -773,6 +865,28 @@ export const postsService = {
     try {
       if (type === 'community') return { posts: [], nextCursor: null };
 
+      if (type === 'following') {
+        if (!viewerId?.trim()) {
+          return { posts: [], nextCursor: null };
+        }
+        const [rawPosts, exclusions] = await Promise.all([
+          fetchFollowingFeedPosts({
+            viewerId: viewerId.trim(),
+            limit,
+            cursor,
+            excludeIds: exclude,
+          }),
+          loadFeedExclusions(viewerId),
+        ]);
+        let posts = finalizePostsForViewer(
+          await applyViewerFeedFilters(rawPosts, viewerId, exclusions),
+          viewerId,
+        );
+        posts = posts.slice(0, limit);
+        const nextCursor = posts.length === limit ? posts[posts.length - 1].createdAt : null;
+        return { posts, nextCursor };
+      }
+
       let query = supabase
         .from('posts')
         .select(POST_SELECT_FEED)
@@ -784,8 +898,6 @@ export const postsService = {
 
       if (type === 'forYou') {
         query = query.contains('feed_type_eligible', ['forYou']);
-      } else if (type === 'following') {
-        query = query.contains('feed_type_eligible', ['following']);
       } else if (type === 'topToday') {
         const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         query = query.gte('created_at', dayAgoIso);
@@ -1143,6 +1255,8 @@ export const postsService = {
     sound_source_post_id?: string | null;
     sound_source_media_url?: string | null;
     duet_parent_id?: string | null;
+    /** Migration 161 — strip vs floating parent chrome in feed. */
+    duet_layout_mode?: 'strip' | 'floating' | null;
     evidence_url?: string | null;
     evidence_label?: string | null;
     shift_context?: string | null;
@@ -1156,11 +1270,17 @@ export const postsService = {
     scheduled_status?: 'live' | 'scheduled' | 'sending' | 'failed' | 'cancelled' | null;
     cover_alt_url?: string | null;
     mood_preset?: string | null;
+    /** Read-side color grade on feed video (migration 162). */
+    video_look_id?: string | null;
     additional_media?: string[] | null;
     /** On-video sticker line (<=80 chars). Rendered live on the feed video; not baked. */
     video_overlay_text?: string | null;
     /** When true, new comments are rejected for this post (migration 156). */
     comments_disabled?: boolean;
+    /** Stitch/export pipeline (migration 159). Omit unless concat job is in flight. */
+    media_processing_status?: 'queued' | 'running' | 'failed' | null;
+    media_processing_job_id?: string | null;
+    media_processing_error?: string | null;
   }): Promise<Post> {
     let roleCtx = post.role_context;
     let specCtx = post.specialty_context;
@@ -1186,6 +1306,7 @@ export const postsService = {
       sound_source_post_id: soundSourceIn,
       sound_source_media_url: soundMediaIn,
       duet_parent_id: duetParentIn,
+      duet_layout_mode: duetLayoutModeIn,
       evidence_url: evidenceUrlIn,
       evidence_label: evidenceLabelIn,
       shift_context: shiftCtxIn,
@@ -1198,9 +1319,13 @@ export const postsService = {
       scheduled_status: scheduledStatusIn,
       cover_alt_url: coverAltUrlIn,
       mood_preset: moodPresetIn,
+      video_look_id: videoLookIdIn,
       additional_media: additionalMediaIn,
       video_overlay_text: videoOverlayTextIn,
       comments_disabled: commentsDisabledIn,
+      media_processing_status: mediaProcessingStatusIn,
+      media_processing_job_id: mediaProcessingJobIdIn,
+      media_processing_error: mediaProcessingErrorIn,
       ...postRest
     } = post;
 
@@ -1289,9 +1414,28 @@ export const postsService = {
      * through — they'll just lose the on-video sticker line.
      */
     const vot = typeof videoOverlayTextIn === 'string' ? videoOverlayTextIn.trim() : '';
-    if (vot) extensionPayload.video_overlay_text = vot.slice(0, 80);
+    if (vot) extensionPayload.video_overlay_text = clampVideoOverlayText(vot);
+
+    const vlk = normalizeVideoLookId(videoLookIdIn);
+    if (vlk) extensionPayload.video_look_id = vlk;
 
     if (commentsDisabledIn === true) extensionPayload.comments_disabled = true;
+
+    const mps =
+      mediaProcessingStatusIn != null ? String(mediaProcessingStatusIn).trim().toLowerCase() : '';
+    if (mps === 'queued' || mps === 'running' || mps === 'failed') {
+      extensionPayload.media_processing_status = mps;
+    }
+    const mpjid =
+      mediaProcessingJobIdIn != null ? String(mediaProcessingJobIdIn).trim() : '';
+    if (mpjid) extensionPayload.media_processing_job_id = mpjid;
+    const mperr =
+      mediaProcessingErrorIn != null ? String(mediaProcessingErrorIn).trim() : '';
+    if (mperr) extensionPayload.media_processing_error = mperr.slice(0, 500);
+
+    if (dp) {
+      extensionPayload.duet_layout_mode = duetLayoutModeIn === 'floating' ? 'floating' : 'strip';
+    }
 
     const fullPayload = { ...insertPayload, ...extensionPayload };
 
@@ -1538,6 +1682,53 @@ export const postsService = {
       .single();
     if (error || !data) throw error ?? new Error('Update failed');
     return rowToPost(data);
+  },
+
+  /**
+   * Author-only patch for stitch/export pipeline fields (migration 159).
+   * Used after enqueueing creator_media_jobs or on client-side failure before worker runs.
+   */
+  async updateOwnPostMediaProcessing(
+    postId: string,
+    creatorId: string,
+    patch: {
+      mediaProcessingJobId?: string | null;
+      mediaProcessingStatus?: 'queued' | 'running' | 'failed' | null;
+      mediaProcessingError?: string | null;
+      mediaUrl?: string | null;
+    },
+  ): Promise<void> {
+    const updates: Record<string, unknown> = {};
+    if (Object.prototype.hasOwnProperty.call(patch, 'mediaProcessingJobId')) {
+      const v = patch.mediaProcessingJobId;
+      updates.media_processing_job_id =
+        v != null && String(v).trim() ? String(v).trim() : null;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'mediaProcessingStatus')) {
+      const v = patch.mediaProcessingStatus;
+      if (v == null) updates.media_processing_status = null;
+      else {
+        const s = String(v).trim().toLowerCase();
+        if (s === 'queued' || s === 'running' || s === 'failed') updates.media_processing_status = s;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'mediaProcessingError')) {
+      const v = patch.mediaProcessingError;
+      updates.media_processing_error =
+        v != null && String(v).trim() ? String(v).trim().slice(0, 500) : null;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'mediaUrl')) {
+      const v = patch.mediaUrl;
+      updates.media_url = v != null && String(v).trim() ? String(v).trim() : null;
+    }
+    if (Object.keys(updates).length === 0) return;
+
+    const { error } = await supabase
+      .from('posts')
+      .update(updates as never)
+      .eq('id', postId)
+      .eq('creator_id', creatorId);
+    if (error) throw error;
   },
 
   /** Top hashtags from recent public posts (Discover + Search empty-query browse). */

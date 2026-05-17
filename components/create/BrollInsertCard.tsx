@@ -12,8 +12,7 @@ type Props = {
 };
 
 /**
- * B-roll in Advanced tools: queues cutaway clips for sequential posting (same queue mechanism as multi-part series).
- * FFmpeg concat as one MP4 is a backend step after uploads (`creator_media_jobs` kinds stitch/broll — see scripts/creator-media-worker.mjs).
+ * B-roll in Advanced tools: queues cutaways after the main clip for a single post + server concat (`creator_media_jobs` broll).
  */
 export function BrollInsertCard({ hasPrimaryVideo, queuedCutaways, onOpenPicker }: Props) {
   return (
@@ -22,7 +21,7 @@ export function BrollInsertCard({ hasPrimaryVideo, queuedCutaways, onOpenPicker 
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>B-roll cutaways</Text>
         <Text style={styles.sub}>
-          Post your main video first, then each cutaway in sequence — we move each clip into place so you can caption separate Pulse posts. One merged MP4 uses ffmpeg outside this flow after clips are uploaded to storage (see scripts/creator-media-worker.mjs for operators).
+          One post: main story first in the file, then your cutaways concatenated on the server (ffmpeg worker). Tap Post once from the composer when the queue is ready — same pipeline as multi-part series.
         </Text>
         {queuedCutaways > 0 ? (
           <Text style={styles.queued}>{queuedCutaways} cutaway{queuedCutaways === 1 ? '' : 's'} queued</Text>

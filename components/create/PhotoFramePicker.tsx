@@ -13,7 +13,7 @@ export function PhotoFramePicker({ selected, onSelect }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Photo frames</Text>
-      <Text style={styles.sub}>Wraps the cover slide. Free differentiator.</Text>
+      <Text style={styles.sub}>Preview on cover slide — not burned into uploads; feed parity ships separately.</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {PHOTO_FRAMES.map((f) => {
           const active = selected === f.id;

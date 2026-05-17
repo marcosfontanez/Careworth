@@ -3,22 +3,14 @@ import type { PulseAvatarRingStyle } from '@/components/profile/AvatarBuilder';
 import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 
 /**
- * Mirror of the SQL trigger `_economy_sync_user_pulse_frame_from_shop_item`
- * (migration 133): map a shop border to the slug of its synced pulse-avatar
- * frame so the client can dedupe vault rows and resolve "equipped" state
- * across the two storage tables (`user_inventory` + `user_pulse_avatar_frames`).
+ * Mirror of `_economy_sync_user_pulse_frame_from_shop_item` (migration 133+):
+ * map a shop border to `pulse_avatar_frames.slug` for vault dedupe and equipped
+ * detection across `user_inventory` + `user_pulse_avatar_frames`.
  *
- * Why this is needed on the client:
- *   When a user owns a shop border that has a synced pulse-frame counterpart,
- *   the Border Vault used to render *both* representations side-by-side, which
- *   read as a duplicate to the user. Dedupe + cross-source equipped detection
- *   both need a single key — `pulse_avatar_frames.slug` is the column the SQL
- *   join uses, so we use the same here.
- *
- * Resolution order (must match the SQL trigger to stay in sync):
- *   1. `shop_items.metadata.pulse_frame_slug`  (set by recent migrations)
- *   2. legacy fallback map for early shop borders that pre-date that field
- *   3. null — this border has no pulse-frame mirror, no dedupe needed
+ * Resolution order (aligned with SQL RPCs):
+ *   1. `shop_items.metadata.pulse_frame_slug` when set
+ *   2. Legacy slug fallback map for older borders
+ *   3. null — no pulse-frame mirror
  */
 const LEGACY_SHOP_SLUG_TO_FRAME_SLUG: Record<string, string> = {
   'border-pride-month-2026': 'pride-month-2026-border',
@@ -35,11 +27,12 @@ const LEGACY_SHOP_SLUG_TO_FRAME_SLUG: Record<string, string> = {
 
 export function resolveShopBorderFrameSlug(item: ShopItemRow): string | null {
   if (item.type !== 'border') return null;
+  const shopSlug = String(item.slug ?? '').trim().toLowerCase();
   const meta = (item.metadata ?? {}) as { pulse_frame_slug?: unknown };
   const fromMeta =
     typeof meta.pulse_frame_slug === 'string' ? meta.pulse_frame_slug.trim() : '';
   if (fromMeta) return fromMeta;
-  const fromMap = LEGACY_SHOP_SLUG_TO_FRAME_SLUG[String(item.slug ?? '').toLowerCase()];
+  const fromMap = LEGACY_SHOP_SLUG_TO_FRAME_SLUG[shopSlug];
   return fromMap ?? null;
 }
 

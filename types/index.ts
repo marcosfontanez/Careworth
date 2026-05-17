@@ -1,5 +1,6 @@
 import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
 import type { BrandKit } from '@/lib/brandKit';
+import type { VideoLookId } from '@/lib/videoFilters';
 
 export type Role =
   | ''
@@ -452,6 +453,8 @@ export interface Post {
   soundSourceMediaUrl?: string;
   /** Side-by-side / layout duet: points at original clip */
   duetParentId?: string;
+  /** Parent reference chrome in feed when dueting — strip vs PiP (migration 161). */
+  duetLayoutMode?: 'strip' | 'floating';
   evidenceUrl?: string;
   evidenceLabel?: string;
   /** day | night | weekend — shift-aware ranking hint */
@@ -498,6 +501,8 @@ export interface Post {
   scheduledStatus?: string;
   coverAltUrl?: string;
   moodPreset?: string;
+  /** Composer color-grade chip — feed overlays matching tint (not burned into MP4). */
+  videoLookId?: VideoLookId;
   /**
    * Optional on-video sticker line (<=80 chars) added in the video composer.
    * The feed renders this as a centered <Text> on top of the video player
@@ -505,6 +510,13 @@ export interface Post {
    * video. Not baked into the underlying MP4 — pure runtime overlay.
    */
   videoOverlayText?: string;
+  /**
+   * When stitch/export is running for concat jobs: queued | running | failed.
+   * Null/undefined = ready for main feeds (migration 159).
+   */
+  mediaProcessingStatus?: string;
+  mediaProcessingJobId?: string;
+  mediaProcessingError?: string;
 }
 
 export interface SponsorInfo {

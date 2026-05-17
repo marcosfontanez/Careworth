@@ -13,21 +13,32 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { LoadingState } from '@/components/ui/LoadingState';
-import { useLiveStreams } from '@/hooks/useQueries';
-import { colors, borderRadius, layout, pulseverse, spacing, typography } from '@/theme';
+import { colors, borderRadius, layout, spacing, typography, pulseverse } from '@/theme';
 import { FeaturedLiveCarousel } from '@/components/live/FeaturedLiveCarousel';
 import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
-import { LiveNowCard } from '@/components/live/LiveNowCard';
-import { RisingLiveCard } from '@/components/live/RisingLiveCard';
-import { LiveTopicChip, LIVE_TOPICS, type LiveTopic } from '@/components/live/LiveTopicChip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { liveGoLiveHref, liveHostControlsHref, liveStreamHref } from '@/lib/navigation/liveRoutes';
+import { useLiveHubHome } from '@/hooks/useLiveHubHome';
+import type { LiveHubCategoryTab, LiveHubStream } from '@/types/liveHub';
+import {
+  HubCircleLiveCard,
+  HubShopLiveCard,
+  HubTrendingCard,
+  HubUpcomingCard,
+  LiveHubCategoryBar,
+  StartLivePromoCard,
+  liveModeLabel,
+} from '@/components/live/hub/HubDiscoveryCards';
+import { LiveHubSkeleton } from '@/components/live/hub/LiveHubSkeleton';
+import { useToast } from '@/components/ui/Toast';
 import type { LiveStream } from '@/types';
 
-const FEATURED_COUNT = 5;
-const TOP_LIVE_TAKE = 6;
-const RISING_TAKE = 6;
+function chunkPairs<T>(arr: T[]): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += 2) out.push(arr.slice(i, i + 2));
+  return out;
+}
 
 /** Shown when the Live tab is visible but streaming is not enabled yet (e.g. pre–store launch). */
 function LivePrelaunchPlaceholder() {
@@ -52,7 +63,7 @@ function LivePrelaunchPlaceholder() {
           <EmptyState
             icon="radio-outline"
             title="Coming after launch"
-            subtitle="Creator live streams will land here soon. Turn the feature on when you’re ready, or browse the feed for now."
+            subtitle="Turn on Live streaming in Admin → Feature flags when you’re ready."
             accent={colors.status.live}
             ctaLabel="Back to Feed"
             onCtaPress={() => router.replace('/(tabs)/feed')}
@@ -67,14 +78,16 @@ export default function LiveScreen() {
   if (!isFeatureEnabled('liveStreaming')) {
     return <LivePrelaunchPlaceholder />;
   }
-  return <LiveScreenEnabled />;
+  return <LiveHubScreen />;
 }
 
-function LiveScreenEnabled() {
+function LiveHubScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data, isLoading, isError, refetch } = useLiveStreams();
+  const showToast = useToast((s) => s.show);
+  const [tab, setTab] = useState<LiveHubCategoryTab>('for-you');
   const [refreshing, setRefreshing] = useState(false);
+  const { data, isLoading, isError, refetch } = useLiveHubHome(tab);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -82,213 +95,201 @@ function LiveScreenEnabled() {
     setRefreshing(false);
   }, [refetch]);
 
-  const realLive = data?.live ?? [];
-
-  /**
-   * Production: show only real streams from the database. Empty state below
-   * when none are live (no seed / demo cards).
-   */
-  const liveAll = realLive;
-  const hasLiveStreams = liveAll.length > 0;
-
-  /**
-   * Sections are derived from a single live list:
-   * - Featured = top 5 by viewer count
-   * - Top Live Now = next 6 (after Featured) by viewer count
-   * - Rising Lives = next 6 (after Featured + Top Now), by viewer count
-   *
-   * If there aren't enough streams, sections gracefully thin out instead of
-   * showing the same stream in multiple sections.
-   */
-  const { featured, topLiveNow, risingLives } = useMemo(() => {
-    const sorted = [...liveAll].sort((a, b) => b.viewerCount - a.viewerCount);
-    const f = sorted.slice(0, FEATURED_COUNT);
-    const t = sorted.slice(FEATURED_COUNT, FEATURED_COUNT + TOP_LIVE_TAKE);
-    const r = sorted.slice(
-      FEATURED_COUNT + TOP_LIVE_TAKE,
-      FEATURED_COUNT + TOP_LIVE_TAKE + RISING_TAKE,
-    );
-    return { featured: f, topLiveNow: t, risingLives: r };
-  }, [liveAll]);
-
-  const handleStreamPress = useCallback(
-    (stream: LiveStream) => {
-      router.push(`/live/${stream.id}`);
+  const openStream = useCallback(
+    (s: LiveHubStream) => {
+      router.push(liveStreamHref(s.id));
     },
     [router],
   );
-  const handleTopicPress = useCallback(
-    (topic: LiveTopic) =>
-      router.push(`/search?q=${encodeURIComponent(topic.label)}` as any),
-    [router],
-  );
+
+  const featuredSubtitle = useCallback((s: LiveStream) => {
+    const hub = s as LiveHubStream;
+    const mode = liveModeLabel(hub.liveType);
+    return hub.promoTag ? `${mode} · ${hub.promoTag}` : mode;
+  }, []);
+
+  const featuredShopBadge = useCallback((s: LiveStream) => {
+    const hub = s as LiveHubStream;
+    if (!hub.hasProducts) return undefined;
+    if (hub.promoTag?.trim()) return hub.promoTag.trim();
+    const t = hub.products?.[0]?.title?.trim();
+    if (!t) return 'Shop Live';
+    return t.length > 32 ? `${t.slice(0, 31)}…` : t;
+  }, []);
+
+  const upcoming = data?.upcoming ?? [];
+  const [rsvp, setRsvp] = useState<Record<string, 'none' | 'going' | 'reminder'>>({});
+
+  const emptyFollowing = tab === 'following' && (data?.allFiltered.length ?? 0) === 0;
+
+  const trendingRows = useMemo(() => chunkPairs(data?.trending ?? []), [data?.trending]);
 
   return (
     <SafeAreaView style={styles.safeRoot} edges={['top']}>
       <View style={styles.container}>
-        <Header
-          onMenuPress={() => router.push('/search')}
-          onSearchPress={() => router.push('/search')}
-          onGoLivePress={() => router.push('/live/go-live')}
+        <HubHeader
+          onSearch={() => router.push('/search')}
+          onBell={() => router.push('/notifications')}
+          onGoLive={() => router.push(liveGoLiveHref())}
         />
 
+        <LiveHubCategoryBar active={tab} onChange={setTab} />
+
         {isLoading || !data ? (
-          // Shared loader so Live lines up with Feed / Circles / Pulse
-          // Page rather than showing a bare ActivityIndicator.
-          <LoadingState />
+          <LiveHubSkeleton />
         ) : isError ? (
-          <ErrorState title="Couldn't load streams" onRetry={() => refetch()} />
+          <ErrorState title="Couldn't load Live" onRetry={() => refetch()} />
         ) : (
           <ScrollView
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
             contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'never' : 'automatic'}
             refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary.teal}
-              />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />
             }
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingBottom: insets.bottom + 120 },
-            ]}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           >
-            {!hasLiveStreams ? (
-              <View style={{ paddingHorizontal: layout.screenPadding, marginTop: spacing.md }}>
+            {emptyFollowing ? (
+              <View style={{ paddingHorizontal: layout.screenPadding, marginBottom: spacing.lg }}>
                 <EmptyState
-                  icon="radio-outline"
-                  title="No live streams right now"
-                  subtitle="When someone goes live, you’ll see them here. Pull to refresh, or browse the feed."
-                  accent={colors.status.live}
-                  ctaLabel="Back to Feed"
-                  onCtaPress={() => router.replace('/(tabs)/feed')}
+                  icon="heart-outline"
+                  title="No live streams from people you follow"
+                  subtitle="Follow creators to see their lives here first."
+                  accent={pulseverse.electric}
+                  ctaLabel="Discover"
+                  onCtaPress={() => router.push('/discover')}
                 />
               </View>
             ) : null}
 
-            {/* SECTION 1 — Featured Live carousel */}
-            {hasLiveStreams && featured.length > 0 ? (
+            {/* Featured Live Now */}
+            {data.featured.length > 0 ? (
               <View style={styles.section}>
                 <PVSectionHeader
-                  title="Featured Live"
-                  leading={<Ionicons name="star" size={16} color={colors.primary.gold} />}
-                  rightSlot={
-                    <TouchableOpacity
-                      onPress={() => router.push('/search')}
-                      hitSlop={12}
-                      accessibilityRole="button"
-                      accessibilityLabel="See all featured live"
-                    >
-                      <Text style={styles.sectionSeeAll}>See All</Text>
-                    </TouchableOpacity>
-                  }
+                  title="Featured Live Now"
+                  leading={<Ionicons name="radio" size={16} color={colors.status.live} />}
                   style={styles.pvSectionPad}
                 />
                 <FeaturedLiveCarousel
-                  streams={featured}
-                  onPressStream={handleStreamPress}
-                  maxCards={FEATURED_COUNT}
+                  streams={data.featured}
+                  onPressStream={(s) => openStream(s as LiveHubStream)}
+                  maxCards={5}
+                  getSubtitle={featuredSubtitle}
+                  getShopBadge={featuredShopBadge}
                 />
+              </View>
+            ) : (
+              !emptyFollowing && (
+                <View style={{ paddingHorizontal: layout.screenPadding }}>
+                  <Text style={styles.mutedCenter}>No featured streams in this filter — pull to refresh.</Text>
+                </View>
+              )
+            )}
+
+            {/* Trending */}
+            {data.trending.length > 0 ? (
+              <View style={styles.section}>
+                <PVSectionHeader
+                  title="Trending Live"
+                  leading={<Ionicons name="flame" size={16} color={colors.primary.gold} />}
+                  style={styles.pvSectionPad}
+                />
+                <View style={{ paddingHorizontal: layout.screenPadding, gap: spacing.md }}>
+                  {trendingRows.map((row, ri) => (
+                    <View key={ri} style={styles.trendRow}>
+                      {row.map((s) => (
+                        <HubTrendingCard key={s.id} stream={s} onPress={() => openStream(s)} />
+                      ))}
+                    </View>
+                  ))}
+                </View>
               </View>
             ) : null}
 
-            {/* SECTION 2 — Top Live Now */}
-            {hasLiveStreams && topLiveNow.length > 0 ? (
+            {/* Shop Live Deals */}
+            {data.shopLiveDeals.length > 0 ? (
               <View style={styles.section}>
                 <PVSectionHeader
-                  title="Top Live Now"
-                  rightSlot={
-                    <TouchableOpacity
-                      onPress={() => router.push('/search')}
-                      hitSlop={12}
-                      accessibilityRole="button"
-                      accessibilityLabel="See all top live"
-                    >
-                      <Text style={styles.sectionSeeAll}>See All</Text>
-                    </TouchableOpacity>
-                  }
+                  title="Shop Live Deals"
+                  leading={<Ionicons name="bag-handle" size={16} color={colors.primary.gold} />}
                   style={styles.pvSectionPad}
                 />
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.hRowScroll}
+                  contentContainerStyle={{ paddingHorizontal: layout.screenPadding }}
                 >
-                  {topLiveNow.map((stream) => (
-                    <View key={stream.id} style={styles.hRowItem}>
-                      <LiveNowCard
-                        stream={stream}
-                        onPress={() => handleStreamPress(stream)}
-                      />
-                    </View>
+                  {data.shopLiveDeals.map((s) => (
+                    <HubShopLiveCard key={s.id} stream={s} onPress={() => openStream(s)} />
                   ))}
                 </ScrollView>
               </View>
             ) : null}
 
-            {/* SECTION 3 — Rising Lives */}
-            {hasLiveStreams && risingLives.length > 0 ? (
+            {/* Upcoming */}
+            {upcoming.length > 0 ? (
               <View style={styles.section}>
                 <PVSectionHeader
-                  title="Rising Lives"
-                  leading={<Ionicons name="trending-up" size={16} color={colors.primary.gold} />}
-                  rightSlot={
-                    <TouchableOpacity
-                      onPress={() => router.push('/search')}
-                      hitSlop={12}
-                      accessibilityRole="button"
-                      accessibilityLabel="See all rising lives"
-                    >
-                      <Text style={styles.sectionSeeAll}>See All</Text>
-                    </TouchableOpacity>
-                  }
+                  title="Upcoming Live Sessions"
+                  leading={<Ionicons name="calendar" size={16} color={pulseverse.electric} />}
                   style={styles.pvSectionPad}
                 />
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.hRowScroll}
-                >
-                  {risingLives.map((stream) => (
-                    <View key={stream.id} style={styles.hRowItem}>
-                      <RisingLiveCard
-                        stream={stream}
-                        onPress={() => handleStreamPress(stream)}
-                      />
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            {/* SECTION 4 — Browse by Topic */}
-            <View style={styles.section}>
-              <PVSectionHeader
-                title="Browse by Topic"
-                rightSlot={
-                  <TouchableOpacity
-                    onPress={() => router.push('/search')}
-                    hitSlop={12}
-                    accessibilityRole="button"
-                    accessibilityLabel="See all topics"
-                  >
-                    <Text style={styles.sectionSeeAll}>See All</Text>
-                  </TouchableOpacity>
-                }
-                style={styles.pvSectionPad}
-              />
-              <View style={styles.topicWrap}>
-                {LIVE_TOPICS.map((topic) => (
-                  <LiveTopicChip
-                    key={topic.id}
-                    topic={topic}
-                    onPress={() => handleTopicPress(topic)}
+                {upcoming.map((ev) => (
+                  <HubUpcomingCard
+                    key={ev.id}
+                    ev={{
+                      ...ev,
+                      rsvpState: rsvp[ev.id] ?? ev.rsvpState ?? 'none',
+                    }}
+                    onRsvp={() => {
+                      setRsvp((prev) => {
+                        const cur = prev[ev.id] ?? 'none';
+                        const next: 'none' | 'going' = cur === 'going' ? 'none' : 'going';
+                        return { ...prev, [ev.id]: next };
+                      });
+                      showToast('Reminder updated (demo)', 'success');
+                    }}
                   />
                 ))}
               </View>
+            ) : null}
+
+            {/* Circles */}
+            {data.circleLives.length > 0 ? (
+              <View style={styles.section}>
+                <PVSectionHeader
+                  title="From Your Circles"
+                  leading={<Ionicons name="people" size={16} color={pulseverse.electric} />}
+                  style={styles.pvSectionPad}
+                />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: layout.screenPadding }}
+                >
+                  {data.circleLives.map((s) => (
+                    <HubCircleLiveCard key={s.id} stream={s} onPress={() => openStream(s)} />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            {/* Host tools (preview) */}
+            <View style={[styles.section, { paddingHorizontal: layout.screenPadding }]}>
+              <Pressable
+                style={styles.hostToolsRow}
+                onPress={() => router.push(liveHostControlsHref({ demo: true }))}
+              >
+                <Ionicons name="construct" size={18} color={pulseverse.electric} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.hostToolsTitle}>Seller control panel (preview)</Text>
+                  <Text style={styles.hostToolsSub}>Pin products, flash deals, metrics — demo UI</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+              </Pressable>
             </View>
+
+            <StartLivePromoCard onGoLive={() => router.push(liveGoLiveHref())} />
           </ScrollView>
         )}
       </View>
@@ -296,41 +297,36 @@ function LiveScreenEnabled() {
   );
 }
 
-function Header({
-  onMenuPress,
-  onSearchPress,
-  onGoLivePress,
+function HubHeader({
+  onSearch,
+  onBell,
+  onGoLive,
 }: {
-  onMenuPress: () => void;
-  onSearchPress: () => void;
-  onGoLivePress: () => void;
+  onSearch: () => void;
+  onBell: () => void;
+  onGoLive: () => void;
 }) {
   return (
     <View style={styles.header}>
-      <TouchableOpacity
-        onPress={onMenuPress}
-        hitSlop={12}
-        style={styles.headerSideBtn}
-        accessibilityLabel="Menu"
-      >
-        <Ionicons name="menu-outline" size={22} color={colors.dark.textSecondary} />
+      <TouchableOpacity onPress={onSearch} hitSlop={12} style={styles.headerSideBtn} accessibilityLabel="Search">
+        <Ionicons name="search-outline" size={22} color={colors.dark.textSecondary} />
       </TouchableOpacity>
 
       <View style={styles.headerCenter}>
         <View style={styles.liveHeaderDot} />
         <View>
           <Text style={styles.headerTitle}>Live</Text>
-          <Text style={styles.headerSubtitle}>Real conversations. Real impact.</Text>
+          <Text style={styles.headerSubtitle}>Discover · Learn · Shop · Go Live</Text>
         </View>
       </View>
 
       <View style={styles.headerRight}>
-        <TouchableOpacity onPress={onSearchPress} hitSlop={10} accessibilityLabel="Search">
-          <Ionicons name="search-outline" size={20} color={colors.dark.textSecondary} />
+        <TouchableOpacity onPress={onBell} hitSlop={10} accessibilityLabel="Notifications">
+          <Ionicons name="notifications-outline" size={21} color={colors.dark.textSecondary} />
         </TouchableOpacity>
         <Pressable
           style={({ pressed }) => [styles.goLiveBtn, pressed && styles.goLiveBtnPressed]}
-          onPress={onGoLivePress}
+          onPress={onGoLive}
         >
           <Ionicons name="videocam-outline" size={14} color={colors.primary.teal} />
           <Text style={styles.goLiveText}>Go Live</Text>
@@ -343,11 +339,10 @@ function Header({
 const styles = StyleSheet.create({
   safeRoot: { flex: 1, backgroundColor: colors.dark.bg },
   container: { flex: 1, backgroundColor: colors.dark.bg },
-  scrollView: { flex: 1, backgroundColor: colors.dark.bg },
+  scrollView: { flex: 1 },
   scrollContent: { paddingTop: spacing.sm },
   prelaunchBody: { flex: 1, justifyContent: 'center' },
 
-  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,12 +352,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.dark.borderSubtle,
   },
-  headerSideBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  headerSideBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerCenter: {
     flex: 1,
     flexDirection: 'row',
@@ -394,7 +384,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     textAlign: 'center',
   },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   goLiveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -414,29 +404,29 @@ const styles = StyleSheet.create({
     color: colors.primary.teal,
   },
 
-  /* Sections */
   section: { marginTop: spacing.xl },
   pvSectionPad: { paddingHorizontal: layout.screenPadding },
-  sectionSeeAll: {
-    ...typography.sectionLabel,
-    color: pulseverse.electric,
-    fontWeight: '700',
-  },
-
-  /* Horizontal-scrolling rows (Top Live Now, Rising Lives) */
-  hRowScroll: {
-    paddingHorizontal: layout.screenPadding,
+  trendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: spacing.md,
   },
-  hRowItem: {
-    /** Spacer between cards is provided by `gap` on the contentContainerStyle */
+  mutedCenter: {
+    ...typography.caption,
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    marginVertical: spacing.md,
   },
-
-  /* Browse by Topic — wrap layout */
-  topicWrap: {
+  hostToolsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm + 2,
-    paddingHorizontal: layout.screenPadding,
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.16)',
+    backgroundColor: 'rgba(15,23,42,0.65)',
   },
+  hostToolsTitle: { ...typography.h3, fontSize: 15, color: colors.dark.text },
+  hostToolsSub: { ...typography.caption, color: colors.dark.textMuted, marginTop: 2 },
 });

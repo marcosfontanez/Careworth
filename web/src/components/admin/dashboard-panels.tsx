@@ -14,7 +14,7 @@ export function AdminOpsStrip({
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-xl border border-border/80 bg-gradient-to-br from-card/90 to-secondary/25 px-4 py-3 shadow-sm ring-1 ring-white/[0.04]"
+          className="rounded-xl border border-border/80 bg-linear-to-br from-card/90 to-secondary/25 px-4 py-3 shadow-sm ring-1 ring-white/4"
         >
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{item.value}</p>
@@ -90,7 +90,7 @@ export function ReportPipelineSummary({
         <CardTitle className="text-base font-semibold">Report pipeline</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex h-2.5 overflow-hidden rounded-full bg-secondary ring-1 ring-white/[0.04]">
+        <div className="flex h-2.5 overflow-hidden rounded-full bg-secondary ring-1 ring-white/4">
           {items.map((s) => (
             <div
               key={s.status}
@@ -105,7 +105,7 @@ export function ReportPipelineSummary({
         </div>
         <dl className="grid gap-3 sm:grid-cols-3">
           {items.map((s) => (
-            <div key={s.status} className="rounded-lg bg-secondary/30 px-3 py-2 ring-1 ring-white/[0.03]">
+            <div key={s.status} className="rounded-lg bg-secondary/30 px-3 py-2 ring-1 ring-white/3">
               <dt className="text-xs capitalize text-muted-foreground">{s.status.replace(/_/g, " ")}</dt>
               <dd className="text-lg font-semibold tabular-nums">{s.count.toLocaleString()}</dd>
             </div>
@@ -130,7 +130,7 @@ export function SystemHealthChecklist({
         {services.map((s) => (
           <div
             key={s.name}
-            className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm"
+            className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/2 px-3 py-2 text-sm"
           >
             <span className="text-foreground">{s.name}</span>
             <span
@@ -169,10 +169,10 @@ export function ModeratorWorkloadPanel({
                 <span className="font-medium text-foreground">{m.name}</span>
                 <span className="tabular-nums text-muted-foreground">{m.load}%</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-secondary ring-1 ring-white/[0.04]">
+              <div className="h-2 overflow-hidden rounded-full bg-secondary ring-1 ring-white/4">
                 <div
                   className={cn(
-                    "h-full rounded-full bg-gradient-to-r from-primary to-[#00d2ff]",
+                    "h-full rounded-full bg-linear-to-r from-primary to-[#00d2ff]",
                     m.load > 80 && "from-amber-500 to-orange-400",
                   )}
                   style={{ width: `${m.load}%` }}

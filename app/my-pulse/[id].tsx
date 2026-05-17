@@ -28,6 +28,7 @@ import { userService } from '@/services/user';
 import { withPulseVerseCta } from '@/lib/share';
 import { postKeys, profileUpdateKeys, userKeys } from '@/lib/queryKeys';
 import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
+import { liveStreamHref } from '@/lib/navigation/liveRoutes';
 import { hrefPost } from '@/lib/communityRoutes';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { useFeatureFlags } from '@/lib/featureFlags';
@@ -469,7 +470,7 @@ export default function MyPulseDetailScreen() {
       return;
     }
     if (update.linkedLiveId && liveStreaming) {
-      router.push(`/live/${update.linkedLiveId}` as any);
+      router.push(liveStreamHref(update.linkedLiveId));
       return;
     }
     if (update.linkedUrl?.trim()) {

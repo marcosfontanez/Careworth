@@ -26,7 +26,7 @@ export function CarouselColorMatch({ enabled, palette, onToggle, onPalette }: Pr
         />
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, enabled && { color: colors.primary.teal }]}>Auto color match</Text>
-          <Text style={styles.sub}>Tints every slide in the same family for a magazine feel.</Text>
+          <Text style={styles.sub}>Composer tint only — followers see untouched photos in the carousel.</Text>
         </View>
         <View style={[styles.switch, enabled && styles.switchOn]}>
           <View style={[styles.switchKnob, enabled && styles.switchKnobOn]} />

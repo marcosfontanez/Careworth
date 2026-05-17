@@ -9,6 +9,7 @@ import {
   Platform,
   Dimensions,
   Alert,
+  Share,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Redirect } from 'expo-router';
@@ -43,6 +44,8 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/ui/Toast';
 import { isSeedStream } from '@/lib/liveSeedStreams';
+import { isDemoLiveStreamId } from '@/lib/liveDemoStreams';
+import { DemoLiveViewer } from '@/components/live/demo';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
 import { colors, borderRadius, typography } from '@/theme';
@@ -50,6 +53,7 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { formatCount } from '@/utils/format';
 import { useSparkWallet, useSparkBalanceNumber } from '@/hooks/useShopEconomy';
 import { shopKeys } from '@/lib/shop/queryKeys';
+import { liveHighlightsHref } from '@/lib/navigation/liveRoutes';
 import type {
   StreamMessage,
   StreamPinnedMessage,
@@ -91,6 +95,9 @@ function StreamViewerEntry() {
   const streamId = id ?? '';
   if (streamId && isSeedStream({ id: streamId })) {
     return <Redirect href="/(tabs)/live" />;
+  }
+  if (streamId && isDemoLiveStreamId(streamId)) {
+    return <DemoLiveViewer streamId={streamId} />;
   }
   return <StreamViewerScreenContent />;
 }
@@ -647,6 +654,21 @@ function StreamViewerScreenContent() {
     );
   }, [isHost, endingStream, streamId, router, showToast]);
 
+  const handleShareLive = useCallback(async () => {
+    if (!stream) return;
+    try {
+      await Share.share({
+        message: `Watch ${stream.host.displayName} on PulseVerse Live: ${stream.title}`,
+      });
+    } catch {
+      showToast('Share cancelled', 'info');
+    }
+  }, [stream, showToast]);
+
+  const openLiveHighlights = useCallback(() => {
+    router.push(liveHighlightsHref(streamId));
+  }, [router, streamId]);
+
   if (isLoading || !stream) return <LoadingState />;
 
   return (
@@ -693,6 +715,26 @@ function StreamViewerScreenContent() {
                 <Ionicons name="ribbon-outline" size={18} color={colors.dark.textSecondary} />
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                handleShareLive();
+              }}
+              style={styles.iconBtnSubtle}
+              accessibilityLabel="Share live stream"
+            >
+              <Ionicons name="share-social-outline" size={17} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openLiveHighlights();
+              }}
+              style={styles.iconBtnSubtle}
+              accessibilityLabel="Clips and highlights"
+            >
+              <Ionicons name="cut-outline" size={17} color="#FFF" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowChat(!showChat)} style={styles.iconBtn} accessibilityLabel="Toggle chat">
               <Ionicons name={showChat ? 'chatbubble' : 'chatbubble-outline'} size={19} color="#FFF" />
             </TouchableOpacity>

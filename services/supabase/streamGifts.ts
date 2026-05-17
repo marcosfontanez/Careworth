@@ -52,7 +52,9 @@ export interface SendGiftInput {
 export const streamGiftsService = {
   /**
    * Persist a live sticker gift: debit Sparks, credit host Diamonds, insert row (realtime).
-   * Free gifts (0 sparks) skip wallet debits inside the RPC.
+   * Spark unit price is resolved server-side (`live_stream_gift_catalog`); `p_unit_spark_cost`
+   * is kept for RPC backward compatibility but ignored — UI still shows costs from LIVE_GIFTS.
+   * Free catalog gifts skip wallet debits inside the RPC.
    */
   async send(input: SendGiftInput): Promise<LiveGiftEvent | null> {
     const { streamId, gift, quantity, idempotencyKey } = input;

@@ -21,7 +21,7 @@ export function FaqAccordion({ items }: { items: readonly { q: string; a: string
             <button
               id={buttonId}
               type="button"
-              className="flex w-full items-start gap-3 p-4 text-left text-sm font-medium text-foreground outline-none hover:bg-white/[0.02] focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="flex w-full items-start gap-3 p-4 text-left text-sm font-medium text-foreground outline-none hover:bg-white/2 focus-visible:ring-2 focus-visible:ring-primary/40"
               aria-expanded={isOpen}
               aria-controls={panelId}
               onClick={() => setOpen(isOpen ? null : i)}

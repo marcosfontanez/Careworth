@@ -26,6 +26,7 @@
     "db:types:check": "node scripts/check-db-types-fresh.mjs",
     "worker:media": "node scripts/creator-media-worker.mjs",
     "assets:pride-border": "node scripts/process-pride-border.mjs",
+    "assets:solstice-borders": "node scripts/process-summer-solstice-borders.mjs",
     "assets:app-icon": "node scripts/build-app-icon.cjs",
     "postinstall": "patch-package"
   },
@@ -97,6 +98,9 @@
     "patch-package": "^8.0.1",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.34.5"
   },
   "private": true
 }

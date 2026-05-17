@@ -29,7 +29,7 @@ export default async function ContactPage({
       {sent ? (
         <>
           <ContactSuccessTracker />
-          <div className="mt-10 space-y-4 rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent)]/5 p-8 text-center">
+          <div className="mt-10 space-y-4 rounded-2xl border border-[var(--accent)]/25 bg-accent/5 p-8 text-center">
             <p className="text-lg font-semibold text-foreground">{t.successTitle}</p>
             <p className="text-sm text-muted-foreground">{t.successBody}</p>
             <Button asChild variant="outline" className="mt-2 border-white/20">

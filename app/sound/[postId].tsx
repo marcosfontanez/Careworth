@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
@@ -12,6 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { colors, layout, spacing, typography } from '@/theme';
 import { postKeys } from '@/lib/queryKeys';
+import { resolveFeedGradeLookId } from '@/lib/moodPresets';
+import { tintForLook } from '@/lib/videoFilters';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { Post } from '@/types';
 
@@ -77,7 +79,12 @@ export default function SoundDetailScreen() {
   };
 
   const renderRemix = (item: Post) => {
-    const thumb = item.thumbnailUrl?.trim() || item.mediaUrl?.trim();
+    const tUri = item.thumbnailUrl?.trim() || item.mediaUrl?.trim();
+    const rLook = resolveFeedGradeLookId({
+      videoLookId: item.videoLookId,
+      moodPreset: item.moodPreset,
+    });
+    const rTint = rLook ? tintForLook(rLook) : null;
     return (
       <TouchableOpacity
         key={item.id}
@@ -85,16 +92,24 @@ export default function SoundDetailScreen() {
         activeOpacity={0.85}
         onPress={() => router.push(`/post/${item.id}`)}
       >
-        {thumb ? (
-          <Image
-            source={{ uri: thumb }}
-            style={styles.remixThumb}
-            contentFit="cover"
-            {...pulseImageListThumbProps}
-          />
-        ) : (
-          <View style={[styles.remixThumb, styles.thumbPh]} />
-        )}
+        <View style={styles.remixThumb}>
+          {tUri ? (
+            <Image
+              source={{ uri: tUri }}
+              style={StyleSheet.absoluteFillObject}
+              contentFit="cover"
+              {...pulseImageListThumbProps}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFillObject, styles.thumbPh]} />
+          )}
+          {rTint ? (
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: rTint, zIndex: 2 }]}
+            />
+          ) : null}
+        </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.remixCap} numberOfLines={2}>{item.caption || 'Clip'}</Text>
           <Text style={styles.remixMeta} numberOfLines={1}>{item.creator.displayName}</Text>
@@ -106,6 +121,15 @@ export default function SoundDetailScreen() {
   const thumb = source?.thumbnailUrl?.trim() || source?.mediaUrl?.trim();
   const title = source?.soundTitle?.trim() || 'Original sound';
 
+  const heroGradeTint = useMemo(() => {
+    if (!source) return null;
+    const id = resolveFeedGradeLookId({
+      videoLookId: source.videoLookId,
+      moodPreset: source.moodPreset,
+    });
+    return id ? tintForLook(id) : null;
+  }, [source]);
+
   return (
     <View style={styles.container}>
       <StackScreenHeader insetTop={insets.top} title="Sound" onPressLeft={() => router.back()} />
@@ -116,16 +140,24 @@ export default function SoundDetailScreen() {
       ) : (
         <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}>
           <View style={styles.hero}>
-            {thumb ? (
-              <Image
-                source={{ uri: thumb }}
-                style={styles.heroThumb}
-                contentFit="cover"
-                {...pulseImageFeedHeroProps}
-              />
-            ) : (
-              <View style={[styles.heroThumb, styles.thumbPh]} />
-            )}
+            <View style={styles.heroThumb}>
+              {thumb ? (
+                <Image
+                  source={{ uri: thumb }}
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="cover"
+                  {...pulseImageFeedHeroProps}
+                />
+              ) : (
+                <View style={[StyleSheet.absoluteFillObject, styles.thumbPh]} />
+              )}
+              {heroGradeTint ? (
+                <View
+                  pointerEvents="none"
+                  style={[StyleSheet.absoluteFillObject, { backgroundColor: heroGradeTint, zIndex: 2 }]}
+                />
+              ) : null}
+            </View>
             <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
               <Text style={styles.title} numberOfLines={2}>{title}</Text>
               <Text style={styles.meta} numberOfLines={1}>{source.creator.displayName}</Text>
@@ -188,7 +220,13 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: layout.screenPadding, paddingTop: spacing.md, gap: spacing.md },
   muted: { ...typography.body, color: colors.dark.textMuted, padding: layout.screenPadding },
   hero: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  heroThumb: { width: 88, height: 88, borderRadius: 14, backgroundColor: colors.dark.cardAlt },
+  heroThumb: {
+    width: 88,
+    height: 88,
+    borderRadius: 14,
+    backgroundColor: colors.dark.cardAlt,
+    overflow: 'hidden',
+  },
   thumbPh: { backgroundColor: colors.dark.border },
   title: { ...typography.h3, color: colors.dark.text },
   meta: { ...typography.bodySmall, color: colors.dark.textMuted },
@@ -233,7 +271,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.dark.border,
     alignItems: 'center',
   },
-  remixThumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: colors.dark.cardAlt },
+  remixThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: colors.dark.cardAlt,
+    overflow: 'hidden',
+  },
   remixCap: { ...typography.body, color: colors.dark.text, fontSize: 14 },
   remixMeta: { ...typography.caption, color: colors.dark.textMuted },
 });

@@ -125,7 +125,7 @@ export function HomeBordersFlagship({ locale }: { locale: Locale }) {
 
         {/* Surfaces strip — where a border actually appears. */}
         <div className="mt-14">
-          <p className="text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]/90">
+          <p className="text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-(--accent)/90">
             {c.surfacesEyebrow}
           </p>
           <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -134,10 +134,10 @@ export function HomeBordersFlagship({ locale }: { locale: Locale }) {
               return (
                 <li
                   key={s.surface}
-                  className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-sm transition-colors hover:border-white/20 hover:bg-white/[0.05]"
+                  className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/3 px-4 py-3 backdrop-blur-sm transition-colors hover:border-white/20 hover:bg-white/5"
                 >
                   <span
-                    className="mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)]"
+                    className="mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-(--accent)/30 bg-accent/10 text-[var(--accent)]"
                     aria-hidden
                   >
                     <Icon className="h-4 w-4" />
@@ -167,7 +167,7 @@ export function HomeBordersFlagship({ locale }: { locale: Locale }) {
           <Button
             size="lg"
             variant="outline"
-            className="h-11 rounded-full border-white/15 bg-white/[0.03] px-6 font-semibold hover:bg-white/[0.07]"
+            className="h-11 rounded-full border-white/15 bg-white/3 px-6 font-semibold hover:bg-white/7"
             asChild
           >
             <Link href="/features/my-pulse">{c.ctaSecondary}</Link>

@@ -17,5 +17,10 @@ export { pulseScoresService } from './pulseScores';
 export { pulseAvatarFramesService } from './pulseAvatarFrames';
 export { soundCatalogService } from './soundCatalog';
 export { collabProjectsService } from './collabProjects';
-export { enqueueCreatorMediaJob, getCreatorMediaJob, listMyCreatorMediaJobs } from './creatorMediaJobs';
+export {
+  enqueueCreatorMediaJob,
+  getCreatorMediaJob,
+  listMyCreatorMediaJobs,
+  waitForCreatorMediaJob,
+} from './creatorMediaJobs';
 export type { CreatorMediaJobKind, CreatorMediaJobRow } from './creatorMediaJobs';

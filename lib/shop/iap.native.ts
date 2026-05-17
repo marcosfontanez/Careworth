@@ -1,9 +1,10 @@
 /**
  * Native in-app purchases (react-native-iap).
- * Requires Expo dev client / native build (not Expo Go for real IAP).
+ * Requires a development build or release native app — not Expo Go (Nitro/IAP native code).
  */
 
 import { Platform } from 'react-native';
+import { isExpoGoClient } from '@/lib/compressorAvailability';
 
 export type PurchasePlatform = 'ios' | 'android';
 
@@ -20,6 +21,8 @@ export type IapPurchaseResult =
 type RNIap = typeof import('react-native-iap');
 
 function loadModule(): RNIap | null {
+  /** Loading `react-native-iap` pulls Nitro modules and throws in Expo Go before our try/catch helps reliably. */
+  if (isExpoGoClient()) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('react-native-iap') as RNIap;
@@ -33,7 +36,12 @@ let connectionReady = false;
 export async function initIapConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
   const mod = loadModule();
   if (!mod) {
-    return { ok: false, message: 'Store purchases are only available on the iOS/Android app build.' };
+    return {
+      ok: false,
+      message: isExpoGoClient()
+        ? 'Expo Go does not support in-app purchases. Use a development build (e.g. eas build --profile development) or run npx expo run:ios.'
+        : 'Store purchases are only available on the iOS/Android app build.',
+    };
   }
   if (connectionReady) return { ok: true };
   try {
@@ -70,7 +78,12 @@ export async function restorePurchasesFromStore(): Promise<
 > {
   const mod = loadModule();
   if (!mod) {
-    return { ok: false, message: 'Store purchases are only available on the iOS/Android app build.' };
+    return {
+      ok: false,
+      message: isExpoGoClient()
+        ? 'Expo Go does not support in-app purchases. Use a development build or npx expo run:ios.'
+        : 'Store purchases are only available on the iOS/Android app build.',
+    };
   }
   const init = await initIapConnection();
   if (!init.ok) return { ok: false, message: init.message };
@@ -120,11 +133,33 @@ export async function purchaseSku(params: {
   const { sku, isConsumable = false } = params;
   const mod = loadModule();
   if (!mod) {
-    return { ok: false, code: 'IAP_UNAVAILABLE', message: 'In-app purchases are not available on this build.' };
+    return {
+      ok: false,
+      code: 'IAP_UNAVAILABLE',
+      message: isExpoGoClient()
+        ? 'Expo Go does not support in-app purchases. Use a development build or npx expo run:ios.'
+        : 'In-app purchases are not available on this build.',
+    };
   }
 
   const init = await initIapConnection();
   if (!init.ok) return { ok: false, code: 'IAP_INIT_FAILED', message: init.message };
+
+  try {
+    const products = await mod.fetchProducts({ skus: [sku], type: 'in-app' });
+    const found = Array.isArray(products) && products.some((p: { id: string }) => p.id === sku);
+    if (!found) {
+      const storeLabel = Platform.OS === 'android' ? 'Google Play Console' : 'App Store Connect';
+      return {
+        ok: false,
+        code: 'SKU_NOT_FOUND',
+        message: `The store has no product for SKU "${sku}". Create a matching consumable IAP in ${storeLabel}, ensure agreements are active, and wait for propagation after changes.`,
+      };
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, code: 'FETCH_PRODUCTS_FAILED', message: msg };
+  }
 
   return new Promise((resolve) => {
     let settled = false;
@@ -193,15 +228,22 @@ export async function purchaseSku(params: {
       settled = true;
       sub.remove();
       errSub.remove();
-      const code = (e as { code?: string }).code ?? 'USER_CANCELLED';
-      if (code === 'E_USER_CANCELLED' || String(e).includes('cancel')) {
+      const rawCode = (e as { code?: string }).code ?? '';
+      const msg = (e as { message?: string }).message ?? String(e);
+      const cancelled =
+        rawCode === 'E_USER_CANCELLED' ||
+        rawCode === 'user-cancelled' ||
+        /cancel/i.test(msg);
+      if (cancelled) {
         resolve({ ok: false, code: 'USER_CANCELLED', message: 'Purchase cancelled.' });
         return;
       }
+      const code =
+        rawCode === 'sku-not-found' || /sku\s*not\s*found/i.test(msg) ? 'SKU_NOT_FOUND' : rawCode || 'IAP_ERROR';
       resolve({
         ok: false,
         code,
-        message: (e as { message?: string }).message ?? String(e),
+        message: msg,
       });
     });
 

@@ -473,7 +473,14 @@ export const storageService = {
     return this.uploadPostMedia(userId, file);
   },
 
-  async uploadPostMedia(userId: string, file: { uri: string; type?: string; name?: string }) {
+  /**
+   * Upload to post-media and return both the public URL and bucket-relative path
+   * (required for creator_media_jobs stitch/broll inputs).
+   */
+  async uploadPostMediaWithMeta(
+    userId: string,
+    file: { uri: string; type?: string; name?: string },
+  ): Promise<{ publicUrl: string; storagePath: string; bucket: string }> {
     const ext = fileExtForUpload(file);
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const data = await uploadFile(STORAGE_BUCKETS.postMedia, path, file);
@@ -484,7 +491,17 @@ export const storageService = {
 
     const url = urlData.publicUrl?.trim();
     if (!url) throw new Error('Storage returned no public URL');
-    return url;
+    const storagePath = typeof data.path === 'string' ? data.path : path;
+    return {
+      publicUrl: url,
+      storagePath,
+      bucket: STORAGE_BUCKETS.postMedia,
+    };
+  },
+
+  async uploadPostMedia(userId: string, file: { uri: string; type?: string; name?: string }) {
+    const { publicUrl } = await this.uploadPostMediaWithMeta(userId, file);
+    return publicUrl;
   },
 
   /**

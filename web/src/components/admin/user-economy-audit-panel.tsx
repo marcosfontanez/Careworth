@@ -130,7 +130,7 @@ export function UserEconomyAuditPanel({ audit }: { audit: UserEconomyAudit }) {
                 <TableHead>Status</TableHead>
                 <TableHead>Source</TableHead>
                 <TableHead>Idempotency</TableHead>
-                <TableHead className="min-w-[12rem]">Metadata</TableHead>
+                <TableHead className="min-w-48">Metadata</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

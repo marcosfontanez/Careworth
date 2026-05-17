@@ -17,7 +17,7 @@ export function SpeedRampEditor({ rates, onChange, effectivePreview, onPreviewCh
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Speed ramps</Text>
-      <Text style={styles.sub}>Slow the climax, speed the boring middle.</Text>
+      <Text style={styles.sub}>Preview playback shaping — does not re-encode the uploaded file yet.</Text>
 
       {(['start', 'mid', 'end'] as const).map((section) => (
         <View key={section} style={styles.row}>

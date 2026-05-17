@@ -64,7 +64,7 @@ export default function PrivacyPage() {
         APIs. Actual legal roles (processor v. subprocessor) and data locations depend on the relevant contracts and
         the data region of our Supabase project.
       </p>
-      <div className={cn("mt-4 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]")}>
+      <div className={cn("mt-4 overflow-x-auto rounded-xl border border-white/10 bg-white/2")}>
         <table>
           <thead>
             <tr>

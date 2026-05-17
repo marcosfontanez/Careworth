@@ -78,7 +78,7 @@ export function HomeCreatorHub({ locale }: { locale: Locale }) {
             per-creator ledger / HIPAA-aware moderation" visible without competing with the banner. */}
         <ul
           className={cn(
-            "mt-12 grid gap-2.5 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-3 ring-1 ring-white/[0.04] backdrop-blur-md sm:p-4",
+            "mt-12 grid gap-2.5 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-3 ring-1 ring-white/4 backdrop-blur-md sm:p-4",
             "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:gap-2",
             "shadow-[0_24px_70px_-30px_rgba(229,184,75,0.30)]",
           )}
@@ -100,7 +100,7 @@ export function HomeCreatorHub({ locale }: { locale: Locale }) {
                     "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1",
                     accent
                       ? "bg-[rgba(229,184,75,0.10)] text-[#E5B84B] ring-[rgba(229,184,75,0.30)]"
-                      : "bg-[var(--accent)]/10 text-[var(--accent)] ring-[var(--accent)]/30",
+                      : "bg-accent/10 text-[var(--accent)] ring-[var(--accent)]/30",
                   )}
                 >
                   <Icon className="h-4 w-4" aria-hidden />
@@ -128,7 +128,7 @@ export function HomeCreatorHub({ locale }: { locale: Locale }) {
           <Button
             size="lg"
             variant="outline"
-            className="h-11 rounded-full border-white/15 bg-white/[0.03] px-6 font-semibold hover:bg-white/[0.07]"
+            className="h-11 rounded-full border-white/15 bg-white/3 px-6 font-semibold hover:bg-white/7"
             asChild
           >
             <Link href="/features/live">{c.ctaSecondary}</Link>

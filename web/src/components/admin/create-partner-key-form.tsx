@@ -35,7 +35,7 @@ export function CreatePartnerKeyForm() {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Agency reporting — Q2"
-          className="border-white/10 bg-white/[0.04]"
+          className="border-white/10 bg-white/4"
         />
       </div>
       <Button type="button" size="sm" disabled={pending || !label.trim()} onClick={submit}>

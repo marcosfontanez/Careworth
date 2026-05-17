@@ -54,7 +54,7 @@ export function HomeCirclesSpotlight({ locale }: { locale: Locale }) {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-11 rounded-full border-white/15 bg-white/[0.03] px-6 font-semibold hover:bg-white/[0.07]"
+                className="h-11 rounded-full border-white/15 bg-white/3 px-6 font-semibold hover:bg-white/7"
                 asChild
               >
                 <Link href="/features">{c.ctaSecondary}</Link>

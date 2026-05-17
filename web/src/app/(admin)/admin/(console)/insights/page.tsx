@@ -67,7 +67,7 @@ export default async function AdminInsightsPage({
         title="Insights"
         description="Product analytics derived from Supabase — counts, rolls ups, and sampled distributions."
       />
-      <Card className="border-border/80 bg-gradient-to-r from-card/95 to-primary/[0.06] shadow-sm ring-1 ring-white/4">
+      <Card className="border-border/80 bg-linear-to-r from-card/95 to-primary/6 shadow-sm ring-1 ring-white/4">
         <CardContent className="p-6 text-sm leading-relaxed text-muted-foreground">
           <p>
             {process.env.SUPABASE_SERVICE_ROLE_KEY ? (

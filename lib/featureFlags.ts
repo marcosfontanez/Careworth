@@ -3,6 +3,13 @@ import { create } from 'zustand';
 export interface FeatureFlags {
   /** TikTok-style live rooms (mock video provider today). Off for v1 store launch. */
   liveStreaming: boolean;
+  /** Merge curated `demo-live-*` rows into Live discovery for demos / screenshots. */
+  liveDiscoveryDemos: boolean;
+/**
+ * Feed rail “Gift” using `SendCreatorGiftTray` — Phase 2 gifting (`FeedActionRail` / `VideoFeedPost`).
+ * Default on; staff can turn off from **Admin → Feature flags** if needed.
+ */
+  feedCreatorGifting: boolean;
   sponsoredPosts: boolean;
   pulseversePro: boolean;
   creatorTips: boolean;
@@ -18,6 +25,8 @@ interface FeatureFlagStore extends FeatureFlags {
 
 const DEFAULT_FLAGS: FeatureFlags = {
   liveStreaming: false,
+  liveDiscoveryDemos: true,
+  feedCreatorGifting: true,
   sponsoredPosts: false,
   pulseversePro: false,
   creatorTips: false,

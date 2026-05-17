@@ -37,7 +37,7 @@ export function HomeWhySix({ locale }: { locale: Locale }) {
             return (
               <div
                 key={item.title}
-                className="rounded-2xl border border-[rgba(148,163,184,0.12)] bg-[rgba(12,21,36,0.45)] p-6 ring-1 ring-white/[0.03] backdrop-blur-sm transition hover:border-primary/25"
+                className="rounded-2xl border border-[rgba(148,163,184,0.12)] bg-[rgba(12,21,36,0.45)] p-6 ring-1 ring-white/3 backdrop-blur-sm transition hover:border-primary/25"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
                   <Icon className="h-6 w-6" strokeWidth={1.5} aria-hidden />

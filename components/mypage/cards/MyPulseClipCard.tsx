@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,7 +9,7 @@ import { relativeMyPulse } from '@/utils/format';
 import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
-import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
+import { RecentMediaThumb, FeedGradeTintOverlay, feedGradeTintFromPost } from '@/components/mypage/RecentMediaThumb';
 import { postStaticImagePreviewUri } from '@/utils/postPreviewMedia';
 
 interface Props {
@@ -73,6 +73,11 @@ export function MyPulseClipCard({
     engagementSummary?.likes ?? u.likeCount ?? 0;
   const shellCommentCount =
     engagementSummary?.comments ?? u.commentCount ?? 0;
+
+  const linkedGradeTint = useMemo(
+    () => (linkedPost ? feedGradeTintFromPost(linkedPost) : null),
+    [linkedPost],
+  );
 
   // Prefer an explicit thumbnail; else a static image preview from the
   // linked post; else fall through to RecentMediaThumb which pauses on the
@@ -181,6 +186,7 @@ export function MyPulseClipCard({
               contentFit="contain"
               {...pulseImageFeedHeroProps}
             />
+            <FeedGradeTintOverlay tint={linkedGradeTint} />
             <LinearGradient
               colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
               style={styles.heroScrim}
@@ -194,12 +200,15 @@ export function MyPulseClipCard({
         <View style={styles.mediaRow}>
           <View style={styles.thumbWrap}>
             {staticThumb ? (
-              <ExpoImage
-                source={{ uri: staticThumb }}
-                style={styles.thumb}
-                contentFit="cover"
-                {...pulseImageListThumbProps}
-              />
+              <>
+                <ExpoImage
+                  source={{ uri: staticThumb }}
+                  style={styles.thumb}
+                  contentFit="cover"
+                  {...pulseImageListThumbProps}
+                />
+                <FeedGradeTintOverlay tint={linkedGradeTint} />
+              </>
             ) : showVideoPreview && linkedPost ? (
               <RecentMediaThumb
                 post={linkedPost}

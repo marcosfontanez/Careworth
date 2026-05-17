@@ -190,10 +190,18 @@ export const circleContentKeys = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
+// Reward Delivery Engine (celebration queue)
+// ─────────────────────────────────────────────────────────────────────
+export const rewardDeliveryKeys = {
+  pendingList: (userId: Nullable<string>) =>
+    ['rewardDeliveries', 'pending', maybe(userId)] as const,
+};
+
+// ─────────────────────────────────────────────────────────────────────
 // Feed
 // ─────────────────────────────────────────────────────────────────────
 /** Bump with `useFeedInfinite` when the first-page or continuation queryFn shape changes. */
-export const FEED_INFINITE_QUERY_KEY_VERSION = 1 as const;
+export const FEED_INFINITE_QUERY_KEY_VERSION = 2 as const;
 
 export const feedKeys = {
   /** Matches every legacy non-infinite feed page key `['feed', ver, …]`. */

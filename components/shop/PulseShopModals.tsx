@@ -44,7 +44,8 @@ type BuyProps = {
   onClose: () => void;
   borderName: string;
   onPurchase: () => Promise<PurchaseOutcome>;
-  onSuccess?: () => void;
+  /** Fulfilled purchase payload from Edge/RPC (e.g. `purchase_receipt_id`). */
+  onSuccess?: (data: Record<string, unknown>) => void;
   /** 'free' = RPC claim (migration 125); default = App Store / Play Billing */
   purchaseMode?: 'iap' | 'free';
 };
@@ -78,7 +79,7 @@ export function BorderBuyConfirmModal({
         setErr(shopErrorHint(r.code) || r.message);
         return;
       }
-      onSuccess?.();
+      onSuccess?.(r.data);
       onClose();
     } finally {
       setBusy(false);
@@ -376,6 +377,7 @@ export function BorderGiftRecipientModal({
                   placeholderTextColor={colors.dark.textQuiet}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  underlineColorAndroid="transparent"
                   style={styles.input}
                 />
                 <Text style={styles.fieldLabel}>Optional note</Text>
@@ -384,6 +386,7 @@ export function BorderGiftRecipientModal({
                   onChangeText={setNote}
                   placeholder="Congrats on the launch 🎉"
                   placeholderTextColor={colors.dark.textQuiet}
+                  underlineColorAndroid="transparent"
                   style={[styles.input, styles.inputMultiline]}
                   multiline
                 />
@@ -533,8 +536,14 @@ type CreditPackProps = {
   packLabel: string;
   sparksAmount: number;
   tag?: string;
-  onPurchase: () => Promise<PurchaseOutcome>;
-  onSuccess?: () => void;
+  /**
+   * `purchase` — App Store / Play flow (native).
+   * `web_info` — web catalog browse: explains mobile IAP + same celebration UX when signed in on app.
+   */
+  mode?: 'purchase' | 'web_info';
+  onPurchase?: () => Promise<PurchaseOutcome>;
+  /** Fulfilled purchase payload from Edge/RPC (e.g. `purchase_receipt_id`). Not used for `web_info`. */
+  onSuccess?: (data: Record<string, unknown>) => void;
 };
 
 export function CreditPackConfirmModal({
@@ -543,11 +552,14 @@ export function CreditPackConfirmModal({
   packLabel,
   sparksAmount,
   tag,
+  mode = 'purchase',
   onPurchase,
   onSuccess,
 }: CreditPackProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const webInfo = mode === 'web_info';
 
   useEffect(() => {
     if (!visible) {
@@ -557,6 +569,7 @@ export function CreditPackConfirmModal({
   }, [visible]);
 
   const run = async () => {
+    if (!onPurchase) return;
     setErr(null);
     setBusy(true);
     try {
@@ -566,7 +579,7 @@ export function CreditPackConfirmModal({
         setErr(shopErrorHint(r.code) || r.message);
         return;
       }
-      onSuccess?.();
+      onSuccess?.(r.data);
       onClose();
     } finally {
       setBusy(false);
@@ -586,27 +599,51 @@ export function CreditPackConfirmModal({
           <View style={styles.modeRow}>
             <View style={styles.modeBadgeSparks}>
               <Ionicons name="wallet-outline" size={14} color="#A5F3FC" />
-              <Text style={styles.modeBadgeSparksText}>Store top-up · adds to your Sparks balance</Text>
+              <Text style={styles.modeBadgeSparksText}>
+                {webInfo ? 'Sparks top-up · mobile app purchase' : 'Store top-up · adds to your Sparks balance'}
+              </Text>
             </View>
           </View>
           <Text style={styles.sheetTitle}>{packLabel}</Text>
-          <Text style={styles.sheetBody}>
-            Spark packs are billed through the App Store or Google Play. You’ll see localized pricing on the
-            next step{tag ? ` · ${tag}` : ''}.
-          </Text>
+          {webInfo ? (
+            <Text style={styles.sheetBody}>
+              Spark packs are purchased through the{' '}
+              <Text style={{ fontWeight: '800' }}>iOS or Android app</Text> (App Store / Google Play). After you buy on
+              mobile while signed in as the same account, your balance updates everywhere — and you’ll get the same{' '}
+              <Text style={{ fontWeight: '800' }}>reward celebration</Text> (toast → gift reveal) as on native.
+              {tag ? ` Pack highlight: ${tag}.` : ''}
+            </Text>
+          ) : (
+            <Text style={styles.sheetBody}>
+              Spark packs are billed through the App Store or Google Play. You’ll see localized pricing on the
+              next step{tag ? ` · ${tag}` : ''}.
+            </Text>
+          )}
           {err ? <Text style={styles.errorText}>{err}</Text> : null}
           <View style={styles.sheetActions}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
-              <Text style={styles.secondaryBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
-              disabled={busy}
-              onPress={run}
-              activeOpacity={0.88}
-            >
-              {busy ? <ActivityIndicator color={pulseverse.onElectric} /> : <Text style={styles.primaryBtnText}>Continue</Text>}
-            </TouchableOpacity>
+            {webInfo ? (
+              <TouchableOpacity style={styles.primaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
+                <Text style={styles.primaryBtnText}>Got it</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
+                  disabled={busy}
+                  onPress={run}
+                  activeOpacity={0.88}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={pulseverse.onElectric} />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Continue</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </Pressable>
       </Pressable>
@@ -754,12 +791,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.dark.border,
+    borderColor: colors.dark.borderSubtle,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
     color: colors.dark.text,
-    backgroundColor: colors.dark.cardAlt,
+    backgroundColor: 'transparent',
   },
   inputMultiline: { minHeight: 72, textAlignVertical: 'top' },
   errorText: {

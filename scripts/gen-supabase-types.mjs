@@ -6,7 +6,8 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outPath = join(root, 'lib', 'database.types.ts');
 
-const projectId = process.env.SUPABASE_PROJECT_REF ?? 'sakrlbmzmfvdywqgyqxh';
+/** Never hardcode a project ref here — it ships in git and identifies your Supabase project. */
+const projectId = process.env.SUPABASE_PROJECT_REF?.trim();
 
 try {
   const linked = execSync('npx supabase gen types typescript --linked', {
@@ -17,6 +18,13 @@ try {
   writeFileSync(outPath, linked, 'utf8');
   console.log('Wrote', outPath, 'from --linked');
 } catch {
+  if (!projectId) {
+    console.error(
+      'Could not use --linked. Set SUPABASE_PROJECT_REF to your project ref (Dashboard → Settings → General),\n' +
+        'or run `npx supabase link`, then retry.',
+    );
+    process.exit(1);
+  }
   try {
     const byId = execSync(
       `npx supabase gen types typescript --project-id ${projectId} --schema public`,

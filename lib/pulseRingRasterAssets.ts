@@ -94,12 +94,15 @@ const SHOP_SLUGS_EMERALD_RENEWAL_MAY_2026 = new Set([
 ]);
 
 /**
- * Bundled raster for Pulse Shop previews when the row has no remote image_url yet.
+ * Bundled raster for Pulse Shop previews when the row has no remote `image_url` yet.
+ * Monthly champion rows use tier podium PNGs via {@link leaderboardChampionBundledRaster}.
  */
 export function shopItemBundledRasterPreview(
   item: ShopItemRow,
 ): { source: ImageSourcePropType; innerOpeningFrac: number } | null {
   if (item.type !== 'border') return null;
+  const lb = leaderboardChampionBundledRaster(item);
+  if (lb) return lb;
   const slug = String(item.slug ?? '').trim().toLowerCase();
   const slugNorm = slug.replace(/-/g, '_');
   if (SHOP_SLUGS_BETA_RASTER.has(slug) || SHOP_SLUGS_BETA_RASTER.has(slugNorm)) {
@@ -187,7 +190,7 @@ export function resolvePulseRingRaster(frame: {
   }
   return {
     source: podiumPulseRingSource(frame.prizeTier),
-    innerOpeningFrac: RASTER_PODIUM_INNER_OPENING_FRAC,
+    innerOpeningFrac: podiumTierInnerOpeningFrac(frame.prizeTier),
   };
 }
 
@@ -240,4 +243,42 @@ export function podiumPulseRingSource(
   if (tier === 'silver') return solstice ? SOLSTICE_SILVER : PODIUM_SILVER;
   if (tier === 'bronze') return solstice ? SOLSTICE_BRONZE : PODIUM_BRONZE;
   return null;
+}
+
+/** Measured from processed June 2026 Solstice PNGs (`scripts/process-summer-solstice-borders.mjs`). */
+export const RASTER_SOLSTICE_2026_GOLD_INNER_OPENING_FRAC = 0.566;
+export const RASTER_SOLSTICE_2026_SILVER_INNER_OPENING_FRAC = 0.58;
+export const RASTER_SOLSTICE_2026_BRONZE_INNER_OPENING_FRAC = 0.68;
+
+/** Inner “hole” diameter / canvas width — aligns avatar photo under podium / Solstice rasters. */
+export function podiumTierInnerOpeningFrac(
+  tier: PulseAvatarFrame['prizeTier'] | undefined,
+  referenceDate: Date = new Date(),
+): number {
+  if (tier !== 'gold' && tier !== 'silver' && tier !== 'bronze') {
+    return RASTER_PODIUM_INNER_OPENING_FRAC;
+  }
+  if (!isSummerSolstice2026PulseCollectionActive(referenceDate)) {
+    return RASTER_PODIUM_INNER_OPENING_FRAC;
+  }
+  if (tier === 'gold') return RASTER_SOLSTICE_2026_GOLD_INNER_OPENING_FRAC;
+  if (tier === 'silver') return RASTER_SOLSTICE_2026_SILVER_INNER_OPENING_FRAC;
+  return RASTER_SOLSTICE_2026_BRONZE_INNER_OPENING_FRAC;
+}
+
+function leaderboardChampionBundledRaster(
+  item: ShopItemRow,
+): { source: ImageSourcePropType; innerOpeningFrac: number } | null {
+  if (item.type !== 'border') return null;
+  const st = String(item.source_type ?? '').toLowerCase();
+  const um = String(item.unlock_method ?? '').toLowerCase();
+  const isLb = st === 'leaderboard_reward' || um === 'leaderboard_rank';
+  if (!isLb) return null;
+  const rp = item.rank_place;
+  if (typeof rp !== 'number' || rp < 1 || rp > 5) return null;
+  const tier: PulseAvatarFrame['prizeTier'] =
+    rp === 1 ? 'gold' : rp === 2 || rp === 3 ? 'silver' : 'bronze';
+  const source = podiumPulseRingSource(tier);
+  if (!source) return null;
+  return { source, innerOpeningFrac: podiumTierInnerOpeningFrac(tier) };
 }

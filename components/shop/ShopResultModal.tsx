@@ -18,12 +18,21 @@ import type { ShopItemRow } from '@/lib/shop/types';
 import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
+import { useRouter } from 'expo-router';
+import { analytics } from '@/lib/analytics';
 
 /** Premium success layouts for Pulse Shop purchase flows (reference UI). */
 export type PulseShopCelebrationPayload =
   | { kind: 'border_purchase'; borderItem: ShopItemRow; equipInventoryId?: string }
   | { kind: 'spark_pack'; sparksAmount: number }
-  | { kind: 'gift_sent'; recipient: string };
+  /** `sentKind` defaults to border IAP gift; creator Sparks gifts use `creator_sparks`. */
+  | {
+      kind: 'gift_sent';
+      recipient: string;
+      sentKind?: 'border' | 'creator_sparks';
+      /** Return to post / profile / live after closing sender celebration */
+      contextNavigate?: { label: string; href: string } | null;
+    };
 
 type Props = {
   visible: boolean;
@@ -238,7 +247,42 @@ function SparkPackCelebration({
   );
 }
 
-function GiftSentCelebration({ recipient, onClose }: { recipient: string; onClose: () => void }) {
+function GiftSentCelebration({
+  recipient,
+  sentKind = 'border',
+  contextNavigate,
+  onClose,
+}: {
+  recipient: string;
+  sentKind?: 'border' | 'creator_sparks';
+  contextNavigate?: { label: string; href: string } | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const subtitle =
+    sentKind === 'creator_sparks' ? (
+      <>
+        <Text style={styles.premiumSubtitleMuted}>Your Sparks gift reached </Text>
+        <Text style={styles.vaultHighlight}>{recipient}</Text>
+        <Text style={styles.premiumSubtitleMuted}>
+          . They’ll see the celebration in-app when online — your balance is already updated.
+        </Text>
+      </>
+    ) : (
+      <>
+        <Text style={styles.premiumSubtitleMuted}>Your border is on its way to </Text>
+        <Text style={styles.vaultHighlight}>{recipient}</Text>
+        <Text style={styles.premiumSubtitleMuted}>.</Text>
+      </>
+    );
+
+  const onContext = () => {
+    if (!contextNavigate?.href) return;
+    analytics.track('gift_sender_return_nav', { href: contextNavigate.href });
+    router.push(contextNavigate.href as any);
+    onClose();
+  };
+
   return (
     <>
       <View style={styles.sparkBurstWrap}>
@@ -249,12 +293,14 @@ function GiftSentCelebration({ recipient, onClose }: { recipient: string; onClos
         </LinearGradient>
       </View>
       <Text style={styles.premiumTitle}>Gift sent</Text>
-      <Text style={styles.premiumSubtitle}>
-        <Text style={styles.premiumSubtitleMuted}>Your border is on its way to </Text>
-        <Text style={styles.vaultHighlight}>{recipient}</Text>
-        <Text style={styles.premiumSubtitleMuted}>.</Text>
-      </Text>
-      <TouchableOpacity style={[styles.primaryBtnPremium, { marginTop: 26 }]} onPress={onClose} activeOpacity={0.88}>
+      <Text style={styles.premiumSubtitle}>{subtitle}</Text>
+      {contextNavigate ? (
+        <TouchableOpacity style={styles.giftContextNavBtn} onPress={onContext} activeOpacity={0.88}>
+          <Ionicons name="arrow-forward-circle-outline" size={18} color={pulseverse.electricSoft} style={{ marginRight: 8 }} />
+          <Text style={styles.giftContextNavTxt}>{contextNavigate.label}</Text>
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity style={[styles.primaryBtnPremium, { marginTop: contextNavigate ? 14 : 26 }]} onPress={onClose} activeOpacity={0.88}>
         <LinearGradient colors={[...gradients.ctaSheet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryGradPremium}>
           <Text style={styles.primaryBtnTextPremium}>Done</Text>
         </LinearGradient>
@@ -338,7 +384,12 @@ export function ShopResultModal({
                       onSendGift={onSparkSendGift}
                     />
                   ) : (
-                    <GiftSentCelebration recipient={pulseCelebration.recipient} onClose={onClose} />
+                    <GiftSentCelebration
+                      recipient={pulseCelebration.recipient}
+                      sentKind={pulseCelebration.sentKind}
+                      contextNavigate={'contextNavigate' in pulseCelebration ? pulseCelebration.contextNavigate : null}
+                      onClose={onClose}
+                    />
                   )}
                 </ScrollView>
               </PulsePremiumBackdrop>
@@ -606,6 +657,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: pulseverse.electricMuted,
+  },
+  giftContextNavBtn: {
+    marginTop: 20,
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.38)',
+    backgroundColor: 'rgba(8,14,28,0.72)',
+  },
+  giftContextNavTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: pulseverse.electricSoft,
   },
   primaryBtnPremium: {
     marginTop: 22,

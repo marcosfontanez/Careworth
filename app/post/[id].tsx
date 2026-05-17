@@ -20,6 +20,7 @@ import { usePost, useComments, useLikedPostIds } from '@/hooks/useQueries';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { sharePostMenu } from '@/lib/share';
+import { canRemixVideoPost, openVideoRemixMenu } from '@/lib/videoRemixNavigation';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { postKeys, commentKeys, likedPostKeys, profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import { looksLikeRlsPolicyDenial, postsService } from '@/services/supabase/posts';
@@ -28,6 +29,8 @@ import { commentService } from '@/services/comment';
 import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius } from '@/theme';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
+import { resolveFeedGradeLookId } from '@/lib/moodPresets';
+import { tintForLook, type VideoLookId } from '@/lib/videoFilters';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { CommentRichText } from '@/components/ui/CommentRichText';
@@ -62,7 +65,8 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const POST_DETAIL_MEDIA_MAX_H = Math.min(SCREEN_H * 0.82, SCREEN_W * 2.2);
 
 /** Inline player for `/post/[id]` — feed uses `VideoFeedPost`; this screen previously showed a static cover + dead play icon. */
-function PostDetailVideo({ publicUri }: { publicUri: string }) {
+function PostDetailVideo({ publicUri, lookId }: { publicUri: string; lookId?: VideoLookId }) {
+  const gradeTint = lookId ? tintForLook(lookId) : null;
   const isFocused = useIsFocused();
   const [userPaused, setUserPaused] = useState(false);
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
@@ -149,6 +153,12 @@ function PostDetailVideo({ publicUri }: { publicUri: string }) {
         nativeControls={false}
         {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
       />
+      {gradeTint ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: gradeTint, zIndex: 2 }]}
+        />
+      ) : null}
       {buffering && isFocused && !paused && !loadError ? (
         <View style={styles.videoBuffering} pointerEvents="none">
           <ActivityIndicator size="large" color={colors.dark.textMuted} />
@@ -255,6 +265,16 @@ export default function PostDetailScreen() {
   const videoMediaHeight = useMemo(
     () => Math.min(POST_DETAIL_MEDIA_MAX_H, SCREEN_H * 0.75),
     [],
+  );
+
+  const detailGradeLookId = useMemo(() => {
+    if (!post) return undefined;
+    return resolveFeedGradeLookId({ videoLookId: post.videoLookId, moodPreset: post.moodPreset });
+  }, [post]);
+
+  const detailGradeTint = useMemo(
+    () => (detailGradeLookId ? tintForLook(detailGradeLookId) : null),
+    [detailGradeLookId],
   );
 
   const [liked, setLiked] = useState(false);
@@ -642,31 +662,43 @@ export default function PostDetailScreen() {
           {/* Media */}
           {post.type === 'video' && post.mediaUrl?.trim() ? (
             <View style={[styles.mediaWrapBase, { height: videoMediaHeight }]}>
-              <PostDetailVideo publicUri={post.mediaUrl.trim()} />
+              <PostDetailVideo publicUri={post.mediaUrl.trim()} lookId={detailGradeLookId} />
             </View>
           ) : post.type === 'image' && previewUri ? (
             <TouchableOpacity
               onPress={() => {
                 if (post.mediaUrl) {
-                  router.push(`/image-viewer?uri=${encodeURIComponent(post.mediaUrl)}`);
+                  const q = [`uri=${encodeURIComponent(post.mediaUrl)}`];
+                  if (detailGradeLookId) {
+                    q.push(`grade=${encodeURIComponent(detailGradeLookId)}`);
+                  }
+                  router.push(`/image-viewer?${q.join('&')}`);
                 }
               }}
               activeOpacity={0.92}
               style={[styles.mediaWrapBase, { height: imageMediaHeight }]}
             >
-              <Image
-                source={{ uri: previewUri }}
-                style={styles.media}
-                contentFit="contain"
-                transition={120}
-                onLoad={(e) => {
-                  const s = e.source;
-                  const w = typeof s?.width === 'number' ? s.width : 0;
-                  const h = typeof s?.height === 'number' ? s.height : 0;
-                  if (w > 0 && h > 0) setImageAspect(w / h);
-                }}
-                {...pulseImageFeedHeroProps}
-              />
+              <View style={styles.media}>
+                <Image
+                  source={{ uri: previewUri }}
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="contain"
+                  transition={120}
+                  onLoad={(e) => {
+                    const s = e.source;
+                    const w = typeof s?.width === 'number' ? s.width : 0;
+                    const h = typeof s?.height === 'number' ? s.height : 0;
+                    if (w > 0 && h > 0) setImageAspect(w / h);
+                  }}
+                  {...pulseImageFeedHeroProps}
+                />
+                {detailGradeTint ? (
+                  <View
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFillObject, { backgroundColor: detailGradeTint, zIndex: 2 }]}
+                  />
+                ) : null}
+              </View>
             </TouchableOpacity>
           ) : null}
 
@@ -731,6 +763,14 @@ export default function PostDetailScreen() {
                 label="Gift"
                 tint={colors.primary.teal}
                 onPress={() => setCreatorGiftOpen(true)}
+              />
+            ) : null}
+            {authUser && !maskIdentity && canRemixVideoPost(post) ? (
+              <ActionButton
+                icon="sparkles-outline"
+                label="Remix"
+                tint={colors.primary.teal}
+                onPress={() => openVideoRemixMenu(post, router)}
               />
             ) : null}
             {!openedFromCircle ? (
@@ -973,7 +1013,7 @@ function CommentsCard({
         toast.show('Couldn’t remove comment', 'error');
       }
     },
-    [postId, queryClient, toast],
+    [postId, queryClient, toast, authUserId],
   );
 
   /**
@@ -1023,7 +1063,7 @@ function CommentsCard({
         throw e;
       }
     },
-    [postId, queryClient, toast],
+    [postId, queryClient, toast, authUserId],
   );
 
   const handleSend = useCallback(async () => {

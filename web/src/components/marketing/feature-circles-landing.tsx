@@ -35,7 +35,7 @@ export function FeatureCirclesLanding() {
             <p className={marketingEyebrow}>Circles</p>
             <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
               Where healthcare finds its{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">people.</span>
+              <span className="bg-linear-to-r from-accent to-primary bg-clip-text text-transparent">people.</span>
             </h1>
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
               Join healthcare-specific, topic-based circles — premium rooms with high-signal threads. Share what lands
@@ -107,7 +107,7 @@ export function FeatureCirclesLanding() {
             <div
               key={c.name}
               className={cn(
-                "group flex flex-col rounded-2xl border border-white/10 bg-gradient-to-br p-5 ring-1 ring-white/[0.05] transition hover:border-primary/35",
+                "group flex flex-col rounded-2xl border border-white/10 bg-linear-to-br p-5 ring-1 ring-white/5 transition hover:border-primary/35",
                 c.tint,
               )}
             >
@@ -134,7 +134,7 @@ export function FeatureCirclesLanding() {
           </div>
           <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
             <h3 className="text-sm font-semibold text-foreground">Discover your people</h3>
-            <div className="mt-4 flex rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-muted-foreground">
+            <div className="mt-4 flex rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-sm text-muted-foreground">
               <Search className="mr-2 h-4 w-4 shrink-0 text-primary" />
               Search Circles…
             </div>
@@ -151,7 +151,7 @@ export function FeatureCirclesLanding() {
           </div>
           <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
             <h3 className="text-sm font-semibold text-foreground">Share &amp; repost</h3>
-            <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/3 p-4">
               <p className="text-sm text-muted-foreground">Great thread on night-shift handoffs…</p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" className="border border-white/10 bg-primary/15 text-primary">

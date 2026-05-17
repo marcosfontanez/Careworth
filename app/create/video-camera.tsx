@@ -153,6 +153,7 @@ export default function CreateVideoCameraScreen() {
         lookId: lookId !== 'none' ? lookId : undefined,
         soundPostId: pickedSound?.postId,
         soundTitle: pickedSound?.title,
+        ...(duetPostIdTrim ? { duetLayoutMode } : {}),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const sp = pickedSound?.postId
@@ -161,7 +162,7 @@ export default function CreateVideoCameraScreen() {
       const dp = duetPostIdTrim ? `&duetPostId=${encodeURIComponent(duetPostIdTrim)}` : '';
       router.replace(`/create/video?mode=record${sp}${dp}` as any);
     },
-    [router, lookId, pickedSound, duetPostIdTrim],
+    [router, lookId, pickedSound, duetPostIdTrim, duetLayoutMode],
   );
 
   const stopRecordingOnly = useCallback(() => {

@@ -83,7 +83,7 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
             autoComplete="username"
             placeholder="you@organization.org"
             disabled={loading}
-            className="border-white/10 bg-white/[0.04]"
+            className="border-white/10 bg-white/4"
           />
         </div>
         <div className="space-y-2">
@@ -95,7 +95,7 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
             required
             autoComplete="current-password"
             disabled={loading}
-            className="border-white/10 bg-white/[0.04]"
+            className="border-white/10 bg-white/4"
           />
         </div>
         <Button

@@ -18,8 +18,9 @@ import { colors, typography, borderRadius, spacing } from '@/theme';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { profileHandleLineForCreator } from '@/utils/profileHandle';
 import { useFeatureFlags } from '@/lib/featureFlags';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Post } from '@/types';
-import { getMoodPreset } from '@/lib/moodPresets';
+import { getMoodPreset, resolveFeedGradeLookId } from '@/lib/moodPresets';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
 import { trySignedUrlFromPostMediaPublicUrl, avatarThumb } from '@/lib/storage';
@@ -31,8 +32,8 @@ import { usePost } from '@/hooks/useQueries';
 import { useRouter } from 'expo-router';
 import { DuetParentPreview } from '@/components/feed/DuetParentPreview';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
-import type { BrandKit } from '@/lib/brandKit';
-import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
+import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
+import { tintForLook, type VideoLookId } from '@/lib/videoFilters';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SCRUB_HIT_SLOP = 24;
@@ -80,6 +81,17 @@ function VideoFeedPostInner({
     : { content: 88, progress: 82, rail: 112 };
   const isAnon = post.isAnonymous;
   const sponsoredPostsEnabled = useFeatureFlags((s) => s.sponsoredPosts);
+  const feedCreatorGifting = useFeatureFlags((s) => s.feedCreatorGifting);
+  const { user } = useAuth();
+  const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
+
+  const canOpenFeedGift =
+    feedCreatorGifting && Boolean(user?.id) && user!.id !== post.creatorId && !post.isAnonymous;
+
+  useEffect(() => {
+    setCreatorGiftOpen(false);
+  }, [post.id]);
+
   const [localPaused, setLocalPaused] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [showPauseIcon, setShowPauseIcon] = useState(false);
@@ -106,6 +118,14 @@ function VideoFeedPostInner({
   }, [post.id]);
 
   const moodPresetResolved = useMemo(() => getMoodPreset(post.moodPreset), [post.moodPreset]);
+  const gradeLookId = useMemo(
+    () => resolveFeedGradeLookId({ videoLookId: post.videoLookId, moodPreset: post.moodPreset }),
+    [post.videoLookId, post.moodPreset],
+  );
+  const feedGradeTint = useMemo(
+    () => (gradeLookId ? tintForLook(gradeLookId) : null),
+    [gradeLookId],
+  );
   const seriesLabel = useMemo(() => {
     const part = post.seriesPart;
     const total = post.seriesTotal;
@@ -225,7 +245,7 @@ function VideoFeedPostInner({
         <DuetParentPreview
           parentPostId={duetParentId}
           pageHeight={pageH}
-          layoutMode="strip"
+          layoutMode={post.duetLayoutMode ?? 'strip'}
           enablePlayback={hasVideo && isActive}
           paused={paused}
           isActive={isActive}
@@ -261,7 +281,7 @@ function VideoFeedPostInner({
             muteEmbeddedAudio={useAttributedSoundPip}
             speedUp={speedUp}
             progressBarBottom={chromeBottom.progress}
-            creatorBrandKit={post.creator.brandKit ?? null}
+            lookId={gradeLookId}
           />
           {useAttributedSoundPip ? (
             <FeedAttributedSoundPlayer
@@ -305,6 +325,12 @@ function VideoFeedPostInner({
               />
             ))}
           </ScrollView>
+          {feedGradeTint ? (
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: feedGradeTint, zIndex: 2 }]}
+            />
+          ) : null}
           <View style={styles.carouselDots} pointerEvents="none">
             {carouselUrls.map((_, i) => (
               <View
@@ -332,6 +358,12 @@ function VideoFeedPostInner({
             contentFit="cover"
             {...pulseImageFeedHeroProps}
           />
+          {feedGradeTint ? (
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: feedGradeTint, zIndex: 2 }]}
+            />
+          ) : null}
           {post.videoOverlayText?.trim() ? (
             <View
               pointerEvents="none"
@@ -369,6 +401,7 @@ function VideoFeedPostInner({
         onShare={onShare}
         onFollow={onFollow}
         onProfile={onProfile}
+        onGift={canOpenFeedGift ? () => setCreatorGiftOpen(true) : undefined}
         onReport={onReport}
         videoSoundSlot={
           hasVideo ? <FeedOriginalSound post={post} isSoundCellActive={isActive} /> : undefined
@@ -542,15 +575,35 @@ function VideoFeedPostInner({
     </Pressable>
   );
 
+  const creatorGiftTray =
+    canOpenFeedGift ? (
+      <SendCreatorGiftTray
+        visible={creatorGiftOpen}
+        onClose={() => setCreatorGiftOpen(false)}
+        creatorUserId={post.creatorId}
+        creatorDisplayName={post.creator.displayName}
+        creatorHandle={post.creator.username}
+        creatorAvatarUrl={post.creator.avatarUrl}
+        contextType="post"
+        contextId={post.id}
+      />
+    ) : null;
+
   if (onOpenCreatorVideos && hasVideo && !post.isAnonymous) {
     return (
-      <GestureDetector gesture={swipeOpenCreatorGrid}>
-        {body}
-      </GestureDetector>
+      <>
+        <GestureDetector gesture={swipeOpenCreatorGrid}>{body}</GestureDetector>
+        {creatorGiftTray}
+      </>
     );
   }
 
-  return body;
+  return (
+    <>
+      {body}
+      {creatorGiftTray}
+    </>
+  );
 }
 
 /** Ignore unstable callback identities; compare only fields that affect the cell UI. */
@@ -598,6 +651,7 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.thumbnailUrl !== n.thumbnailUrl ||
     p.coverAltUrl !== n.coverAltUrl ||
     (p.videoOverlayText ?? '') !== (n.videoOverlayText ?? '') ||
+    (p.videoLookId ?? '') !== (n.videoLookId ?? '') ||
     (p.evidenceUrl ?? '') !== (n.evidenceUrl ?? '') ||
     (p.evidenceLabel ?? '') !== (n.evidenceLabel ?? '') ||
     (p.scheduledStatus ?? '') !== (n.scheduledStatus ?? '') ||
@@ -619,7 +673,9 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.viewCount !== n.viewCount ||
     p.saveCount !== n.saveCount ||
     (p.commentsDisabled ?? false) !== (n.commentsDisabled ?? false) ||
-    (p.duetParentId ?? '') !== (n.duetParentId ?? '')
+    (p.duetParentId ?? '') !== (n.duetParentId ?? '') ||
+    (p.duetLayoutMode ?? '') !== (n.duetLayoutMode ?? '') ||
+    (p.mediaProcessingStatus ?? '') !== (n.mediaProcessingStatus ?? '')
   ) {
     return false;
   }
@@ -765,7 +821,7 @@ function FeedAttributedSoundPlayer({
 
 function FeedVideoPlayer({
   uri, paused, isActive, muteEmbeddedAudio = false, speedUp = false, progressBarBottom = 82,
-  creatorBrandKit = null,
+  lookId,
 }: {
   uri: string;
   paused: boolean;
@@ -774,8 +830,10 @@ function FeedVideoPlayer({
   muteEmbeddedAudio?: boolean;
   speedUp?: boolean;
   progressBarBottom?: number;
-  creatorBrandKit?: BrandKit | null;
+  /** Composer color grade — read-side tint overlay (migration 162). */
+  lookId?: VideoLookId;
 }) {
+  const gradeTint = lookId ? tintForLook(lookId) : null;
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const sourcePhase = useRef<'public' | 'signed' | 'failed'>('public');
@@ -904,6 +962,13 @@ function FeedVideoPlayer({
         {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
       />
 
+      {gradeTint ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: gradeTint, zIndex: 2 }]}
+        />
+      ) : null}
+
       {buffering && isActive && !loadError && (
         <View style={styles.bufferingWrap}>
           <ActivityIndicator size="large" color={colors.feed.emptySubtext} />
@@ -916,13 +981,6 @@ function FeedVideoPlayer({
           <Text style={styles.playbackErrorText}>Could not load this video (check Storage access).</Text>
         </View>
       )}
-
-      <VideoBrandWatermark
-        brandKit={creatorBrandKit}
-        position="bottom-center"
-        edgeOffset={progressBarBottom + 26}
-        variant="subtle"
-      />
 
       <View
         ref={barRef}

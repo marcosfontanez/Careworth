@@ -1,5 +1,13 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Platform,
+  Alert,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -10,9 +18,11 @@ import { colors, borderRadius, layout, typography, pulseverse, shadows, spacing,
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { PulseLeaderboards } from '@/components/leaderboards/PulseLeaderboards';
 import { useFeatureFlags } from '@/lib/featureFlags';
+import { liveGoLiveHref } from '@/lib/navigation/liveRoutes';
 import { ShopEntryCard } from '@/components/shop/premium/ShopEntryCard';
 import { CreatorHubGlassBackdrop } from '@/components/pv/CreatorHubGlassBackdrop';
 import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
+import { loadDraft, draftDataHasContent } from '@/lib/drafts';
 
 function CreatorHubSectionLeading({
   icon,
@@ -48,59 +58,57 @@ function HubSectionDivider() {
 /** PulseVerse Creator Hub — use a PNG with alpha so the gradient background shows through. */
 const CREATOR_HUB_BANNER = require('../../assets/images/pulseverse-creator-hub-banner.png');
 
-type CreateTile = {
-  title: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  bg: string;
-  href: string;
-};
-
-const GRID: CreateTile[] = [
-  {
-    title: 'Record Video',
-    subtitle: 'Capture a moment',
-    icon: 'videocam',
-    iconColor: pulseverse.hubTilePurple,
-    bg: pulseverse.hubTilePurpleBg,
-    href: '/create/video-camera',
-  },
-  {
-    title: 'Upload Video',
-    subtitle: 'Share from gallery',
-    icon: 'cloud-upload',
-    iconColor: pulseverse.hubTileGreen,
-    bg: pulseverse.hubTileGreenBg,
-    href: '/create/video?mode=upload',
-  },
-  {
-    title: 'Add Photo / Media',
-    subtitle: 'Multi-photo carousels & layouts',
-    icon: 'images',
-    iconColor: pulseverse.hubTileBlue,
-    bg: pulseverse.hubTileBlueBg,
-    href: '/create/image',
-  },
-  {
-    title: 'Scheduled posts',
-    subtitle: 'Queued publish times',
-    icon: 'calendar-outline',
-    iconColor: pulseverse.storeAccent,
-    bg: `${pulseverse.storeAccent}18`,
-    href: '/create/scheduled-posts',
-  },
-];
-
 export default function CreateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const liveStreaming = useFeatureFlags((s) => s.liveStreaming);
   const hubFocused = useIsFocused();
 
+  const [videoDraft, setVideoDraft] = useState(false);
+  const [imageDraft, setImageDraft] = useState(false);
+
+  useEffect(() => {
+    if (!hubFocused) return;
+    let cancelled = false;
+    (async () => {
+      const [v, i] = await Promise.all([loadDraft('video'), loadDraft('image')]);
+      if (cancelled) return;
+      setVideoDraft(draftDataHasContent(v));
+      setImageDraft(draftDataHasContent(i));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hubFocused]);
+
+  const draftCount = (videoDraft ? 1 : 0) + (imageDraft ? 1 : 0);
+
   const openShop = useCallback(() => {
     router.push('/pulse-shop' as any);
   }, [router]);
+
+  const openDrafts = useCallback(() => {
+    if (videoDraft && !imageDraft) {
+      router.push('/create/video' as any);
+      return;
+    }
+    if (imageDraft && !videoDraft) {
+      router.push('/create/image' as any);
+      return;
+    }
+    if (videoDraft && imageDraft) {
+      Alert.alert('Resume draft', 'Choose which draft to open.', [
+        { text: 'Video', onPress: () => router.push('/create/video' as any) },
+        { text: 'Photo', onPress: () => router.push('/create/image' as any) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    Alert.alert(
+      'Drafts',
+      'No drafts yet. While you work on a video or photo post, PulseVerse saves your progress automatically — come back here anytime to continue.',
+    );
+  }, [router, videoDraft, imageDraft]);
 
   return (
     <View style={styles.container}>
@@ -141,77 +149,199 @@ export default function CreateScreen() {
           />
         </View>
 
-        <View style={styles.hubBlockShop}>
-          <ShopEntryCard onPress={openShop} motionActive={hubFocused} />
-        </View>
-
-        <HubSectionDivider />
-
         <View style={styles.hubSection}>
           <PVSectionHeader
             leading={<CreatorHubSectionLeading icon="film-outline" accent={pulseverse.hubTilePurple} />}
             kicker="Create"
-            title="Videos & photos"
-            subtitle="Capture or upload video, build photo layouts, and open Advanced tools for series posts, B-roll queues, and duet layouts — one composer pipeline."
+            title="Start creating"
+            subtitle="Record or upload, add photos, or start Combine clips for multi-part / B-roll merges. Thumbnails, schedules, and extra polish live under Advanced on the video screen."
           />
           <View style={styles.hubPanel}>
             <CreatorHubGlassBackdrop borderRadius={borderRadius['2xl']} blurIntensity={44} />
             <View style={styles.hubPanelForeground}>
-              <View style={styles.grid}>
-                {GRID.map((tile) => (
-                  <TouchableOpacity
-                    key={tile.title}
-                    style={styles.tile}
-                    activeOpacity={0.88}
-                    onPress={() => router.push(tile.href as any)}
-                  >
-                    <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
-                    <View style={styles.tileForeground}>
-                      <View style={[styles.tileIcon, { backgroundColor: tile.bg }]}>
-                        <Ionicons name={tile.icon} size={26} color={tile.iconColor} />
-                      </View>
-                      <View style={styles.tileText}>
-                        <Text style={styles.tileTitle}>{tile.title}</Text>
-                        <Text style={styles.tileSub}>{tile.subtitle}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+              <View style={styles.heroPairRow}>
+                <TouchableOpacity
+                  style={styles.heroTile}
+                  activeOpacity={0.88}
+                  onPress={() => router.push('/create/video-camera' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Record video"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <View style={styles.heroTileForeground}>
+                    <View style={[styles.heroTileIcon, { backgroundColor: pulseverse.hubTilePurpleBg }]}>
+                      <Ionicons name="videocam" size={28} color={pulseverse.hubTilePurple} />
                     </View>
-                  </TouchableOpacity>
-                ))}
+                    <Text style={styles.heroTileTitle}>Record</Text>
+                    <Text style={styles.heroTileSub}>Camera</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.heroTile}
+                  activeOpacity={0.88}
+                  onPress={() => router.push('/create/video?mode=upload' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upload video"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <View style={styles.heroTileForeground}>
+                    <View style={[styles.heroTileIcon, { backgroundColor: pulseverse.hubTileGreenBg }]}>
+                      <Ionicons name="cloud-upload" size={28} color={pulseverse.hubTileGreen} />
+                    </View>
+                    <Text style={styles.heroTileTitle}>Upload</Text>
+                    <Text style={styles.heroTileSub}>Gallery</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.photoTile}
+                activeOpacity={0.88}
+                onPress={() => router.push('/create/image' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Add photo or carousel"
+              >
+                <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                <View style={styles.tileForeground}>
+                  <View style={[styles.tileIcon, { backgroundColor: pulseverse.hubTileBlueBg }]}>
+                    <Ionicons name="images" size={26} color={pulseverse.hubTileBlue} />
+                  </View>
+                  <View style={styles.tileText}>
+                    <Text style={styles.tileTitle}>Photo / carousel</Text>
+                    <Text style={styles.tileSub}>Layouts & multi-photo posts</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.photoTile}
+                activeOpacity={0.88}
+                onPress={() => router.push('/create/video?openStitch=series' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Combine video clips"
+              >
+                <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                <View style={styles.tileForeground}>
+                  <View
+                    style={[
+                      styles.tileIcon,
+                      { backgroundColor: 'rgba(56,189,248,0.14)', borderWidth: 1, borderColor: 'rgba(56,189,248,0.28)' },
+                    ]}
+                  >
+                    <Ionicons name="git-merge-outline" size={26} color={pulseverse.electric} />
+                  </View>
+                  <View style={styles.tileText}>
+                    <Text style={styles.tileTitle}>Combine clips</Text>
+                    <Text style={styles.tileSub}>Multi-part series or B-roll · one post, merged on the server</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.hubStitchAltLink}
+                activeOpacity={0.82}
+                onPress={() => router.push('/create/video?openStitch=broll' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Start combine flow as B-roll queue"
+              >
+                <Text style={styles.hubStitchAltLinkText}>Prefer B-roll first? Start here →</Text>
+              </TouchableOpacity>
+
+              <View style={styles.quickRow}>
+                <TouchableOpacity
+                  style={styles.quickPill}
+                  activeOpacity={0.85}
+                  onPress={openDrafts}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    draftCount > 0 ? `Drafts, ${draftCount} saved` : 'Drafts, none saved yet'
+                  }
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                  <View style={styles.quickPillInner}>
+                    <Ionicons name="document-text-outline" size={18} color={colors.primary.teal} />
+                    <Text style={styles.quickPillText}>Drafts</Text>
+                    {draftCount > 0 ? (
+                      <View style={styles.draftBadge}>
+                        <Text style={styles.draftBadgeText}>{draftCount}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickPill}
+                  activeOpacity={0.85}
+                  onPress={() => router.push('/create/scheduled-posts' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Scheduled posts"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                  <View style={styles.quickPillInner}>
+                    <Ionicons name="calendar-outline" size={18} color={pulseverse.storeAccent} />
+                    <Text style={styles.quickPillText}>Scheduled</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickPill}
+                  activeOpacity={0.85}
+                  onPress={() => router.push('/create/collab' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Co-create hub"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                  <View style={styles.quickPillInner}>
+                    <Ionicons name="people-outline" size={18} color={colors.status.invite} />
+                    <Text style={styles.quickPillText}>Co-create</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
         </View>
 
+        <HubSectionDivider />
+
+        <View style={styles.hubBlockShopAfterCreate}>
+          <ShopEntryCard onPress={openShop} motionActive={hubFocused} />
+        </View>
+
         {liveStreaming ? (
-          <View style={styles.hubSection}>
-            <PVSectionHeader
-              leading={<CreatorHubSectionLeading icon="radio-outline" accent={pulseverse.livePink} />}
-              kicker="Live"
-              title="Broadcast"
-              subtitle="Go live to your audience with the PulseVerse live stack."
-            />
-            <View style={styles.hubPanelFlush}>
-              <CreatorHubGlassBackdrop borderRadius={borderRadius['2xl']} blurIntensity={44} />
-              <TouchableOpacity
-                style={styles.goLive}
-                activeOpacity={0.88}
-                onPress={() => router.push('/live/go-live' as any)}
-              >
-                <View style={styles.goLiveAccent} />
-                <View style={styles.goLiveInner}>
-                  <View style={styles.goLiveIcon}>
-                    <Ionicons name="radio" size={24} color={pulseverse.livePink} />
+          <>
+            <HubSectionDivider />
+            <View style={styles.hubSection}>
+              <PVSectionHeader
+                leading={<CreatorHubSectionLeading icon="radio-outline" accent={pulseverse.livePink} />}
+                kicker="Live"
+                title="Broadcast"
+                subtitle="Go live to your audience with the PulseVerse live stack."
+              />
+              <View style={styles.hubPanelFlush}>
+                <CreatorHubGlassBackdrop borderRadius={borderRadius['2xl']} blurIntensity={44} />
+                <TouchableOpacity
+                  style={styles.goLive}
+                  activeOpacity={0.88}
+                  onPress={() => router.push(liveGoLiveHref())}
+                >
+                  <View style={styles.goLiveAccent} />
+                  <View style={styles.goLiveInner}>
+                    <View style={styles.goLiveIcon}>
+                      <Ionicons name="radio" size={24} color={pulseverse.livePink} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.goLiveTitle}>Go Live</Text>
+                      <Text style={styles.goLiveSub}>Broadcast live</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.dark.textMuted} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.goLiveTitle}>Go Live</Text>
-                    <Text style={styles.goLiveSub}>Broadcast live</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.dark.textMuted} />
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </>
         ) : null}
 
         <HubSectionDivider />
@@ -273,8 +403,7 @@ const styles = StyleSheet.create({
   },
   scrollView: { flex: 1 },
   scroll: { paddingHorizontal: layout.screenPadding },
-  hubBlockShop: {
-    marginTop: spacing.md,
+  hubBlockShopAfterCreate: {
     marginBottom: spacing['2xl'],
   },
   hubSectionDivider: {
@@ -337,6 +466,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     position: 'relative',
     zIndex: 1,
+    gap: layout.sectionGap,
   },
   hubPanelFlush: {
     borderRadius: borderRadius['2xl'],
@@ -348,19 +478,59 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    paddingTop: 6,
-    paddingBottom: spacing.xl,
+    paddingTop: 4,
+    paddingBottom: spacing.lg,
     width: '100%',
   },
-  /** Wide horizontal art (~1024×341); transparent PNG blends with screen gradient. */
   heroBanner: {
     width: '100%',
     maxWidth: 560,
     aspectRatio: 1024 / 341,
-    maxHeight: 150,
+    maxHeight: 132,
   },
-  grid: { gap: layout.sectionGap },
-  tile: {
+  heroPairRow: {
+    flexDirection: 'row',
+    gap: layout.sectionGap,
+  },
+  heroTile: {
+    flex: 1,
+    minHeight: 118,
+    borderRadius: borderRadius.card,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.18)',
+    overflow: 'hidden',
+    position: 'relative',
+    ...shadows.subtle,
+  },
+  heroTileForeground: {
+    paddingVertical: spacing.md + 4,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    position: 'relative',
+    zIndex: 1,
+  },
+  heroTileIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTileTitle: {
+    ...typography.bodyMedium,
+    fontWeight: '800',
+    color: colors.dark.text,
+    letterSpacing: -0.2,
+  },
+  heroTileSub: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    marginTop: -2,
+  },
+  photoTile: {
     position: 'relative',
     overflow: 'hidden',
     flexDirection: 'column',
@@ -397,6 +567,62 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.dark.textMuted,
     marginTop: 4,
+  },
+  hubStitchAltLink: {
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    marginTop: -2,
+  },
+  hubStitchAltLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: pulseverse.electricSoft,
+    letterSpacing: -0.1,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  quickPill: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.16)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  quickPillInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    position: 'relative',
+    zIndex: 1,
+  },
+  quickPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.dark.text,
+    letterSpacing: -0.1,
+  },
+  draftBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: colors.primary.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  draftBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: colors.dark.bg,
   },
   goLive: {
     position: 'relative',

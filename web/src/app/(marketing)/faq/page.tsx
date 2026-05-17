@@ -26,7 +26,7 @@ export default async function FaqPage() {
     <MarketingPageShell width="tight" breadcrumbPath="/faq">
       <AppJsonLd data={faqPageSchema(items)} />
       <SectionHeader title={head.title} description={head.description} />
-      <div className={cn("mt-10 rounded-2xl border border-white/10 p-4 ring-1 ring-white/[0.04] sm:p-6", marketingCardMuted)}>
+      <div className={cn("mt-10 rounded-2xl border border-white/10 p-4 ring-1 ring-white/4 sm:p-6", marketingCardMuted)}>
         <FaqAccordion items={items} />
       </div>
     </MarketingPageShell>

@@ -40,7 +40,7 @@ export function ContactForm({ initialTopic = "", locale }: { initialTopic?: stri
           name="name"
           required
           placeholder={t.namePlaceholder}
-          className="border-white/10 bg-white/[0.04]"
+          className="border-white/10 bg-white/4"
         />
       </div>
       <div className="space-y-2">
@@ -51,7 +51,7 @@ export function ContactForm({ initialTopic = "", locale }: { initialTopic?: stri
           type="email"
           required
           placeholder={t.emailPlaceholder}
-          className="border-white/10 bg-white/[0.04]"
+          className="border-white/10 bg-white/4"
         />
       </div>
       <div className="space-y-2">
@@ -61,7 +61,7 @@ export function ContactForm({ initialTopic = "", locale }: { initialTopic?: stri
           name="message"
           required
           placeholder={messagePlaceholder}
-          className="min-h-28 border-white/10 bg-white/[0.04]"
+          className="min-h-28 border-white/10 bg-white/4"
         />
       </div>
       <Button

@@ -22,11 +22,11 @@ export function HeroSection({ locale }: { locale: Locale }) {
       <WebsiteSectionBackdrop variant="deep" />
       <div
         aria-hidden
-        className="pointer-events-none absolute -left-24 top-12 -z-10 h-[420px] w-[420px] rounded-full bg-primary/[0.10] blur-[110px]"
+        className="pointer-events-none absolute -left-24 top-12 -z-10 h-[420px] w-[420px] rounded-full bg-primary/10 blur-[110px]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-32 top-44 -z-10 h-[360px] w-[360px] rounded-full bg-[var(--accent)]/[0.10] blur-[110px]"
+        className="pointer-events-none absolute -right-32 top-44 -z-10 h-[360px] w-[360px] rounded-full bg-(--accent)/10 blur-[110px]"
       />
 
       <div className={cn("relative", marketingGutterX)}>
@@ -37,7 +37,7 @@ export function HeroSection({ locale }: { locale: Locale }) {
          */}
         <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:gap-16">
           <div className="relative z-10">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]/90">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-(--accent)/90">
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               {t.eyebrow}
             </span>
@@ -71,7 +71,7 @@ export function HeroSection({ locale }: { locale: Locale }) {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-12 rounded-full border-white/15 bg-white/[0.03] px-7 text-base font-semibold text-foreground hover:bg-white/[0.07]"
+                className="h-12 rounded-full border-white/15 bg-white/3 px-7 text-base font-semibold text-foreground hover:bg-white/7"
                 asChild
               >
                 <Link href="/web-app" className="inline-flex items-center gap-2">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,9 +7,10 @@ import { colors, borderRadius } from '@/theme';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { relativeMyPulse } from '@/utils/format';
 import { resolvePicsUrls } from '@/utils/myPulseDisplayType';
-import type { ProfileUpdate } from '@/types';
+import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
+import { FeedGradeTintOverlay, feedGradeTintFromPost } from '@/components/mypage/RecentMediaThumb';
 
 interface Props {
   update: ProfileUpdate;
@@ -23,6 +24,8 @@ interface Props {
   onEdit?: (nextContent: string) => Promise<void>;
   editContent?: string;
   wasEdited?: boolean;
+  /** Resolved feed post when this pin re-shares one — drives grade tint parity. */
+  linkedPost?: Post;
 }
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -52,10 +55,16 @@ export function MyPulsePicsCard({
   onEdit,
   editContent,
   wasEdited,
+  linkedPost,
 }: Props) {
   const caption = (u.content?.trim() || u.previewText?.trim() || '').slice(0, 280);
   const urls = resolvePicsUrls(u);
   const total = urls.length;
+
+  const picsGradeTint = useMemo(
+    () => (linkedPost ? feedGradeTintFromPost(linkedPost) : null),
+    [linkedPost],
+  );
 
   return (
     <MyPulseCardShell
@@ -84,7 +93,7 @@ export function MyPulsePicsCard({
         />
       ) : null}
 
-      <PicsStrip urls={urls} />
+      <PicsStrip urls={urls} gradeTint={picsGradeTint} />
 
       {total > 1 ? (
         <View style={styles.countChip} pointerEvents="none">
@@ -98,7 +107,7 @@ export function MyPulsePicsCard({
   );
 }
 
-function PicsStrip({ urls }: { urls: string[] }) {
+function PicsStrip({ urls, gradeTint }: { urls: string[]; gradeTint: string | null }) {
   if (urls.length === 0) {
     return (
       <View style={[styles.heroSingle, styles.tileEmpty]}>
@@ -117,6 +126,7 @@ function PicsStrip({ urls }: { urls: string[] }) {
           contentFit="contain"
           {...pulseImageFeedHeroProps}
         />
+        <FeedGradeTintOverlay tint={gradeTint} />
         <LinearGradient
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
           style={styles.heroScrim}
@@ -150,6 +160,7 @@ function PicsStrip({ urls }: { urls: string[] }) {
             contentFit="contain"
             {...pulseImageListThumbProps}
           />
+          <FeedGradeTintOverlay tint={gradeTint} />
           {/* subtle inner border so each tile feels distinct */}
           <View style={styles.thumbBorder} pointerEvents="none" />
         </View>

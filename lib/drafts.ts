@@ -15,6 +15,8 @@ export interface DraftData {
   /** Queued follow-up clips (series or B-roll flow) — URIs only; may be stale after OS cache eviction. */
   followUpClipUris?: string[];
   clipQueueVariant?: 'series' | 'broll';
+  /** Duet camera layout preference — restored when duetting from draft (migration 161). */
+  videoDuetLayout?: 'strip' | 'floating';
   seriesSelection?: { seriesId: string; seriesPart: number; seriesTotal: number };
   content?: string;
   updatedAt?: string;
@@ -71,6 +73,36 @@ export async function clearDraft(type: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(`${DRAFT_PREFIX}${type}`);
   } catch {}
+}
+
+/** True when saved draft payload has meaningful creator content (hub badges / resume affordances). */
+export function draftDataHasContent(data: DraftData | null | undefined): boolean {
+  if (!data) return false;
+  return !!(
+    data.caption?.trim() ||
+    data.hashtags?.trim() ||
+    data.headline?.trim() ||
+    data.overlayLine?.trim() ||
+    data.shortTitle?.trim() ||
+    data.soundTitle?.trim() ||
+    data.content?.trim() ||
+    (data.mediaUris?.length ?? 0) > 0 ||
+    (data.followUpClipUris?.length ?? 0) > 0 ||
+    data.seriesSelection != null ||
+    data.clipQueueVariant != null ||
+    data.trimStartSec != null ||
+    data.trimEndSec != null ||
+    data.soundAnchorSec != null ||
+    data.scheduledAtIso?.trim() ||
+    data.educationOnDraft === true ||
+    (data.educationCitationsDraft?.length ?? 0) > 0 ||
+    data.imageMoodId != null ||
+    data.imageBeforeAfter === true ||
+    data.imageColorMatch === true ||
+    data.imageBrandBackdrop === true ||
+    (data.imagePhotoFrame?.trim() && data.imagePhotoFrame !== 'none') ||
+    (data.imageLayoutPreset?.trim() && data.imageLayoutPreset !== 'carousel')
+  );
 }
 
 export async function getAllDrafts(): Promise<{ type: string; data: DraftData }[]> {

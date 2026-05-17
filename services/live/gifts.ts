@@ -1,5 +1,6 @@
 import type { LiveGift, LiveGiftTier } from '@/types';
 
+/** Canonical ids + Spark prices — keep aligned with `live_stream_gift_catalog` (Supabase migration). */
 export const LIVE_GIFTS: LiveGift[] = [
   { id: 'heart', name: 'Heart', emoji: '❤️', sparkCost: 0, tier: 'free', animation: 'float', color: '#EF4444' },
   { id: 'clap', name: 'Clap', emoji: '👏', sparkCost: 0, tier: 'free', animation: 'float', color: '#F59E0B' },

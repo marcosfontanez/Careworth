@@ -20,12 +20,15 @@ export type AdminShopItemRow = {
   created_at: string | null;
 };
 
-/** Present when type === "border"; sourced from admin_shop_border_stats RPC. */
+/** Borders + spark_pack SKUs; sourced from admin_shop_border_stats RPC. */
 export type AdminShopBorderStats = {
-  owners: number;
+  /** Inventory holders (borders only); null for spark packs. */
+  owners: number | null;
   acqPaid: number;
   acqFree: number;
   acqStaff: number;
+  /** Rows in shop_admin_item_grants (staff catalog grant actions). */
+  staffGrantCount: number;
   acqTotal: number;
 };
 
@@ -45,10 +48,11 @@ export type AdminShopGrantLogRow = {
 
 type AdminShopBorderStatsRpcRow = {
   shop_item_id: string;
-  owners: number;
+  owners: number | null;
   acq_paid: number;
   acq_free: number;
   acq_staff: number;
+  staff_grant_count: number;
 };
 
 export async function loadShopBorderAdminStats(): Promise<Record<string, AdminShopBorderStats>> {
@@ -66,11 +70,13 @@ export async function loadShopBorderAdminStats(): Promise<Record<string, AdminSh
       const paid = Number(r.acq_paid) || 0;
       const free = Number(r.acq_free) || 0;
       const staff = Number(r.acq_staff) || 0;
+      const grantLog = Number(r.staff_grant_count) || 0;
       out[r.shop_item_id] = {
-        owners: Number(r.owners) || 0,
+        owners: r.owners == null ? null : Number(r.owners) || 0,
         acqPaid: paid,
         acqFree: free,
         acqStaff: staff,
+        staffGrantCount: grantLog,
         acqTotal: paid + free + staff,
       };
     }

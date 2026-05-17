@@ -59,7 +59,7 @@ export function HomePulseDuo({ locale }: { locale: Locale }) {
                 "h-11 rounded-full px-6 font-semibold",
                 i === 0
                   ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "border-white/15 bg-white/[0.03] hover:bg-white/[0.07]",
+                  : "border-white/15 bg-white/3 hover:bg-white/7",
               )}
               asChild
             >

@@ -2,8 +2,15 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Alert, Platform } from 'react-native';
 
-export const VIDEO_MIN_SECONDS = 0;
+/** Minimum clip length for short-form posts (picker + composer gate when duration is known). */
+export const VIDEO_MIN_SECONDS = 1;
 export const VIDEO_MAX_SECONDS = 180;
+
+/** expo-image-picker: duration may be seconds or milliseconds depending on platform/asset. */
+export function normalizePickerVideoDurationSeconds(raw: number | null | undefined): number | undefined {
+  if (raw == null || !Number.isFinite(raw)) return undefined;
+  return raw > 1000 ? raw / 1000 : raw;
+}
 
 export interface MediaAsset {
   uri: string;
@@ -73,10 +80,8 @@ function assetFromResult(result: ImagePicker.ImagePickerResult): MediaAsset | nu
   const isVideo = asset.type === 'video';
   const ext = asset.uri.split('.').pop()?.toLowerCase().split('?')[0] ?? (isVideo ? 'mp4' : 'jpg');
 
-  let durationSec: number | undefined;
-  if (asset.duration != null) {
-    durationSec = asset.duration > 1000 ? asset.duration / 1000 : asset.duration;
-  }
+  const durationSec =
+    isVideo ? normalizePickerVideoDurationSeconds(asset.duration) : undefined;
 
   return {
     uri: asset.uri,
@@ -207,12 +212,21 @@ export async function pickVideoFromGallery(): Promise<MediaAsset | null> {
   });
 
   const asset = assetFromResult(result);
-  if (asset && asset.duration != null && asset.duration > VIDEO_MAX_SECONDS) {
-    Alert.alert(
-      'Video Too Long',
-      `Short-form videos can be up to ${VIDEO_MAX_SECONDS / 60} minutes. Try trimming it or go live for longer content!`,
-    );
-    return null;
+  if (asset?.type === 'video' && asset.duration != null) {
+    if (asset.duration < VIDEO_MIN_SECONDS) {
+      Alert.alert(
+        'Clip too short',
+        `Short-form clips need to be at least ${VIDEO_MIN_SECONDS}s. Pick a slightly longer moment or trim elsewhere.`,
+      );
+      return null;
+    }
+    if (asset.duration > VIDEO_MAX_SECONDS) {
+      Alert.alert(
+        'Video Too Long',
+        `Short-form videos can be up to ${VIDEO_MAX_SECONDS / 60} minutes. Try trimming it or go live for longer content!`,
+      );
+      return null;
+    }
   }
   return asset;
 }
@@ -230,12 +244,21 @@ export async function recordVideo(): Promise<MediaAsset | null> {
   });
 
   const asset = assetFromResult(result);
-  if (asset && asset.duration != null && asset.duration > VIDEO_MAX_SECONDS) {
-    Alert.alert(
-      'Video Too Long',
-      `Short-form videos can be up to ${VIDEO_MAX_SECONDS / 60} minutes. Try trimming it or go live for longer content!`,
-    );
-    return null;
+  if (asset?.type === 'video' && asset.duration != null) {
+    if (asset.duration < VIDEO_MIN_SECONDS) {
+      Alert.alert(
+        'Clip too short',
+        `Short-form clips need to be at least ${VIDEO_MIN_SECONDS}s. Record a slightly longer take.`,
+      );
+      return null;
+    }
+    if (asset.duration > VIDEO_MAX_SECONDS) {
+      Alert.alert(
+        'Video Too Long',
+        `Short-form videos can be up to ${VIDEO_MAX_SECONDS / 60} minutes. Try trimming it or go live for longer content!`,
+      );
+      return null;
+    }
   }
   return asset;
 }

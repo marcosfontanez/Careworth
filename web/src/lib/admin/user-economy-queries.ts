@@ -206,7 +206,7 @@ export async function loadUserEconomyAudit(userId: string): Promise<UserEconomyA
       if (r.shop_item_id) shopIds.add(r.shop_item_id);
     }
 
-    let shopItemLabels: Record<string, string> = {};
+    const shopItemLabels: Record<string, string> = {};
     if (shopIds.size > 0) {
       const { data: shopRows } = await supabase
         .from("shop_items")

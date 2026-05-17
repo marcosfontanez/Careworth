@@ -20,10 +20,11 @@ import type { AdminShopBorderStats, AdminShopGrantLogRow, AdminShopItemRow } fro
 import { cn } from "@/lib/utils";
 
 const EMPTY_BORDER_STATS: AdminShopBorderStats = {
-  owners: 0,
+  owners: null,
   acqPaid: 0,
   acqFree: 0,
   acqStaff: 0,
+  staffGrantCount: 0,
   acqTotal: 0,
 };
 
@@ -211,10 +212,14 @@ export function ShopCatalogConsole({
             Rows live in <code className="rounded bg-muted px-1 py-0.5">shop_items</code>. Prefer turning off sales with{" "}
             <strong className="font-medium text-foreground">is_active</strong>,{" "}
             <strong className="font-medium text-foreground">is_retired</strong>, or availability fields instead of
-            deleting, so past SKUs stay auditable. For <code className="rounded bg-muted px-1 py-0.5">border</code> rows,
-            <strong className="font-medium text-foreground"> Owners</strong> counts inventory rows (one per user).{" "}
-            <strong className="font-medium text-foreground">Acquisitions</strong> count posted wallet credits:{" "}
-            paid (IAP self or gift), free (shop promo claim), staff (admin grants and pending team gifts not yet opened).
+            deleting, so past SKUs stay auditable. For <code className="rounded bg-muted px-1 py-0.5">border</code> rows,{" "}
+            <strong className="font-medium text-foreground">Owners</strong> counts inventory rows (one per user).{" "}
+            <strong className="font-medium text-foreground">Purchased</strong> is IAP-backed ledger credits (border
+            self/gift or Sparks pack receipts). <strong className="font-medium text-foreground">Staff grants</strong> counts
+            rows in <code className="rounded bg-muted px-1 py-0.5">shop_admin_item_grants</code> (catalog grant actions).
+            <strong className="font-medium text-foreground"> Free claim</strong> is in-app promo unlock (borders).{" "}
+            <strong className="font-medium text-foreground">Total acq.</strong> sums ledger pathways (purchased + free +
+            non-purchase credits); compare with staff grants for ops transparency.
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -226,9 +231,9 @@ export function ShopCatalogConsole({
                 <TableHead>Name</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead className="tabular-nums text-right">Owners</TableHead>
-                <TableHead className="tabular-nums text-right">Paid</TableHead>
-                <TableHead className="tabular-nums text-right">Free</TableHead>
-                <TableHead className="tabular-nums text-right">Staff</TableHead>
+                <TableHead className="tabular-nums text-right">Purchased</TableHead>
+                <TableHead className="tabular-nums text-right">Staff grants</TableHead>
+                <TableHead className="tabular-nums text-right">Free claim</TableHead>
                 <TableHead className="tabular-nums text-right">Total acq.</TableHead>
                 <TableHead>Sparks / pack</TableHead>
                 <TableHead>SKU (iOS)</TableHead>
@@ -239,7 +244,9 @@ export function ShopCatalogConsole({
               {items.map((i) => {
                 const pill = statusPill(i);
                 const bs =
-                  i.type === "border" ? (borderStatsByItemId[i.id] ?? EMPTY_BORDER_STATS) : null;
+                  i.type === "border" || i.type === "spark_pack"
+                    ? (borderStatsByItemId[i.id] ?? EMPTY_BORDER_STATS)
+                    : null;
                 const dash = "—";
                 return (
                   <TableRow key={i.id}>
@@ -257,16 +264,14 @@ export function ShopCatalogConsole({
                     <TableCell className="text-sm font-medium">{i.name}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{i.slug}</TableCell>
                     <TableCell className="tabular-nums text-right text-sm">
-                      {bs ? bs.owners : dash}
+                      {bs ? (i.type === "border" ? (bs.owners ?? 0) : dash) : dash}
+                    </TableCell>
+                    <TableCell className="tabular-nums text-right text-sm">{bs ? bs.acqPaid : dash}</TableCell>
+                    <TableCell className="tabular-nums text-right text-sm font-medium">
+                      {bs ? bs.staffGrantCount : dash}
                     </TableCell>
                     <TableCell className="tabular-nums text-right text-sm">
-                      {bs ? bs.acqPaid : dash}
-                    </TableCell>
-                    <TableCell className="tabular-nums text-right text-sm">
-                      {bs ? bs.acqFree : dash}
-                    </TableCell>
-                    <TableCell className="tabular-nums text-right text-sm">
-                      {bs ? bs.acqStaff : dash}
+                      {bs ? (i.type === "border" ? bs.acqFree : dash) : dash}
                     </TableCell>
                     <TableCell className="tabular-nums text-right text-sm font-medium">
                       {bs ? bs.acqTotal : dash}

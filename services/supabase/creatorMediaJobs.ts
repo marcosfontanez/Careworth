@@ -13,6 +13,8 @@ export interface CreatorMediaStitchInput {
   clipPaths: string[];
   /** Defaults to `<user_id>/exports/<job_id>.mp4`. */
   outputPath?: string;
+  /** When set, worker patches `posts.media_url` and clears processing columns on success. */
+  target_post_id?: string;
 }
 
 /**
@@ -24,6 +26,7 @@ export interface CreatorMediaBrollInput {
   mainPath: string;
   cutawayPaths: string[];
   outputPath?: string;
+  target_post_id?: string;
 }
 
 export type CreatorMediaJobKind =
@@ -100,4 +103,31 @@ export async function listMyCreatorMediaJobs(limit = 20): Promise<CreatorMediaJo
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as CreatorMediaJobRow[];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Poll until job reaches a terminal status or timeout.
+ * @throws Error with message `TIMEOUT` or `JOB_NOT_FOUND`
+ */
+export async function waitForCreatorMediaJob(
+  jobId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<CreatorMediaJobRow> {
+  const timeoutMs = opts?.timeoutMs ?? 180_000;
+  const intervalMs = opts?.intervalMs ?? 2000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const row = await getCreatorMediaJob(jobId);
+    if (!row) throw new Error('JOB_NOT_FOUND');
+    if (row.status === 'succeeded' || row.status === 'failed' || row.status === 'cancelled') {
+      return row;
+    }
+    await sleep(intervalMs);
+  }
+  throw new Error('TIMEOUT');
 }

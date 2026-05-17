@@ -20,6 +20,10 @@ type Props = {
   onPressStream: (stream: LiveStream) => void;
   /** Cap how many hero cards to show. Defaults to 5 (per design spec). */
   maxCards?: number;
+  /** Optional second line under title (e.g. hub mode + promo tag). */
+  getSubtitle?: (stream: LiveStream) => string | undefined;
+  /** Shop Live / commerce pill under LIVE badge on hero cards. */
+  getShopBadge?: (stream: LiveStream) => string | undefined;
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -34,6 +38,8 @@ export function FeaturedLiveCarousel({
   streams,
   onPressStream,
   maxCards = 5,
+  getSubtitle,
+  getShopBadge,
 }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<LiveStream>>(null);
@@ -76,6 +82,8 @@ export function FeaturedLiveCarousel({
               stream={item}
               width={CARD_WIDTH}
               onPress={() => onPressStream(item)}
+              subtitle={getSubtitle?.(item)}
+              shopBadge={getShopBadge?.(item)}
             />
           </View>
         )}

@@ -44,7 +44,7 @@ export function NewsletterSignup({ source = "footer", locale = "en" }: { source?
           placeholder={ui.placeholder}
           disabled={pending}
           autoComplete="email"
-          className="border-white/10 bg-white/[0.04] placeholder:text-muted-foreground"
+          className="border-white/10 bg-white/4 placeholder:text-muted-foreground"
         />
         <Button
           type="submit"

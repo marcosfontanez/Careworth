@@ -78,5 +78,6 @@ Replace placeholders in root `eas.json` under `submit.production`:
 Feature flags default **off** in `lib/featureFlags.ts`:
 
 - `liveStreaming` — Live tab, `/live/*`, Create → Go Live
+- `feedCreatorGifting` — Feed rail creator gifts (`FeedActionRail` / `VideoFeedPost`); baseline QA doc: `docs/GIFT_SYSTEM_PHASE0_BASELINE.md`
 
 Admins can toggle these in **Admin → feature flags** once real providers ship.

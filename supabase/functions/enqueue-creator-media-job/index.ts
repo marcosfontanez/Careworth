@@ -56,6 +56,16 @@ Deno.serve(async (req) => {
   if (!kind || !allowed.includes(kind)) return json({ error: "invalid_kind" }, 400);
 
   const input = body.input ?? {};
+
+  const TARGET_POST_UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const tpid = input.target_post_id;
+  if (tpid != null && typeof tpid === "string" && tpid.trim()) {
+    if (!TARGET_POST_UUID.test(tpid.trim())) {
+      return json({ error: "invalid target_post_id (expected UUID)" }, 400);
+    }
+  }
+
   if (kind === "stitch") {
     const clipPaths = input.clipPaths;
     if (!Array.isArray(clipPaths) || clipPaths.length === 0 || !clipPaths.every((x: unknown) => typeof x === "string")) {

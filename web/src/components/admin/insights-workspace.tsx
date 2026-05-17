@@ -86,7 +86,7 @@ export function InsightsWorkspace({
 
   return (
     <Tabs key={activeTab} defaultValue={activeTab} className="space-y-6">
-      <TabsList className="flex h-auto max-w-full flex-wrap justify-start gap-1 bg-secondary/40 p-1 ring-1 ring-white/[0.04]">
+      <TabsList className="flex h-auto max-w-full flex-wrap justify-start gap-1 bg-secondary/40 p-1 ring-1 ring-white/4">
         {INSIGHT_TABS.map((t) => (
           <TabsTrigger key={t.id} value={t.id} className={tabClass}>
             {t.label}

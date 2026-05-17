@@ -40,7 +40,13 @@ type EventName =
   | 'spark_pack_purchase_started'
   | 'spark_pack_purchase_completed'
   | 'gift_sent'
-  | 'insufficient_sparks_prompt_shown';
+  | 'gift_sender_return_nav'
+  | 'insufficient_sparks_prompt_shown'
+  | 'reward_toast_opened'
+  | 'reward_toast_dismissed'
+  | 'reward_reveal_opened'
+  | 'reward_reveal_closed'
+  | 'reward_reveal_cta';
 
 class AnalyticsService {
   private userId: string | null = null;

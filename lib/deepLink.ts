@@ -2,6 +2,13 @@ import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { queryClient } from '@/lib/queryClient';
 import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
+import {
+  liveGoLiveHref,
+  liveHighlightsHref,
+  liveHighlightsRootHref,
+  liveHostControlsHref,
+  liveStreamHref,
+} from '@/lib/navigation/liveRoutes';
 
 function firstQueryString(
   qp: Linking.QueryParams | null | undefined,
@@ -127,6 +134,28 @@ export function parseAndNavigate(url: string) {
       const conversationId = chatRest.split('/').filter(Boolean)[0]?.trim() ?? '';
       if (!conversationId) return false;
       router.push(`/messages/${conversationId}` as any);
+      return true;
+    }
+
+    const liveRest = stripPrefixCaseInsensitive(path, 'live/');
+    if (liveRest !== null) {
+      const segments = liveRest.split('/').filter(Boolean);
+      const head = segments[0]?.trim().toLowerCase() ?? '';
+      if (!head) return false;
+      if (head === 'go-live') {
+        router.push(liveGoLiveHref());
+        return true;
+      }
+      if (head === 'host-controls') {
+        router.push(liveHostControlsHref());
+        return true;
+      }
+      if (head === 'highlights') {
+        const sid = firstQueryString(parsed.queryParams, 'streamId');
+        router.push(sid ? liveHighlightsHref(sid) : liveHighlightsRootHref());
+        return true;
+      }
+      router.push(liveStreamHref(segments[0]!));
       return true;
     }
   } catch {}

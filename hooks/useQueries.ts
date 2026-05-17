@@ -32,7 +32,7 @@ export { useLiveStreams, useStream } from '@/hooks/useLiveQueries';
  */
 
 /** Bump when feed queryFn shape changes so dev clients don’t keep a stale Fast Refresh closure. */
-const FEED_QUERY_KEY_VERSION = 2;
+const FEED_QUERY_KEY_VERSION = 3;
 
 export function useFeed(type: FeedType, userId?: string) {
   return useQuery({

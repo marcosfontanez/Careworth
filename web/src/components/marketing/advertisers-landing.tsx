@@ -41,7 +41,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             <p className={marketingEyebrow}>{c.hero.eyebrow}</p>
             <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.35rem]">
               {c.hero.titleBefore}{" "}
-              <span className="bg-gradient-to-r from-primary via-[#4d9fff] to-[var(--accent)] bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-primary via-[#4d9fff] to-accent bg-clip-text text-transparent">
                 {c.hero.titleGradient}
               </span>
             </h1>
@@ -57,7 +57,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
                   <ArrowRight className="h-4 w-4" />
                 </MarketingDestinationLink>
               </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
+              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/4 px-7 font-semibold">
                 <MarketingDestinationLink href="/contact?topic=partnerships" analyticsSource="advertisers_hero_partnerships">
                   {c.hero.ctaPartnerships}
                 </MarketingDestinationLink>
@@ -82,7 +82,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
         </div>
       </section>
 
-      <MarketingPageShell className="!py-0 pb-10">
+      <MarketingPageShell className="py-0! pb-10">
         <p className={marketingEyebrow}>{c.whyEyebrow}</p>
         <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.whyTitle}</h2>
         <div className="mt-8 grid gap-6 md:grid-cols-2">
@@ -96,18 +96,18 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
         <p className="mt-8 text-sm leading-relaxed text-muted-foreground">{c.whyFooter}</p>
       </MarketingPageShell>
 
-      <MarketingPageShell className="!py-0 pb-6">
+      <MarketingPageShell className="py-0! pb-6">
         <h2 className="max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.audiencesTitle}</h2>
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {c.audiences.map((a) => (
             <div
               key={a.title}
               className={cn(
-                "flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b ring-1 ring-white/[0.04]",
+                "flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-linear-to-b ring-1 ring-white/4",
                 a.tint,
               )}
             >
-              <div className="h-28 bg-gradient-to-t from-black/60 to-transparent" />
+              <div className="h-28 bg-linear-to-t from-black/60 to-transparent" />
               <div className="flex flex-1 flex-col p-5">
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--accent)]">{a.title}</p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{a.body}</p>
@@ -161,7 +161,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
               const Icon = placementIcons[i] ?? LayoutPanelTop;
               return (
                 <div key={p.title} className={cn("rounded-2xl p-5", marketingCardMuted)}>
-                  <div className="mb-12 aspect-[4/3] rounded-xl border border-dashed border-white/15 bg-white/[0.02]" />
+                  <div className="mb-12 aspect-4/3 rounded-xl border border-dashed border-white/15 bg-white/2" />
                   <Icon className="h-5 w-5 text-primary" />
                   <p className="mt-3 font-semibold text-foreground">{p.title}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{p.body}</p>
@@ -203,7 +203,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             </ul>
           </div>
           <div className="flex justify-center lg:justify-end">
-            <div className="flex h-40 w-40 items-center justify-center rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/10 shadow-[0_0_60px_-12px_rgba(0,210,255,0.45)]">
+            <div className="flex h-40 w-40 items-center justify-center rounded-full border border-[var(--accent)]/40 bg-accent/10 shadow-[0_0_60px_-12px_rgba(0,210,255,0.45)]">
               <Shield className="h-20 w-20 text-[var(--accent)]" strokeWidth={1.25} />
             </div>
           </div>
@@ -238,7 +238,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
                 ))}
               </ul>
             </div>
-            <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 text-xs leading-relaxed text-muted-foreground">
+            <p className="rounded-2xl border border-white/10 bg-white/3 px-5 py-4 text-xs leading-relaxed text-muted-foreground">
               {c.partnerSheet.disclaimer}
             </p>
           </div>

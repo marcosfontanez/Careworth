@@ -23,7 +23,7 @@ export default async function AboutPage() {
           </div>
         ))}
       </div>
-      <div className="mt-12 rounded-2xl border border-white/10 bg-white/[0.02] p-8 ring-1 ring-white/[0.04]">
+      <div className="mt-12 rounded-2xl border border-white/10 bg-white/2 p-8 ring-1 ring-white/4">
         <p className="text-lg leading-relaxed text-muted-foreground">{c.closing}</p>
       </div>
     </MarketingPageShell>

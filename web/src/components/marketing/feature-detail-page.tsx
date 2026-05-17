@@ -60,7 +60,7 @@ export function FeatureDetailPage({
       </div>
 
       <div className="mt-14 grid gap-6 lg:grid-cols-3">
-        <div className="aspect-[4/3] rounded-2xl border border-dashed border-border/80 bg-gradient-to-br from-card/80 to-pv-navy/40 p-6 lg:col-span-2">
+        <div className="aspect-4/3 rounded-2xl border border-dashed border-border/80 bg-linear-to-br from-card/80 to-pv-navy/40 p-6 lg:col-span-2">
           <div className="flex h-full flex-col items-center justify-center text-center">
             <p className="text-sm font-medium text-foreground">Product frame</p>
             <p className="mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground">
@@ -68,7 +68,7 @@ export function FeatureDetailPage({
             </p>
           </div>
         </div>
-        <div className="flex flex-col justify-center gap-3 rounded-2xl border border-border/80 bg-card/40 p-6 ring-1 ring-white/[0.04]">
+        <div className="flex flex-col justify-center gap-3 rounded-2xl border border-border/80 bg-card/40 p-6 ring-1 ring-white/4">
           <p className="text-sm leading-relaxed text-muted-foreground">
             Need the full pillar map? Start from the feature hub or jump to adjacent surfaces.
           </p>

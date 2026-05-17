@@ -10,6 +10,8 @@ export default function LiveLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="[id]" />
       <Stack.Screen name="go-live" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="host-controls" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="highlights" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

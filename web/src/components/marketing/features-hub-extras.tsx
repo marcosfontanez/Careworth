@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 export function FeaturesHubBanner({ message }: { message: string }) {
   return (
     <div className={cn(marketingGutterX, "py-10")}>
-      <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center text-base font-medium leading-relaxed text-foreground ring-1 ring-white/[0.05] sm:text-lg">
+      <p className="rounded-2xl border border-white/10 bg-white/3 px-6 py-8 text-center text-base font-medium leading-relaxed text-foreground ring-1 ring-white/5 sm:text-lg">
         {message}
       </p>
     </div>

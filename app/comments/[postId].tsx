@@ -29,7 +29,9 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { getCircleAccent } from '@/lib/circleAccents';
 import { COMMENT_MAX_LENGTH } from '@/constants';
 import { pickCoverForSession } from '@/lib/coverAbRotation';
+import { resolveFeedGradeLookId } from '@/lib/moodPresets';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
+import { tintForLook } from '@/lib/videoFilters';
 import { storageService } from '@/lib/storage';
 import type { Post } from '@/types';
 import * as ImagePicker from 'expo-image-picker';
@@ -74,6 +76,15 @@ function CommentsMediaHeader({
     [],
   );
 
+  const gradeLookId = useMemo(
+    () => resolveFeedGradeLookId({ videoLookId: post.videoLookId, moodPreset: post.moodPreset }),
+    [post.videoLookId, post.moodPreset],
+  );
+  const gradeTint = useMemo(
+    () => (gradeLookId ? tintForLook(gradeLookId) : null),
+    [gradeLookId],
+  );
+
   const openFullPost = () => {
     const qs = new URLSearchParams();
     if (circleSlug) qs.set('circle', circleSlug);
@@ -89,21 +100,33 @@ function CommentsMediaHeader({
       <View style={commentsMediaStyles.wrap}>
         <TouchableOpacity
           activeOpacity={0.92}
-          onPress={() => router.push(`/image-viewer?uri=${encodeURIComponent(full)}` as any)}
+          onPress={() => {
+            const q = [`uri=${encodeURIComponent(full)}`];
+            if (gradeLookId) q.push(`grade=${encodeURIComponent(gradeLookId)}`);
+            router.push(`/image-viewer?${q.join('&')}` as any);
+          }}
         >
-          <Image
-            source={{ uri }}
-            style={[commentsMediaStyles.media, { height: imageHeight }]}
-            contentFit="contain"
-            onLoad={(e) => {
-              const w = e.source?.width;
-              const h = e.source?.height;
-              if (typeof w === 'number' && typeof h === 'number' && h > 0) {
-                setImageAspect(w / h);
-              }
-            }}
-            {...pulseImageFeedHeroProps}
-          />
+          <View style={[commentsMediaStyles.media, { height: imageHeight }]}>
+            <Image
+              source={{ uri }}
+              style={StyleSheet.absoluteFillObject}
+              contentFit="contain"
+              onLoad={(e) => {
+                const w = e.source?.width;
+                const h = e.source?.height;
+                if (typeof w === 'number' && typeof h === 'number' && h > 0) {
+                  setImageAspect(w / h);
+                }
+              }}
+              {...pulseImageFeedHeroProps}
+            />
+            {gradeTint ? (
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFillObject, { backgroundColor: gradeTint, zIndex: 2 }]}
+              />
+            ) : null}
+          </View>
         </TouchableOpacity>
       </View>
     );
@@ -125,6 +148,12 @@ function CommentsMediaHeader({
             ) : (
               <View style={[StyleSheet.absoluteFillObject, commentsMediaStyles.videoFallback]} />
             )}
+            {gradeTint ? (
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFillObject, { backgroundColor: gradeTint, zIndex: 1 }]}
+              />
+            ) : null}
             <View style={commentsMediaStyles.playBadge} pointerEvents="none">
               <Ionicons name="play-circle" size={48} color="#FFFFFFD0" />
             </View>
@@ -157,6 +186,7 @@ const commentsMediaStyles = StyleSheet.create({
   videoFallback: { backgroundColor: 'rgba(0,0,0,0.35)' },
   playBadge: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.2)',
@@ -165,6 +195,7 @@ const commentsMediaStyles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     alignSelf: 'center',
+    zIndex: 2,
     fontSize: 12,
     fontWeight: '700',
     color: 'rgba(255,255,255,0.92)',

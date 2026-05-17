@@ -36,11 +36,11 @@ export default async function WebAppPage() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-32 top-44 -z-10 h-[360px] w-[360px] rounded-full bg-[var(--accent)]/10 blur-[110px]"
+        className="pointer-events-none absolute -right-32 top-44 -z-10 h-[360px] w-[360px] rounded-full bg-accent/10 blur-[110px]"
       />
 
       <div className={cn(marketingGutterX, "relative z-10 mx-auto max-w-3xl text-center")}>
-        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/25 bg-[var(--accent)]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
+        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/25 bg-accent/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
           {c.kicker}
         </span>
         <h1 className="mt-4 text-balance font-heading text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-[2.65rem] lg:leading-[1.08]">

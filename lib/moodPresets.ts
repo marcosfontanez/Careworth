@@ -127,3 +127,15 @@ export function getMoodPreset(id: MoodPresetId | string | null | undefined): Moo
   if (!id) return null;
   return MOOD_PRESETS.find((m) => m.id === id) ?? null;
 }
+
+/**
+ * Feed / detail tint: explicit persisted grade wins; else mood preset’s bundled look.
+ */
+export function resolveFeedGradeLookId(input: {
+  videoLookId?: VideoLookId;
+  moodPreset?: string | null;
+}): VideoLookId | undefined {
+  if (input.videoLookId) return input.videoLookId;
+  const lk = getMoodPreset(input.moodPreset)?.look;
+  return lk && lk !== 'none' ? lk : undefined;
+}

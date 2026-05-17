@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { pulseScoreKeys } from '@/lib/queryKeys';
 import { pulseScoresService } from '@/services/supabase/pulseScores';
+import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 
 /**
  * Finalized prior-month stats + global rank from `get_pulse_month_celebration`.
@@ -12,7 +13,8 @@ export function usePulseMonthCelebration(userId: string | null | undefined, enab
     queryFn: async () => {
       try {
         return await pulseScoresService.getMonthCelebration();
-      } catch {
+      } catch (e) {
+        rewardDeliveryDebug.warn('get_pulse_month_celebration failed', e);
         return null;
       }
     },

@@ -20,3 +20,14 @@ export function rpcEconomyEquipBorder(p_inventory_item_id: string) {
 export function rpcEconomyAcceptPendingBorderGift(p_border_gift_id: string) {
   return supabase.rpc('economy_accept_pending_border_gift', { p_border_gift_id });
 }
+
+/** Sparks creator gift (live / post / profile). Same logic as edge `send_creator_gift`; avoids undeployed/broken functions returning non-JSON. */
+export function rpcEconomySendCreatorGift(params: {
+  p_creator_user_id: string;
+  p_gift_item_id: string;
+  p_context_type: 'live' | 'post' | 'profile';
+  p_context_id: string | null;
+  p_idempotency_key: string;
+}) {
+  return supabase.rpc('economy_send_creator_gift', params);
+}

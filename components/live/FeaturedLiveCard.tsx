@@ -15,6 +15,8 @@ type Props = {
   onPress: () => void;
   /** Optional one-line context shown under the title. */
   subtitle?: string;
+  /** Commerce hint on Shop Live / selling streams (promo or product). */
+  shopBadge?: string;
 };
 
 const HERO_HEIGHT = 380;
@@ -23,7 +25,7 @@ const HERO_HEIGHT = 380;
  * Premium hero card used inside the FeaturedLiveCarousel.
  * Cinematic image fill, gradient scrim, identity row, gold-accented Watch Now CTA.
  */
-export function FeaturedLiveCard({ stream, width, onPress, subtitle }: Props) {
+export function FeaturedLiveCard({ stream, width, onPress, subtitle, shopBadge }: Props) {
   const ctxLine =
     subtitle ??
     [stream.host.role, stream.host.specialty].filter(Boolean).join(' · ');
@@ -53,7 +55,17 @@ export function FeaturedLiveCard({ stream, width, onPress, subtitle }: Props) {
       />
 
       <View style={styles.topRow}>
-        <LivePill />
+        <View style={styles.topLeftStack}>
+          <LivePill />
+          {shopBadge ? (
+            <View style={styles.shopBadge}>
+              <Ionicons name="bag-handle" size={12} color={colors.primary.gold} />
+              <Text style={styles.shopBadgeTxt} numberOfLines={1}>
+                {shopBadge}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <LiveViewerBadge count={stream.viewerCount} />
       </View>
 
@@ -110,8 +122,36 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+  },
+  topLeftStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  shopBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(15,23,42,0.72)',
+    borderWidth: 1,
+    borderColor: colors.primary.gold + '55',
+  },
+  shopBadgeTxt: {
+    ...typography.caption,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primary.gold,
+    letterSpacing: 0.2,
   },
   bottom: {
     position: 'absolute',

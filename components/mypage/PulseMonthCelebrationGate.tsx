@@ -24,6 +24,10 @@ import { AvatarDisplay, type PulseAvatarRingStyle } from '@/components/profile/A
 import { tierMeta } from '@/utils/pulseScore';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { useAppStore } from '@/store/useAppStore';
+import { queryClient } from '@/lib/queryClient';
+import { rewardDeliveryKeys } from '@/lib/queryKeys';
+import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
+import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 
 function formatMonthHeading(iso: string): string {
   const d = new Date(`${iso.trim().slice(0, 10)}T12:00:00.000Z`);
@@ -67,7 +71,8 @@ function frameFromCelebration(
 }
 
 /**
- * One-time modal after each month-end tally: rank, score pill, optional top-5 gift + border reveal.
+ * One-time modal after each month-end tally: rank, score pill, optional top-5 border celebration.
+ * Top-5 frames are also enqueued into Reward Delivery (`leaderboard_reward` → toast → gift box) when possible.
  */
 export function PulseMonthCelebrationGate() {
   const insets = useSafeAreaInsets();
@@ -76,15 +81,20 @@ export function PulseMonthCelebrationGate() {
   const { user, profile, isAuthenticated, isLoading } = useAuth();
   const betaTesterBorderBlocking = useAppStore((s) => s.betaTesterBorderBlocking);
   const teamBorderGiftBlocking = useAppStore((s) => s.teamBorderGiftBlocking);
+  const rewardDeliveryBlocking = useAppStore((s) => s.rewardDeliveryBlocking);
   const setPulseMonthCelebrationBlocking = useAppStore((s) => s.setPulseMonthCelebrationBlocking);
   const inAuth = segments[0] === 'auth';
-  const enabled = isAuthenticated && !isLoading && !inAuth && Boolean(user?.id);
+  const enabled =
+    isAuthenticated && !isLoading && !inAuth && Boolean(user?.id) && !rewardDeliveryBlocking;
 
   const { data: celebration, isFetched } = usePulseMonthCelebration(user?.id, enabled);
 
   const [open, setOpen] = useState(false);
   const [giftOpened, setGiftOpened] = useState(false);
   const [posting, setPosting] = useState(false);
+  /** Top-5 only: premium toast path vs legacy inline gift. */
+  const [top5RevealMode, setTop5RevealMode] = useState<'idle' | 'loading' | 'delivery' | 'legacy'>('idle');
+  const leaderboardEnqueueAttemptedRef = useRef(false);
   const bounce = useRef(new Animated.Value(0)).current;
   const burst = useRef(new Animated.Value(0)).current;
 
@@ -92,6 +102,8 @@ export function PulseMonthCelebrationGate() {
     setOpen(false);
     setGiftOpened(false);
     setPosting(false);
+    setTop5RevealMode('idle');
+    leaderboardEnqueueAttemptedRef.current = false;
   }, [user?.id]);
 
   useEffect(() => {
@@ -99,18 +111,76 @@ export function PulseMonthCelebrationGate() {
   }, [celebration?.monthStart]);
 
   useEffect(() => {
+    if (!open) {
+      leaderboardEnqueueAttemptedRef.current = false;
+      setTop5RevealMode('idle');
+      return;
+    }
+    if (!celebration?.isTop5 || !user?.id || !celebration.monthStart?.trim()) {
+      setTop5RevealMode('idle');
+      return;
+    }
+    if (leaderboardEnqueueAttemptedRef.current) return;
+    leaderboardEnqueueAttemptedRef.current = true;
+    setTop5RevealMode('loading');
+
+    const uid = user.id;
+    const monthStart = celebration.monthStart;
+
+    void (async () => {
+      const id = await rewardDeliveriesService.enqueueClient({
+        deliveryType: 'leaderboard_reward',
+        itemType: 'future_item',
+        idempotencyKey: `pulse_month_top5:${uid}:${monthStart}`,
+        metadata: {
+          kind: 'pulse_leaderboard_frame',
+          prize_tier: celebration.prizeTier,
+          ring_color: celebration.frameRingColor,
+          glow_color: celebration.frameGlowColor,
+          ring_caption: celebration.frameRingCaption,
+          frame_label: celebration.frameLabel,
+        },
+      });
+
+      if (id) {
+        await queryClient.invalidateQueries({ queryKey: rewardDeliveryKeys.pendingList(uid) });
+        await queryClient.refetchQueries({ queryKey: rewardDeliveryKeys.pendingList(uid) });
+        setTop5RevealMode('delivery');
+        rewardDeliveryDebug.log('PulseMonthCelebrationGate: top-5 leaderboard reward queued', {
+          deliveryId: id.slice(0, 8),
+        });
+      } else {
+        setTop5RevealMode('legacy');
+        rewardDeliveryDebug.warn(
+          'PulseMonthCelebrationGate: leaderboard enqueueClient returned null — inline gift fallback',
+        );
+      }
+    })();
+  }, [
+    open,
+    celebration?.isTop5,
+    celebration?.monthStart,
+    celebration?.prizeTier,
+    celebration?.frameRingColor,
+    celebration?.frameGlowColor,
+    celebration?.frameRingCaption,
+    celebration?.frameLabel,
+    user?.id,
+  ]);
+
+  useEffect(() => {
     setPulseMonthCelebrationBlocking(open);
     return () => setPulseMonthCelebrationBlocking(false);
   }, [open, setPulseMonthCelebrationBlocking]);
 
   useEffect(() => {
-    if (betaTesterBorderBlocking || teamBorderGiftBlocking) {
+    if (betaTesterBorderBlocking || teamBorderGiftBlocking || rewardDeliveryBlocking) {
       setOpen(false);
     }
-  }, [betaTesterBorderBlocking, teamBorderGiftBlocking]);
+  }, [betaTesterBorderBlocking, teamBorderGiftBlocking, rewardDeliveryBlocking]);
 
   useEffect(() => {
-    if (!celebration?.monthStart || !isFetched || betaTesterBorderBlocking || teamBorderGiftBlocking) return;
+    if (!celebration?.monthStart || !isFetched || betaTesterBorderBlocking || teamBorderGiftBlocking || rewardDeliveryBlocking) return;
     let cancelled = false;
     (async () => {
       const seen = await hasSeenPulseMonthCelebration(celebration.monthStart);
@@ -119,10 +189,10 @@ export function PulseMonthCelebrationGate() {
     return () => {
       cancelled = true;
     };
-  }, [celebration?.monthStart, isFetched, betaTesterBorderBlocking, teamBorderGiftBlocking]);
+  }, [celebration?.monthStart, isFetched, betaTesterBorderBlocking, teamBorderGiftBlocking, rewardDeliveryBlocking]);
 
   useEffect(() => {
-    if (!open || giftOpened || !celebration?.isTop5) return;
+    if (!open || giftOpened || !celebration?.isTop5 || top5RevealMode !== 'legacy') return;
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(bounce, {
@@ -141,7 +211,7 @@ export function PulseMonthCelebrationGate() {
     );
     anim.start();
     return () => anim.stop();
-  }, [open, giftOpened, celebration?.isTop5, bounce]);
+  }, [open, giftOpened, celebration?.isTop5, top5RevealMode, bounce]);
 
   const closeAndMark = useCallback(async () => {
     if (celebration?.monthStart) await markPulseMonthCelebrationSeen(celebration.monthStart);
@@ -167,17 +237,22 @@ export function PulseMonthCelebrationGate() {
   }, [closeAndMark, router]);
 
   const confirmThenCustomize = useCallback(() => {
-    Alert.alert(
-      'Open Customize My Pulse?',
-      celebration?.isTop5
+    const top5 = celebration?.isTop5;
+    const queuedOrPending =
+      top5RevealMode === 'delivery' ||
+      top5RevealMode === 'loading' ||
+      top5RevealMode === 'idle';
+    const msg =
+      top5 && top5RevealMode === 'legacy' && !giftOpened
         ? 'Finish opening your gift above if you haven’t yet — then equip your new border under Border on Customize My Pulse.'
-        : 'You can adjust your portrait, avatar border, and how your My Pulse page looks there.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Open Customize My Pulse', onPress: () => goCustomize() },
-      ],
-    );
-  }, [goCustomize, celebration?.isTop5]);
+        : top5 && queuedOrPending
+          ? 'Your leaderboard border is also delivered through the reward toast — tap the toast and open the gift box when it appears, then equip under Border on Customize My Pulse.'
+          : 'You can adjust your portrait, avatar border, and how your My Pulse page looks there.';
+    Alert.alert('Open Customize My Pulse?', msg, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Customize My Pulse', onPress: () => goCustomize() },
+    ]);
+  }, [goCustomize, celebration?.isTop5, top5RevealMode, giftOpened]);
 
   const postToMyPulse = useCallback(async () => {
     const uid = user?.id;
@@ -221,6 +296,18 @@ export function PulseMonthCelebrationGate() {
     celebration.frameGlowColor,
     celebration.frameRingCaption,
   );
+
+  /** Avoid one-frame legacy flash before enqueue effect runs. */
+  const top5UiMode =
+    !celebration.isTop5
+      ? null
+      : top5RevealMode === 'delivery'
+        ? ('delivery' as const)
+        : top5RevealMode === 'legacy'
+          ? ('legacy' as const)
+          : ('loading' as const);
+
+  const hidePrimaryForLegacyGift = celebration.isTop5 && top5UiMode === 'legacy' && !giftOpened;
 
   const giftTranslate = bounce.interpolate({
     inputRange: [0, 1],
@@ -275,36 +362,55 @@ export function PulseMonthCelebrationGate() {
                   {celebration.frameLabel ? ` — ${celebration.frameLabel}` : ''}.
                 </Text>
 
-                {!giftOpened ? (
-                  <Pressable
-                    onPress={onOpenGift}
-                    style={styles.giftHit}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open reward, reveal new border"
-                  >
-                    <Animated.View style={{ transform: [{ translateY: giftTranslate }] }}>
-                      <Ionicons name="gift" size={64} color={colors.primary.gold} />
-                    </Animated.View>
-                    <Text style={styles.giftHint}>Tap the gift</Text>
-                  </Pressable>
+                {top5UiMode === 'loading' ? (
+                  <View style={styles.top5Loading}>
+                    <ActivityIndicator color={colors.primary.gold} />
+                    <Text style={styles.top5LoadingText}>Preparing your reward reveal…</Text>
+                  </View>
+                ) : top5UiMode === 'delivery' ? (
+                  <View style={styles.toastCallout}>
+                    <Ionicons name="notifications-outline" size={22} color={colors.primary.teal} />
+                    <Text style={styles.toastCalloutText}>
+                      Your border is ready in the{' '}
+                      <Text style={styles.toastCalloutEm}>PulseVerse reward</Text> flow. Watch for the{' '}
+                      <Text style={styles.toastCalloutEm}>reward toast</Text>, tap it, then open your premium gift box.
+                      Closing this summary won’t cancel the toast.
+                    </Text>
+                  </View>
                 ) : (
                   <>
-                    <Animated.View
-                      style={[styles.avatarBurst, { transform: [{ scale: avatarScale }] }]}
-                      accessibilityLabel="New avatar border preview"
-                    >
-                      <AvatarDisplay
-                        size={96}
-                        avatarUrl={profile?.avatarUrl ?? undefined}
-                        prioritizeRemoteAvatar
-                        pulseFrame={pulseFrame ?? undefined}
-                      />
-                    </Animated.View>
-                    <Text style={styles.howto}>
-                      Find your border on <Text style={styles.howtoEm}>My Pulse</Text>: open{' '}
-                      <Text style={styles.howtoEm}>Customize My Pulse</Text>, then choose{' '}
-                      <Text style={styles.howtoEm}>Border</Text> to equip it.
-                    </Text>
+                    {!giftOpened ? (
+                      <Pressable
+                        onPress={onOpenGift}
+                        style={styles.giftHit}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open reward, reveal new border"
+                      >
+                        <Animated.View style={{ transform: [{ translateY: giftTranslate }] }}>
+                          <Ionicons name="gift" size={64} color={colors.primary.gold} />
+                        </Animated.View>
+                        <Text style={styles.giftHint}>Tap the gift</Text>
+                      </Pressable>
+                    ) : (
+                      <>
+                        <Animated.View
+                          style={[styles.avatarBurst, { transform: [{ scale: avatarScale }] }]}
+                          accessibilityLabel="New avatar border preview"
+                        >
+                          <AvatarDisplay
+                            size={96}
+                            avatarUrl={profile?.avatarUrl ?? undefined}
+                            prioritizeRemoteAvatar
+                            pulseFrame={pulseFrame ?? undefined}
+                          />
+                        </Animated.View>
+                        <Text style={styles.howto}>
+                          Find your border on <Text style={styles.howtoEm}>My Pulse</Text>: open{' '}
+                          <Text style={styles.howtoEm}>Customize My Pulse</Text>, then choose{' '}
+                          <Text style={styles.howtoEm}>Border</Text> to equip it.
+                        </Text>
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -326,7 +432,7 @@ export function PulseMonthCelebrationGate() {
             </Pressable>
             <Text style={styles.postHint}>Share your placement on your My Pulse page.</Text>
 
-            {!(celebration.isTop5 && !giftOpened) ? (
+            {!(celebration.isTop5 && hidePrimaryForLegacyGift) ? (
               <Pressable
                 onPress={confirmThenCustomize}
                 style={styles.primaryBtn}
@@ -336,7 +442,7 @@ export function PulseMonthCelebrationGate() {
                 <Text style={styles.primaryBtnText}>Go to Customize My Pulse</Text>
               </Pressable>
             ) : null}
-            {celebration.isTop5 && !giftOpened ? (
+            {celebration.isTop5 && hidePrimaryForLegacyGift ? (
               <Text style={styles.continueHint}>Tap the gift above to open your prize, then continue.</Text>
             ) : null}
           </View>
@@ -398,6 +504,39 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     textAlign: 'center',
     marginBottom: spacing.lg,
+  },
+  top5Loading: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  top5LoadingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+    textAlign: 'center',
+  },
+  toastCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: 16,
+    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(45, 212, 191, 0.28)',
+  },
+  toastCalloutText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+  },
+  toastCalloutEm: {
+    fontWeight: '800',
+    color: '#F8FAFC',
   },
   giftHit: {
     alignSelf: 'center',

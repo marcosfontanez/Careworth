@@ -24,7 +24,7 @@ export function HomeSignatureOverview({ locale }: { locale: Locale }) {
           className={cn(
             "grid gap-4 sm:gap-6",
             "grid-cols-1 sm:grid-cols-3",
-            "rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-5 ring-1 ring-white/[0.04] backdrop-blur-md sm:p-6",
+            "rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-5 ring-1 ring-white/4 backdrop-blur-md sm:p-6",
             "shadow-[0_24px_70px_-30px_rgba(20,184,166,0.30)]",
           )}
         >
@@ -38,7 +38,7 @@ export function HomeSignatureOverview({ locale }: { locale: Locale }) {
                   i !== 0 && "sm:border-l sm:border-white/[0.06] sm:pl-5",
                 )}
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] ring-1 ring-[var(--accent)]/30">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-[var(--accent)] ring-1 ring-[var(--accent)]/30">
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
                 <div className="min-w-0">

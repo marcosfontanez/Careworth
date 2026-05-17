@@ -162,6 +162,7 @@ export function MyPulseItemCard({
       return (
         <MyPulseCircleCard
           update={u}
+          linkedPost={linkedPost}
           linkedPostMediaUrl={postMediaPreviewUri(linkedPost)}
           onDelete={handleDelete}
           onTogglePin={onTogglePin ? handleTogglePin : undefined}
@@ -225,10 +226,12 @@ export function MyPulseItemCard({
           wasEdited={wasEdited}
         />
       );
-    case 'pics':
+    case 'pics': {
+      const linkedPost = u.linkedPostId ? resolveLinkedPost?.(u.linkedPostId) : undefined;
       return (
         <MyPulsePicsCard
           update={u}
+          linkedPost={linkedPost}
           onDelete={handleDelete}
           onTogglePin={onTogglePin ? handleTogglePin : undefined}
           onLike={handleLike}
@@ -240,6 +243,7 @@ export function MyPulseItemCard({
           wasEdited={wasEdited}
         />
       );
+    }
     case 'thought':
     default:
       return (

@@ -37,6 +37,8 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
+import { clampVideoOverlayText, VIDEO_OVERLAY_TEXT_MAX_LEN } from '@/lib/videoOverlayText';
+import { VIDEO_MAX_SECONDS } from '@/lib/media';
 
 /** Legacy AsyncStorage key for circle drafts — purged on open/post so nothing lingers. */
 const LEGACY_CIRCLE_DRAFT = 'circle';
@@ -73,6 +75,8 @@ export default function CommunityCreatePostScreen() {
   const [body, setBody] = useState('');
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
+  /** Same contract as main composers → `posts.video_overlay_text` / feed sticker. */
+  const [overlayLine, setOverlayLine] = useState('');
   const [posting, setPosting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [settings, setSettings] = useState<CirclePostSettings>({
@@ -84,6 +88,8 @@ export default function CommunityCreatePostScreen() {
   });
   const [phiAck, setPhiAck] = useState(false);
 
+  const allowsMedia = postType === 'meme' || postType === 'video';
+
   /** Remove any saved circle drafts — feature disabled; avoids stale keys and room-banner checks. */
   React.useEffect(() => {
     void (async () => {
@@ -92,7 +98,15 @@ export default function CommunityCreatePostScreen() {
     })();
   }, [slug]);
 
-  const phiFindings = useMemo(() => scanForPhi(body), [body]);
+  React.useEffect(() => {
+    if (!allowsMedia) {
+      setMediaUri(null);
+      setMediaKind(null);
+      setOverlayLine('');
+    }
+  }, [allowsMedia]);
+
+  const phiFindings = useMemo(() => scanForPhi(body, overlayLine), [body, overlayLine]);
   const phiSev = highestSeverity(phiFindings);
 
   const placeholder = postType === 'question'
@@ -102,8 +116,6 @@ export default function CommunityCreatePostScreen() {
       : postType === 'video'
         ? 'Add a caption for your video…'
         : 'What\u2019s worth sharing today?';
-
-  const allowsMedia = postType === 'meme' || postType === 'video';
 
   const pickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -117,7 +129,7 @@ export default function CommunityCreatePostScreen() {
       /** Full-bleed photos — native crop sheet was forcing an unwanted square crop on memes. */
       allowsEditing: false,
       quality: 0.85,
-      videoMaxDuration: 60,
+      videoMaxDuration: VIDEO_MAX_SECONDS,
     });
     if (!result.canceled && result.assets?.[0]) {
       setMediaUri(result.assets[0].uri);
@@ -128,6 +140,7 @@ export default function CommunityCreatePostScreen() {
   const removeMedia = () => {
     setMediaUri(null);
     setMediaKind(null);
+    setOverlayLine('');
   };
 
   const onChangeSettings = (next: Partial<CirclePostSettings>) =>
@@ -192,6 +205,10 @@ export default function CommunityCreatePostScreen() {
         privacy_mode: 'public',
         is_anonymous: isConfessions,
         comments_disabled: !settings.allowComments || undefined,
+        video_overlay_text:
+          (postKind === 'video' || postKind === 'image') && overlayLine.trim()
+            ? clampVideoOverlayText(overlayLine)
+            : undefined,
       });
 
       /* Circle highlights — curated pins table (RLS: PulseVerse staff only). */
@@ -377,6 +394,36 @@ export default function CommunityCreatePostScreen() {
           </View>
         )}
 
+        {allowsMedia && mediaUri ? (
+          <View style={{ marginHorizontal: 14 }}>
+            <AccentComposerFrame
+              accentColor={accent.color}
+              hint="On-media sticker (optional)"
+              compact
+              noShadow
+              footer={
+                <AccentCharCount
+                  length={overlayLine.length}
+                  max={VIDEO_OVERLAY_TEXT_MAX_LEN}
+                  accentColor={accent.color}
+                  warnWithin={12}
+                  hideWhenEmpty={false}
+                />
+              }
+            >
+              <TextInput
+                style={styles.overlayInput}
+                value={overlayLine}
+                onChangeText={setOverlayLine}
+                placeholder="Short line shown on your photo or video in the feed"
+                placeholderTextColor={colors.dark.textMuted}
+                editable={!posting}
+                maxLength={VIDEO_OVERLAY_TEXT_MAX_LEN}
+              />
+            </AccentComposerFrame>
+          </View>
+        ) : null}
+
         {/* ====================== POST SETTINGS =====================
             The Circle confirmation row that used to live here was a
             duplicate of the CircleContextFooter below — removed to keep
@@ -502,6 +549,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.dark.text,
     lineHeight: 22,
+    paddingTop: 4,
+  },
+  overlayInput: {
+    minHeight: 44,
+    fontSize: 15,
+    color: colors.dark.text,
+    lineHeight: 20,
     paddingTop: 4,
   },
 

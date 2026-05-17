@@ -91,7 +91,7 @@ export const CATALOG_GIFTS: CatalogGift[] = [
     name: 'Coffee Drop',
     icon: 'cafe',
     sparks: 100,
-    contexts: ['live', 'post'],
+    contexts: ['live', 'post', 'profile'],
     accent: '#D4A63A',
   },
   {

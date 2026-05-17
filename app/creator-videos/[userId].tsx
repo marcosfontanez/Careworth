@@ -92,7 +92,8 @@ export default function CreatorVideosGridScreen() {
   const [sort, setSort] = useState<VideoSort>('newest');
   const [pulseHistoryOpen, setPulseHistoryOpen] = useState(false);
   const listRef = useRef<FlatList<Post>>(null);
-  const jumpPromptShown = useRef(false);
+  /** Shared by banner + alert so dismissing one cancels the other (effect cleanup clears pending Alert). */
+  const [jumpOfferDismissed, setJumpOfferDismissed] = useState(false);
 
   const isOwner = !!authUser?.id && creatorId === authUser.id;
   const { data: profile, isLoading: profileLoading } = useUser(creatorId);
@@ -145,6 +146,15 @@ export default function CreatorVideosGridScreen() {
     return v;
   }, [videos, sort]);
 
+  const fromPostIdx = useMemo(() => {
+    if (!fromPostId) return -1;
+    return sortedVideos.findIndex((p) => p.id === fromPostId);
+  }, [sortedVideos, fromPostId]);
+
+  useEffect(() => {
+    setJumpOfferDismissed(false);
+  }, [fromPostId, creatorId]);
+
   const headerTitle = 'Videos';
 
   const scrollGridToPostIndex = useCallback((index: number) => {
@@ -156,26 +166,53 @@ export default function CreatorVideosGridScreen() {
   }, []);
 
   useEffect(() => {
-    if (!fromPostId || jumpPromptShown.current || postsLoading || privacyGateLoading) return;
+    if (!fromPostId || jumpOfferDismissed || postsLoading || privacyGateLoading) return;
     if (privateBlocked) return;
-    const idx = sortedVideos.findIndex((p) => p.id === fromPostId);
-    if (idx < 0) return;
-    jumpPromptShown.current = true;
+    if (fromPostIdx < 0) return;
+    const idx = fromPostIdx;
+    let cancelled = false;
     const t = setTimeout(() => {
+      if (cancelled) return;
       Alert.alert(
         'Jump to this video?',
         'Scroll the grid to the clip you were watching.',
         [
-          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Not now',
+            style: 'cancel',
+            onPress: () => setJumpOfferDismissed(true),
+          },
           {
             text: 'Jump',
-            onPress: () => scrollGridToPostIndex(idx),
+            onPress: () => {
+              setJumpOfferDismissed(true);
+              scrollGridToPostIndex(idx);
+            },
           },
         ],
       );
     }, 350);
-    return () => clearTimeout(t);
-  }, [fromPostId, postsLoading, privacyGateLoading, privateBlocked, sortedVideos, scrollGridToPostIndex]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [
+    fromPostId,
+    fromPostIdx,
+    jumpOfferDismissed,
+    postsLoading,
+    privacyGateLoading,
+    privateBlocked,
+    scrollGridToPostIndex,
+  ]);
+
+  const showFromPostJumpBanner =
+    Boolean(fromPostId) &&
+    fromPostIdx >= 0 &&
+    !jumpOfferDismissed &&
+    !postsLoading &&
+    !privacyGateLoading &&
+    !privateBlocked;
 
   const onPullRefresh = useCallback(async () => {
     if (!creatorId) return;
@@ -283,6 +320,36 @@ export default function CreatorVideosGridScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: GAP, paddingHorizontal: PAD }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24, gap: GAP }}
+          ListHeaderComponent={
+            showFromPostJumpBanner ? (
+              <View style={styles.fromPostBanner}>
+                <Text style={styles.fromPostBannerText}>
+                  Jump to the video you opened from the feed?
+                </Text>
+                <View style={styles.fromPostBannerActions}>
+                  <TouchableOpacity
+                    style={styles.fromPostBannerGhost}
+                    onPress={() => setJumpOfferDismissed(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss jump to video banner"
+                  >
+                    <Text style={styles.fromPostBannerGhostText}>Not now</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.fromPostBannerPrimary}
+                    onPress={() => {
+                      setJumpOfferDismissed(true);
+                      scrollGridToPostIndex(fromPostIdx);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Scroll grid to the video from the feed"
+                  >
+                    <Text style={styles.fromPostBannerPrimaryText}>Jump</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null
+          }
           removeClippedSubviews={false}
           initialNumToRender={CREATOR_VIDEOS_GRID_WINDOW.initialNumToRender}
           maxToRenderPerBatch={CREATOR_VIDEOS_GRID_WINDOW.maxToRenderPerBatch}
@@ -442,4 +509,37 @@ const styles = StyleSheet.create({
   },
   thumbMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   thumbViews: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.92)' },
+  fromPostBanner: {
+    marginHorizontal: PAD,
+    marginBottom: GAP,
+    padding: 14,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.dark.cardAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(20,184,166,0.35)',
+  },
+  fromPostBannerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.dark.text,
+    marginBottom: 12,
+    lineHeight: 19,
+  },
+  fromPostBannerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  fromPostBannerGhost: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  fromPostBannerGhostText: { fontSize: 13, fontWeight: '700', color: colors.dark.textMuted },
+  fromPostBannerPrimary: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary.teal,
+  },
+  fromPostBannerPrimaryText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
 });

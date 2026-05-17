@@ -32,7 +32,7 @@ export function FeatureMyPulseLanding() {
             <p className={marketingEyebrow}>My Pulse</p>
             <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.1rem]">
               Your latest five updates —{" "}
-              <span className="bg-gradient-to-r from-[var(--accent)] to-primary bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-accent to-primary bg-clip-text text-transparent">
                 always fresh
               </span>
               , never a wall.
@@ -48,7 +48,7 @@ export function FeatureMyPulseLanding() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
+              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/4 px-7 font-semibold">
                 <Link href="/features/pulse-page">See Pulse Page</Link>
               </Button>
             </div>
@@ -113,7 +113,7 @@ export function FeatureMyPulseLanding() {
           </p>
         </div>
         <div className="mx-auto mt-10 max-w-xl space-y-3">
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 ring-1 ring-white/[0.04]">
+          <div className="rounded-xl border border-white/10 bg-white/3 p-4 ring-1 ring-white/4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">On your Pulse Page · newest first</p>
           </div>
           {myPulseFeedSlots.map((slot, i) => {
@@ -122,7 +122,7 @@ export function FeatureMyPulseLanding() {
               <div
                 key={`${slot.type}-${i}`}
                 className={cn(
-                  "flex items-start gap-3 rounded-xl border border-white/10 bg-[rgba(12,21,36,0.75)] p-4 ring-1 ring-white/[0.04]",
+                  "flex items-start gap-3 rounded-xl border border-white/10 bg-[rgba(12,21,36,0.75)] p-4 ring-1 ring-white/4",
                   i === 0 && "ring-1 ring-primary/25",
                 )}
               >
@@ -166,7 +166,7 @@ export function FeatureMyPulseLanding() {
       </section>
 
       <section className={cn(marketingGutterX, "pb-12")}>
-        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[rgba(12,21,36,0.9)] to-primary/[0.12] p-8 sm:p-10 ring-1 ring-white/[0.06]">
+        <div className="rounded-3xl border border-white/10 bg-linear-to-br from-[rgba(12,21,36,0.9)] to-primary/12 p-8 sm:p-10 ring-1 ring-white/6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-foreground">Pulse Page is the stage. My Pulse is the headline.</h2>

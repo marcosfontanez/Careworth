@@ -30,7 +30,7 @@ export function HomeTrustSection({ locale }: { locale: Locale }) {
         {/* Single anchor quote — premium, centered, with brand mark instead of three competing cards. */}
         <figure
           className={cn(
-            "relative mx-auto mt-14 max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-8 ring-1 ring-white/[0.04] backdrop-blur-md sm:p-10",
+            "relative mx-auto mt-14 max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-8 ring-1 ring-white/4 backdrop-blur-md sm:p-10",
             "shadow-[0_24px_70px_-30px_rgba(20,184,166,0.35)]",
           )}
         >

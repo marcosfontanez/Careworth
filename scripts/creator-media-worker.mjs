@@ -248,6 +248,63 @@ async function processStitchOrBroll(job) {
   }
 }
 
+/**
+ * When input.target_post_id is set, patch posts.media_url after successful concat.
+ */
+async function patchTargetPostAfterStitch(job, output) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const tid = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
+  if (!tid || (job.kind !== 'stitch' && job.kind !== 'broll')) return;
+
+  const { data: postRow, error: selErr } = await supabase
+    .from('posts')
+    .select('id, creator_id')
+    .eq('id', tid)
+    .maybeSingle();
+  if (selErr || !postRow || postRow.creator_id !== job.user_id) {
+    console.error('[worker] target_post_id invalid or ownership mismatch', tid, selErr?.message);
+    return;
+  }
+
+  const bucket = output.bucket;
+  const storagePath = output.storagePath;
+  const { data: pub } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+  const mediaUrl = pub?.publicUrl?.trim();
+  if (!mediaUrl) {
+    console.error('[worker] getPublicUrl returned empty for stitched output');
+    return;
+  }
+
+  const { error: upErr } = await supabase
+    .from('posts')
+    .update({
+      media_url: mediaUrl,
+      media_processing_status: null,
+      media_processing_job_id: null,
+      media_processing_error: null,
+    })
+    .eq('id', tid)
+    .eq('creator_id', job.user_id);
+  if (upErr) console.error('[worker] posts patch after stitch failed', upErr.message);
+}
+
+async function patchTargetPostOnFailure(job, errorMsg) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const tid = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
+  if (!tid || (job.kind !== 'stitch' && job.kind !== 'broll')) return;
+
+  const safe = errorMsg.length > 500 ? `${errorMsg.slice(0, 497)}…` : errorMsg;
+  const { error } = await supabase
+    .from('posts')
+    .update({
+      media_processing_status: 'failed',
+      media_processing_error: safe,
+    })
+    .eq('id', tid)
+    .eq('creator_id', job.user_id);
+  if (error) console.error('[worker] posts patch on job failure', error.message);
+}
+
 async function processOne() {
   const { data: jobs, error: qErr } = await supabase
     .from('creator_media_jobs')
@@ -293,6 +350,8 @@ async function processOne() {
       .eq('id', job.id);
 
     console.log('[worker] succeeded', job.id, job.kind, output?.storagePath);
+
+    await patchTargetPostAfterStitch(job, output);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase
@@ -303,6 +362,8 @@ async function processOne() {
         updated_at: new Date().toISOString(),
       })
       .eq('id', job.id);
+
+    await patchTargetPostOnFailure(job, msg);
 
     console.error('[worker] failed', job.id, job.kind, msg);
   }

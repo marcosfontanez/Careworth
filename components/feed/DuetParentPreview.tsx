@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Dimensions, Text, Platform } from 'react-native';
+import {
+  View, StyleSheet, Dimensions, Text, Platform,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
@@ -7,12 +9,15 @@ import { usePost } from '@/hooks/useQueries';
 import { colors, typography } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
+import type { DuetLayoutMode } from '@/lib/duetLayoutMode';
+import { resolveFeedGradeLookId } from '@/lib/moodPresets';
+import { tintForLook, type VideoLookId } from '@/lib/videoFilters';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const STRIP_W = Math.round(SCREEN_W * 0.34);
 const FLOAT_W = Math.round(SCREEN_W * 0.36);
 
-export type DuetParentLayoutMode = 'strip' | 'floating';
+export type DuetParentLayoutMode = DuetLayoutMode;
 
 type Props = {
   parentPostId: string;
@@ -38,6 +43,7 @@ function DuetParentVideoLayer({
   active,
   muted,
   playbackRate,
+  lookId,
 }: {
   publicUri: string;
   posterUri?: string;
@@ -47,7 +53,9 @@ function DuetParentVideoLayer({
   active: boolean;
   muted: boolean;
   playbackRate: number;
+  lookId?: VideoLookId;
 }) {
+  const gradeTint = lookId ? tintForLook(lookId) : null;
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const sourcePhase = useRef<'public' | 'signed' | 'failed'>('public');
@@ -124,12 +132,20 @@ function DuetParentVideoLayer({
 
   if (failed && posterUri) {
     return (
-      <Image
-        source={{ uri: posterUri }}
-        style={{ width, height }}
-        contentFit="cover"
-        {...pulseImageListThumbProps}
-      />
+      <View style={{ width, height }}>
+        <Image
+          source={{ uri: posterUri }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          {...pulseImageListThumbProps}
+        />
+        {gradeTint ? (
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: gradeTint, zIndex: 2 }]}
+          />
+        ) : null}
+      </View>
     );
   }
 
@@ -138,13 +154,21 @@ function DuetParentVideoLayer({
   }
 
   return (
-    <VideoView
-      player={player}
-      style={{ width, height }}
-      contentFit="cover"
-      nativeControls={false}
-      {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
-    />
+    <View style={{ width, height }}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+        nativeControls={false}
+        {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
+      />
+      {gradeTint ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: gradeTint, zIndex: 2 }]}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -189,6 +213,19 @@ export function DuetParentPreview({
   const innerW = layoutMode === 'strip' ? STRIP_W : FLOAT_W;
   const innerH = layoutMode === 'strip' ? pageHeight : floatHeight;
 
+  const parentGradeLookId = useMemo(() => {
+    if (!parent) return undefined;
+    return resolveFeedGradeLookId({
+      videoLookId: parent.videoLookId,
+      moodPreset: parent.moodPreset,
+    });
+  }, [parent]);
+
+  const parentGradeTint = useMemo(
+    () => (parentGradeLookId ? tintForLook(parentGradeLookId) : null),
+    [parentGradeLookId],
+  );
+
   return (
     <View style={shellStyle} pointerEvents="none">
       {showVideo ? (
@@ -201,14 +238,23 @@ export function DuetParentPreview({
           active={isActive}
           muted={referenceMuted}
           playbackRate={playbackRate}
+          lookId={parentGradeLookId}
         />
       ) : posterUri ? (
-        <Image
-          source={{ uri: posterUri }}
-          style={{ width: innerW, height: innerH }}
-          contentFit="cover"
-          {...pulseImageListThumbProps}
-        />
+        <View style={{ width: innerW, height: innerH }}>
+          <Image
+            source={{ uri: posterUri }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="cover"
+            {...pulseImageListThumbProps}
+          />
+          {parentGradeTint ? (
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: parentGradeTint, zIndex: 2 }]}
+            />
+          ) : null}
+        </View>
       ) : (
         <View style={[styles.ph, { width: innerW, height: innerH }]} />
       )}

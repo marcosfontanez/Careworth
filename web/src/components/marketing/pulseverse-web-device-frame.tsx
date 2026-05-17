@@ -49,7 +49,7 @@ export function PulseverseWebDeviceFrame({
     return (
       <div
         className={cn(
-          "mx-auto max-w-lg rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-10 text-center",
+          "mx-auto max-w-lg rounded-2xl border border-white/10 bg-white/3 px-6 py-10 text-center",
           className,
         )}
       >
@@ -75,15 +75,15 @@ export function PulseverseWebDeviceFrame({
             }}
           >
             <div
-              className="pointer-events-none absolute -left-px top-[5.5rem] z-20 h-10 w-[3px] rounded-r bg-gradient-to-b from-zinc-600 to-zinc-800"
+              className="pointer-events-none absolute -left-px top-[5.5rem] z-20 h-10 w-[3px] rounded-r bg-linear-to-b from-zinc-600 to-zinc-800"
               aria-hidden
             />
             <div
-              className="pointer-events-none absolute -left-px top-[8.25rem] z-20 h-16 w-[3px] rounded-r bg-gradient-to-b from-zinc-600 to-zinc-800"
+              className="pointer-events-none absolute -left-px top-[8.25rem] z-20 h-16 w-[3px] rounded-r bg-linear-to-b from-zinc-600 to-zinc-800"
               aria-hidden
             />
             <div
-              className="pointer-events-none absolute -right-px top-[6.5rem] z-20 h-[4.5rem] w-[3px] rounded-l bg-gradient-to-b from-zinc-600 to-zinc-800"
+              className="pointer-events-none absolute -right-px top-[6.5rem] z-20 h-[4.5rem] w-[3px] rounded-l bg-linear-to-b from-zinc-600 to-zinc-800"
               aria-hidden
             />
 
@@ -96,7 +96,7 @@ export function PulseverseWebDeviceFrame({
               }}
             >
               <div
-                className="pointer-events-none absolute left-1/2 top-3 z-10 h-7 w-[108px] -translate-x-1/2 rounded-full bg-black/95 shadow-inner shadow-black/80 ring-1 ring-white/[0.07]"
+                className="pointer-events-none absolute left-1/2 top-3 z-10 h-7 w-[108px] -translate-x-1/2 rounded-full bg-black/95 shadow-inner shadow-black/80 ring-1 ring-white/7"
                 aria-hidden
               />
 

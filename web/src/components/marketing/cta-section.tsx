@@ -24,7 +24,7 @@ export function CtaSection({
   return (
     <section className="py-16 sm:py-20">
       <div className={marketingGutterX}>
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0c1f4a] via-primary to-[#00a8cc] p-px shadow-[0_24px_80px_-24px_rgba(45,127,249,0.45)]">
+        <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-[#0c1f4a] via-primary to-[#00a8cc] p-px shadow-[0_24px_80px_-24px_rgba(45,127,249,0.45)]">
           <div className="relative overflow-hidden rounded-[calc(1.5rem-1px)] bg-[rgba(5,10,20,0.93)] px-8 py-12 sm:px-14 sm:py-14">
             <div
               className="pointer-events-none absolute inset-0 opacity-40"

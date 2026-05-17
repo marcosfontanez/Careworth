@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import type { Post, ProfileUpdate } from '@/types';
 import { MyPulseCardShell } from './MyPulseCardShell';
 import { communitiesService } from '@/services/supabase';
 import { feedService } from '@/services/feed';
+import { FeedGradeTintOverlay, feedGradeTintFromPost } from '@/components/mypage/RecentMediaThumb';
 
 function thumbFromPost(post: Post | null | undefined): string | null {
   if (!post) return null;
@@ -27,6 +28,8 @@ interface Props {
   update: ProfileUpdate;
   /** Thumbnail from the linked feed post (when the pin references `linkedPostId`). */
   linkedPostMediaUrl?: string | null;
+  /** Full post when resolved — used for grade tint on the pin preview only. */
+  linkedPost?: Post;
   onDelete?: () => Promise<void> | void;
   readOnly?: boolean;
   onPress?: () => void;
@@ -42,6 +45,7 @@ interface Props {
 export function MyPulseCircleCard({
   update: u,
   linkedPostMediaUrl,
+  linkedPost,
   onDelete,
   onTogglePin,
   readOnly,
@@ -85,6 +89,11 @@ export function MyPulseCircleCard({
   const memberCount = circleMeta?.memberCount;
   const showFeatured = circleMeta?.featuredOrder != null;
 
+  const circlePinTint = useMemo(() => {
+    if (!linkedPost || !pinThumb || previewUri !== pinThumb) return null;
+    return feedGradeTintFromPost(linkedPost);
+  }, [linkedPost, pinThumb, previewUri]);
+
   return (
     <MyPulseCardShell
       displayType="circle"
@@ -104,12 +113,15 @@ export function MyPulseCircleCard({
       <View style={styles.circleRow}>
         <View style={styles.previewRing}>
           {previewUri ? (
-            <Image
-              source={{ uri: previewUri }}
-              style={styles.previewImg}
-              contentFit="cover"
-              {...pulseImageListThumbProps}
-            />
+            <>
+              <Image
+                source={{ uri: previewUri }}
+                style={styles.previewImg}
+                contentFit="cover"
+                {...pulseImageListThumbProps}
+              />
+              <FeedGradeTintOverlay tint={circlePinTint} />
+            </>
           ) : (
             <View style={styles.previewFallback}>
               <Ionicons name="people" size={28} color={`${ACCENT}99`} />

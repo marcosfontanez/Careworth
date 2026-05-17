@@ -44,7 +44,7 @@ export function MarketingExpandableMedia({
           onClick={() => setOpen(true)}
           className={cn(
             "absolute inset-0 z-[38] cursor-zoom-in rounded-[inherit] border-0 bg-transparent p-0",
-            "transition-colors duration-200 hover:bg-white/[0.05]",
+            "transition-colors duration-200 hover:bg-white/5",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(5,10,20,0.92)]",
           )}
           aria-label={`Open larger view: ${alt}`}

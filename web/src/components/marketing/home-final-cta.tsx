@@ -19,7 +19,7 @@ export function HomeFinalCta({ locale }: { locale: Locale }) {
         <div
           className={cn(
             "relative overflow-hidden rounded-[1.75rem] p-px",
-            "bg-gradient-to-r from-[#0c1f4a] via-primary to-[#00a8cc]",
+            "bg-linear-to-r from-[#0c1f4a] via-primary to-[#00a8cc]",
             "shadow-[0_30px_90px_-24px_rgba(45,127,249,0.55)]",
           )}
         >
@@ -59,7 +59,7 @@ export function HomeFinalCta({ locale }: { locale: Locale }) {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="h-12 rounded-full border-white/25 bg-transparent px-7 font-semibold text-foreground hover:bg-white/[0.06]"
+                    className="h-12 rounded-full border-white/25 bg-transparent px-7 font-semibold text-foreground hover:bg-white/6"
                     asChild
                   >
                     <MarketingDestinationLink href="/contact" analyticsSource="home_bottom_secondary">

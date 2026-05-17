@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,8 @@ import { colors, borderRadius, layout, typography, pulseverse, shadows } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { useShopCatalog, useSparkWallet, useShopRefetchers, useSparkBalanceNumber, useShopDerived } from '@/hooks/useShopEconomy';
 import { purchaseService } from '@/services/shop/purchaseService';
-import type { ShopItemRow } from '@/lib/shop/types';
+import { shopQueriesService } from '@/services/shop/shopQueries';
+import type { GiftContext, ShopItemRow } from '@/lib/shop/types';
 import {
   CREATOR_GIFT_TIER_META,
   CREATOR_GIFT_TIER_ORDER,
@@ -29,10 +31,16 @@ import {
 import { CreatorGiftOrb } from '@/components/shop/CreatorGiftOrb';
 import { analytics } from '@/lib/analytics';
 import { shopErrorHint } from '@/lib/shop/shopErrors';
-import { useToast } from '@/components/ui/Toast';
 import { ShopResultModal } from '@/components/shop/ShopResultModal';
 
+/** Matches economy RPC `p_context_type` (`live` = `/live/:id`). Receipt metadata may use reason `live_stream`. */
 export type CreatorGiftContext = 'live' | 'post' | 'profile';
+
+function giftContextSurfaceLabel(c: GiftContext): string {
+  if (c === 'live') return 'Live';
+  if (c === 'post') return 'Posts';
+  return 'Profiles';
+}
 
 type Props = {
   visible: boolean;
@@ -57,7 +65,6 @@ export function SendCreatorGiftTray({
   onSent,
 }: Props) {
   const router = useRouter();
-  const toast = useToast((s) => s.show);
   const { user: authUser } = useAuth();
   const userId = authUser?.id;
   const catalogQ = useShopCatalog();
@@ -69,8 +76,27 @@ export function SendCreatorGiftTray({
   const [picked, setPicked] = useState<ShopItemRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const [celebration, setCelebration] = useState<{ title: string; message: string } | null>(null);
+  /** Success modal open — hides sheet Modal so it stacks above (RN Modal order). */
+  const [sentCelebrationOpen, setSentCelebrationOpen] = useState(false);
+  const [sentGiftName, setSentGiftName] = useState<string | null>(null);
   const [giftTierFilter, setGiftTierFilter] = useState<GiftTierFilter>('all');
+
+  const recipientDisplay = useMemo(() => {
+    const name = creatorDisplayName?.trim();
+    if (name) return name;
+    const h = creatorHandle?.trim();
+    if (h) return `@${h}`;
+    return 'This creator';
+  }, [creatorDisplayName, creatorHandle]);
+
+  const senderGiftContextNavigate = useMemo(() => {
+    const id = contextId?.trim();
+    if (!id) return null;
+    if (contextType === 'post') return { label: 'View post', href: `/post/${id}` } as const;
+    if (contextType === 'profile') return { label: 'View profile', href: `/profile/${id}` } as const;
+    if (contextType === 'live') return { label: 'View live', href: `/live/${encodeURIComponent(id)}` } as const;
+    return null;
+  }, [contextType, contextId]);
 
   useEffect(() => {
     if (visible && userId) {
@@ -83,7 +109,8 @@ export function SendCreatorGiftTray({
       setPicked(null);
       setConfirmOpen(false);
       setSending(false);
-      setCelebration(null);
+      setSentCelebrationOpen(false);
+      setSentGiftName(null);
       setGiftTierFilter('all');
     }
   }, [visible]);
@@ -111,6 +138,15 @@ export function SendCreatorGiftTray({
     return giftsByTier.get(giftTierFilter) ?? [];
   }, [giftTierFilter, giftsByTier, sortedGifts]);
 
+  const goGetSparks = useCallback(() => {
+    analytics.track('insufficient_sparks_prompt_shown', {
+      action: 'get_sparks_cta',
+      surface: 'creator_gift_tray',
+    });
+    handleClose();
+    router.push('/pulse-shop?tab=sparks' as any);
+  }, [handleClose, router]);
+
   const openConfirm = (g: ShopItemRow) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const price = g.spark_price ?? 0;
@@ -120,20 +156,57 @@ export function SendCreatorGiftTray({
         have: sparks,
         surface: 'creator_gift_tray',
       });
-      toast(`You need ${price.toLocaleString()} Sparks. Top up in Pulse Shop.`, 'error');
+      /** RN Modal sits above {@link ToastContainer} — Alert is visible on top. */
+      Alert.alert(
+        'Not enough Sparks',
+        `You need ${price.toLocaleString()} Sparks. You have ${Math.max(0, sparks).toLocaleString()}.`,
+        [
+          { text: 'OK', style: 'cancel' },
+          { text: 'Get Sparks', onPress: goGetSparks },
+        ],
+      );
       return;
     }
     setPicked(g);
     setConfirmOpen(true);
   };
 
+  const onGiftRowPress = (g: ShopItemRow, contexts: GiftContext[], allowed: boolean) => {
+    if (sending) return;
+    if (!allowed) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      const where =
+        contexts.length > 0
+          ? contexts.map((c) => giftContextSurfaceLabel(c)).join(' · ')
+          : 'Live · Posts · Profiles';
+      Alert.alert(
+        'Not available here',
+        `This gift can only be sent from: ${where}. Open one of their posts or a live stream to send it.`,
+      );
+      return;
+    }
+    openConfirm(g);
+  };
+
   const sendGift = async () => {
-    if (!picked || !userId) return;
+    const gift = picked;
+    if (!gift || !userId) return;
     setSending(true);
     try {
+      try {
+        await shopQueriesService.ensureWallets(userId);
+      } catch (wErr) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert(
+          'Could not send gift',
+          wErr instanceof Error ? wErr.message : 'Wallet setup failed. Try again after signing in.',
+        );
+        return;
+      }
+
       const idem = Crypto.randomUUID();
       const res = await purchaseService.sendCreatorGift({
-        giftItem: picked,
+        giftItem: gift,
         creatorUserId,
         contextType,
         contextId,
@@ -141,41 +214,33 @@ export function SendCreatorGiftTray({
       });
       if (!res.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        toast(shopErrorHint(res.code) || res.message, 'error');
+        Alert.alert('Could not send gift', shopErrorHint(res.code) || res.message);
         return;
       }
+      setConfirmOpen(false);
+      setPicked(null);
+      setSentGiftName(gift.name);
       await refreshAfterPurchase();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       analytics.track('gift_sent', {
-        gift_id: picked.id,
+        gift_id: gift.id,
         creator_id: creatorUserId,
         context_type: contextType,
         context_id: contextId,
-        sparks: picked.spark_price,
+        sparks: gift.spark_price,
       });
-      setCelebration({
-        title: 'Gift delivered',
-        message: `You sent ${picked.name} with Sparks.${creatorDisplayName ? ` Thanks for supporting ${creatorDisplayName}.` : ''} Your balance is updated.`,
-      });
+      setSentCelebrationOpen(true);
     } finally {
       setSending(false);
     }
   };
 
   const finishCelebration = useCallback(() => {
-    setCelebration(null);
+    setSentCelebrationOpen(false);
+    setSentGiftName(null);
     onSent?.();
     handleClose();
   }, [handleClose, onSent]);
-
-  const goGetSparks = () => {
-    analytics.track('insufficient_sparks_prompt_shown', {
-      action: 'get_sparks_cta',
-      surface: 'creator_gift_tray',
-    });
-    handleClose();
-    router.push('/pulse-shop?tab=sparks' as any);
-  };
 
   const ctxLabel =
     contextType === 'live' ? 'Live' : contextType === 'post' ? 'Post' : 'Profile';
@@ -183,12 +248,12 @@ export function SendCreatorGiftTray({
   return (
     <>
       <Modal
-        visible={visible}
+        visible={visible && !sentCelebrationOpen}
         animationType="slide"
         transparent
-        onRequestClose={sending || celebration ? () => undefined : handleClose}
+        onRequestClose={sending || sentCelebrationOpen ? () => undefined : handleClose}
       >
-        <Pressable style={styles.backdrop} onPress={sending || celebration ? undefined : handleClose}>
+        <Pressable style={styles.backdrop} onPress={sending || sentCelebrationOpen ? undefined : handleClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
             colors={['#A78BFA', pulseverse.electric]}
@@ -285,7 +350,7 @@ export function SendCreatorGiftTray({
                     {visibleTrayGifts.map((g) => {
                     const price = g.spark_price ?? 0;
                     const short = sparks < price;
-                    const contexts = g.gift_contexts ?? [];
+                    const contexts = (g.gift_contexts ?? []) as GiftContext[];
                     const allowed = contexts.length === 0 || contexts.includes(contextType);
                     const tier = creatorGiftTierForItem(g);
                     return (
@@ -296,8 +361,8 @@ export function SendCreatorGiftTray({
                           !allowed && styles.giftRowDisabled,
                           { borderLeftColor: CREATOR_GIFT_TIER_META[tier].cardAccent },
                         ]}
-                        disabled={!allowed || sending}
-                        onPress={() => allowed && openConfirm(g)}
+                        disabled={sending}
+                        onPress={() => onGiftRowPress(g, contexts, allowed)}
                         activeOpacity={0.88}
                       >
                         <View style={styles.giftOrb}>
@@ -370,10 +435,16 @@ export function SendCreatorGiftTray({
       </Pressable>
     </Modal>
     <ShopResultModal
-      visible={!!celebration}
+      visible={sentCelebrationOpen}
       variant="success"
-      title={celebration?.title ?? ''}
-      message={celebration?.message}
+      title="Gift sent"
+      message={`You sent ${sentGiftName ?? 'a gift'} with Sparks. Your balance is updated.`}
+      pulseCelebration={{
+        kind: 'gift_sent',
+        recipient: recipientDisplay,
+        sentKind: 'creator_sparks',
+        contextNavigate: senderGiftContextNavigate,
+      }}
       secondaryLabel="Done"
       onClose={finishCelebration}
     />

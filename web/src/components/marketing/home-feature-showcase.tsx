@@ -35,7 +35,7 @@ export function HomeFeatureShowcase({ locale }: { locale: Locale }) {
 
         <ul
           className={cn(
-            "mt-12 grid grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-3 ring-1 ring-white/[0.04] backdrop-blur-md",
+            "mt-12 grid grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-3 ring-1 ring-white/4 backdrop-blur-md",
             "sm:grid-cols-3 sm:p-4 lg:grid-cols-6 lg:gap-2",
             "shadow-[0_24px_70px_-30px_rgba(20,184,166,0.30)]",
           )}
@@ -53,7 +53,7 @@ export function HomeFeatureShowcase({ locale }: { locale: Locale }) {
                 ? "bg-[rgba(229,184,75,0.10)] ring-[rgba(229,184,75,0.30)]"
                 : tile.tone === "blue"
                   ? "bg-primary/10 ring-primary/30"
-                  : "bg-[var(--accent)]/10 ring-[var(--accent)]/30";
+                  : "bg-accent/10 ring-[var(--accent)]/30";
             const Icon = tile.icon;
             return (
               <li key={tile.id}>
@@ -61,7 +61,7 @@ export function HomeFeatureShowcase({ locale }: { locale: Locale }) {
                   href={tile.href}
                   className={cn(
                     "group relative flex h-full items-center gap-3 rounded-xl px-3 py-3 transition",
-                    "hover:bg-white/[0.04]",
+                    "hover:bg-white/4",
                   )}
                 >
                   <span

@@ -21,6 +21,8 @@ import {
   postHasDemoCatalogMedia,
 } from '@/utils/postPreviewMedia';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
+import { resolveFeedGradeLookId } from '@/lib/moodPresets';
+import { tintForLook } from '@/lib/videoFilters';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 type ThumbStyle = StyleProp<ImageStyle | ViewStyle>;
@@ -29,6 +31,25 @@ type ThumbStyle = StyleProp<ImageStyle | ViewStyle>;
 const FALLBACK_THUMB_CSS = { w: 118, h: 168 };
 
 export type HubTileLayoutCss = { w: number; h: number };
+
+/** Feed-aligned tint RGBA for a post’s persisted grade / mood look — reusable outside tiles. */
+export function feedGradeTintFromPost(post: Post): string | null {
+  const id = resolveFeedGradeLookId({
+    videoLookId: post.videoLookId,
+    moodPreset: post.moodPreset,
+  });
+  return id ? tintForLook(id) : null;
+}
+
+export function FeedGradeTintOverlay({ tint }: { tint: string | null }) {
+  if (!tint) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFillObject, { backgroundColor: tint, zIndex: 3 }]}
+    />
+  );
+}
 
 /**
  * Grid tile image: prefer Supabase **transform** URLs (correct size + `resize=cover`
@@ -290,16 +311,38 @@ export function RecentMediaThumb({
     );
   }
 
+  const gradeTint = feedGradeTintFromPost(post);
+
   if (post.type === 'video') {
     const poster = pickAbCoverUrl(post);
     if (poster && !isDemoCatalogMediaUrl(poster)) {
-      return <HubTileImage uri={poster} style={style} layoutSizeCss={hubTileCss} contentFit={hubImageContentFit} />;
+      return (
+        <View style={[style, styles.thumbShell]}>
+          <HubTileImage
+            uri={poster}
+            style={StyleSheet.absoluteFillObject}
+            layoutSizeCss={hubTileCss}
+            contentFit={hubImageContentFit}
+          />
+          <FeedGradeTintOverlay tint={gradeTint} />
+        </View>
+      );
     }
   }
 
   const staticUri = postStaticImagePreviewUri(post);
   if (staticUri) {
-    return <HubTileImage uri={staticUri} style={style} layoutSizeCss={hubTileCss} contentFit={hubImageContentFit} />;
+    return (
+      <View style={[style, styles.thumbShell]}>
+        <HubTileImage
+          uri={staticUri}
+          style={StyleSheet.absoluteFillObject}
+          layoutSizeCss={hubTileCss}
+          contentFit={hubImageContentFit}
+        />
+        <FeedGradeTintOverlay tint={gradeTint} />
+      </View>
+    );
   }
 
   if (post.type === 'image') {
@@ -307,7 +350,17 @@ export function RecentMediaThumb({
     for (const raw of candidates) {
       const m = raw?.trim();
       if (m && !isDemoCatalogMediaUrl(m)) {
-        return <HubTileImage uri={m} style={style} layoutSizeCss={hubTileCss} contentFit={hubImageContentFit} />;
+        return (
+          <View style={[style, styles.thumbShell]}>
+            <HubTileImage
+              uri={m}
+              style={StyleSheet.absoluteFillObject}
+              layoutSizeCss={hubTileCss}
+              contentFit={hubImageContentFit}
+            />
+            <FeedGradeTintOverlay tint={gradeTint} />
+          </View>
+        );
       }
     }
   }
@@ -330,6 +383,7 @@ export function RecentMediaThumb({
       return (
         <View style={[style, styles.videoTile]}>
           <WebVideoGridPoster publicUrl={v} />
+          <FeedGradeTintOverlay tint={gradeTint} />
           <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );
@@ -349,6 +403,7 @@ export function RecentMediaThumb({
             layoutSizeCss={hubTileCss}
             contentFit={hubImageContentFit}
           />
+          <FeedGradeTintOverlay tint={gradeTint} />
           <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );
@@ -356,6 +411,7 @@ export function RecentMediaThumb({
     return (
       <View style={[style, styles.videoTile]}>
         <PausedVideoFrame publicUrl={v} style={StyleSheet.absoluteFillObject} contentFit="contain" />
+        <FeedGradeTintOverlay tint={gradeTint} />
         <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
       </View>
     );
@@ -373,6 +429,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark.cardAlt,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  thumbShell: {
+    overflow: 'hidden',
   },
   videoTile: {
     backgroundColor: '#0a0b0f',

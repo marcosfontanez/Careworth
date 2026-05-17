@@ -37,7 +37,7 @@ export function FeatureLiveLanding() {
             </p>
             <h1 className="mt-6 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
               Go live with the{" "}
-              <span className="bg-gradient-to-r from-primary via-[#4d9fff] to-[var(--accent)] bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-primary via-[#4d9fff] to-accent bg-clip-text text-transparent">
                 healthcare
               </span>{" "}
               world.
@@ -53,7 +53,7 @@ export function FeatureLiveLanding() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/[0.04] px-7 font-semibold">
+              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/4 px-7 font-semibold">
                 <Link href="/features">Explore Live</Link>
               </Button>
             </div>
@@ -74,7 +74,7 @@ export function FeatureLiveLanding() {
 
           <div className="relative">
             <div className="rounded-2xl border border-white/10 bg-[rgba(5,10,20,0.85)] p-1 shadow-[0_24px_80px_-24px_rgba(45,127,249,0.35)] ring-1 ring-primary/20 backdrop-blur-md">
-              <div className="relative aspect-video overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 to-slate-950">
+              <div className="relative aspect-video overflow-hidden rounded-xl bg-linear-to-br from-slate-900 to-slate-950">
                 <div className="absolute inset-0 flex items-center justify-center text-center">
                   <div>
                     <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
@@ -96,10 +96,10 @@ export function FeatureLiveLanding() {
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 px-2 pb-2 sm:grid-cols-3">
-                <div className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[10px] text-muted-foreground">
+                <div className="rounded-lg border border-white/10 bg-white/4 p-2 text-[10px] text-muted-foreground">
                   Q&amp;A · top questions
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[10px] text-muted-foreground">
+                <div className="rounded-lg border border-white/10 bg-white/4 p-2 text-[10px] text-muted-foreground">
                   Chat · moderated
                 </div>
                 <div className="hidden rounded-lg border border-violet-500/25 bg-violet-500/10 p-2 text-[10px] text-violet-100 sm:block">
@@ -122,7 +122,7 @@ export function FeatureLiveLanding() {
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {liveFeaturedSessions.map((s) => (
             <div key={s.title} className={cn("overflow-hidden rounded-2xl border border-white/10", marketingCardMuted)}>
-              <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", s.thumbClass)}>
+              <div className={cn("relative aspect-video overflow-hidden bg-linear-to-br", s.thumbClass)}>
                 <div
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(255,255,255,0.12),transparent_55%)]"
@@ -204,7 +204,7 @@ export function FeatureLiveLanding() {
               {liveTopicBrowse.map((c) => (
                 <div
                   key={c.title}
-                  className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-primary/35"
+                  className="rounded-xl border border-white/10 bg-white/3 p-3 transition hover:border-primary/35"
                 >
                   <Radio className="h-4 w-4 text-primary" />
                   <p className="mt-2 text-xs font-semibold text-foreground">{c.title}</p>
@@ -230,7 +230,7 @@ export function FeatureLiveLanding() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 sm:gap-10">
+        <div className="mt-14 flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-white/10 bg-white/3 px-6 py-8 sm:gap-10">
           {[
             { bold: "25K+", sub: "Live sessions hosted" },
             { bold: "3.7M+", sub: "Live views" },

@@ -13,6 +13,7 @@ import { sharePost, shareToMyPulseAsClip } from '@/lib/share';
 import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
 import { useToast } from '@/components/ui/Toast';
 import type { Post } from '@/types';
+import { canRemixVideoPost, pushVideoRemixRoute } from '@/lib/videoRemixNavigation';
 
 interface Props {
   post: Post | null;
@@ -25,14 +26,13 @@ interface Props {
 }
 
 function remixActionsForPost(post: Post) {
-  if (post.isAnonymous) return [] as const;
-  if (post.type !== 'video') return [] as const;
-  const hasMedia = Boolean(post.mediaUrl?.trim() || post.thumbnailUrl?.trim());
-  if (!hasMedia) return [] as const;
+  if (!canRemixVideoPost(post)) return [] as const;
   return [
     { icon: 'musical-notes' as const, label: 'Use sound', key: 'useSound' as const, color: colors.primary.gold },
     { icon: 'git-branch-outline' as const, label: 'Duet', key: 'duet' as const, color: colors.primary.teal },
-    { icon: 'film-outline' as const, label: 'Video composer', key: 'composer' as const, color: '#FFF' },
+    { icon: 'git-merge-outline' as const, label: 'Stitch', key: 'stitch' as const, color: colors.primary.teal },
+    { icon: 'layers-outline' as const, label: 'B-roll', key: 'stitchBroll' as const, color: colors.primary.gold },
+    { icon: 'film-outline' as const, label: 'Full editor', key: 'composer' as const, color: '#FFF' },
   ] as const;
 }
 
@@ -66,19 +66,25 @@ export function LongPressMenu({
   const handleAction = async (key: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     switch (key) {
-      case 'useSound': {
-        const soundPageId = post.soundSourcePostId?.trim() || post.id;
+      case 'useSound':
         onClose();
-        router.push(`/create/video?soundPostId=${encodeURIComponent(soundPageId)}`);
+        pushVideoRemixRoute(router, post, 'useSound');
         break;
-      }
       case 'duet':
         onClose();
-        router.push(`/create/video-camera?duetPostId=${encodeURIComponent(post.id)}`);
+        pushVideoRemixRoute(router, post, 'duet');
+        break;
+      case 'stitch':
+        onClose();
+        pushVideoRemixRoute(router, post, 'stitch');
+        break;
+      case 'stitchBroll':
+        onClose();
+        pushVideoRemixRoute(router, post, 'stitchBroll');
         break;
       case 'composer':
         onClose();
-        router.push('/create/video');
+        pushVideoRemixRoute(router, post, 'composer');
         break;
       case 'save':
         onSave();

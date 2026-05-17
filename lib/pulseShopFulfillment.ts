@@ -94,12 +94,18 @@ export async function invokePulseShopFulfillment<T extends Record<string, unknow
 
   const json = (await res.json().catch(() => null)) as unknown;
   const parsed = parsePulseShopFulfillmentJson(json);
-  if (!parsed.ok && parsed.error.code === 'FULFILLMENT_FAILED' && json === null) {
+  const bodyWasNotJson = json === null;
+
+  if (!parsed.ok && parsed.error.code === 'FULFILLMENT_FAILED' && bodyWasNotJson) {
+    const deployHint =
+      res.status === 404
+        ? ' Deploy the pulse-shop-fulfillment Edge Function (Supabase Dashboard → Edge Functions, or `npx supabase functions deploy pulse-shop-fulfillment`). Also confirm EXPO_PUBLIC_SUPABASE_URL is your project root (e.g. https://xxxx.supabase.co) with no extra path.'
+        : '';
     return {
       ok: false,
       error: {
         code: 'FULFILLMENT_FAILED',
-        message: `Invalid response (${res.status})`,
+        message: `Could not reach Pulse Shop fulfillment (HTTP ${res.status}).${deployHint}`,
         details: null,
       },
     };

@@ -46,6 +46,7 @@ import { BeforeAfterPreview, BeforeAfterToggle } from '@/components/create/Befor
 import { MoodPresetPicker } from '@/components/create/MoodPresetPicker';
 import { SmartCoverHint } from '@/components/create/SmartCoverHint';
 import { LayoutTemplatePicker, type PhotoLayoutPreset } from '@/components/create/LayoutTemplatePicker';
+import { PreviewOnlyCallout } from '@/components/create/PreviewOnlyCallout';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SLIDE_W = SCREEN_W - 32;
@@ -580,7 +581,11 @@ export default function CreateImageScreen() {
           </View>
         ) : images.length > 0 ? (
           <View style={{ borderRadius: 12 }}>
-          <View
+            <PreviewOnlyCallout
+              title="Preview only — feed shows plain photos"
+              body="Frames, layout guides, color-match tints, and brand backdrop are composer previews. Followers see standard carousel images until feed rendering adds these treatments."
+            />
+            <View
             style={[
               brandBackdrop && brandKit?.primary
                 ? {
@@ -768,6 +773,9 @@ export default function CreateImageScreen() {
 
         <View style={styles.proPanel}>
           <Text style={styles.proLabel}>Creator tools</Text>
+          <Text style={styles.proTruthHint}>
+            Mood presets apply hashtags/filters you keep; frames & layout guides above stay preview-only for the feed carousel.
+          </Text>
           <TouchableOpacity style={styles.toolLink} onPress={() => setBrandKitOpen(true)} activeOpacity={0.85}>
             <Ionicons name="color-wand" size={18} color={colors.primary.teal} />
             <Text style={styles.toolLinkText}>Edit brand kit (scrubs colors &amp; logo)</Text>
@@ -980,6 +988,7 @@ const styles = StyleSheet.create({
     borderColor: colors.dark.border,
   },
   proLabel: { fontSize: 14, fontWeight: '800', color: colors.dark.text },
+  proTruthHint: { fontSize: 11, lineHeight: 15, color: colors.dark.textMuted, marginBottom: 6 },
   toolLink: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 10, paddingHorizontal: 10,
