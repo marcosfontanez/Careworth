@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { DashboardExportButton, type DashboardExportSnapshot } from "@/components/admin/dashboard-export-button";
+import { DashboardExportButton, type DashboardExportSnapshotInput } from "@/components/admin/dashboard-export-button";
 import {
   AudienceDonutChart,
   EngagementOverviewChart,
@@ -151,7 +151,7 @@ export default async function AdminDashboardPage() {
     },
   ];
 
-  const exportSnapshot: DashboardExportSnapshot = {
+  const exportSnapshot: DashboardExportSnapshotInput = {
     exportedAt: new Date().toISOString(),
     kpis: kpiRow.map((k) => ({ key: k.key, label: k.label, value: k.value, delta: k.delta })),
     counts: {
@@ -184,7 +184,7 @@ export default async function AdminDashboardPage() {
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Dashboard" }]}
         title="Admin dashboard"
-        description="Overview of platform health, engagement, and operations from Supabase."
+        description="Day-to-day command surface — staffing cues, queues, live/incident cues. Strategy graphs live under Insights / Partnership routes."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span className="hidden rounded-lg border border-white/10 bg-white/3 px-3 py-1.5 text-xs text-muted-foreground md:inline">
@@ -192,7 +192,7 @@ export default async function AdminDashboardPage() {
             </span>
             <DashboardExportButton snapshot={exportSnapshot} />
             <Button size="sm" variant="outline" className="border-white/15" asChild>
-              <Link href="/admin/advertisers">Partner metrics</Link>
+              <Link href="/admin/advertisers">Advertisers</Link>
             </Button>
             <Button size="sm" variant="outline" className="border-white/15" asChild>
               <Link href="/admin/merchandising">Shop &amp; borders</Link>

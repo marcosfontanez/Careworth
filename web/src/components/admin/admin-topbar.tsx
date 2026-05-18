@@ -45,7 +45,7 @@ export function AdminTopbar({
   }, [notifOpen]);
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border bg-[rgba(5,10,20,0.72)] px-4 backdrop-blur-md md:gap-6 md:px-6">
+    <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border bg-[rgba(5,10,20,0.72)] px-4 backdrop-blur-md print:hidden md:gap-6 md:px-6">
       <nav
         className="mx-auto flex w-full max-w-2xl min-w-0 flex-1 flex-wrap items-center justify-center gap-1.5 sm:justify-start"
         aria-label="Quick navigation"
@@ -54,7 +54,7 @@ export function AdminTopbar({
           [
             ["/admin/moderation", "Moderation"],
             ["/admin/users", "Users"],
-            ["/admin/advertisers", "Partner metrics"],
+            ["/admin/advertisers", "Advertisers"],
             ["/admin/insights", "Insights"],
           ] as const
         ).map(([href, label]) => (

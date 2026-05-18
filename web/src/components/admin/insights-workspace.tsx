@@ -124,7 +124,7 @@ export function InsightsWorkspace({
         <p className="text-sm leading-relaxed text-muted-foreground">
           Brand-planner view: reach proxies, funnels, inventory, and content performance. Figures use Supabase rollups
           with documented caps; treat reach as directional unless you widen samples in SQL. For a full-page layout with
-          outreach copy, open <span className="font-medium text-foreground">Partner metrics</span> in the sidebar.
+          outreach copy, open <span className="font-medium text-foreground">Advertiser overview</span> in the sidebar.
         </p>
         <AdvertiserEngagementDashboard payload={advertiserEngagement} />
         <AdminPanelCard>

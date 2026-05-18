@@ -61,11 +61,25 @@ export type AdvertiserContentHealth = {
   shareOfEngagementPct: string;
 };
 
+export type AdminDataAccessMode = "service_role" | "session_rls";
+
+/** How sponsored metrics relate to the selected analytics window. */
+export type AdvertiserCampaignMetricScope = "lifetime_row_totals";
+
 export type AdvertiserEngagementPayload = {
   windowDays: number;
+  cohortMinCount: number;
   generatedAt: string;
+  dataAccess: AdminDataAccessMode;
+  campaignMetricsScope: AdvertiserCampaignMetricScope;
   /** Sampling caps applied (for footnotes) */
-  caps: { analyticsRows: number; postsSample: number; profilesGeoSample: number };
+  caps: {
+    analyticsRows: number;
+    postsSample: number;
+    profilesGeoSample: number;
+    profilesRoleSample: number;
+    postViewsSample: number;
+  };
   kpis: { label: string; value: string; hint?: string }[];
   daily: AdvertiserDailyPoint[];
   topEventNames: AdvertiserNamedCount[];
@@ -74,6 +88,8 @@ export type AdvertiserEngagementPayload = {
   topPosts: AdvertiserTopPost[];
   topStates: AdvertiserNamedCount[];
   topSpecialties: AdvertiserNamedCount[];
+  /** Role distribution from a capped profile sample (privacy-safe aggregates). */
+  roleMix: AdvertiserNamedCount[];
   circlesInventory: { name: string; members: number; posts: number }[];
   campaignRollup: AdvertiserCampaignRollup;
   /** Content type mix (post.type) in window */
@@ -81,4 +97,12 @@ export type AdvertiserEngagementPayload = {
   periodComparison: AdvertiserPeriodComparison;
   campaignLeaderboard: AdvertiserCampaignLeaderboardRow[];
   contentHealth: AdvertiserContentHealth;
+  registrationGrowth: { rolling7d: number; rolling30d: number; rolling90d: number };
+  registeredUsersTotal: number | null;
+  activeCreatorsCount: number | null;
+  /** Sum of view_count on a capped set of posts created in-window */
+  postViewsSumSample: number | null;
+  distinctUsersAnalyticsSample: number;
+  /** Known gaps — shown explicitly instead of implying coverage */
+  notInstrumented: string[];
 };

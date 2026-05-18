@@ -2,16 +2,22 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  ClipboardList,
   Flag,
+  ImageDown,
   LayoutDashboard,
   Layers,
+  LineChart,
   Megaphone,
+  MessagesSquare,
   Orbit,
+  Package,
   Radio,
   Scale,
   ScrollText,
   Settings,
   Shield,
+  ShieldAlert,
   ShoppingBag,
   Sparkles,
   TrendingUp,
@@ -56,19 +62,27 @@ const groups: { title: string; items: Item[] }[] = [
       { href: "/admin/moderation", label: "Moderation", icon: Shield },
       { href: "/admin/reports", label: "Reports", icon: Flag },
       { href: "/admin/appeals", label: "Appeals", icon: Scale },
+      { href: "/admin/brand-safety", label: "Brand safety", icon: ShieldAlert },
     ],
   },
   {
-    title: "Engagement",
+    title: "Partnerships & revenue",
     items: [
-      { href: "/admin/advertisers", label: "Partner metrics", icon: TrendingUp },
+      { href: "/admin/advertisers", label: "Advertiser overview", icon: TrendingUp },
+      { href: "/admin/audience-insights", label: "Audience insights", icon: LineChart },
       { href: "/admin/campaigns", label: "Campaigns", icon: Megaphone },
+      { href: "/admin/inventory", label: "Inventory & placements", icon: Package },
       { href: "/admin/creators", label: "Creators", icon: Sparkles },
+      { href: "/admin/leads", label: "Leads / inquiries", icon: MessagesSquare },
+      { href: "/admin/media-kit", label: "Media kit / exports", icon: ImageDown },
     ],
   },
   {
     title: "Settings",
-    items: [{ href: "/admin/settings", label: "Settings", icon: Settings }],
+    items: [
+      { href: "/admin/settings#preferences", label: "Preferences", icon: ClipboardList },
+      { href: "/admin/settings#platform-controls", label: "Platform controls", icon: Settings },
+    ],
   },
 ];
 
@@ -81,8 +95,14 @@ export function AdminSidebar({
   pendingAppealsCount?: number;
   health: AdminHealthStrip;
 }) {
+  function linkActive(href: string): boolean {
+    const base = href.split("#")[0] ?? href;
+    if (base === "/admin/dashboard") return currentPath === base;
+    return currentPath === base || currentPath.startsWith(`${base}/`);
+  }
+
   return (
-    <aside className="flex w-66 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside className="flex w-66 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground print:hidden">
       <div className="flex min-h-20 items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2">
         <MarketingLogo variant="admin" className="min-w-0" />
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Admin</span>
@@ -96,9 +116,8 @@ export function AdminSidebar({
             <div className="space-y-0.5">
               {group.items.map(({ href, label, icon: Icon, badge: staticBadge }) => {
                 const badge =
-                  href === "/admin/appeals" && pendingAppealsCount > 0 ? pendingAppealsCount : staticBadge;
-                const active =
-                  currentPath === href || (href !== "/admin/dashboard" && currentPath.startsWith(href));
+                  href.startsWith("/admin/appeals") && pendingAppealsCount > 0 ? pendingAppealsCount : staticBadge;
+                const active = linkActive(href);
                 return (
                   <Link
                     key={href}

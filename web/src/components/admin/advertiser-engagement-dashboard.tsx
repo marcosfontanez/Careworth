@@ -33,20 +33,42 @@ function Footnote({ payload }: { payload: AdvertiserEngagementPayload }) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const access =
+    payload.dataAccess === "service_role"
+      ? "Service role server aggregate (full-table totals when the key is configured)."
+      : "Staff session + RLS — totals may omit rows your session cannot read.";
   return (
-    <p className="text-xs leading-relaxed text-muted-foreground">
-      Window: last <span className="text-foreground/90">{payload.windowDays}</span> calendar days (UTC). Analytics
-      capped at <span className="tabular-nums">{formatCount(payload.caps.analyticsRows)}</span> newest rows; post /
-      comment / like / share tallies capped at <span className="tabular-nums">{formatCount(payload.caps.postsSample)}</span>{" "}
-      rows each (including <span className="text-foreground/90">saved_posts</span> bookmarks); geo / specialty from up to{" "}
-      <span className="tabular-nums">{formatCount(payload.caps.profilesGeoSample)}</span> profiles. Daily reach is{" "}
-      <span className="font-medium text-foreground/90">distinct user_ids</span> in the analytics sample (not MAU).{" "}
-      Generated {when}.
-    </p>
+    <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+      <p>
+        <span className="font-medium text-foreground/90">Data path:</span> {access} Sponsored KPIs use{" "}
+        <span className="text-foreground/85">{payload.campaignMetricsScope.replace(/_/g, " ")}</span> (not filtered by
+        this analytics window).
+      </p>
+      <p>
+        Window: last <span className="text-foreground/90">{payload.windowDays}</span> calendar days (UTC). Analytics
+        capped at <span className="tabular-nums">{formatCount(payload.caps.analyticsRows)}</span> newest rows; post /
+        comment / like / share tallies capped at{" "}
+        <span className="tabular-nums">{formatCount(payload.caps.postsSample)}</span> rows each (including{" "}
+        <span className="text-foreground/90">saved_posts</span> bookmarks); geo / specialty from up to{" "}
+        <span className="tabular-nums">{formatCount(payload.caps.profilesGeoSample)}</span> profiles; role mix from up to{" "}
+        <span className="tabular-nums">{formatCount(payload.caps.profilesRoleSample)}</span> profiles; post views summed on ≤{" "}
+        <span className="tabular-nums">{formatCount(payload.caps.postViewsSample)}</span> posts in-window. Daily reach is{" "}
+        <span className="font-medium text-foreground/90">distinct user_ids</span> in the analytics sample (not MAU). Cohort
+        suppression minimum: <span className="tabular-nums text-foreground/90">{payload.cohortMinCount}</span>.
+      </p>
+      <p className="text-[11px]">Generated {when}.</p>
+    </div>
   );
 }
 
-export function AdvertiserEngagementDashboard({ payload }: { payload: AdvertiserEngagementPayload }) {
+export function AdvertiserEngagementDashboard({
+  payload,
+  showTopPosts = true,
+}: {
+  payload: AdvertiserEngagementPayload;
+  /** Hide row-level post previews on privacy-forward surfaces (e.g. audience insights). */
+  showTopPosts?: boolean;
+}) {
   const daily = payload.daily.map((d) => ({
     label: d.date.slice(5),
     events: d.events,
@@ -85,6 +107,25 @@ export function AdvertiserEngagementDashboard({ payload }: { payload: Advertiser
         </div>
         <AdvertiserEngagementExportButtons payload={payload} />
       </div>
+
+      {payload.notInstrumented?.length ? (
+        <AdminPanelCard className="border-amber-500/25 bg-amber-500/6">
+          <CardHeader>
+            <CardTitle className="text-base text-amber-100/95">Not instrumented yet</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              We surface gaps explicitly instead of implying coverage. Pair with product analytics warehouse work where
+              needed.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground marker:text-amber-400/90">
+              {payload.notInstrumented.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </AdminPanelCard>
+      ) : null}
 
       <section className="grid gap-6 lg:grid-cols-3">
         <AdminPanelCard className="lg:col-span-2">
@@ -358,6 +399,74 @@ export function AdvertiserEngagementDashboard({ payload }: { payload: Advertiser
       <section className="grid gap-6 lg:grid-cols-2">
         <AdminPanelCard>
           <CardHeader>
+            <CardTitle>Role mix (profile sample)</CardTitle>
+            <p className="text-xs text-muted-foreground">Aggregated from capped profiles · suppression applies</p>
+          </CardHeader>
+          <CardContent>
+            {payload.roleMix.length ? (
+              <div className="w-full min-w-0">
+                <ResponsiveContainer width="100%" height={Math.max(220, payload.roleMix.length * 24)}>
+                  <BarChart
+                    data={payload.roleMix.map((r) => ({
+                      name: r.name.length > 36 ? `${r.name.slice(0, 34)}…` : r.name,
+                      count: r.count,
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                    <XAxis type="number" tick={axisStyle} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" width={140} tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                      }}
+                    />
+                    <Bar dataKey="count" fill="var(--chart-4)" radius={[0, 4, 4, 0]} name="Profiles" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No profile roles returned.</p>
+            )}
+          </CardContent>
+        </AdminPanelCard>
+
+        <AdminPanelCard>
+          <CardHeader>
+            <CardTitle>Advertiser-ready blurbs (copy carefully)</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Numbers below mirror KPI tiles — always attach methodology footnotes when sharing externally.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <blockquote className="rounded-lg border border-white/8 bg-card/30 p-3 text-foreground/90">
+              PulseVerse recorded{" "}
+              <span className="font-semibold tabular-nums">{formatCount(payload.distinctUsersAnalyticsSample)}</span>{" "}
+              distinct users in our capped analytics sample over {payload.windowDays} days (not MAU), with{" "}
+              <span className="font-semibold tabular-nums">{formatCount(payload.registrationGrowth.rolling30d)}</span> new
+              registrations in the last 30 days.
+            </blockquote>
+            <blockquote className="rounded-lg border border-white/8 bg-card/30 p-3 text-foreground/90">
+              Creator bench:{" "}
+              <span className="font-semibold tabular-nums">
+                {payload.activeCreatorsCount != null ? formatCount(payload.activeCreatorsCount) : "—"}
+              </span>{" "}
+              profiles currently carry at least one post (
+              <span className="font-semibold tabular-nums">
+                {payload.registeredUsersTotal != null ? formatCount(payload.registeredUsersTotal) : "—"}
+              </span>{" "}
+              registered profiles overall).
+            </blockquote>
+          </CardContent>
+        </AdminPanelCard>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <AdminPanelCard>
+          <CardHeader>
             <CardTitle>Audience geo (state, profile sample)</CardTitle>
           </CardHeader>
           <CardContent>
@@ -510,49 +619,66 @@ export function AdvertiserEngagementDashboard({ payload }: { payload: Advertiser
         </AdminPanelCard>
       </section>
 
-      <AdminPanelCard>
-        <CardHeader>
-          <CardTitle>Top posts by blended engagement score</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {payload.topPosts.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Preview</TableHead>
-                  <TableHead>Creator</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Views</TableHead>
-                  <TableHead className="text-right">Likes</TableHead>
-                  <TableHead className="text-right">Cmt</TableHead>
-                  <TableHead className="text-right">Shr</TableHead>
-                  <TableHead className="text-right">Save</TableHead>
-                  <TableHead className="text-right">Score</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payload.topPosts.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="max-w-[220px]">
-                      <span className="line-clamp-2 text-xs text-muted-foreground">{p.captionPreview}</span>
-                    </TableCell>
-                    <TableCell className="text-xs">{p.creatorName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{p.type}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{formatCount(p.views)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{formatCount(p.likes)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{formatCount(p.comments)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{formatCount(p.shares)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{formatCount(p.saves)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs font-medium">{p.score}</TableCell>
+      {showTopPosts ? (
+        <AdminPanelCard>
+          <CardHeader>
+            <CardTitle>Top posts by blended engagement score</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Internal preview rows — redact before external sharing; JSON export includes this block.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {payload.topPosts.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Preview</TableHead>
+                    <TableHead>Creator</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Views</TableHead>
+                    <TableHead className="text-right">Likes</TableHead>
+                    <TableHead className="text-right">Cmt</TableHead>
+                    <TableHead className="text-right">Shr</TableHead>
+                    <TableHead className="text-right">Save</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-sm text-muted-foreground">No posts returned.</p>
-          )}
-        </CardContent>
-      </AdminPanelCard>
+                </TableHeader>
+                <TableBody>
+                  {payload.topPosts.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="max-w-[220px]">
+                        <span className="line-clamp-2 text-xs text-muted-foreground">{p.captionPreview}</span>
+                      </TableCell>
+                      <TableCell className="text-xs">{p.creatorName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{p.type}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{formatCount(p.views)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{formatCount(p.likes)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{formatCount(p.comments)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{formatCount(p.shares)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{formatCount(p.saves)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs font-medium">{p.score}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">No posts returned.</p>
+            )}
+          </CardContent>
+        </AdminPanelCard>
+      ) : (
+        <AdminPanelCard>
+          <CardHeader>
+            <CardTitle>Post-level previews</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Hidden on this view for a tighter privacy posture — open{" "}
+              <span className="text-foreground/90">Advertiser Overview</span> for internal post previews.
+            </p>
+          </CardContent>
+        </AdminPanelCard>
+      )}
     </div>
   );
 }

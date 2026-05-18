@@ -1,16 +1,16 @@
 import "server-only";
 
-import { createAdminDataSupabaseClient } from "@/lib/supabase/admin-data";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { formatCount } from "@/lib/admin/format";
+import { createAdminDataSupabaseClient, getAdminDataAccessMode } from "@/lib/supabase/admin-data";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 import type {
-  AdvertiserCampaignRollup,
   AdvertiserCampaignLeaderboardRow,
+  AdvertiserCampaignRollup,
   AdvertiserContentHealth,
   AdvertiserDailyPoint,
   AdvertiserEngagementPayload,
-  AdvertiserPeriodComparison,
   AdvertiserNamedCount,
+  AdvertiserPeriodComparison,
   AdvertiserTopPost,
 } from "@/types/advertiser-engagement";
 
@@ -18,7 +18,22 @@ const CAP_ANALYTICS = 45_000;
 const CAP_POSTS_RECENT = 18_000;
 const CAP_POSTS_TOP = 80;
 const CAP_PROFILES_GEO = 14_000;
-const WINDOW_DAYS = 30;
+const CAP_PROFILES_ROLE = 12_000;
+const CAP_POST_VIEWS_SAMPLE = 25_000;
+
+export type LoadAdvertiserEngagementOptions = {
+  /** Rolling analytics window in UTC calendar days (clamped to 7, 30, or 90). */
+  windowDays?: number;
+  /** Minimum count to show a cohort row; smaller buckets merge into an “Other / suppressed” row. */
+  cohortMinCount?: number;
+};
+
+function clampWindowDays(raw?: number): number {
+  const x = raw ?? 30;
+  if (x <= 7) return 7;
+  if (x <= 30) return 30;
+  return 90;
+}
 
 function utcDayKey(iso: string): string {
   const d = new Date(iso);
@@ -52,13 +67,48 @@ function buildPeriodComparison(daily: AdvertiserDailyPoint[], windowDays: number
     priorLabel: `Earlier ${half}d (UTC)`,
     currentLabel: `Latest ${half}d (UTC)`,
     rows: [
-      { label: "Analytics events", current: sum(current, "events"), prior: sum(prior, "events"), changePct: pctStr(sum(current, "events"), sum(prior, "events")) },
-      { label: "Est. reach (Σ daily uniques)", current: reachCurr, prior: reachPrior, changePct: pctStr(reachCurr, reachPrior) },
-      { label: "New posts", current: sum(current, "newPosts"), prior: sum(prior, "newPosts"), changePct: pctStr(sum(current, "newPosts"), sum(prior, "newPosts")) },
-      { label: "Comments", current: sum(current, "newComments"), prior: sum(prior, "newComments"), changePct: pctStr(sum(current, "newComments"), sum(prior, "newComments")) },
-      { label: "Likes", current: sum(current, "newLikes"), prior: sum(prior, "newLikes"), changePct: pctStr(sum(current, "newLikes"), sum(prior, "newLikes")) },
-      { label: "Shares", current: sum(current, "newShares"), prior: sum(prior, "newShares"), changePct: pctStr(sum(current, "newShares"), sum(prior, "newShares")) },
-      { label: "Saves", current: sum(current, "newBookmarks"), prior: sum(prior, "newBookmarks"), changePct: pctStr(sum(current, "newBookmarks"), sum(prior, "newBookmarks")) },
+      {
+        label: "Analytics events",
+        current: sum(current, "events"),
+        prior: sum(prior, "events"),
+        changePct: pctStr(sum(current, "events"), sum(prior, "events")),
+      },
+      {
+        label: "Est. reach (Σ daily uniques)",
+        current: reachCurr,
+        prior: reachPrior,
+        changePct: pctStr(reachCurr, reachPrior),
+      },
+      {
+        label: "New posts",
+        current: sum(current, "newPosts"),
+        prior: sum(prior, "newPosts"),
+        changePct: pctStr(sum(current, "newPosts"), sum(prior, "newPosts")),
+      },
+      {
+        label: "Comments",
+        current: sum(current, "newComments"),
+        prior: sum(prior, "newComments"),
+        changePct: pctStr(sum(current, "newComments"), sum(prior, "newComments")),
+      },
+      {
+        label: "Likes",
+        current: sum(current, "newLikes"),
+        prior: sum(prior, "newLikes"),
+        changePct: pctStr(sum(current, "newLikes"), sum(prior, "newLikes")),
+      },
+      {
+        label: "Shares",
+        current: sum(current, "newShares"),
+        prior: sum(prior, "newShares"),
+        changePct: pctStr(sum(current, "newShares"), sum(prior, "newShares")),
+      },
+      {
+        label: "Saves",
+        current: sum(current, "newBookmarks"),
+        prior: sum(prior, "newBookmarks"),
+        changePct: pctStr(sum(current, "newBookmarks"), sum(prior, "newBookmarks")),
+      },
     ],
   };
 }
@@ -75,7 +125,30 @@ function tallyMap(entries: string[], limit: number): AdvertiserNamedCount[] {
     .map(([name, count]) => ({ name, count }));
 }
 
-export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngagementPayload> {
+/** Privacy-safe cohort display: merge buckets below `min` into one aggregate row. */
+export function suppressSmallCohorts(rows: AdvertiserNamedCount[], min: number): AdvertiserNamedCount[] {
+  if (min <= 1 || !rows.length) return rows;
+  const kept: AdvertiserNamedCount[] = [];
+  let suppressedSum = 0;
+  for (const r of rows) {
+    if (r.count >= min) kept.push(r);
+    else suppressedSum += r.count;
+  }
+  if (suppressedSum > 0) {
+    kept.push({ name: `Other / suppressed (<${min} each)`, count: suppressedSum });
+  }
+  return kept.sort((a, b) => b.count - a.count);
+}
+
+function rollingIso(days: number): string {
+  return new Date(Date.now() - days * 86400000).toISOString();
+}
+
+function emptyPayload(
+  windowDays: number,
+  cohortMinCount: number,
+  campaignMetricsScope: AdvertiserEngagementPayload["campaignMetricsScope"],
+): AdvertiserEngagementPayload {
   const emptyRollup: AdvertiserCampaignRollup = {
     campaignsTracked: 0,
     totalImpressions: 0,
@@ -83,51 +156,69 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
     overallCtrPct: "0",
     byStatus: [],
   };
+  const dayKeys = buildDayRange(windowDays);
+  const zeroDaily = dayKeys.map((date) => ({
+    date,
+    events: 0,
+    estReachUsers: 0,
+    newPosts: 0,
+    newComments: 0,
+    newLikes: 0,
+    newShares: 0,
+    newBookmarks: 0,
+    newProfiles: 0,
+  }));
+  const dataAccess = getAdminDataAccessMode();
+  return {
+    windowDays,
+    cohortMinCount,
+    generatedAt: new Date().toISOString(),
+    dataAccess,
+    campaignMetricsScope,
+    caps: { analyticsRows: 0, postsSample: 0, profilesGeoSample: 0, profilesRoleSample: 0, postViewsSample: 0 },
+    kpis: [],
+    daily: zeroDaily,
+    topEventNames: [],
+    topScreens: [],
+    hourOfDayUtc: Array.from({ length: 24 }, (_, hour) => ({ hour, events: 0 })),
+    topPosts: [],
+    topStates: [],
+    topSpecialties: [],
+    roleMix: [],
+    circlesInventory: [],
+    campaignRollup: emptyRollup,
+    postTypes: [],
+    periodComparison: buildPeriodComparison(zeroDaily, windowDays),
+    campaignLeaderboard: [],
+    contentHealth: { engagementPerPost: "0", commentToLikeRatio: "—", shareOfEngagementPct: "0" },
+    registrationGrowth: { rolling7d: 0, rolling30d: 0, rolling90d: 0 },
+    registeredUsersTotal: null,
+    activeCreatorsCount: null,
+    postViewsSumSample: null,
+    distinctUsersAnalyticsSample: 0,
+    notInstrumented: [
+      "Warehouse-grade MAU/WAU (distinct actives over full analytics_events history)",
+      "Aggregate live watch minutes (needs player/session rollup)",
+      "Sponsored delivery logs per day (only lifetime totals exist on ad_campaigns rows today)",
+    ],
+  };
+}
+
+export async function loadAdvertiserEngagementPayload(
+  options?: LoadAdvertiserEngagementOptions,
+): Promise<AdvertiserEngagementPayload> {
+  const WINDOW_DAYS = clampWindowDays(options?.windowDays);
+  const cohortMinCount = Math.max(1, Math.min(500, options?.cohortMinCount ?? 8));
+  const campaignMetricsScope: AdvertiserEngagementPayload["campaignMetricsScope"] = "lifetime_row_totals";
+
   const dayKeys = buildDayRange(WINDOW_DAYS);
   const since = new Date(`${dayKeys[0]}T00:00:00.000Z`).toISOString();
+  const dataAccess = getAdminDataAccessMode();
 
   if (!isSupabaseConfigured()) {
     return {
-      windowDays: WINDOW_DAYS,
-      generatedAt: new Date().toISOString(),
-      caps: { analyticsRows: 0, postsSample: 0, profilesGeoSample: 0 },
-      kpis: [],
-      daily: dayKeys.map((date) => ({
-        date,
-        events: 0,
-        estReachUsers: 0,
-        newPosts: 0,
-        newComments: 0,
-        newLikes: 0,
-        newShares: 0,
-        newBookmarks: 0,
-        newProfiles: 0,
-      })),
-      topEventNames: [],
-      topScreens: [],
-      hourOfDayUtc: Array.from({ length: 24 }, (_, hour) => ({ hour, events: 0 })),
-      topPosts: [],
-      topStates: [],
-      topSpecialties: [],
-      circlesInventory: [],
-      campaignRollup: emptyRollup,
-      postTypes: [],
-      periodComparison: buildPeriodComparison(
-        dayKeys.map((date) => ({
-          date,
-          events: 0,
-          estReachUsers: 0,
-          newPosts: 0,
-          newComments: 0,
-          newLikes: 0,
-          newShares: 0,
-          newBookmarks: 0,
-          newProfiles: 0,
-        })),
-        WINDOW_DAYS,
-      ),
-      campaignLeaderboard: [],
-      contentHealth: { engagementPerPost: "0", commentToLikeRatio: "—", shareOfEngagementPct: "0" },
+      ...emptyPayload(WINDOW_DAYS, cohortMinCount, campaignMetricsScope),
+      kpis: [{ label: "Supabase", value: "Not configured", hint: "Set NEXT_PUBLIC_SUPABASE_URL + anon key" }],
     };
   }
 
@@ -146,6 +237,13 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
       circlesRes,
       campaignsRes,
       profilesGeoRes,
+      profilesRoleRes,
+      profilesTotalRes,
+      activeCreatorsRes,
+      reg7Res,
+      reg30Res,
+      reg90Res,
+      postsViewsRes,
     ] = await Promise.all([
       supabase
         .from("analytics_events")
@@ -173,6 +271,13 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
         .select("title, advertiser_name, impressions, clicks, status, start_date, end_date")
         .limit(250),
       supabase.from("profiles").select("state, specialty").limit(CAP_PROFILES_GEO),
+      supabase.from("profiles").select("role").limit(CAP_PROFILES_ROLE),
+      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      supabase.from("profiles").select("id", { count: "exact", head: true }).gt("post_count", 0),
+      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", rollingIso(7)),
+      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", rollingIso(30)),
+      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", rollingIso(90)),
+      supabase.from("posts").select("view_count").gte("created_at", since).limit(CAP_POST_VIEWS_SAMPLE),
     ]);
 
     const evRows = analyticsRes.data ?? [];
@@ -182,15 +287,18 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
 
     const eventsByDay = Object.fromEntries(dayKeys.map((k) => [k, 0])) as Record<string, number>;
     const reachByDay = new Map<string, Set<string>>();
-
     for (const k of dayKeys) reachByDay.set(k, new Set());
 
+    const distinctUsers = new Set<string>();
     for (const r of evRows) {
       const day = utcDayKey(r.created_at as string);
       if (eventsByDay[day] !== undefined) {
         eventsByDay[day] += 1;
         const uid = r.user_id as string | null;
-        if (uid) reachByDay.get(day)?.add(uid);
+        if (uid) {
+          reachByDay.get(day)?.add(uid);
+          distinctUsers.add(uid);
+        }
       }
       eventNames.push(String(r.event_name ?? ""));
       screens.push(String(r.screen ?? ""));
@@ -247,8 +355,11 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
       newProfiles: profilesByDay[date] ?? 0,
     }));
 
-    const topEventNames = tallyMap(eventNames, 22);
-    const topScreens = tallyMap(screens, 16);
+    let topEventNames = tallyMap(eventNames, 22);
+    let topScreens = tallyMap(screens, 16);
+    topEventNames = suppressSmallCohorts(topEventNames, cohortMinCount);
+    topScreens = suppressSmallCohorts(topScreens, cohortMinCount);
+
     const hourOfDayUtc = hourBuckets.map((events, hour) => ({ hour, events }));
 
     const geoStates: string[] = [];
@@ -259,8 +370,15 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
       const sp = String((p as { specialty?: string }).specialty ?? "").trim();
       if (sp) specialties.push(sp);
     }
-    const topStates = tallyMap(geoStates, 14);
-    const topSpecialties = tallyMap(specialties, 12);
+    let topStates = tallyMap(geoStates, 14);
+    let topSpecialties = tallyMap(specialties, 12);
+    topStates = suppressSmallCohorts(topStates, cohortMinCount);
+    topSpecialties = suppressSmallCohorts(topSpecialties, cohortMinCount);
+
+    const rolesRaw = (profilesRoleRes.data ?? []).map((r) => String((r as { role?: string }).role ?? "").trim() || "(blank)");
+    let roleMix = suppressSmallCohorts(tallyMap(rolesRaw, 40), cohortMinCount);
+
+    const postViewsSumSample = (postsViewsRes.data ?? []).reduce((s, row) => s + Number((row as { view_count?: number }).view_count ?? 0), 0);
 
     const topPostsRaw = (postsTopRes.data ?? []) as {
       id: string;
@@ -278,10 +396,7 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
     const creatorIds = [...new Set(topPostsRaw.map((p) => p.creator_id))];
     let profMap = new Map<string, string>();
     if (creatorIds.length) {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .in("id", creatorIds);
+      const { data: profs } = await supabase.from("profiles").select("id, display_name").in("id", creatorIds);
       profMap = new Map((profs ?? []).map((x) => [x.id as string, String(x.display_name ?? "")]));
     }
 
@@ -356,13 +471,14 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
       .sort((a, b) => b.impressions - a.impressions)
       .slice(0, 20);
 
-    const postTypes = tallyMap(postTypesList, 10);
+    let postTypes = tallyMap(postTypesList, 10);
+    postTypes = suppressSmallCohorts(postTypes, cohortMinCount);
 
     const sum = (arr: AdvertiserDailyPoint[], key: keyof AdvertiserDailyPoint) =>
       arr.reduce((s, d) => s + (Number(d[key]) || 0), 0);
 
     const totalEvents = sum(daily, "events");
-    const totalReachApprox = Math.max(...daily.map((d) => d.estReachUsers));
+    const totalReachApprox = Math.max(...daily.map((d) => d.estReachUsers), 0);
     const sumReach = daily.reduce((s, d) => s + d.estReachUsers, 0);
     const avgDailyReach = daily.length ? Math.round(sumReach / daily.length) : 0;
     const totalPosts = sum(daily, "newPosts");
@@ -379,26 +495,140 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
     };
     const periodComparison = buildPeriodComparison(daily, WINDOW_DAYS);
 
+    const registeredUsersTotal = profilesTotalRes.count ?? null;
+    const activeCreatorsCount = activeCreatorsRes.count ?? null;
+
+    const registrationGrowth = {
+      rolling7d: reg7Res.count ?? 0,
+      rolling30d: reg30Res.count ?? 0,
+      rolling90d: reg90Res.count ?? 0,
+    };
+
+    const notInstrumented = [
+      "Warehouse-grade MAU/WAU (distinct actives over full analytics_events history)",
+      "Aggregate live watch minutes (needs player/session rollup)",
+      "Per-day sponsored delivery time series (only lifetime totals exist on ad_campaigns rows today)",
+    ];
+
     const kpis: AdvertiserEngagementPayload["kpis"] = [
-      { label: "Analytics events (window)", value: formatCount(totalEvents), hint: `${WINDOW_DAYS}d · capped row read` },
-      { label: "Peak est. daily reach", value: formatCount(totalReachApprox), hint: "distinct users/day in sample" },
-      { label: "Avg est. daily reach", value: formatCount(avgDailyReach), hint: "mean of daily uniques in sample" },
-      { label: "New posts (window)", value: formatCount(totalPosts), hint: "public.caption posts" },
-      { label: "New comments (window)", value: formatCount(totalComments), hint: "all threads" },
-      { label: "Reactions (likes)", value: formatCount(totalLikes), hint: "post_likes rows" },
-      { label: "Shares (window)", value: formatCount(totalShares), hint: "post_shares rows" },
-      { label: "Saves / bookmarks", value: formatCount(totalBookmarks), hint: "saved_posts rows" },
-      { label: "Engagements / new post", value: engPerPost, hint: "(likes+comments+shares+bookmarks)/posts" },
-      { label: "Sponsored impressions (all rows)", value: formatCount(totalImp), hint: "sum ad_campaigns.impressions" },
-      { label: "Sponsored clicks (all rows)", value: formatCount(totalClk), hint: "sum ad_campaigns.clicks" },
-      { label: "Blended sponsored CTR", value: `${ctr}%`, hint: "clicks ÷ impressions" },
-      { label: "Active circles (top slice)", value: formatCount(circlesInventory.length), hint: "highest member_count" },
+      {
+        label: "Aggregate data path",
+        value: dataAccess === "service_role" ? "Service role" : "Staff session + RLS",
+        hint:
+          dataAccess === "service_role"
+            ? "Matches SQL editor totals when key is set"
+            : "Some totals may be incomplete vs full aggregates",
+      },
+      {
+        label: "Registered users (all time)",
+        value: registeredUsersTotal != null ? formatCount(registeredUsersTotal) : "—",
+        hint: "profiles row count",
+      },
+      {
+        label: "Creators with posts",
+        value: activeCreatorsCount != null ? formatCount(activeCreatorsCount) : "—",
+        hint: "profiles.post_count > 0",
+      },
+      {
+        label: "New registrations (7d / 30d / 90d)",
+        value: `${formatCount(registrationGrowth.rolling7d)} · ${formatCount(registrationGrowth.rolling30d)} · ${formatCount(registrationGrowth.rolling90d)}`,
+        hint: "profiles.created_at rolling UTC windows",
+      },
+      {
+        label: "Distinct users in analytics sample",
+        value: formatCount(distinctUsers.size),
+        hint: `Unique user_id in last ${WINDOW_DAYS}d sample (not MAU; capped rows)`,
+      },
+      {
+        label: "Post views (window, capped sample)",
+        value: formatCount(postViewsSumSample),
+        hint: `Sum posts.view_count · ≤${formatCount(CAP_POST_VIEWS_SAMPLE)} newest rows in window`,
+      },
+      {
+        label: "Analytics events (window)",
+        value: formatCount(totalEvents),
+        hint: `${WINDOW_DAYS}d · capped row read`,
+      },
+      {
+        label: "Peak est. daily reach",
+        value: formatCount(totalReachApprox),
+        hint: "distinct users/day in analytics sample",
+      },
+      {
+        label: "Avg est. daily reach",
+        value: formatCount(avgDailyReach),
+        hint: "mean of daily uniques in sample",
+      },
+      {
+        label: "New posts (window)",
+        value: formatCount(totalPosts),
+        hint: "posts.created_at in window",
+      },
+      {
+        label: "New comments (window)",
+        value: formatCount(totalComments),
+        hint: "all threads",
+      },
+      {
+        label: "Reactions (likes)",
+        value: formatCount(totalLikes),
+        hint: "post_likes rows",
+      },
+      {
+        label: "Shares (window)",
+        value: formatCount(totalShares),
+        hint: "post_shares rows",
+      },
+      {
+        label: "Saves / bookmarks",
+        value: formatCount(totalBookmarks),
+        hint: "saved_posts rows",
+      },
+      {
+        label: "Engagements / new post",
+        value: engPerPost,
+        hint: "(likes+comments+shares+bookmarks)/posts",
+      },
+      {
+        label: "Sponsored impressions (all campaigns)",
+        value: formatCount(totalImp),
+        hint: "Σ ad_campaigns.impressions · lifetime row totals",
+      },
+      {
+        label: "Sponsored clicks (all campaigns)",
+        value: formatCount(totalClk),
+        hint: "Σ ad_campaigns.clicks · lifetime row totals",
+      },
+      {
+        label: "Blended sponsored CTR",
+        value: `${ctr}%`,
+        hint: "Σ clicks ÷ Σ impressions",
+      },
+      {
+        label: "Active circles (top slice)",
+        value: formatCount(circlesInventory.length),
+        hint: "highest member_count",
+      },
+      {
+        label: "Cohort suppression threshold",
+        value: String(cohortMinCount),
+        hint: "states/specialties/roles/events/screens/post types",
+      },
     ];
 
     return {
       windowDays: WINDOW_DAYS,
+      cohortMinCount,
       generatedAt: new Date().toISOString(),
-      caps: { analyticsRows: CAP_ANALYTICS, postsSample: CAP_POSTS_RECENT, profilesGeoSample: CAP_PROFILES_GEO },
+      dataAccess,
+      campaignMetricsScope,
+      caps: {
+        analyticsRows: CAP_ANALYTICS,
+        postsSample: CAP_POSTS_RECENT,
+        profilesGeoSample: CAP_PROFILES_GEO,
+        profilesRoleSample: CAP_PROFILES_ROLE,
+        postViewsSample: CAP_POST_VIEWS_SAMPLE,
+      },
       kpis,
       daily,
       topEventNames,
@@ -407,57 +637,26 @@ export async function loadAdvertiserEngagementPayload(): Promise<AdvertiserEngag
       topPosts,
       topStates,
       topSpecialties,
+      roleMix,
       circlesInventory,
       campaignRollup,
       postTypes,
       periodComparison,
       campaignLeaderboard,
       contentHealth,
+      registrationGrowth,
+      registeredUsersTotal,
+      activeCreatorsCount,
+      postViewsSumSample,
+      distinctUsersAnalyticsSample: distinctUsers.size,
+      notInstrumented,
     };
   } catch (e) {
     console.error("loadAdvertiserEngagementPayload:", e);
-    const dayKeys = buildDayRange(WINDOW_DAYS);
+    const base = emptyPayload(WINDOW_DAYS, cohortMinCount, campaignMetricsScope);
     return {
-      windowDays: WINDOW_DAYS,
-      generatedAt: new Date().toISOString(),
-      caps: { analyticsRows: 0, postsSample: 0, profilesGeoSample: 0 },
+      ...base,
       kpis: [{ label: "Error", value: "—", hint: String(e instanceof Error ? e.message : e) }],
-      daily: dayKeys.map((date) => ({
-        date,
-        events: 0,
-        estReachUsers: 0,
-        newPosts: 0,
-        newComments: 0,
-        newLikes: 0,
-        newShares: 0,
-        newBookmarks: 0,
-        newProfiles: 0,
-      })),
-      topEventNames: [],
-      topScreens: [],
-      hourOfDayUtc: Array.from({ length: 24 }, (_, hour) => ({ hour, events: 0 })),
-      topPosts: [],
-      topStates: [],
-      topSpecialties: [],
-      circlesInventory: [],
-      campaignRollup: emptyRollup,
-      postTypes: [],
-      periodComparison: buildPeriodComparison(
-        dayKeys.map((date) => ({
-          date,
-          events: 0,
-          estReachUsers: 0,
-          newPosts: 0,
-          newComments: 0,
-          newLikes: 0,
-          newShares: 0,
-          newBookmarks: 0,
-          newProfiles: 0,
-        })),
-        WINDOW_DAYS,
-      ),
-      campaignLeaderboard: [],
-      contentHealth: { engagementPerPost: "0", commentToLikeRatio: "—", shareOfEngagementPct: "0" },
     };
   }
 }

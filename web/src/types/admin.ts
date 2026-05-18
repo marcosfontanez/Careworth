@@ -104,7 +104,14 @@ export interface CampaignRow {
   start: string;
   end: string;
   impressions: number;
+  clicks: number;
   ctr: number;
+  status: string;
+  /** Monetary budget fields when present on row */
+  budgetTotal: number;
+  budgetSpent: number;
+  /** Linear flight pacing vs spend (null when dates/budget unusable) */
+  pacingNote: string | null;
 }
 
 export interface CreatorRow {
@@ -115,7 +122,35 @@ export interface CreatorRow {
   liveHours: number;
   verified: boolean;
   score: number;
+  post_count: number;
+  updated_at: string;
 }
+
+/** Marketing site contact / inquiry rows (`064` + CRM-lite `189`). */
+export type MarketingContactLeadRow = {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  created_at: string;
+  host: string | null;
+  topic: string | null;
+  status: string;
+  owner_id: string | null;
+  owner_display_name: string | null;
+  internal_notes: string | null;
+  last_contacted_at: string | null;
+};
+
+export type PlacementInventoryRow = {
+  placement: string;
+  campaignCount: number;
+  activeCampaignCount: number;
+  impressionsSum: number;
+  clicksSum: number;
+  ctrPct: string;
+  statuses: string;
+};
 
 export type AdminNotificationItem = {
   id: string;

@@ -12,6 +12,8 @@ import type {
   CircleAdmin,
   CreatorRow,
   LiveSessionRow,
+  MarketingContactLeadRow,
+  PlacementInventoryRow,
   ReportReason,
   ReportRow,
   ReportStatus,
@@ -48,6 +50,34 @@ function mapReportReason(dbReason: string): ReportReason {
   if (dbReason === "inappropriate" || dbReason === "other") return "spam";
   return "spam";
 }
+
+function computeCampaignPacingNote(args: {
+  start_date: string;
+  end_date: string;
+  budget_total: unknown;
+  budget_spent: unknown;
+}): string | null {
+  const budgetTotal = Number(args.budget_total ?? 0);
+  if (!Number.isFinite(budgetTotal) || budgetTotal <= 0) return null;
+  const startMs = new Date(args.start_date).getTime();
+  const endMs = new Date(args.end_date).getTime();
+  const now = Date.now();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  const flight = endMs - startMs;
+  const elapsed = Math.min(Math.max(now - startMs, 0), flight);
+  const expectedPct = flight > 0 ? elapsed / flight : 0;
+  const spentPct = Math.min(Math.max(Number(args.budget_spent ?? 0) / budgetTotal, 0), 1);
+  const deltaPts = (spentPct - expectedPct) * 100;
+  return `Spend ${(spentPct * 100).toFixed(1)}% vs linear expectation ${(expectedPct * 100).toFixed(1)}% (${deltaPts >= 0 ? "+" : ""}${deltaPts.toFixed(1)} pts)`;
+}
+
+export type LoadCreatorsFilters = {
+  role?: string;
+  verified?: "all" | "yes" | "no";
+  minFollowers?: number;
+  sort?: "followers" | "posts" | "updated";
+  limit?: number;
+};
 
 function mapReportStatus(dbStatus: string): ReportStatus {
   switch (dbStatus) {
@@ -404,10 +434,10 @@ export async function loadCampaigns(): Promise<CampaignRow[]> {
     const { data, error } = await supabase
       .from("ad_campaigns")
       .select(
-        "id, advertiser_name, title, start_date, end_date, impressions, clicks, status, cpm_rate",
+        "id, advertiser_name, title, start_date, end_date, impressions, clicks, status, cpm_rate, budget_total, budget_spent",
       )
       .order("start_date", { ascending: false })
-      .limit(80);
+      .limit(120);
 
     if (error || !data) {
       console.error("loadCampaigns:", error?.message);
@@ -418,19 +448,77 @@ export async function loadCampaigns(): Promise<CampaignRow[]> {
       const impressions = Number(c.impressions ?? 0);
       const clicks = Number(c.clicks ?? 0);
       const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+      const startRaw = c.start_date as string;
+      const endRaw = c.end_date as string;
       return {
         id: c.id as string,
         sponsor: c.advertiser_name as string,
         placement: (c.title as string) || "In-feed",
-        start: (c.start_date as string)?.slice(0, 10) ?? "—",
-        end: (c.end_date as string)?.slice(0, 10) ?? "—",
+        start: startRaw?.slice(0, 10) ?? "—",
+        end: endRaw?.slice(0, 10) ?? "—",
         impressions,
+        clicks,
         ctr: Math.round(ctr * 100) / 100,
+        status: String(c.status ?? "—"),
+        budgetTotal: Number(c.budget_total ?? 0),
+        budgetSpent: Number(c.budget_spent ?? 0),
+        pacingNote: computeCampaignPacingNote({
+          start_date: startRaw,
+          end_date: endRaw,
+          budget_total: c.budget_total,
+          budget_spent: c.budget_spent,
+        }),
       };
     });
   } catch (e) {
     console.error("loadCampaigns exception:", e);
     return [];
+  }
+}
+
+/** Single campaign row for detail reporting (no per-day delivery table in schema). */
+export async function loadCampaignById(id: string): Promise<CampaignRow | null> {
+  if (!isSupabaseConfigured() || !id?.trim()) return null;
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    const { data, error } = await supabase
+      .from("ad_campaigns")
+      .select(
+        "id, advertiser_name, title, start_date, end_date, impressions, clicks, status, cpm_rate, budget_total, budget_spent",
+      )
+      .eq("id", id.trim())
+      .maybeSingle();
+    if (error || !data) {
+      if (error) console.error("loadCampaignById:", error.message);
+      return null;
+    }
+    const impressions = Number(data.impressions ?? 0);
+    const clicks = Number(data.clicks ?? 0);
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+    const startRaw = data.start_date as string;
+    const endRaw = data.end_date as string;
+    return {
+      id: data.id as string,
+      sponsor: data.advertiser_name as string,
+      placement: (data.title as string) || "In-feed",
+      start: startRaw?.slice(0, 10) ?? "—",
+      end: endRaw?.slice(0, 10) ?? "—",
+      impressions,
+      clicks,
+      ctr: Math.round(ctr * 100) / 100,
+      status: String(data.status ?? "—"),
+      budgetTotal: Number(data.budget_total ?? 0),
+      budgetSpent: Number(data.budget_spent ?? 0),
+      pacingNote: computeCampaignPacingNote({
+        start_date: startRaw,
+        end_date: endRaw,
+        budget_total: data.budget_total,
+        budget_spent: data.budget_spent,
+      }),
+    };
+  } catch (e) {
+    console.error("loadCampaignById exception:", e);
+    return null;
   }
 }
 
@@ -480,15 +568,48 @@ export async function loadLiveSessions(): Promise<LiveSessionRow[]> {
   }
 }
 
-export async function loadCreators(): Promise<CreatorRow[]> {
+export async function loadCreatorRoleOptions(): Promise<string[]> {
   if (!isSupabaseConfigured()) return [];
   try {
     const supabase = await createAdminDataSupabaseClient();
-    const { data, error } = await supabase
+    const { data } = await supabase.from("profiles").select("role").limit(4000);
+    const bag = new Set<string>();
+    for (const row of data ?? []) {
+      const role = String((row as { role?: string }).role ?? "").trim();
+      if (role) bag.add(role);
+    }
+    return [...bag].sort((a, b) => a.localeCompare(b));
+  } catch (e) {
+    console.error("loadCreatorRoleOptions:", e);
+    return [];
+  }
+}
+
+export async function loadCreators(filters?: LoadCreatorsFilters): Promise<CreatorRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const limit = Math.min(Math.max(filters?.limit ?? 80, 1), 200);
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    let qb = supabase
       .from("profiles")
-      .select("id, username, display_name, role, follower_count, is_verified, post_count")
-      .order("follower_count", { ascending: false })
-      .limit(80);
+      .select("id, username, display_name, role, follower_count, is_verified, post_count, updated_at")
+      .limit(limit);
+
+    const verified = filters?.verified ?? "all";
+    if (verified === "yes") qb = qb.eq("is_verified", true);
+    else if (verified === "no") qb = qb.eq("is_verified", false);
+
+    const role = filters?.role?.trim();
+    if (role) qb = qb.eq("role", role);
+
+    const minF = filters?.minFollowers;
+    if (minF != null && minF > 0) qb = qb.gte("follower_count", minF);
+
+    const sort = filters?.sort ?? "followers";
+    const orderCol = sort === "posts" ? "post_count" : sort === "updated" ? "updated_at" : "follower_count";
+    qb = qb.order(orderCol, { ascending: false });
+
+    const { data, error } = await qb;
 
     if (error || !data) {
       console.error("loadCreators:", error?.message);
@@ -507,6 +628,8 @@ export async function loadCreators(): Promise<CreatorRow[]> {
         liveHours: 0,
         verified: p.is_verified ?? false,
         score: Math.min(100, Math.round(Math.log10((p.follower_count ?? 0) + 10) * 28)),
+        post_count: p.post_count ?? 0,
+        updated_at: String((p as { updated_at?: string }).updated_at ?? ""),
       };
     });
   } catch (e) {
@@ -1159,6 +1282,274 @@ export async function loadModerationKpiStats(): Promise<ModerationKpiStats> {
   }
 }
 
+function parseMarketingLeadTopic(message: string): string | null {
+  const m = message.match(/^\[Inquiry:\s*([^\]]+)\]/i);
+  return m ? m[1].trim() : null;
+}
+
+/** Public marketing contact form rows (service-role-capable loader for admin UI). */
+export async function loadMarketingContactMessages(options?: {
+  limit?: number;
+  status?: string;
+}): Promise<MarketingContactLeadRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const limit = Math.min(Math.max(options?.limit ?? 200, 1), 500);
+  const statusFilter = options?.status?.trim();
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    let qb = supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table may lag generated Database typedefs
+      .from("marketing_contact_messages" as any)
+      .select("id, name, email, message, created_at, host, status, owner_id, internal_notes, last_contacted_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (statusFilter) {
+      qb = qb.eq("status", statusFilter);
+    }
+
+    const { data, error } = await qb;
+
+    if (error || !data) {
+      if (error) console.error("loadMarketingContactMessages:", error.message);
+      return [];
+    }
+
+    const rows = data as {
+      id: string;
+      name: string;
+      email: string;
+      message: string;
+      created_at: string;
+      host: string | null;
+      status?: string | null;
+      owner_id?: string | null;
+      internal_notes?: string | null;
+      last_contacted_at?: string | null;
+    }[];
+
+    const ownerIds = [...new Set(rows.map((r) => r.owner_id).filter(Boolean))] as string[];
+    const nameMap = new Map<string, string>();
+    if (ownerIds.length) {
+      const { data: profs } = await supabase.from("profiles").select("id, display_name").in("id", ownerIds);
+      for (const p of profs ?? []) {
+        nameMap.set(p.id as string, String((p as { display_name?: string }).display_name ?? "").trim() || "Staff");
+      }
+    }
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      message: row.message,
+      created_at: row.created_at,
+      host: row.host ?? null,
+      topic: parseMarketingLeadTopic(row.message),
+      status: typeof row.status === "string" && row.status ? row.status : "new",
+      owner_id: row.owner_id ?? null,
+      owner_display_name: row.owner_id ? (nameMap.get(row.owner_id) ?? null) : null,
+      internal_notes: row.internal_notes ?? null,
+      last_contacted_at: row.last_contacted_at ?? null,
+    }));
+  } catch (e) {
+    console.error("loadMarketingContactMessages:", e);
+    return [];
+  }
+}
+
+export async function loadAdminLeadOwnerOptions(): Promise<{ id: string; label: string }[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, display_name, username")
+      .eq("role_admin", true)
+      .order("display_name", { ascending: true })
+      .limit(120);
+
+    if (error || !data?.length) {
+      if (error) console.error("loadAdminLeadOwnerOptions:", error.message);
+      return [];
+    }
+
+    return data.map((p) => {
+      const id = p.id as string;
+      const dn = String((p as { display_name?: string }).display_name ?? "").trim();
+      const un = String((p as { username?: string }).username ?? "").trim();
+      const label = dn ? (un ? `${dn} (@${un})` : dn) : un ? `@${un}` : id.slice(0, 8);
+      return { id, label };
+    });
+  } catch (e) {
+    console.error("loadAdminLeadOwnerOptions:", e);
+    return [];
+  }
+}
+
+function campaignPlacementActive(statusRaw: string, startIso: string, endIso: string): boolean {
+  const now = Date.now();
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  const st = statusRaw.toLowerCase();
+  if (st.includes("pause") || st.includes("draft") || st.includes("cancel")) return false;
+  if (st.includes("active") || st.includes("running") || st.includes("live")) return true;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+  return now >= start && now <= end;
+}
+
+/** Placement labels == `ad_campaigns.title` (no separate inventory table). */
+export async function loadPlacementInventorySummary(): Promise<PlacementInventoryRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    const { data, error } = await supabase
+      .from("ad_campaigns")
+      .select("title, status, impressions, clicks, start_date, end_date")
+      .limit(400);
+
+    if (error || !data?.length) {
+      if (error) console.error("loadPlacementInventorySummary:", error.message);
+      return [];
+    }
+
+    type Agg = {
+      campaignCount: number;
+      activeCampaignCount: number;
+      impressionsSum: number;
+      clicksSum: number;
+      statuses: Set<string>;
+    };
+    const map = new Map<string, Agg>();
+
+    for (const raw of data as {
+      title: string;
+      status: string | null;
+      impressions: number | null;
+      clicks: number | null;
+      start_date: string;
+      end_date: string;
+    }[]) {
+      const placement = String(raw.title ?? "").trim() || "Untitled";
+      const statusStr = String(raw.status ?? "—");
+      const impressions = Number(raw.impressions ?? 0);
+      const clicks = Number(raw.clicks ?? 0);
+      const active = campaignPlacementActive(statusStr, raw.start_date, raw.end_date);
+      const cur = map.get(placement) ?? {
+        campaignCount: 0,
+        activeCampaignCount: 0,
+        impressionsSum: 0,
+        clicksSum: 0,
+        statuses: new Set<string>(),
+      };
+      cur.campaignCount += 1;
+      if (active) cur.activeCampaignCount += 1;
+      cur.impressionsSum += impressions;
+      cur.clicksSum += clicks;
+      cur.statuses.add(statusStr);
+      map.set(placement, cur);
+    }
+
+    return [...map.entries()]
+      .map(([placement, a]) => {
+        const ctr = a.impressionsSum > 0 ? ((a.clicksSum / a.impressionsSum) * 100).toFixed(3) : "0";
+        return {
+          placement,
+          campaignCount: a.campaignCount,
+          activeCampaignCount: a.activeCampaignCount,
+          impressionsSum: a.impressionsSum,
+          clicksSum: a.clicksSum,
+          ctrPct: ctr,
+          statuses: [...a.statuses].sort().join(", "),
+        };
+      })
+      .sort((x, y) => y.impressionsSum - x.impressionsSum);
+  } catch (e) {
+    console.error("loadPlacementInventorySummary:", e);
+    return [];
+  }
+}
+
+export type BrandSafetySnapshot = {
+  moderation: ModerationKpiStats;
+  reportsCreated30d: number;
+  reportsLast30dByDay: { date: string; count: number }[];
+  reportOutcome: { actionTaken: number; dismissed: number };
+  appealsOpen: number;
+  appealsClosed30d: number;
+  liveNonTerminalStreams24h: number;
+};
+
+/** Privacy-safe internal trust signals derived from existing moderation tables (aggregates only). */
+export async function loadBrandSafetySnapshot(): Promise<BrandSafetySnapshot> {
+  const moderation = await loadModerationKpiStats();
+  const emptyTrend: BrandSafetySnapshot = {
+    moderation,
+    reportsCreated30d: 0,
+    reportsLast30dByDay: [],
+    reportOutcome: { actionTaken: 0, dismissed: 0 },
+    appealsOpen: 0,
+    appealsClosed30d: 0,
+    liveNonTerminalStreams24h: 0,
+  };
+  if (!isSupabaseConfigured()) return emptyTrend;
+
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+    const dayKeys: string[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - i));
+      dayKeys.push(d.toISOString().slice(0, 10));
+    }
+    const countsByDay = Object.fromEntries(dayKeys.map((k) => [k, 0])) as Record<string, number>;
+
+    const [
+      reports30Count,
+      reportRows,
+      actionTaken,
+      dismissed,
+      appealsOpen,
+      appealsClosed,
+      liveSnap,
+    ] = await Promise.all([
+      supabase.from("reports").select("*", { count: "exact", head: true }).gte("created_at", since30),
+      supabase.from("reports").select("created_at").gte("created_at", since30).limit(4000),
+      supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "action_taken"),
+      supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "dismissed"),
+      supabase.from("content_appeals").select("*", { count: "exact", head: true }).eq("status", "pending"),
+      supabase
+        .from("content_appeals")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", since30)
+        .in("status", ["approved", "rejected", "denied", "accepted"]),
+      loadLive24hSnapshot(),
+    ]);
+
+    for (const r of reportRows.data ?? []) {
+      const day = String((r as { created_at: string }).created_at).slice(0, 10);
+      if (countsByDay[day] !== undefined) countsByDay[day] += 1;
+    }
+
+    const reportsLast30dByDay = dayKeys.map((date) => ({ date, count: countsByDay[date] ?? 0 }));
+
+    return {
+      moderation,
+      reportsCreated30d: reports30Count.count ?? 0,
+      reportsLast30dByDay,
+      reportOutcome: {
+        actionTaken: actionTaken.count ?? 0,
+        dismissed: dismissed.count ?? 0,
+      },
+      appealsOpen: appealsOpen.count ?? 0,
+      appealsClosed30d: appealsClosed.count ?? 0,
+      liveNonTerminalStreams24h: liveSnap.abnormal,
+    };
+  } catch (e) {
+    console.error("loadBrandSafetySnapshot:", e);
+    return emptyTrend;
+  }
+}
+
 export async function loadAppealOpsStrip(): Promise<OpsStripItem[]> {
   if (!isSupabaseConfigured()) return [];
   try {
@@ -1463,7 +1854,7 @@ export async function loadCampaignInsightKpis(): Promise<{ label: string; value:
       { label: "Impressions (30d window)", value: formatCount(imp) },
       { label: "Clicks", value: formatCount(clk) },
       { label: "CTR", value: `${ctr}%` },
-      { label: "Brand lift", value: "—" },
+      { label: "Attributed brand lift", value: "Not instrumented" },
     ];
   } catch {
     return [];

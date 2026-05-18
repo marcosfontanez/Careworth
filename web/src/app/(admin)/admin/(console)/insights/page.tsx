@@ -65,7 +65,7 @@ export default async function AdminInsightsPage({
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Insights" }]}
         title="Insights"
-        description="Product analytics derived from Supabase — counts, rolls ups, and sampled distributions."
+        description="Longitudinal analytics — growth, trust/safety mix, monetization proxies. Operational queues remain on Dashboard."
       />
       <Card className="border-border/80 bg-linear-to-r from-card/95 to-primary/6 shadow-sm ring-1 ring-white/4">
         <CardContent className="p-6 text-sm leading-relaxed text-muted-foreground">

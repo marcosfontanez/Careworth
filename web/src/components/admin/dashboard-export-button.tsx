@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-export type DashboardExportSnapshot = {
+export type DashboardExportSnapshotInput = {
   exportedAt: string;
   kpis: { key: string; label: string; value: string; delta?: string }[];
   counts: {
@@ -20,11 +20,16 @@ export type DashboardExportSnapshot = {
   notes: string;
 };
 
-export function DashboardExportButton({ snapshot }: { snapshot: DashboardExportSnapshot }) {
+export function DashboardExportButton({ snapshot }: { snapshot: DashboardExportSnapshotInput }) {
   const stamp = snapshot.exportedAt.slice(0, 19).replace(/[:T]/g, "-");
 
   function download() {
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    const snapshotBody = {
+      exportAudience: "internal_operational_dashboard" as const,
+      exportSchemaVersion: 1 as const,
+      ...snapshot,
+    };
+    const blob = new Blob([JSON.stringify(snapshotBody, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -36,7 +41,7 @@ export function DashboardExportButton({ snapshot }: { snapshot: DashboardExportS
   return (
     <Button type="button" variant="outline" size="sm" className="border-white/15 bg-transparent" onClick={download}>
       <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-      Export snapshot
+      Export snapshot (internal aggregate KPIs)
     </Button>
   );
 }

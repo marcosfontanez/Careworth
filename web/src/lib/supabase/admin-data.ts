@@ -19,3 +19,9 @@ export async function createAdminDataSupabaseClient() {
   }
   return createSupabaseServerClient();
 }
+
+/** Sync mirror of the client selection logic — for provenance labels on admin aggregates. */
+export function getAdminDataAccessMode(): "service_role" | "session_rls" {
+  const creds = getSupabaseUrlAndAnon();
+  return creds && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ? "service_role" : "session_rls";
+}

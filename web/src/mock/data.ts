@@ -408,7 +408,12 @@ export const mockCampaigns: CampaignRow[] = [
     start: "2026-04-01",
     end: "2026-04-30",
     impressions: 2_400_000,
+    clicks: 44_400,
     ctr: 1.85,
+    status: "active",
+    budgetTotal: 50_000,
+    budgetSpent: 32_000,
+    pacingNote: "Spend 64.0% vs linear expectation 70.0% (-6.0 pts)",
   },
   {
     id: "cp2",
@@ -417,7 +422,12 @@ export const mockCampaigns: CampaignRow[] = [
     start: "2026-03-15",
     end: "2026-05-15",
     impressions: 890_000,
+    clicks: 18_868,
     ctr: 2.12,
+    status: "active",
+    budgetTotal: 40_000,
+    budgetSpent: 22_000,
+    pacingNote: null,
   },
 ];
 
@@ -430,6 +440,8 @@ export const mockCreators: CreatorRow[] = [
     liveHours: 142,
     verified: true,
     score: 96,
+    post_count: 412,
+    updated_at: "2026-05-10T12:00:00Z",
   },
   {
     id: "cr2",
@@ -439,6 +451,8 @@ export const mockCreators: CreatorRow[] = [
     liveHours: 88,
     verified: true,
     score: 91,
+    post_count: 210,
+    updated_at: "2026-05-11T08:30:00Z",
   },
   {
     id: "cr3",
@@ -448,6 +462,8 @@ export const mockCreators: CreatorRow[] = [
     liveHours: 34,
     verified: false,
     score: 82,
+    post_count: 98,
+    updated_at: "2026-05-09T18:15:00Z",
   },
 ];
 

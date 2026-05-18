@@ -39,10 +39,10 @@ export default async function AdminSettingsPage() {
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Settings" }]}
         title="Settings"
-        description="Staff preferences and read-only diagnostics. Remote feature flags and policy toggles ship with the mobile app — this console does not flip production behavior yet."
+        description="Staff locales + digest email. Operational switches live on Platform; this card links there."
       />
       {staffPrefs ? (
-        <AdminPanelCard>
+        <AdminPanelCard id="preferences">
           <CardHeader>
             <CardTitle>Your account</CardTitle>
             <CardDescription>
@@ -57,7 +57,7 @@ export default async function AdminSettingsPage() {
           </CardContent>
         </AdminPanelCard>
       ) : null}
-      <AdminPanelCard>
+      <AdminPanelCard id="platform-controls">
         <CardHeader>
           <CardTitle>Platform feature controls</CardTitle>
           <CardDescription>
@@ -67,9 +67,13 @@ export default async function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Use <span className="font-medium text-foreground">Moderation</span> and{" "}
-            <span className="font-medium text-foreground">Trust</span> insights for operational workflow; product
-            defaults remain in the mobile app and database migrations.
+            Live switches live under{" "}
+            <a href="/admin/platform" className="font-medium text-primary underline-offset-4 hover:underline">
+              Platform
+            </a>
+            . Use <span className="font-medium text-foreground">Moderation</span> and{" "}
+            <span className="font-medium text-foreground">Trust</span> insights for operational workflow; product defaults
+            remain in the mobile app and database migrations.
           </p>
         </CardContent>
       </AdminPanelCard>
