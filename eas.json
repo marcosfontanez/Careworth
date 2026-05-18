@@ -36,6 +36,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_LIVE_STREAMING": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
@@ -51,6 +52,7 @@
       },
       "env": {
         "NODE_OPTIONS": "--max-old-space-size=8192",
+        "EXPO_PUBLIC_LIVE_STREAMING": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }

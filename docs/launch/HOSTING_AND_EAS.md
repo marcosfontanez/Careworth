@@ -63,6 +63,7 @@ Prefer **[EAS Environment Variables](https://docs.expo.dev/build-reference/varia
 | `EXPO_PUBLIC_MARKETING_SITE` | Base marketing URL (future deep links) |
 | `EXPO_PUBLIC_TERMS_URL` | If set, Settings → Terms opens browser |
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | If set, Settings → Privacy opens browser |
+| `EXPO_PUBLIC_LIVE_STREAMING` | Set `1` for TestFlight/App Store builds so Live tab + Go Live appear (`lib/featureFlags.ts`; dev builds default on via `__DEV__`). Root `eas.json` sets this for **preview** and **production** profiles. |
 
 Sentry: create a project at [sentry.io](https://sentry.io), add the React Native DSN, then add `EXPO_PUBLIC_SENTRY_DSN` in EAS. New native build required after adding `@sentry/react-native` (already in `app.json` plugins).
 
@@ -75,9 +76,9 @@ Replace placeholders in root `eas.json` under `submit.production`:
 
 ## 5. Live / Sparks (post–v1)
 
-Feature flags default **off** in `lib/featureFlags.ts`:
+In **`lib/featureFlags.ts`**, `liveStreaming` defaults **on** only in **development** (`__DEV__`). **Release** builds need **`EXPO_PUBLIC_LIVE_STREAMING=1`** at EAS build time (see §3 table); otherwise the Live tab shows the “Coming after launch” placeholder.
 
 - `liveStreaming` — Live tab, `/live/*`, Create → Go Live
 - `feedCreatorGifting` — Feed rail creator gifts (`FeedActionRail` / `VideoFeedPost`); baseline QA doc: `docs/GIFT_SYSTEM_PHASE0_BASELINE.md`
 
-Admins can toggle these in **Admin → feature flags** once real providers ship.
+In-app **Admin → Feature flags** toggles are **per device** only (Zustand); they do **not** replace build-time env for TestFlight. To ship Live widely, keep **`EXPO_PUBLIC_LIVE_STREAMING=1`** on **preview** / **production** EAS profiles (already in root `eas.json`).
