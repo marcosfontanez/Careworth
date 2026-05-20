@@ -38,6 +38,23 @@ npm run db:push
 **You should see** migrations through **189** apply.  
 **Do not** copy `scripts/sql/parked/181_*` into `supabase/migrations/` until engineering signs off.
 
+#### If `db push` tries to re-run migration 001 (`profiles already exists`)
+
+Your production database was built before the CLI tracked history. **Do not** say yes to re-applying 001–175.
+
+1. Mark existing history as applied (one-time):
+
+```powershell
+$versions = 1..175 | ForEach-Object { "{0:D3}" -f $_ }
+npx supabase migration repair --status applied @versions
+```
+
+2. Run `npm run db:push` again — only **176–189** should remain.
+
+#### If a mid-batch migration fails on production drift
+
+Some prod databases already had partial manual changes. Re-run `npm run db:push` after pulling latest `main` (migrations 177+ include idempotent guards). Paste the error if it persists.
+
 ### 3. Auth redirect URLs
 
 1. **Supabase** → **Authentication** → **URL Configuration**.

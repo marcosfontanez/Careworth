@@ -55,7 +55,8 @@ revoke all on function public.claim_next_creator_media_job() from public;
 grant execute on function public.claim_next_creator_media_job() to service_role;
 
 -- Single-row snapshot for SQL editor / admin checks (no per-user RLS; restrict who can SELECT).
-create or replace view public.creator_media_jobs_ops_snapshot_v1 as
+drop view if exists public.creator_media_jobs_ops_snapshot_v1;
+create view public.creator_media_jobs_ops_snapshot_v1 as
 select
   (select count(*)::bigint from public.creator_media_jobs where status = 'queued') as queued_count,
   (select count(*)::bigint from public.creator_media_jobs where status = 'running') as running_count,

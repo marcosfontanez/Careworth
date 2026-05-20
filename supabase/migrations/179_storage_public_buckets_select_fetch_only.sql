@@ -24,6 +24,7 @@ drop policy if exists "Community banners are publicly accessible" on storage.obj
 drop policy if exists "Employer logos are publicly accessible" on storage.objects;
 
 -- Avatars
+drop policy if exists "Public avatars readable via fetch or render only" on storage.objects;
 create policy "Public avatars readable via fetch or render only"
   on storage.objects
   for select
@@ -38,6 +39,7 @@ create policy "Public avatars readable via fetch or render only"
   );
 
 -- Post media
+drop policy if exists "Public post-media readable via fetch or render only" on storage.objects;
 create policy "Public post-media readable via fetch or render only"
   on storage.objects
   for select
@@ -52,6 +54,7 @@ create policy "Public post-media readable via fetch or render only"
   );
 
 -- Community banners
+drop policy if exists "Public community-banners readable via fetch or render only" on storage.objects;
 create policy "Public community-banners readable via fetch or render only"
   on storage.objects
   for select
@@ -66,6 +69,7 @@ create policy "Public community-banners readable via fetch or render only"
   );
 
 -- Employer logos
+drop policy if exists "Public employer-logos readable via fetch or render only" on storage.objects;
 create policy "Public employer-logos readable via fetch or render only"
   on storage.objects
   for select

@@ -45,87 +45,82 @@ begin
   end if;
 end $$;
 
--- ─── 1b) Anonymous + authenticated (discovery, signup checks, pulse reads, ads) ─
+-- ─── 1b–1c) Intentional EXECUTE grants (skip missing signatures on drifted prod) ─
 
-grant execute on function public.get_for_you_post_ids(uuid, int) to anon, authenticated;
-grant execute on function public.get_ranked_feed_v2(uuid, int, timestamptz) to anon, authenticated;
-grant execute on function public.get_ranked_feed(uuid, int, timestamptz) to anon, authenticated;
-grant execute on function public.get_top_today(int) to anon, authenticated;
-
-grant execute on function public.search_sound_library(text, int) to anon, authenticated;
-grant execute on function public.search_hashtags(text, int) to anon, authenticated;
-grant execute on function public.get_viral_sounds_this_week(int, text) to anon, authenticated;
-
-grant execute on function public.get_community_card_stats(uuid[]) to anon, authenticated;
-grant execute on function public.get_mutual_follow_ids(uuid) to anon, authenticated;
-grant execute on function public.check_username_available(text) to anon, authenticated;
-grant execute on function public.border_catalog_leaderboard_rank_defaults(integer) to anon, authenticated;
-
-grant execute on function public.get_current_pulse_score(uuid) to anon, authenticated;
-grant execute on function public.get_top_current_pulse(int, uuid) to anon, authenticated;
-grant execute on function public.get_top_lifetime_pulse(int, uuid) to anon, authenticated;
-grant execute on function public.get_pulse_history(uuid) to anon, authenticated;
-
-grant execute on function public.increment_ad_impression(uuid) to anon, authenticated;
-grant execute on function public.increment_ad_click(uuid) to anon, authenticated;
-
--- Pulse idempotent activity marker (058); kept callable like pre-177 grants.
-grant execute on function public.bump_streak(uuid) to anon, authenticated;
-
--- ─── 1c) authenticated-only RPCs (app + Edge Function user JWT) ─────────────
-
-grant execute on function public.get_feed_exclusions(uuid) to authenticated;
-
-grant execute on function public.get_pulse_month_celebration() to authenticated;
-
-grant execute on function public.get_top_events(int) to authenticated;
-grant execute on function public.get_daily_active_users(int) to authenticated;
-
-grant execute on function public.admin_profile_set_is_verified(uuid, boolean) to authenticated;
-grant execute on function public.admin_profile_set_role_admin(uuid, boolean) to authenticated;
-grant execute on function public.admin_post_set_privacy_mode(uuid, text) to authenticated;
-
-grant execute on function public.admin_upsert_sound_catalog(uuid, text, text, int, boolean) to authenticated;
-grant execute on function public.admin_delete_sound_catalog(uuid) to authenticated;
-
-grant execute on function public.admin_shop_border_stats() to authenticated;
-
--- Monthly border catalog champions (123); staff-gated inside function body.
-grant execute on function public.admin_border_catalog_create_monthly_champions(text, text) to authenticated;
-
-grant execute on function public.bump_community_profile_open(uuid) to authenticated;
-
-grant execute on function public.economy_create_or_get_wallets(uuid) to authenticated;
-grant execute on function public.economy_claim_free_shop_border(uuid) to authenticated;
-grant execute on function public.economy_equip_border(uuid) to authenticated;
-grant execute on function public.economy_accept_pending_border_gift(uuid) to authenticated;
-grant execute on function public.economy_send_creator_gift(uuid, uuid, text, uuid, text) to authenticated;
-grant execute on function public.economy_send_live_stream_gift(text, text, text, text, integer, integer, text) to authenticated;
-grant execute on function public.economy_admin_grant_shop_item(uuid, uuid, text, text) to authenticated;
-
-grant execute on function public.economy_grant_sparks_from_valid_receipt(uuid) to authenticated;
-grant execute on function public.economy_grant_border_from_valid_receipt(uuid, uuid) to authenticated;
-grant execute on function public.economy_gift_border_from_valid_receipt(uuid, text, uuid, uuid, text) to authenticated;
-
-grant execute on function public.increment_creator_earnings(uuid, numeric) to authenticated;
-grant execute on function public.increment_poll_vote(uuid, text) to authenticated;
-
-grant execute on function public.update_user_streak(uuid) to authenticated;
-
-grant execute on function public.reward_deliveries_list_pending() to authenticated;
-grant execute on function public.reward_delivery_set_status(uuid, text) to authenticated;
-grant execute on function public.reward_delivery_enqueue_border_self(uuid, uuid, jsonb) to authenticated;
-grant execute on function public.reward_delivery_enqueue_sparks_pack(uuid, uuid, integer, jsonb) to authenticated;
-grant execute on function public.reward_delivery_enqueue_client(text, text, text, jsonb, integer, uuid, uuid, text) to authenticated;
-
-grant execute on function public.pin_profile_update(uuid) to authenticated;
-grant execute on function public.unpin_profile_update(uuid) to authenticated;
-grant execute on function public.toggle_profile_update_like(uuid) to authenticated;
-
-grant execute on function public.claim_pulse_beta_border() to authenticated;
-grant execute on function public.set_selected_pulse_avatar_frame(uuid) to authenticated;
-
-grant execute on function public.live_touch_stream_attendance(uuid) to authenticated;
+do $$
+declare
+  grants text[] := array[
+    'public.get_for_you_post_ids(uuid, int)|anon, authenticated',
+    'public.get_ranked_feed_v2(uuid, int, timestamptz)|anon, authenticated',
+    'public.get_ranked_feed(uuid, int, timestamptz)|anon, authenticated',
+    'public.get_top_today(int)|anon, authenticated',
+    'public.search_sound_library(text, int)|anon, authenticated',
+    'public.search_hashtags(text, int)|anon, authenticated',
+    'public.get_viral_sounds_this_week(int, text)|anon, authenticated',
+    'public.get_community_card_stats(uuid[])|anon, authenticated',
+    'public.get_mutual_follow_ids(uuid)|anon, authenticated',
+    'public.check_username_available(text)|anon, authenticated',
+    'public.border_catalog_leaderboard_rank_defaults(integer)|anon, authenticated',
+    'public.get_current_pulse_score(uuid)|anon, authenticated',
+    'public.get_top_current_pulse(int, uuid)|anon, authenticated',
+    'public.get_top_lifetime_pulse(int, uuid)|anon, authenticated',
+    'public.get_pulse_history(uuid)|anon, authenticated',
+    'public.increment_ad_impression(uuid)|anon, authenticated',
+    'public.increment_ad_click(uuid)|anon, authenticated',
+    'public.bump_streak(uuid)|anon, authenticated',
+    'public.get_feed_exclusions(uuid)|authenticated',
+    'public.get_pulse_month_celebration()|authenticated',
+    'public.get_top_events(int)|authenticated',
+    'public.get_daily_active_users(int)|authenticated',
+    'public.admin_profile_set_is_verified(uuid, boolean)|authenticated',
+    'public.admin_profile_set_role_admin(uuid, boolean)|authenticated',
+    'public.admin_post_set_privacy_mode(uuid, text)|authenticated',
+    'public.admin_upsert_sound_catalog(uuid, text, text, int, boolean)|authenticated',
+    'public.admin_delete_sound_catalog(uuid)|authenticated',
+    'public.admin_shop_border_stats()|authenticated',
+    'public.admin_border_catalog_create_monthly_champions(text, text)|authenticated',
+    'public.bump_community_profile_open(uuid)|authenticated',
+    'public.economy_create_or_get_wallets(uuid)|authenticated',
+    'public.economy_claim_free_shop_border(uuid)|authenticated',
+    'public.economy_equip_border(uuid)|authenticated',
+    'public.economy_accept_pending_border_gift(uuid)|authenticated',
+    'public.economy_send_creator_gift(uuid, uuid, text, uuid, text)|authenticated',
+    'public.economy_send_live_stream_gift(text, text, text, text, integer, integer, text)|authenticated',
+    'public.economy_admin_grant_shop_item(uuid, uuid, text, text)|authenticated',
+    'public.economy_grant_sparks_from_valid_receipt(uuid)|authenticated',
+    'public.economy_grant_border_from_valid_receipt(uuid, uuid)|authenticated',
+    'public.economy_gift_border_from_valid_receipt(uuid, text, uuid, uuid, text)|authenticated',
+    'public.increment_creator_earnings(uuid, numeric)|authenticated',
+    'public.increment_creator_earnings(uuid)|authenticated',
+    'public.increment_poll_vote(uuid, text)|authenticated',
+    'public.update_user_streak(uuid)|authenticated',
+    'public.update_user_streak()|authenticated',
+    'public.reward_deliveries_list_pending()|authenticated',
+    'public.reward_delivery_set_status(uuid, text)|authenticated',
+    'public.reward_delivery_enqueue_border_self(uuid, uuid, jsonb)|authenticated',
+    'public.reward_delivery_enqueue_sparks_pack(uuid, uuid, integer, jsonb)|authenticated',
+    'public.reward_delivery_enqueue_client(text, text, text, jsonb, integer, uuid, uuid, text)|authenticated',
+    'public.pin_profile_update(uuid)|authenticated',
+    'public.unpin_profile_update(uuid)|authenticated',
+    'public.toggle_profile_update_like(uuid)|authenticated',
+    'public.claim_pulse_beta_border()|authenticated',
+    'public.set_selected_pulse_avatar_frame(uuid)|authenticated',
+    'public.live_touch_stream_attendance(uuid)|authenticated'
+  ];
+  row text;
+  parts text[];
+  sig text;
+  grantees text;
+begin
+  foreach row in array grants loop
+    parts := string_to_array(row, '|');
+    sig := parts[1];
+    grantees := parts[2];
+    if to_regprocedure(sig) is not null then
+      execute format('grant execute on function %s to %s', sig, grantees);
+    end if;
+  end loop;
+end $$;
 
 -- service_role: migration 150 granted EXECUTE; revoking authenticated does not revoke service_role.
 
@@ -167,36 +162,44 @@ end $$;
 
 -- ─── 1f) Legacy coin transfer superseded by economy_send_live_stream_gift (143) ─
 
-revoke execute on function public.transfer_gift_coins(uuid, text, integer) from anon;
-revoke execute on function public.transfer_gift_coins(uuid, text, integer) from authenticated;
+do $$
+begin
+  if to_regprocedure('public.transfer_gift_coins(uuid, text, integer)') is not null then
+    execute 'revoke execute on function public.transfer_gift_coins(uuid, text, integer) from anon';
+    execute 'revoke execute on function public.transfer_gift_coins(uuid, text, integer) from authenticated';
+  end if;
+end $$;
 
 -- ─── 2) search_path pinning (Advisor: function_search_path_mutable) ─────────
 
-alter function public.increment_view_count() set search_path = public;
-
-alter function public.increment_ad_impression(uuid) set search_path = public;
-alter function public.increment_ad_click(uuid) set search_path = public;
-alter function public.increment_creator_earnings(uuid, numeric) set search_path = public;
-
-alter function public.get_top_today(int) set search_path = public;
-
-alter function public.get_ranked_feed(uuid, int, timestamptz) set search_path = public;
-
-alter function public.transfer_gift_coins(uuid, text, integer) set search_path = public;
-
-alter function public.search_hashtags(text, int) set search_path = public;
-alter function public.search_sound_library(text, int) set search_path = public;
-
-alter function public.live_streams_assign_livekit_room() set search_path = public;
-
-alter function public.cleanup_rate_limits() set search_path = public;
-alter function public.auto_moderate_content() set search_path = public;
-
-alter function public.update_ranking_scores() set search_path = public;
-
-alter function public.check_and_award_milestones() set search_path = public;
-
-alter function public.increment_poll_vote(uuid, text) set search_path = public;
+do $$
+declare
+  pins text[] := array[
+    'public.increment_view_count()',
+    'public.increment_ad_impression(uuid)',
+    'public.increment_ad_click(uuid)',
+    'public.increment_creator_earnings(uuid, numeric)',
+    'public.increment_creator_earnings(uuid)',
+    'public.get_top_today(int)',
+    'public.get_ranked_feed(uuid, int, timestamptz)',
+    'public.transfer_gift_coins(uuid, text, integer)',
+    'public.search_hashtags(text, int)',
+    'public.search_sound_library(text, int)',
+    'public.live_streams_assign_livekit_room()',
+    'public.cleanup_rate_limits()',
+    'public.auto_moderate_content()',
+    'public.update_ranking_scores()',
+    'public.check_and_award_milestones()',
+    'public.increment_poll_vote(uuid, text)'
+  ];
+  sig text;
+begin
+  foreach sig in array pins loop
+    if to_regprocedure(sig) is not null then
+      execute format('alter function %s set search_path = public', sig);
+    end if;
+  end loop;
+end $$;
 
 -- ─── 3) RLS initplan-friendly auth.uid() (semantics unchanged) ───────────────
 
