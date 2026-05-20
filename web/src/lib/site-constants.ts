@@ -42,8 +42,15 @@ export function getIosTestflightUrl(): string {
   return v || DEFAULT_IOS_TESTFLIGHT_JOIN_URL;
 }
 
-/** Google Play open testing / internal testing opt-in URL — optional companion to TestFlight. */
-export function getAndroidOpenTestingUrl(): string | undefined {
+/** Google Play open testing opt-in URL (Play Console → Testing → Open testing → Copy link). */
+export const DEFAULT_ANDROID_OPEN_TESTING_URL =
+  "https://play.google.com/apps/testing/com.pulseverse.app" as const;
+
+/**
+ * Google Play open testing URL for /download and other CTAs.
+ * Override with `NEXT_PUBLIC_ANDROID_OPEN_TESTING_URL` if Play Console gives a different opt-in link.
+ */
+export function getAndroidOpenTestingUrl(): string {
   const v = process.env.NEXT_PUBLIC_ANDROID_OPEN_TESTING_URL?.trim();
-  return v ? v : undefined;
+  return v || DEFAULT_ANDROID_OPEN_TESTING_URL;
 }

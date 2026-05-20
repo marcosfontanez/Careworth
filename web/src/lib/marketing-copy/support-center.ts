@@ -78,6 +78,7 @@ export function getSupportCenterCopy(
       searchButton: "Buscar",
       popularLabel: "Popular:",
       popularLinks: [
+        { href: "/download#beta", label: "Descargar app" },
         { href: "/faq", label: "Cuenta" },
         { href: "/trust", label: "Confianza y seguridad" },
         { href: "/privacy", label: "Privacidad" },
@@ -95,7 +96,12 @@ export function getSupportCenterCopy(
         { title: "Circles", body: "Comunidades temáticas, moderación y republicar a My Pulse.", href: "/faq", linkLabel: "Ver artículos" },
         { title: "Live", body: "Destacados, top en vivo, en ascenso y explorar por tema.", href: "/faq", linkLabel: "Ver artículos" },
         { title: "Pulse Page", body: "Casa de identidad — Current Vibe, My Pulse, Media Hub.", href: "/faq", linkLabel: "Ver artículos" },
-        { title: "Socios", body: "Prensa, acceso e instituciones piloto.", href: "/faq", linkLabel: "Ver artículos" },
+        {
+          title: "Descargar app",
+          body: "Beta iOS en TestFlight o beta Android en Google Play (prueba abierta).",
+          href: "/download#beta",
+          linkLabel: "Enlaces de descarga",
+        },
       ],
       faqEyebrow: "FAQ",
       faqTitle: "Preguntas frecuentes",
@@ -137,6 +143,7 @@ export function getSupportCenterCopy(
     searchButton: "Search",
     popularLabel: "Popular:",
     popularLinks: [
+      { href: "/download#beta", label: "Download app" },
       { href: "/faq", label: "Account settings" },
       { href: "/trust", label: "Trust & safety" },
       { href: "/privacy", label: "Privacy" },
@@ -159,7 +166,12 @@ export function getSupportCenterCopy(
         href: "/faq",
         linkLabel: "View articles",
       },
-      { title: "Partners", body: "Press, access programs, and institution pilots.", href: "/faq", linkLabel: "View articles" },
+      {
+        title: "Get the app",
+        body: "Join iOS beta on TestFlight or Android on Google Play open testing.",
+        href: "/download#beta",
+        linkLabel: "Download links",
+      },
     ],
     faqEyebrow: "FAQ",
     faqTitle: "Frequently asked questions",

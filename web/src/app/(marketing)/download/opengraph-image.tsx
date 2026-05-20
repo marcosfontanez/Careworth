@@ -8,6 +8,6 @@ export const alt = "Download · PulseVerse";
 export default function Image() {
   return pulseVerseOgImageResponse({
     title: "Get PulseVerse",
-    subtitle: "Early access, TestFlight & Play tracks as regions open.",
+    subtitle: "TestFlight on iPhone · Google Play open testing on Android.",
   });
 }

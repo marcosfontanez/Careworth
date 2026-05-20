@@ -25,7 +25,7 @@ const copy: Record<Locale, DownloadPageCopy> = {
     eyebrow: "Get the app",
     title: "Join early access",
     description:
-      "PulseVerse is rolling out to clinicians, students, and allied teams. Request access — or open TestFlight / Play testing directly when your region is enabled.",
+      "PulseVerse is rolling out to clinicians, students, and allied teams. Join on iPhone via TestFlight or on Android via Google Play open testing — or request an invite if you need help.",
     requestInvite: "Request invite",
     appStoreSoon: "App Store (soon)",
     playSoon: "Google Play (soon)",
@@ -33,9 +33,9 @@ const copy: Record<Locale, DownloadPageCopy> = {
     androidBetaCta: "Join Android beta",
     betaStepsTitle: "Install the beta",
     betaSteps: [
-      "Install Apple TestFlight from the App Store on the iPhone, iPad, or Mac you’ll use for testing.",
-      "On that device, tap Join iOS beta below, accept the invitation, then tap Install in TestFlight. (Android: use Join Android beta when available.)",
-      "Open PulseVerse from TestFlight or Play and sign in with your approved account — Wi‑Fi helps on first launch.",
+      "iPhone / iPad: install Apple TestFlight from the App Store, tap Join iOS beta below, accept the invite, then Install in TestFlight.",
+      "Android: tap Join Android beta below, opt in on Google Play, then Install from the Play Store listing.",
+      "Open PulseVerse and sign in with your account — Wi‑Fi helps on first launch.",
     ],
     faqHintBefore: "Questions?",
     faqLinkLabel: "FAQ",
@@ -49,7 +49,7 @@ const copy: Record<Locale, DownloadPageCopy> = {
     eyebrow: "Descarga la app",
     title: "Únete al acceso anticipado",
     description:
-      "PulseVerse llega a clínicos, estudiantes y equipos afines. Solicita acceso — o abre TestFlight / Play directamente cuando tu región esté activa.",
+      "PulseVerse llega a clínicos, estudiantes y equipos afines. Únete en iPhone con TestFlight o en Android con la prueba abierta de Google Play — o solicita invitación si necesitas ayuda.",
     requestInvite: "Solicitar invitación",
     appStoreSoon: "App Store (pronto)",
     playSoon: "Google Play (pronto)",
@@ -57,9 +57,9 @@ const copy: Record<Locale, DownloadPageCopy> = {
     androidBetaCta: "Beta Android",
     betaStepsTitle: "Instalar la beta",
     betaSteps: [
-      "Instala Apple TestFlight desde la App Store en el iPhone, iPad o Mac que usarás para probar.",
-      "En ese dispositivo, pulsa Beta iOS abajo, acepta la invitación y pulsa Instalar en TestFlight. (Android: Beta Android cuando exista.)",
-      "Abre PulseVerse desde TestFlight o Play y entra con tu cuenta aprobada — Wi‑Fi ayuda en el primer arranque.",
+      "iPhone / iPad: instala Apple TestFlight desde la App Store, pulsa Beta iOS abajo, acepta la invitación e Instalar en TestFlight.",
+      "Android: pulsa Beta Android abajo, apúntate en Google Play y luego Instalar desde la ficha de Play Store.",
+      "Abre PulseVerse e inicia sesión — Wi‑Fi ayuda en el primer arranque.",
     ],
     faqHintBefore: "¿Dudas?",
     faqLinkLabel: "FAQ",

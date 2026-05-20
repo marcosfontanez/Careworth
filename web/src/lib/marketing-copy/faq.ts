@@ -4,6 +4,10 @@ export type MarketingFaqItem = { q: string; a: string };
 
 const en: MarketingFaqItem[] = [
   {
+    q: "How do I download PulseVerse?",
+    a: "Go to pulseverse.app/download — tap Join iOS beta for TestFlight on iPhone, or Join Android beta for Google Play open testing. You can also request an invite from the contact form if you need help getting access.",
+  },
+  {
     q: "What is PulseVerse?",
     a: "A social platform for healthcare professionals — Feed, Circles, Live, and Pulse Page (with My Pulse and Media Hub) — with moderation built for clinical culture.",
   },
@@ -74,6 +78,10 @@ const en: MarketingFaqItem[] = [
 ];
 
 const es: MarketingFaqItem[] = [
+  {
+    q: "¿Cómo descargo PulseVerse?",
+    a: "Entra en pulseverse.app/download — pulsa Beta iOS para TestFlight en iPhone, o Beta Android para la prueba abierta de Google Play. También puedes solicitar invitación desde el formulario de contacto.",
+  },
   {
     q: "¿Qué es PulseVerse?",
     a: "Una red social para profesionales de la salud: Feed, Circles, Live y Pulse Page (con My Pulse y Media Hub), con moderación pensada para la cultura clínica.",

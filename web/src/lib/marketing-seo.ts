@@ -88,9 +88,9 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   download: {
     title: "Download",
-    description: `Request access to ${site.name} on iOS and Android as availability expands.`,
+    description: `Join ${site.name} on iOS (TestFlight) or Android (Google Play open testing).`,
     ogTitle: "Download",
-    ogDescription: `Get ${site.name} on mobile when your region opens.`,
+    ogDescription: `Get ${site.name} on iPhone or Android — beta links on our download page.`,
   },
   faq: {
     title: "FAQ",
@@ -231,9 +231,9 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   download: {
     title: "Descargar",
-    description: `Solicita acceso a ${site.name} en iOS y Android según vaya abriendo disponibilidad.`,
+    description: `Únete a ${site.name} en iOS (TestFlight) o Android (prueba abierta de Google Play).`,
     ogTitle: "Descargar",
-    ogDescription: `Consigue ${site.name} en móvil cuando tu región esté disponible.`,
+    ogDescription: `Consigue ${site.name} en iPhone o Android — enlaces beta en la página de descarga.`,
   },
   faq: {
     title: "Preguntas frecuentes",

@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 
+import { BetaAccessButtons } from "@/components/marketing/beta-access-buttons";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { PosterFrame, SplitFeatureRow } from "@/components/marketing/website-visuals";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,10 @@ export function HomeFinalCta({ locale }: { locale: Locale }) {
                     </MarketingDestinationLink>
                   </Button>
                 </div>
+                <BetaAccessButtons
+                  locale={locale}
+                  className="mt-5 justify-center lg:justify-start"
+                />
               </div>
 
               <PosterFrame

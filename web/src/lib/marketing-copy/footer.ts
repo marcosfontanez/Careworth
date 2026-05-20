@@ -26,6 +26,7 @@ const copy: Record<Locale, FooterCopy> = {
       {
         title: "Product",
         links: [
+          { href: "/download", label: "Download app" },
           { href: "/features", label: "Features" },
           { href: "/web-app", label: "Web app" },
           { href: "/login", label: "Sign in" },
@@ -86,6 +87,7 @@ const copy: Record<Locale, FooterCopy> = {
       {
         title: "Producto",
         links: [
+          { href: "/download", label: "Descargar app" },
           { href: "/features", label: "Funciones" },
           { href: "/web-app", label: "App web" },
           { href: "/login", label: "Iniciar sesión" },

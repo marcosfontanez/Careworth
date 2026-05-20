@@ -1,15 +1,13 @@
 import Link from "next/link";
 
+import { BetaAccessButtons } from "@/components/marketing/beta-access-buttons";
 import { SectionHeader } from "@/components/marketing/section-header";
-import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { PosterFrame } from "@/components/marketing/website-visuals";
-import { Button } from "@/components/ui/button";
 import { getDownloadPageCopy } from "@/lib/marketing-copy/download";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
-import { getAndroidOpenTestingUrl, getIosTestflightUrl } from "@/lib/site-constants";
-import { marketingCardMuted, marketingInlineLink, shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingCardMuted, marketingInlineLink } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 export const generateMetadata = () => generateMarketingMetadata("download");
@@ -17,9 +15,6 @@ export const generateMetadata = () => generateMarketingMetadata("download");
 export default async function DownloadPage() {
   const locale = await getMarketingLocale();
   const t = getDownloadPageCopy(locale);
-  const iosUrl = getIosTestflightUrl();
-  const androidUrl = getAndroidOpenTestingUrl();
-  const showBetaHelp = Boolean(iosUrl || androidUrl);
 
   return (
     <MarketingPageShell width="medium" breadcrumbPath="/download">
@@ -42,47 +37,23 @@ export default async function DownloadPage() {
       </div>
 
       <div className={cn("mx-auto mt-12 max-w-2xl rounded-2xl p-8", marketingCardMuted)}>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button size="lg" className={cn("bg-primary text-primary-foreground", shadowPrimaryCta)} asChild>
-            <MarketingDestinationLink href="/contact" analyticsSource="download_request_invite">
-              {t.requestInvite}
-            </MarketingDestinationLink>
-          </Button>
-          <Button size="lg" variant="outline" className="border-white/15 bg-white/3" asChild>
-            <a href={iosUrl} target="_blank" rel="noopener noreferrer">
-              {t.iosBetaCta}
-            </a>
-          </Button>
-          {androidUrl ? (
-            <Button size="lg" variant="outline" className="border-white/15 bg-white/3" asChild>
-              <a href={androidUrl} target="_blank" rel="noopener noreferrer">
-                {t.androidBetaCta}
-              </a>
-            </Button>
-          ) : (
-            <Button size="lg" variant="outline" className="border-white/15" disabled>
-              {t.playSoon}
-            </Button>
-          )}
-        </div>
+        <BetaAccessButtons locale={locale} showRequestInvite className="justify-center" />
 
-        {showBetaHelp ? (
-          <div className="mt-10 border-t border-white/10 pt-8">
-            <p className="text-sm font-semibold text-foreground">{t.betaStepsTitle}</p>
-            <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground">
-              {t.betaSteps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-            <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
-              {t.faqHintBefore}{" "}
-              <Link href="/faq" className={marketingInlineLink}>
-                {t.faqLinkLabel}
-              </Link>{" "}
-              {t.faqHintAfter}
-            </p>
-          </div>
-        ) : null}
+        <div className="mt-10 border-t border-white/10 pt-8">
+          <p className="text-sm font-semibold text-foreground">{t.betaStepsTitle}</p>
+          <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground">
+            {t.betaSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
+            {t.faqHintBefore}{" "}
+            <Link href="/faq" className={marketingInlineLink}>
+              {t.faqLinkLabel}
+            </Link>{" "}
+            {t.faqHintAfter}
+          </p>
+        </div>
 
         <p className="mt-8 text-center text-sm leading-relaxed text-muted-foreground">{t.footnote}</p>
       </div>
