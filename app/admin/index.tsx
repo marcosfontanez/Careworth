@@ -118,12 +118,16 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => { loadData(); }, [tab, reportFilter]);
+  useEffect(() => {
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadData body depends on tab/filter state declared above
+  }, [tab, reportFilter]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- same loadData closure as mount effect
   }, [tab, reportFilter]);
 
   const openWebAdmin = useCallback(() => {

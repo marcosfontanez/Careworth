@@ -12,6 +12,7 @@
  * After running, update lib/pulseRingRasterAssets.ts constants printed below if needed.
  */
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
+import { Buffer } from 'node:buffer';
 import { join } from 'path';
 import { loadSharp } from './load-sharp.mjs';
 import { fileURLToPath } from 'url';

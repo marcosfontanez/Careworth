@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
@@ -31,18 +31,14 @@ export default function BlockedUsersScreen() {
   const [blocked, setBlocked] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadBlocked = useCallback(async () => {
     if (!user) return;
-    loadBlocked();
-  }, [user]);
-
-  const loadBlocked = async () => {
     setLoading(true);
     try {
       const { data } = await supabase
         .from('blocked_users')
         .select('id, blocked:blocked_id(id, display_name, avatar_url, role)')
-        .eq('blocker_id', user!.id);
+        .eq('blocker_id', user.id);
 
       setBlocked(
         (data ?? []).map((r: any) => ({
@@ -55,7 +51,11 @@ export default function BlockedUsersScreen() {
       );
     } catch {}
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    void loadBlocked();
+  }, [loadBlocked]);
 
   const handleUnblock = (item: BlockedUser) => {
     Alert.alert(

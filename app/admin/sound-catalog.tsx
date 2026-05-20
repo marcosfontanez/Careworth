@@ -25,7 +25,7 @@ const SOUND_CATALOG_ADMIN_LIST_WINDOW = getAdminModerationListWindow('soundCatal
 export default function AdminSoundCatalogScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const toast = useToast();
+  const showToast = useToast((s) => s.show);
 
   const [rows, setRows] = useState<SoundCatalogAdminRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export default function AdminSoundCatalogScreen() {
         await load();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Failed to load catalog';
-        if (!cancelled) toast.show(msg, 'error');
+        if (!cancelled) showToast(msg, 'error');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -68,16 +68,16 @@ export default function AdminSoundCatalogScreen() {
       await load();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Refresh failed';
-      toast.show(msg, 'error');
+      showToast(msg, 'error');
     } finally {
       setRefreshing(false);
     }
-  }, [load]);
+  }, [load, showToast]);
 
   const handleSave = async () => {
     const pid = postId.trim();
     if (!pid) {
-      toast.show('Post UUID is required', 'error');
+      showToast('Post UUID is required', 'error');
       return;
     }
     setSaving(true);
@@ -91,7 +91,7 @@ export default function AdminSoundCatalogScreen() {
         sortBoost: boost,
         isActive,
       });
-      toast.show('Saved to catalog', 'success');
+      showToast('Saved to catalog', 'success');
       setPostId('');
       setArtist('');
       setKeywords('');
@@ -100,7 +100,7 @@ export default function AdminSoundCatalogScreen() {
       await load();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Save failed';
-      toast.show(msg, 'error');
+      showToast(msg, 'error');
     } finally {
       setSaving(false);
     }
@@ -118,11 +118,11 @@ export default function AdminSoundCatalogScreen() {
           onPress: async () => {
             try {
               await soundCatalogService.deleteByPostId(row.post_id);
-              toast.show('Removed', 'success');
+              showToast('Removed', 'success');
               await load();
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Delete failed';
-              toast.show(msg, 'error');
+              showToast(msg, 'error');
             }
           },
         },

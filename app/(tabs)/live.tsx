@@ -102,7 +102,6 @@ function LiveHubScreen() {
   const upcomingSectionY = useRef(0);
   const pendingScrollToSection = useRef<LiveHubSection | null>(null);
   const featuredSectionY = useRef(0);
-  const circlesSectionY = useRef(0);
   const [headerCompact, setHeaderCompact] = useState(false);
   const [tab, setTab] = useState<LiveHubCategoryTab>('for-you');
   const [refreshing, setRefreshing] = useState(false);
@@ -175,8 +174,7 @@ function LiveHubScreen() {
     return hub.promoTag?.trim() || 'Live Deal';
   }, []);
 
-  const upcoming = data?.upcoming ?? [];
-  const upcomingPreview = useMemo(() => upcoming.slice(0, 12), [upcoming]);
+  const upcomingPreview = useMemo(() => (data?.upcoming ?? []).slice(0, 12), [data?.upcoming]);
 
   const emptyFollowing = tab === 'following' && (data?.allFiltered.length ?? 0) === 0;
 
@@ -381,7 +379,7 @@ function LiveHubScreen() {
                   leading={<Ionicons name="calendar" size={16} color={pulseverse.electric} />}
                   style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
                   rightSlot={
-                    upcoming.length > upcomingPreview.length ? (
+                    (data?.upcoming?.length ?? 0) > upcomingPreview.length ? (
                       <Pressable onPress={() => viewAllHint('Full schedule view — coming soon.')} hitSlop={8}>
                         <Text style={styles.viewAllLink}>View all sessions</Text>
                       </Pressable>

@@ -475,7 +475,7 @@ export default function FeedScreen() {
         }
       />
     ),
-    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch, toast],
+    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch, toast, user?.id],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
