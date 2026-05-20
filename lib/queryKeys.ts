@@ -61,6 +61,9 @@ export const postKeys = {
    */
   detail: (id: string, viewerId: Nullable<string>) =>
     ['post', id, maybe(viewerId)] as const,
+  /** Batched linked-post resolve (`useLinkedPostsMap`) — one query per unique id-set per viewer. */
+  linkedBatch: (viewerId: Nullable<string>, idsKey: string) =>
+    ['post', 'linkedBatch', maybe(viewerId), idsKey] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────

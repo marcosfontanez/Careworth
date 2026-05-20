@@ -31,7 +31,7 @@ export function shopErrorHint(code: string, isBorderGift = false): string {
       return 'This item has no App Store / Play product ID in PulseVerse yet. Update shop_items in Supabase or redeploy migrations.';
     case 'SKU_NOT_FOUND':
     case 'sku-not-found':
-      return 'The store does not have this product ID yet. In App Store Connect or Play Console, create a consumable IAP whose ID exactly matches your catalog (for example com.pulseverse.sparks.500.ios), accept agreements, then wait up to a few hours for it to propagate.';
+      return 'This purchase isn’t available from the App Store or Google Play yet. If you’re on the PulseVerse team, finish consumable IAP setup so product IDs match the shop catalog; everyone else can try again later or contact support.';
     case 'FETCH_PRODUCTS_FAILED':
     case 'query-product':
       return 'Could not load products from the store. Check your connection, signing into Sandbox (iOS), and try again.';

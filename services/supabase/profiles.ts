@@ -47,7 +47,7 @@ function rowToProfile(row: any): UserProfile {
     identityTags: Array.isArray(row.identity_tags)
       ? (row.identity_tags as string[]).map((s) => String(s).trim()).filter(Boolean)
       : undefined,
-    hideRecentPostsOnMyPage: Boolean(row.hide_recent_posts_on_my_page),
+    hidePulseMusicPlayerOnMyPage: Boolean(row.hide_pulse_music_player_on_my_page),
     /**
      * Denormalized Pulse Score v2 columns (see migration 059). Falls
      * back to `'murmur'` / 0 for rows written before the trigger
@@ -120,7 +120,7 @@ export const profilesService = {
     profile_song_url: string | null;
     profile_song_artwork_url: string | null;
     identity_tags?: string[] | null;
-    hide_recent_posts_on_my_page?: boolean;
+    hide_pulse_music_player_on_my_page?: boolean;
     terms_and_privacy_accepted_at?: string | null;
   }>) {
     const qb = supabase.from('profiles') as any;

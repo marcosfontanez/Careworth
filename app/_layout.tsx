@@ -35,6 +35,16 @@ import { attachSupabaseAuthAutoRefreshToAppState } from '@/lib/supabaseAuthLifec
 import * as Updates from 'expo-updates';
 import { attachAppResumeStaleDataRefresh } from '@/lib/appResumeQuerySync';
 import { RewardDeliveryProvider } from '@/components/rewards/RewardDeliveryProvider';
+import { isExpoGo } from '@/lib/expoRuntime';
+
+/**
+ * LiveKit registers WebRTC globals — requires native modules (dev/EAS build only).
+ * Do not import `@livekit/react-native` at module scope in Expo Go or the app crashes on startup.
+ */
+if (!isExpoGo()) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional native bootstrap
+  require('@livekit/react-native').registerGlobals();
+}
 
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();

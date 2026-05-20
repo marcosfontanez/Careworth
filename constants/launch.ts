@@ -1,3 +1,5 @@
+import { CONTACT_EMAILS } from '@/lib/contactEmails';
+
 /**
  * Store / marketing URLs and support contact.
  *
@@ -6,7 +8,7 @@
  * can open the browser; otherwise we use in-app `/legal/*` screens.
  */
 export const LAUNCH_LINKS = {
-  supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'support@pulseverse.app',
+  supportEmail: CONTACT_EMAILS.support,
   marketingBaseUrl: process.env.EXPO_PUBLIC_MARKETING_SITE?.trim() || 'https://pulseverse.app',
   termsOfServiceUrl: process.env.EXPO_PUBLIC_TERMS_URL?.trim() || '',
   privacyPolicyUrl: process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() || '',

@@ -1,4 +1,4 @@
-import type { Community, CircleThread, Post, TrendingTopic24h } from '@/types';
+import type { Community, CircleThread, CircleThreadKind, Post, TrendingTopic24h } from '@/types';
 import { FEATURED_CIRCLE_SLUGS_ORDER, PROMOTED_NEW_CIRCLE_SLUGS } from '@/constants/circleDiscovery';
 import { communitiesService, postsService, circleThreadsDb } from './supabase';
 
@@ -293,6 +293,19 @@ export const circleContentService = {
 
   async getThreadsByCommunityId(communityId: string): Promise<CircleThread[]> {
     return circleThreadsDb.listByCommunityId(communityId);
+  },
+
+  /** Questions / discussions tab — inserts into `circle_threads` (not circle wall posts). */
+  async createThread(params: {
+    communityId: string;
+    authorId: string;
+    kind: CircleThreadKind;
+    title: string;
+    body: string;
+    mediaThumbUrl?: string | null;
+    linkedPostId?: string | null;
+  }): Promise<CircleThread> {
+    return circleThreadsDb.createThread(params);
   },
 
   async getThreadsByCircleSlug(slug: string): Promise<CircleThread[]> {

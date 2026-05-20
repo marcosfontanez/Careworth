@@ -46,7 +46,17 @@ type EventName =
   | 'reward_toast_dismissed'
   | 'reward_reveal_opened'
   | 'reward_reveal_closed'
-  | 'reward_reveal_cta';
+  | 'reward_reveal_cta'
+  | 'live_tab_viewed'
+  | 'live_stream_created'
+  | 'live_stream_started'
+  | 'live_stream_joined'
+  | 'live_stream_watch_failed'
+  | 'live_gift_opened'
+  | 'live_gift_sent'
+  | 'scheduled_live_created'
+  | 'reminder_clicked'
+  | 'live_stream_ended';
 
 class AnalyticsService {
   private userId: string | null = null;

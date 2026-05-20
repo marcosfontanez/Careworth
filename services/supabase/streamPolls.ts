@@ -85,28 +85,34 @@ export const streamPollsService = {
   },
 
   /**
-   * Cast a vote. Inserts a row in `stream_poll_votes` (unique per user/poll)
-   * then calls the `increment_poll_vote` RPC to atomically bump the option's
-   * count and the poll's total. Returns `false` if the user already voted.
+   * Cast a vote via single transactional RPC (`cast_stream_poll_vote`): insert,
+   * tally, and `counts_applied` in one DB transaction. Returns `false` if the
+   * poll is inactive, the viewer already voted, or the RPC reports failure.
    */
   async vote(pollId: string, optionId: string, userId: string): Promise<boolean> {
     if (!pollId || !optionId || !userId) return false;
 
-    const { error: voteErr } = await supabase
-      .from('stream_poll_votes')
-      .insert({ poll_id: pollId, option_id: optionId, user_id: userId });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || user.id !== userId) return false;
 
-    if (voteErr) {
-      if (voteErr.code === '23505') return false;
-      if (__DEV__) console.warn('[streamPolls.vote/insert]', voteErr.message);
-      return false;
-    }
-
-    const { error: rpcErr } = await supabase.rpc('increment_poll_vote', {
+    const { data, error } = await supabase.rpc('cast_stream_poll_vote', {
       p_poll_id: pollId,
       p_option_id: optionId,
     });
-    if (rpcErr && __DEV__) console.warn('[streamPolls.vote/rpc]', rpcErr.message);
+
+    if (error) {
+      if (__DEV__) console.warn('[streamPolls.vote/rpc]', error.message);
+      return false;
+    }
+
+    const payload = data as { ok?: boolean; reason?: string } | null;
+    if (payload?.ok !== true) {
+      if (__DEV__ && payload?.reason)
+        console.warn('[streamPolls.vote]', payload.reason);
+      return false;
+    }
 
     return true;
   },

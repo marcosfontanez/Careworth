@@ -8,6 +8,33 @@ import type {
   ProfileUpdateType,
 } from '@/types';
 import { postsService } from './posts';
+import {
+  PROFILE_SELECT_MY_PULSE_COMMENT_AUTHOR,
+  profileRowToCreatorSummary,
+} from './profileRowMapper';
+
+const PROFILE_UPDATE_COMMENT_SELECT = `id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(${PROFILE_SELECT_MY_PULSE_COMMENT_AUTHOR})`;
+
+function rowToProfileUpdateComment(row: any): ProfileUpdateComment {
+  const p = row.profiles;
+  const s = p ? profileRowToCreatorSummary(p) : null;
+  return {
+    id: row.id,
+    updateId: row.update_id,
+    authorId: row.author_id,
+    parentId: row.parent_id ?? undefined,
+    content: row.content,
+    mediaUrl: row.media_url ?? undefined,
+    createdAt: row.created_at,
+    editedAt: row.edited_at ?? undefined,
+    authorName: s?.displayName,
+    authorUsername: s?.username,
+    authorAvatarUrl: s?.avatarUrl,
+    authorPulseTier: s?.pulseTier,
+    authorPulseScoreCurrent: s?.pulseScoreCurrent,
+    authorPulseAvatarFrame: s?.pulseAvatarFrame ?? null,
+  };
+}
 
 function rowToProfileUpdate(row: any, liked?: boolean): ProfileUpdate {
   const picsFromArray = Array.isArray(row.pics_urls)
@@ -172,29 +199,12 @@ export const profileUpdatesDb = {
   async listComments(updateId: string): Promise<ProfileUpdateComment[]> {
     const { data, error } = await supabase
       .from('profile_update_comments')
-      .select(
-        'id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
-      )
+      .select(PROFILE_UPDATE_COMMENT_SELECT)
       .eq('update_id', updateId)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return (data ?? []).map((row: any) => {
-      const p = row.profiles;
-      return {
-        id: row.id,
-        updateId: row.update_id,
-        authorId: row.author_id,
-        parentId: row.parent_id ?? undefined,
-        content: row.content,
-        mediaUrl: row.media_url ?? undefined,
-        createdAt: row.created_at,
-        editedAt: row.edited_at ?? undefined,
-        authorName: p?.display_name ?? undefined,
-        authorUsername: p?.username ?? undefined,
-        authorAvatarUrl: p?.avatar_url ?? undefined,
-      };
-    });
+    return (data ?? []).map(rowToProfileUpdateComment);
   },
 
   async addComment(
@@ -217,27 +227,12 @@ export const profileUpdatesDb = {
         parent_id: parentId ?? null,
         media_url: media,
       })
-      .select(
-        'id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
-      )
+      .select(PROFILE_UPDATE_COMMENT_SELECT)
       .single();
 
     if (error || !data) throw error ?? new Error('Failed to post comment');
 
-    const p = (data as any).profiles;
-    return {
-      id: (data as any).id,
-      updateId: (data as any).update_id,
-      authorId: (data as any).author_id,
-      parentId: (data as any).parent_id ?? undefined,
-      content: (data as any).content,
-      mediaUrl: (data as any).media_url ?? undefined,
-      createdAt: (data as any).created_at,
-      editedAt: (data as any).edited_at ?? undefined,
-      authorName: p?.display_name ?? undefined,
-      authorUsername: p?.username ?? undefined,
-      authorAvatarUrl: p?.avatar_url ?? undefined,
-    };
+    return rowToProfileUpdateComment(data as any);
   },
 
   async deleteComment(commentId: string): Promise<void> {
@@ -281,27 +276,12 @@ export const profileUpdatesDb = {
       .update({ content: trimmed })
       .eq('id', commentId)
       .eq('author_id', authorId)
-      .select(
-        'id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(id, display_name, username, avatar_url)',
-      )
+      .select(PROFILE_UPDATE_COMMENT_SELECT)
       .single();
 
     if (error || !data) throw error ?? new Error('Failed to edit comment');
 
-    const p = (data as any).profiles;
-    return {
-      id: (data as any).id,
-      updateId: (data as any).update_id,
-      authorId: (data as any).author_id,
-      parentId: (data as any).parent_id ?? undefined,
-      content: (data as any).content,
-      mediaUrl: (data as any).media_url ?? undefined,
-      createdAt: (data as any).created_at,
-      editedAt: (data as any).edited_at ?? undefined,
-      authorName: p?.display_name ?? undefined,
-      authorUsername: p?.username ?? undefined,
-      authorAvatarUrl: p?.avatar_url ?? undefined,
-    };
+    return rowToProfileUpdateComment(data as any);
   },
 
   async insert(userId: string, payload: AddProfileUpdateRow): Promise<ProfileUpdate> {

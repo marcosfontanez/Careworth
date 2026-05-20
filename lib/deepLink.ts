@@ -7,8 +7,12 @@ import {
   liveHighlightsHref,
   liveHighlightsRootHref,
   liveHostControlsHref,
+  liveHubHref,
   liveStreamHref,
+  type LiveHubHrefOpts,
 } from '@/lib/navigation/liveRoutes';
+import { normalizeLiveHubTabQueryParam } from '@/lib/liveHubTabParam';
+import { normalizeLiveHubSectionQueryParam } from '@/lib/liveHubSectionParam';
 
 function firstQueryString(
   qp: Linking.QueryParams | null | undefined,
@@ -48,6 +52,19 @@ function safeDecodeURIComponent(s: string): string {
   } catch {
     return s;
   }
+}
+
+/** Deep links into `/(tabs)/live` with optional `tab` + `section` query params. */
+function pushLiveHubFromParsed(parsed: Linking.ParsedURL, opts?: { section?: LiveHubHrefOpts['section'] }) {
+  const tabRaw = firstQueryString(parsed.queryParams, 'tab');
+  const tab = normalizeLiveHubTabQueryParam(tabRaw);
+  const secRaw = firstQueryString(parsed.queryParams, 'section');
+  const sectionFromQuery = normalizeLiveHubSectionQueryParam(secRaw);
+  const section = opts?.section ?? sectionFromQuery ?? undefined;
+  const hubOpts: LiveHubHrefOpts = {};
+  if (tab) hubOpts.tab = tab;
+  if (section) hubOpts.section = section;
+  router.push(Object.keys(hubOpts).length ? liveHubHref(hubOpts) : liveHubHref());
 }
 
 /**
@@ -90,6 +107,11 @@ export function parseAndNavigate(url: string) {
     }
 
     const pLower = path.toLowerCase();
+    if (pLower === 'live') {
+      pushLiveHubFromParsed(parsed);
+      return true;
+    }
+
     if (pLower === 'my-pulse' || pLower.startsWith('my-pulse/')) {
       router.push('/(tabs)/my-pulse' as any);
       return true;
@@ -141,7 +163,10 @@ export function parseAndNavigate(url: string) {
     if (liveRest !== null) {
       const segments = liveRest.split('/').filter(Boolean);
       const head = segments[0]?.trim().toLowerCase() ?? '';
-      if (!head) return false;
+      if (!head) {
+        pushLiveHubFromParsed(parsed);
+        return true;
+      }
       if (head === 'go-live') {
         router.push(liveGoLiveHref());
         return true;
@@ -153,6 +178,14 @@ export function parseAndNavigate(url: string) {
       if (head === 'highlights') {
         const sid = firstQueryString(parsed.queryParams, 'streamId');
         router.push(sid ? liveHighlightsHref(sid) : liveHighlightsRootHref());
+        return true;
+      }
+      if (head === 'upcoming') {
+        pushLiveHubFromParsed(parsed, { section: 'upcoming' });
+        return true;
+      }
+      if (head === 'hub') {
+        pushLiveHubFromParsed(parsed);
         return true;
       }
       router.push(liveStreamHref(segments[0]!));

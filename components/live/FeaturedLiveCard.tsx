@@ -13,29 +13,42 @@ type Props = {
   stream: LiveStream;
   width: number;
   onPress: () => void;
+  /** Learn / Shop Live / Circle Live / … pill above title. */
+  categoryLabel?: string;
   /** Optional one-line context shown under the title. */
   subtitle?: string;
   /** Commerce hint on Shop Live / selling streams (promo or product). */
   shopBadge?: string;
+  /** `compact` matches denser marketing mockups; default is full cinematic height. */
+  variant?: 'hero' | 'compact';
 };
 
-const HERO_HEIGHT = 380;
+const HERO_HEIGHTS = { hero: 400, compact: 312 } as const;
 
 /**
  * Premium hero card used inside the FeaturedLiveCarousel.
  * Cinematic image fill, gradient scrim, identity row, gold-accented Watch Now CTA.
  */
-export function FeaturedLiveCard({ stream, width, onPress, subtitle, shopBadge }: Props) {
+export function FeaturedLiveCard({
+  stream,
+  width,
+  onPress,
+  categoryLabel,
+  subtitle,
+  shopBadge,
+  variant = 'hero',
+}: Props) {
   const ctxLine =
     subtitle ??
     [stream.host.role, stream.host.specialty].filter(Boolean).join(' · ');
+  const cardH = HERO_HEIGHTS[variant];
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { width, height: HERO_HEIGHT },
+        { width, height: cardH },
         pressed && styles.pressed,
       ]}
       accessibilityRole="button"
@@ -49,8 +62,8 @@ export function FeaturedLiveCard({ stream, width, onPress, subtitle, shopBadge }
         {...pulseImageFeedHeroProps}
       />
       <LinearGradient
-        colors={['rgba(6,14,26,0.05)', 'rgba(6,14,26,0.45)', 'rgba(6,14,26,0.95)']}
-        locations={[0, 0.45, 1]}
+        colors={['rgba(6,14,26,0.08)', 'rgba(6,14,26,0.42)', 'rgba(6,14,26,0.97)']}
+        locations={[0, 0.38, 1]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -70,11 +83,16 @@ export function FeaturedLiveCard({ stream, width, onPress, subtitle, shopBadge }
       </View>
 
       <View style={styles.bottom}>
+        {categoryLabel ? (
+          <View style={styles.categoryPill}>
+            <Text style={styles.categoryPillTxt}>{categoryLabel}</Text>
+          </View>
+        ) : null}
         <Text style={styles.title} numberOfLines={2}>
           {stream.title}
         </Text>
         {stream.description ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
+          <Text style={styles.subtitle} numberOfLines={2}>
             {stream.description}
           </Text>
         ) : null}
@@ -91,12 +109,17 @@ export function FeaturedLiveCard({ stream, width, onPress, subtitle, shopBadge }
           </View>
         </View>
 
-        <View style={styles.cta}>
-          <Text style={styles.ctaText}>Watch Now</Text>
+        <LinearGradient
+          colors={[colors.primary.teal, '#6366F1']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.ctaGradient}
+        >
+          <Text style={styles.ctaText}>Watch Live</Text>
           <View style={styles.ctaIconWrap}>
-            <Ionicons name="play" size={11} color={colors.dark.bg} />
+            <Ionicons name="play" size={11} color="#0B1220" />
           </View>
-        </View>
+        </LinearGradient>
       </View>
     </Pressable>
   );
@@ -160,20 +183,38 @@ const styles = StyleSheet.create({
     bottom: 0,
     padding: spacing.lg,
   },
+  categoryPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'rgba(56,189,248,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.45)',
+    marginBottom: spacing.sm,
+  },
+  categoryPillTxt: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#A5F3FC',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   title: {
     ...typography.h1,
     fontSize: 24,
     fontWeight: '800',
-    color: colors.dark.text,
+    color: '#F8FAFC',
     letterSpacing: -0.4,
     lineHeight: 28,
   },
   subtitle: {
     ...typography.body,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.78)',
-    marginTop: 4,
+    color: 'rgba(248,250,252,0.72)',
+    marginTop: 6,
     letterSpacing: -0.1,
+    lineHeight: 19,
   },
   identityRow: {
     flexDirection: 'row',
@@ -193,41 +234,45 @@ const styles = StyleSheet.create({
     ...typography.subtitle,
     fontSize: 14,
     fontWeight: '700',
-    color: colors.dark.text,
+    color: '#F1F5F9',
     letterSpacing: -0.1,
   },
   context: {
     ...typography.caption,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(248,250,252,0.62)',
     marginTop: 1,
   },
-  cta: {
-    marginTop: spacing.md + 2,
+  ctaGradient: {
+    marginTop: spacing.md + 4,
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingLeft: spacing.lg,
-    paddingRight: 6,
-    paddingVertical: 6,
+    paddingRight: 7,
+    paddingVertical: 10,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(8,12,20,0.65)',
     borderWidth: 1,
-    borderColor: colors.primary.gold + 'AA',
+    borderColor: 'rgba(255,255,255,0.22)',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
   ctaText: {
     ...typography.button,
     fontSize: 13,
     fontWeight: '800',
-    color: colors.primary.gold,
-    letterSpacing: 0.1,
+    color: '#0B1220',
+    letterSpacing: 0.2,
   },
   ctaIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primary.gold,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
   },

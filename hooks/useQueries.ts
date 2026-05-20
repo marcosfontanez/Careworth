@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useQueries, useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   feedService,
   communityService,
@@ -11,7 +11,7 @@ import {
 } from '@/services';
 import { useAuth } from '@/contexts/AuthContext';
 import { streaksService } from '@/services/social/streaks';
-import type { FeedType } from '@/types';
+import type { FeedType, Post } from '@/types';
 import { postsService, profilesService } from '@/services/supabase';
 import {
   circleContentKeys,
@@ -23,6 +23,7 @@ import {
   profileUpdateKeys,
   userKeys,
 } from '@/lib/queryKeys';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
 
 export { useLiveStreams, useStream } from '@/hooks/useLiveQueries';
 
@@ -30,6 +31,13 @@ export { useLiveStreams, useStream } from '@/hooks/useLiveQueries';
  * Central React Query hooks for the mobile app. This file is large by design; prefer extracting
  * new domain hooks (e.g. `hooks/useLiveQueries.ts`, `hooks/queries/feed.ts`) and re-exporting here.
  */
+
+/** Mirrors `postsService.getById` eligibility — non-live posts only resolve for the author. */
+function linkedPostResolvableForViewer(post: Post, viewerId: string | null): boolean {
+  const s = (post.scheduledStatus ?? 'live').trim().toLowerCase();
+  if (s === 'live') return true;
+  return viewerId != null && viewerId === post.creatorId;
+}
 
 /** Bump when feed queryFn shape changes so dev clients don’t keep a stale Fast Refresh closure. */
 const FEED_QUERY_KEY_VERSION = 3;
@@ -111,16 +119,6 @@ export function usePost(id: string, opts?: { enabled?: boolean }) {
 }
 
 /**
- * Parallel fetch a list of posts by ID, sharing the cache with `usePost` so
- * that any post already seen in the feed / detail screen is reused for free.
- *
- * Used by My Pulse to resolve `linkedPostId`s on Clip pins (which can
- * reference another creator's post, so they aren't always in `userPosts`).
- * Returns a stable Map keyed by post id — callers should treat a missing
- * entry as "not yet resolved" rather than "doesn't exist" and fall back to
- * whatever snapshot data lives on the pin itself.
- */
-/**
  * Batch-prefetch a list of post ids into the React Query cache as
  * individual `postKeys.detail(id, viewerId)` entries, in a single DB
  * round-trip.
@@ -188,42 +186,68 @@ export function usePrefetchPostsByIds(
   }, [idsKey, viewerId, enabled]);
 }
 
-export function useLinkedPostsMap(
-  ids: readonly (string | null | undefined)[],
-): Map<string, import('@/types').Post> {
+export function useLinkedPostsMap(ids: readonly (string | null | undefined)[]): Map<string, Post> {
   const { user } = useAuth();
   const viewerId = user?.id ?? null;
+  const queryClient = useQueryClient();
 
-  const uniqueIds = Array.from(
-    new Set(ids.filter((x): x is string => !!x && x.trim().length > 0)),
+  const idsKey = useMemo(
+    () =>
+      Array.from(new Set(ids.filter((x): x is string => !!x && x.trim().length > 0)))
+        .sort()
+        .join(','),
+    [ids],
   );
 
-  const results = useQueries({
-    queries: uniqueIds.map((id) => ({
-      queryKey: postKeys.detail(id, viewerId),
-      queryFn: () => feedService.getPostById(id, viewerId),
-      enabled: !!id,
-      /** Linked-post previews are an enhancement, not critical — keep them
-       *  fresh enough to reflect like/comment bumps on refresh, but avoid
-       *  hammering the DB if someone pins 10+ clips. */
-      staleTime: 30_000,
-      gcTime: 1000 * 60 * 15,
-      refetchOnMount: false,
-    })),
+  const { data: batchMap } = useQuery({
+    queryKey: postKeys.linkedBatch(viewerId, idsKey),
+    queryFn: async () => {
+      const idList = idsKey.length === 0 ? [] : idsKey.split(',');
+      return postsService.getByIds(idList, viewerId);
+    },
+    enabled: idsKey.length > 0,
+    staleTime: 30_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
   });
 
-  const map = new Map<string, import('@/types').Post>();
-  uniqueIds.forEach((id, i) => {
-    const p = results[i]?.data;
-    if (p) map.set(id, p);
-  });
-  return map;
+  useEffect(() => {
+    if (!batchMap || idsKey.length === 0) return;
+    const idList = idsKey.split(',');
+    for (const id of idList) {
+      const post = batchMap.get(id);
+      if (post && linkedPostResolvableForViewer(post, viewerId)) {
+        queryClient.setQueryData(postKeys.detail(id, viewerId), post);
+      } else {
+        queryClient.setQueryData(postKeys.detail(id, viewerId), null);
+      }
+    }
+  }, [batchMap, idsKey, queryClient, viewerId]);
+
+  return useMemo(() => {
+    const m = new Map<string, Post>();
+    if (idsKey.length === 0) return m;
+    const idList = idsKey.split(',');
+    for (const id of idList) {
+      const fromBatch = batchMap?.get(id);
+      if (fromBatch && linkedPostResolvableForViewer(fromBatch, viewerId)) {
+        m.set(id, fromBatch);
+        continue;
+      }
+      const cached = queryClient.getQueryData(postKeys.detail(id, viewerId));
+      if (cached != null && typeof cached === 'object' && linkedPostResolvableForViewer(cached as Post, viewerId)) {
+        m.set(id, cached as Post);
+      }
+    }
+    return m;
+  }, [batchMap, idsKey, queryClient, viewerId]);
 }
 
 export function useCommunityPosts(communityId: string) {
   const { user } = useAuth();
   const viewerId = user?.id ?? null;
-  return useQuery({
+  const enabled = !!communityId?.trim();
+  const q = useQuery({
     queryKey: circleContentKeys.communityPosts(communityId, viewerId),
     queryFn: () => postsService.getByCommunity(communityId, viewerId),
     /**
@@ -233,7 +257,7 @@ export function useCommunityPosts(communityId: string) {
      * `getByCommunity` accepts null `viewerId`; when the session appears, the key
      * changes and we refetch with the signed-in viewer.
      */
-    enabled: !!communityId,
+    enabled,
     /**
      * When `user` hydrates after the first fetch, the key gains `viewerId` — keep
      * the prior page visible until the viewer-scoped fetch finishes.
@@ -244,6 +268,16 @@ export function useCommunityPosts(communityId: string) {
     refetchOnMount: true,
     retry: 2,
   });
+
+  /**
+   * TanStack Query v5: disabled queries stay `status === 'pending'`, which made
+   * `isPending && !data` look like “still loading” forever for `communityId === ''`.
+   * Only treat as wall loading when the query is enabled and actively fetching.
+   */
+  const isWallInitialLoading =
+    enabled && q.status === 'pending' && q.fetchStatus === 'fetching';
+
+  return { ...q, isWallInitialLoading };
 }
 
 /** Viewer’s selected reaction emoji per post in a circle wall (batch over current list). */
@@ -307,7 +341,7 @@ export function useCommunities() {
 }
 
 export function useCommunity(slug: string) {
-  const key = (slug ?? '').trim();
+  const key = normalizeCommunitySlug(slug);
   return useQuery({
     queryKey: ['community', key],
     queryFn: () => communityService.getBySlug(key),
@@ -355,18 +389,23 @@ export function useCirclesHome() {
  * second `getBySlug` inside `listBySlug` in parallel with `useCommunity`.
  */
 export function useCircleThreads(slug: string | undefined, communityId: string | undefined) {
-  const s = (slug ?? '').trim();
+  const s = normalizeCommunitySlug(slug ?? '');
   const cid = (communityId ?? '').trim();
-  const roomKey = cid || '__pending__';
-  return useQuery({
-    queryKey: circleContentKeys.threadsForRoom(s || '__disabled__', roomKey),
+  const enabled = !!s && !!cid;
+  const q = useQuery({
+    queryKey: circleContentKeys.threadsForRoom(s || '__disabled__', cid || '__pending__'),
     queryFn: () => circleContentService.getThreadsByCommunityId(cid),
-    enabled: !!s && !!cid,
+    enabled,
     staleTime: 45_000,
     gcTime: 1000 * 60 * 15,
     refetchOnMount: true,
     placeholderData: (previousData) => previousData,
   });
+
+  const isThreadsInitialLoading =
+    enabled && q.status === 'pending' && q.fetchStatus === 'fetching';
+
+  return { ...q, isThreadsInitialLoading };
 }
 
 export function useCircleThread(threadId: string | undefined) {

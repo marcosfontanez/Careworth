@@ -56,3 +56,22 @@ Pulse Shop fulfillment (Edge Function: pulse-shop-fulfillment)
 3) Optional — same `EDGE_CORS_ALLOWLIST` secret as Apple Music (single web origin); omit for `*` (React Native).
 
 4) App: call via `lib/pulseShopFulfillment.ts` — see supabase/functions/pulse-shop-fulfillment/README.md
+
+---
+
+LiveKit access tokens (Edge Function: livekit-token)
+
+1) Set secrets (Dashboard → Project Settings → Edge Functions → Secrets, or CLI):
+   npx supabase secrets set LIVEKIT_URL=wss://YOUR_PROJECT.livekit.cloud
+   npx supabase secrets set LIVEKIT_API_KEY=xxxxxxxx
+   npx supabase secrets set LIVEKIT_API_SECRET=xxxxxxxx
+
+   LIVEKIT_URL must be the WebSocket URL shown in LiveKit Cloud (same project as the keys).
+
+2) Deploy (JWT verification ON — default):
+   npx supabase functions deploy livekit-token
+
+3) App / EAS: set EXPO_PUBLIC_LIVEKIT_URL to the same WSS URL so the client selects the LiveKit video provider
+   (see `services/live/videoProvider.ts`). Never put LIVEKIT_API_SECRET in the app bundle.
+
+4) Callers: logged-in `supabase.functions.invoke('livekit-token', { body: { streamId } })` — see `services/live/liveKitToken.ts`.

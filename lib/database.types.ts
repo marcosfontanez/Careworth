@@ -29,7 +29,7 @@ export interface Database {
           push_token_updated_at: string | null;
           pulse_tier: string;
           pulse_score_current: number;
-          hide_recent_posts_on_my_page: boolean;
+          hide_pulse_music_player_on_my_page: boolean;
           preferred_locale: string;
           product_digest_email: boolean;
           created_at: string;
@@ -66,7 +66,7 @@ export interface Database {
           push_token_updated_at?: string | null;
           pulse_tier?: string;
           pulse_score_current?: number;
-          hide_recent_posts_on_my_page?: boolean;
+          hide_pulse_music_player_on_my_page?: boolean;
           preferred_locale?: string;
           product_digest_email?: boolean;
           profile_song_title?: string | null;
@@ -168,6 +168,7 @@ export interface Database {
           created_at: string;
           sound_title: string | null;
           sound_source_post_id: string | null;
+          stitch_source_post_id: string | null;
           is_education: boolean;
           education_citations: Json | null;
           series_id: string | null;
@@ -207,6 +208,7 @@ export interface Database {
           edited_at?: string | null;
           sound_title?: string | null;
           sound_source_post_id?: string | null;
+          stitch_source_post_id?: string | null;
           is_education?: boolean;
           education_citations?: Json | null;
           series_id?: string | null;
@@ -246,6 +248,13 @@ export interface Database {
           idempotency_key: string | null;
           created_at: string;
           updated_at: string;
+          started_at: string | null;
+          completed_at: string | null;
+          attempt_count: number;
+          max_attempts: number;
+          last_error_code: string | null;
+          next_retry_at: string | null;
+          encode_complete: boolean;
         };
         Insert: {
           id?: string;
@@ -256,6 +265,13 @@ export interface Database {
           output?: Json | null;
           error?: string | null;
           idempotency_key?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          attempt_count?: number;
+          max_attempts?: number;
+          last_error_code?: string | null;
+          next_retry_at?: string | null;
+          encode_complete?: boolean;
         };
         Update: Partial<Database['public']['Tables']['creator_media_jobs']['Insert']>;
         Relationships: [];
@@ -949,6 +965,7 @@ export interface Database {
           message: string | null;
           post_id: string | null;
           created_at: string | null;
+          ledger_applied: boolean;
         };
         Insert: {
           id?: string;
@@ -957,6 +974,7 @@ export interface Database {
           amount: number;
           message?: string | null;
           post_id?: string | null;
+          ledger_applied?: boolean;
         };
         Update: Partial<Database['public']['Tables']['creator_tips']['Insert']>;
         Relationships: [];
@@ -1498,12 +1516,14 @@ export interface Database {
           option_id: string;
           user_id: string;
           created_at: string | null;
+          counts_applied: boolean;
         };
         Insert: {
           id?: string;
           poll_id: string;
           option_id: string;
           user_id: string;
+          counts_applied?: boolean;
         };
         Update: Partial<Database['public']['Tables']['stream_poll_votes']['Insert']>;
         Relationships: [];
@@ -2025,6 +2045,10 @@ export interface Database {
         Args: { p_ids: string[] };
         Returns: Record<string, Json>[];
       };
+      bump_streak: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
       bump_community_profile_open: {
         Args: { p_community_id: string };
         Returns: undefined;
@@ -2034,12 +2058,21 @@ export interface Database {
         Returns: undefined;
       };
       increment_creator_earnings: {
-        Args: { creator_id: string; tip_amount: number };
+        Args: { p_tip_id: string };
         Returns: undefined;
       };
-      increment_poll_vote: {
+      cast_stream_poll_vote: {
         Args: { p_poll_id: string; p_option_id: string };
-        Returns: undefined;
+        Returns: Json;
+      };
+      create_creator_tip_and_apply_earnings: {
+        Args: {
+          p_post_id?: string | null;
+          p_message?: string | null;
+          p_amount: number;
+          p_to_creator_id: string;
+        };
+        Returns: string;
       };
       reward_deliveries_list_pending: {
         Args: Record<string, never>;
@@ -2092,11 +2125,8 @@ export interface Database {
         Returns: undefined;
       };
       update_user_streak: {
-        Args: { p_user_id: string };
-        Returns: {
-          current_streak: number;
-          best_streak: number;
-        } | null;
+        Args: Record<string, never>;
+        Returns: Json;
       };
       search_sound_library: {
         Args: { p_query: string; p_limit?: number };

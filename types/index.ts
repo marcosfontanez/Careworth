@@ -324,6 +324,11 @@ export interface ProfileUpdateComment {
   authorName?: string;
   authorUsername?: string;
   authorAvatarUrl?: string;
+  /** Denormalized Pulse tier — same as feed comments (migration 059). */
+  authorPulseTier?: string;
+  authorPulseScoreCurrent?: number;
+  /** Equipped Pulse Shop border for the comment author. */
+  authorPulseAvatarFrame?: PulseAvatarFrame | null;
   parentId?: string;
   content: string;
   /** Optional image (public URL), same bucket pattern as feed comment attachments. */
@@ -387,10 +392,10 @@ export interface UserProfile {
    */
   profileSongArtworkUrl?: string | null;
   /**
-   * When true, the owner does not see the horizontal recent-posts strip on the My Pulse tab.
-   * Visitors opening this profile still see recent public (and followers-only if they follow) posts.
+   * When true, the owner does not see the Current Vibe / music player on their own My Pulse tab.
+   * Visitors still see the player.
    */
-  hideRecentPostsOnMyPage?: boolean;
+  hidePulseMusicPlayerOnMyPage?: boolean;
   isFollowed?: boolean;
   isFriend?: boolean;
   customization?: ProfileCustomization;
@@ -449,6 +454,8 @@ export interface Post {
   soundTitle?: string;
   /** When set, audio is attributed to another post (remix / use sound) */
   soundSourcePostId?: string;
+  /** When set, multi-clip stitch used this post as Part 1 / A-roll (migration 183). */
+  stitchSourcePostId?: string;
   /** Source post media URL used to play attributed audio over a muted video track */
   soundSourceMediaUrl?: string;
   /** Side-by-side / layout duet: points at original clip */
@@ -736,6 +743,12 @@ export interface LiveStream {
   communityId?: string;
   communityName?: string;
   isFollowingHost?: boolean;
+  /** Video stack (`livekit`, `mock`, …). */
+  videoProvider?: string;
+  livekitRoomName?: string;
+  /** Host successfully publishing to LiveKit; discovery hides `live` rows until set. */
+  broadcastStartedAt?: string | null;
+  recordingEnabled?: boolean;
 }
 
 export type StreamMessageType = 'chat' | 'gift' | 'system' | 'poll' | 'raid' | 'pinned';

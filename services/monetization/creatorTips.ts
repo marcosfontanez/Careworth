@@ -27,22 +27,19 @@ export const creatorTipsService = {
     if (!isFeatureEnabled('creatorTips')) return false;
 
     try {
-      const { error } = await supabase
-        .from('creator_tips')
-        .insert({
-          from_user_id: fromUserId,
-          to_creator_id: toCreatorId,
-          amount,
-          message: message ?? null,
-          post_id: postId ?? null,
-        });
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || user.id !== fromUserId) return false;
 
-      if (error) return false;
-
-      await supabase.rpc('increment_creator_earnings', {
-        creator_id: toCreatorId,
-        tip_amount: amount,
+      const { data: tipId, error } = await supabase.rpc('create_creator_tip_and_apply_earnings', {
+        p_to_creator_id: toCreatorId,
+        p_amount: amount,
+        p_message: message ?? null,
+        p_post_id: postId ?? null,
       });
+
+      if (error || !tipId) return false;
 
       return true;
     } catch {

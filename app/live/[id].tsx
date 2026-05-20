@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { useQueryClient } from '@tanstack/react-query';
+import { useFocusEffect } from '@react-navigation/native';
 import { useStream } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
@@ -41,7 +42,6 @@ import {
   streamsLiveService,
   profilesService,
 } from '@/services/supabase';
-import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/ui/Toast';
 import { isSeedStream } from '@/lib/liveSeedStreams';
 import { isDemoLiveStreamId } from '@/lib/liveDemoStreams';
@@ -61,6 +61,16 @@ import type {
   LiveGift,
   StreamGiftLeaderboard,
 } from '@/types';
+import { videoProvider } from '@/services/live/videoProvider';
+import { isExpoGo } from '@/lib/expoRuntime';
+
+/** Loaded only when real LiveKit video is shown — keeps Expo Go from requiring WebRTC native code at bundle parse time. */
+const LiveKitStageLazy = lazy(() =>
+  import('@/components/live/LiveKitStage').then((m) => ({ default: m.LiveKitStage })),
+);
+import { analytics } from '@/lib/analytics';
+import { ReportModal } from '@/components/ui/ReportModal';
+import { messagesService } from '@/services/supabase/messages';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const CHAT_MAX_H = SCREEN_H * 0.38;
@@ -116,6 +126,10 @@ function StreamViewerScreenContent() {
   const sparkBalance = useSparkBalanceNumber(walletQ.data);
 
   const streamIsLive = stream?.status === 'live';
+  const broadcastLive =
+    !!stream && stream.status === 'live' && Boolean(stream.broadcastStartedAt);
+  const preparingBroadcast =
+    !!stream && stream.status === 'live' && !stream.broadcastStartedAt;
 
   /** True when the signed-in user is the stream host — unlocks host controls. */
   const isHost = useMemo(
@@ -123,9 +137,18 @@ function StreamViewerScreenContent() {
     [user?.id, stream],
   );
 
+  const liveKitEnabled = videoProvider.id === 'livekit';
+
   /** Host modal visibility + end-stream busy flag. */
   const [hostPollVisible, setHostPollVisible] = useState(false);
   const [endingStream, setEndingStream] = useState(false);
+  const [lkToken, setLkToken] = useState<string | null>(null);
+  const [lkServerUrl, setLkServerUrl] = useState<string | null>(null);
+  const [lkError, setLkError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [demoContinuing, setDemoContinuing] = useState(false);
+  const [reminderOn, setReminderOn] = useState(false);
 
   /* ---------------- Followed set (hydrated from store) ------------------- */
   const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
@@ -152,13 +175,100 @@ function StreamViewerScreenContent() {
   /* ---------------- Pinned (still simulated in this stage) --------------- */
   const [pinnedMessage, setPinnedMessage] = useState<StreamPinnedMessage | null>(null);
 
-  /* ---------------- Viewer count (presence for real streams) ------------- */
+  /* ---------------- Viewer count (attendance RPC syncs live_streams) --------- */
   const [viewerCount, setViewerCount] = useState(0);
-  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     if (stream) setViewerCount(stream.viewerCount);
   }, [stream]);
+
+  useEffect(() => {
+    if (!streamId || !user?.id || !broadcastLive || isHost) return;
+    let cancelled = false;
+    const tick = async () => {
+      const n = await streamsLiveService.touchAttendance(streamId);
+      if (!cancelled && typeof n === 'number') setViewerCount(n);
+      void queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+    };
+    void tick();
+    const iv = setInterval(tick, 45_000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [streamId, user?.id, broadcastLive, isHost, queryClient]);
+
+  /** Viewer polls while waiting for host broadcast_started_at (no LiveKit token yet). */
+  useEffect(() => {
+    if (!streamId || isHost || stream?.status !== 'live' || stream.broadcastStartedAt) return;
+    const iv = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+    }, 4000);
+    return () => clearInterval(iv);
+  }, [streamId, isHost, stream?.status, stream?.broadcastStartedAt, queryClient]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!stream || !streamId || !liveKitEnabled) {
+      setLkToken(null);
+      setLkServerUrl(null);
+      setLkError(null);
+      return;
+    }
+
+    const allowViewer = !isHost && broadcastLive;
+    const allowHost = isHost && stream.status === 'live';
+
+    if (!allowViewer && !allowHost) {
+      setLkToken(null);
+      setLkServerUrl(null);
+      setLkError(null);
+      return;
+    }
+
+    (async () => {
+      try {
+        const session = await videoProvider.getSession({
+          streamId,
+          role: isHost ? 'host' : 'viewer',
+          userId: user?.id ?? '',
+        });
+        if (cancelled) return;
+        setLkToken(session.token);
+        setLkServerUrl(session.playbackUrl ?? '');
+        setLkError(null);
+        if (!isHost) analytics.track('live_stream_joined', { stream_id: streamId });
+      } catch (e: any) {
+        if (cancelled) return;
+        setLkToken(null);
+        setLkServerUrl(null);
+        const msg = typeof e?.message === 'string' ? e.message : 'Live unavailable';
+        setLkError(msg);
+        analytics.track('live_stream_watch_failed', { stream_id: streamId, reason: msg });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    streamId,
+    stream?.status,
+    stream?.broadcastStartedAt,
+    broadcastLive,
+    isHost,
+    liveKitEnabled,
+    stream,
+    user?.id,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      analytics.track('screen_view', { screen_name: 'live_stream_viewer', stream_id: streamId });
+      return undefined;
+    }, [streamId]),
+  );
 
   /* ==========================================================================
    *  REAL — load + subscribe to real chat messages on DB-backed streams.
@@ -240,38 +350,6 @@ function StreamViewerScreenContent() {
   }, [streamId]);
 
   /* ==========================================================================
-   *  REAL — Supabase Realtime Presence gives an authoritative viewer count.
-   *  Presence is in-memory (no DB writes) — ideal for transient viewership.
-   * ==========================================================================*/
-  useEffect(() => {
-    if (!streamId || !user?.id) return;
-
-    const channel = supabase.channel(`live_presence:${streamId}`, {
-      config: { presence: { key: user.id } },
-    });
-    presenceChannelRef.current = channel;
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        setViewerCount(Object.keys(state).length);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            joined_at: new Date().toISOString(),
-            role: profile?.role,
-          });
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-      presenceChannelRef.current = null;
-    };
-  }, [streamId, user?.id, profile?.role]);
-
-  /* ==========================================================================
    *  REAL — load active poll + subscribe to vote / lifecycle updates.
    *  Also hydrates `hasVotedPoll` from `stream_poll_votes` so the widget
    *  shows results immediately for users who already voted in a past session.
@@ -331,9 +409,60 @@ function StreamViewerScreenContent() {
     };
   }, [streamId]);
 
+  useEffect(() => {
+    if (stream?.status !== 'scheduled') return;
+    let cancelled = false;
+    void streamsLiveService.hasReminder(streamId).then((v) => {
+      if (!cancelled) setReminderOn(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [stream?.status, streamId]);
+
   /* ==========================================================================
    *  Handlers
    * ==========================================================================*/
+  const handleLiveKitConnected = useCallback(async () => {
+    if (!isHost || !streamId) return;
+    const ok = await streamsLiveService.markBroadcastStarted(streamId);
+    if (ok) {
+      analytics.track('live_stream_started', { stream_id: streamId });
+      await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+      await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
+      await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+    }
+  }, [isHost, streamId, queryClient]);
+
+  const promoteScheduledNow = useCallback(async () => {
+    setPromoting(true);
+    try {
+      const ok = await streamsLiveService.promoteScheduledToLive(streamId);
+      if (!ok) showToast('Couldn\u2019t open broadcast.', 'error');
+      else await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+    } finally {
+      setPromoting(false);
+    }
+  }, [streamId, queryClient, showToast]);
+
+  /** When LiveKit is off (Expo Go / missing env), real video never connects — still allow hub + chat via poster. */
+  const continuePosterOnlyDemo = useCallback(async () => {
+    setDemoContinuing(true);
+    try {
+      const ok = await streamsLiveService.markBroadcastStarted(streamId);
+      if (!ok) showToast('Couldn\u2019t open session.', 'error');
+      else {
+        analytics.track('live_stream_started', { stream_id: streamId, demo_poster_only: true });
+        await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+        await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
+        await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+        showToast('Live on the hub — poster preview only until you use a dev build + LiveKit.', 'success');
+      }
+    } finally {
+      setDemoContinuing(false);
+    }
+  }, [streamId, queryClient, showToast]);
+
   const sendMessage = useCallback(async () => {
     const body = inputText.trim().slice(0, STREAM_CHAT_MAX_LENGTH);
     if (!body) return;
@@ -410,6 +539,11 @@ function StreamViewerScreenContent() {
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await queryClient.invalidateQueries({ queryKey: shopKeys.sparkWallet(user.id) });
+        analytics.track('live_gift_sent', {
+          stream_id: streamId,
+          gift_id: gift.id,
+          quantity,
+        });
       } catch (err: any) {
         showToast(
           err?.message?.toLowerCase().includes('insufficient')
@@ -642,6 +776,7 @@ function StreamViewerScreenContent() {
                 setEndingStream(false);
                 return;
               }
+              analytics.track('live_stream_ended', { stream_id: streamId });
               showToast('Stream ended. Great work.', 'success');
               router.replace('/(tabs)/live');
             } catch {
@@ -669,25 +804,205 @@ function StreamViewerScreenContent() {
     router.push(liveHighlightsHref(streamId));
   }, [router, streamId]);
 
+  const openLiveOverflowMenu = useCallback(() => {
+    if (!user?.id || !stream || isHost) return;
+    Alert.alert('Live options', undefined, [
+      {
+        text: 'Report stream',
+        onPress: () => setReportOpen(true),
+      },
+      {
+        text: 'Block host',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            `Block ${stream.host.displayName}?`,
+            'They won\u2019t be able to message you.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Block',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await messagesService.blockUserAndOptionalDeleteConversation(user.id, stream.host.id);
+                    showToast('Host blocked.', 'success');
+                    router.back();
+                  } catch {
+                    showToast('Couldn\u2019t block user.', 'error');
+                  }
+                },
+              },
+            ],
+          );
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [user?.id, stream, isHost, showToast, router]);
+
   if (isLoading || !stream) return <LoadingState />;
+
+  const posterUri = (stream.thumbnailUrl ?? '').trim() || (stream.host.avatarUrl ?? '').trim();
+  const showLiveKitLayer =
+    liveKitEnabled && !!lkToken && !!lkServerUrl && stream.status === 'live';
+
+  if (stream.status === 'ended') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, paddingHorizontal: 14 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <Ionicons name="chevron-back" size={22} color="#FFF" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 48, gap: 10 }}>
+          <Text style={styles.sessionTitle}>This live has ended</Text>
+          <Text style={{ color: colors.dark.textMuted }}>{stream.title}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (stream.status === 'scheduled' && !isHost) {
+    const starts =
+      stream.scheduledFor != null && stream.scheduledFor !== ''
+        ? new Date(stream.scheduledFor).toLocaleString()
+        : 'Time TBD';
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, paddingHorizontal: 14 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <Ionicons name="chevron-back" size={22} color="#FFF" />
+        </TouchableOpacity>
+        <LinearGradient colors={['rgba(6,14,26,0.95)', 'rgba(6,14,26,0.75)']} style={StyleSheet.absoluteFill} />
+        <View style={{ flex: 1, justifyContent: 'center', gap: 16, zIndex: 2 }}>
+          <Text style={styles.sessionTitle}>Starts later</Text>
+          <Text style={{ color: colors.neutral.white }}>{stream.title}</Text>
+          <Text style={{ color: colors.dark.textMuted }}>Hosted by {stream.host.displayName}</Text>
+          <Text style={{ color: colors.primary.teal }}>{starts}</Text>
+          <TouchableOpacity
+            style={styles.followBtn}
+            onPress={async () => {
+              if (!user?.id) {
+                showToast('Sign in to save reminders.', 'info');
+                return;
+              }
+              const next = await streamsLiveService.toggleReminder(stream.id);
+              if (next === null) {
+                showToast('Couldn\u2019t update reminder.', 'error');
+                return;
+              }
+              setReminderOn(next);
+              analytics.track('reminder_clicked', { stream_id: stream.id, enabled: next });
+              showToast(
+                next ? 'Reminder saved. Push at go-live is not wired yet.' : 'Reminder removed.',
+                'success',
+              );
+            }}
+          >
+            <Text style={styles.followBtnText}>{reminderOn ? 'Reminder on' : 'Remind me'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-     <Image
-        source={{ uri: stream.thumbnailUrl }}
-        style={styles.streamBg}
-        contentFit="cover"
-        {...pulseImageFeedHeroProps}
-      />
+      <View style={styles.streamMediaUnderlay}>
+        {showLiveKitLayer ? (
+          <Suspense fallback={<View style={[styles.streamBg, { backgroundColor: '#020617' }]} />}>
+            <LiveKitStageLazy
+              serverUrl={lkServerUrl!}
+              token={lkToken!}
+              role={isHost ? 'host' : 'viewer'}
+              style={styles.streamBg}
+              onConnected={handleLiveKitConnected}
+              onError={(err) => {
+                if (!isHost) return;
+                Alert.alert(
+                  'Broadcast error',
+                  `${err.message}\n\nYou can end this session and try again.`,
+                  [
+                    { text: 'Dismiss', style: 'cancel' },
+                    {
+                      text: 'End session',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await streamsLiveService.abortUnbroadcastStream(streamId);
+                        await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+                        router.replace('/(tabs)/live');
+                      },
+                    },
+                  ],
+                );
+              }}
+            />
+          </Suspense>
+        ) : posterUri ? (
+          <Image
+            source={{ uri: posterUri }}
+            style={styles.streamBg}
+            contentFit="cover"
+            {...pulseImageFeedHeroProps}
+          />
+        ) : (
+          <View style={[styles.streamBg, { backgroundColor: '#0f172a' }]} />
+        )}
+      </View>
       <LinearGradient
         colors={['rgba(6,14,26,0.65)', 'rgba(6,14,26,0.2)', 'rgba(6,14,26,0.88)']}
         locations={[0, 0.35, 1]}
         style={StyleSheet.absoluteFill}
       />
 
+      {!broadcastLive && streamIsLive && !isHost ? (
+        <View style={styles.connectBanner} pointerEvents="none">
+          <Text style={styles.connectBannerTxt}>Host is connecting\u2026</Text>
+        </View>
+      ) : null}
+
+      {isHost && stream.status === 'scheduled' ? (
+        <View style={styles.scheduledHostBanner}>
+          <Text style={styles.scheduledHostTitle}>Scheduled session</Text>
+          <Text style={styles.scheduledHostMeta}>Tap below when you\u2019re ready — viewers stay out until you broadcast.</Text>
+          <TouchableOpacity
+            style={[styles.promoteBtn, promoting && { opacity: 0.7 }]}
+            disabled={promoting}
+            onPress={promoteScheduledNow}
+          >
+            <Text style={styles.promoteBtnTxt}>{promoting ? 'Opening\u2026' : 'Start broadcast'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {isHost && streamIsLive && preparingBroadcast && !liveKitEnabled ? (
+        <View style={styles.mockLiveKitBanner}>
+          <Text style={styles.scheduledHostTitle}>Real camera isn\u2019t available here</Text>
+          <Text style={styles.scheduledHostMeta}>
+            {isExpoGo()
+              ? 'Expo Go can\u2019t run LiveKit (native WebRTC). Use an EAS development build on a device, then set EXPO_PUBLIC_LIVEKIT_URL in .env.'
+              : process.env.EXPO_PUBLIC_LIVEKIT_URL?.trim()
+                ? 'EXPO_PUBLIC_LIVEKIT_URL must start with wss:// — fix .env and restart Metro.'
+                : 'Add EXPO_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud to .env, restart Metro, and use a development build (not Expo Go).'}
+          </Text>
+          <TouchableOpacity
+            style={[styles.promoteBtn, demoContinuing && { opacity: 0.7 }]}
+            disabled={demoContinuing}
+            onPress={continuePosterOnlyDemo}
+          >
+            <Text style={styles.promoteBtnTxt}>
+              {demoContinuing ? 'Starting\u2026' : 'Continue with poster only (hub + chat)'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {lkError && isHost && streamIsLive ? (
+        <View style={styles.lkErrorBanner}>
+          <Text style={styles.lkErrorTxt}>{lkError}</Text>
+        </View>
+      ) : null}
       <View style={[styles.shell, { paddingTop: insets.top }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn} accessibilityLabel="Back">
@@ -697,7 +1012,9 @@ function StreamViewerScreenContent() {
           <View style={styles.topCenter}>
             <View style={styles.liveBadge}>
               <View style={styles.livePulse} />
-              <Text style={styles.liveText}>{streamIsLive ? 'LIVE' : stream.status.toUpperCase()}</Text>
+              <Text style={styles.liveText}>
+                {streamIsLive ? (isHost && preparingBroadcast ? 'CONNECTING' : 'LIVE') : stream.status.toUpperCase()}
+              </Text>
             </View>
             <View style={styles.viewerBadge}>
               <Ionicons name="eye-outline" size={14} color={colors.dark.textSecondary} />
@@ -738,6 +1055,18 @@ function StreamViewerScreenContent() {
             <TouchableOpacity onPress={() => setShowChat(!showChat)} style={styles.iconBtn} accessibilityLabel="Toggle chat">
               <Ionicons name={showChat ? 'chatbubble' : 'chatbubble-outline'} size={19} color="#FFF" />
             </TouchableOpacity>
+            {!isHost && user?.id ? (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  openLiveOverflowMenu();
+                }}
+                style={styles.iconBtnSubtle}
+                accessibilityLabel="More live actions"
+              >
+                <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
+              </TouchableOpacity>
+            ) : null}
             {isHost && (
               <TouchableOpacity
                 onPress={handleEndStream}
@@ -859,6 +1188,7 @@ function StreamViewerScreenContent() {
                         showToast('Sign in to send Sparks gifts', 'error');
                         return;
                       }
+                      analytics.track('live_gift_opened', { stream_id: streamId, surface: 'spark_tray' });
                       setSparkGiftOpen(true);
                     }}
                     activeOpacity={0.75}
@@ -874,6 +1204,7 @@ function StreamViewerScreenContent() {
                         showToast('Sign in to send gifts', 'error');
                         return;
                       }
+                      analytics.track('live_gift_opened', { stream_id: streamId, surface: 'sticker_picker' });
                       setShowGiftPicker(true);
                     }}
                     activeOpacity={0.75}
@@ -954,6 +1285,13 @@ function StreamViewerScreenContent() {
         onClose={() => setHostPollVisible(false)}
         onSubmit={handleCreatePoll}
       />
+
+      <ReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="live_stream"
+        targetId={stream.id}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -961,6 +1299,75 @@ function StreamViewerScreenContent() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   streamBg: { ...StyleSheet.absoluteFillObject },
+  streamMediaUnderlay: { ...StyleSheet.absoluteFillObject },
+  connectBanner: {
+    position: 'absolute',
+    top: 118,
+    left: 14,
+    right: 14,
+    zIndex: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(15,28,48,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.22)',
+  },
+  connectBannerTxt: {
+    ...typography.bodySmall,
+    color: colors.neutral.white,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  scheduledHostBanner: {
+    position: 'absolute',
+    top: 108,
+    left: 14,
+    right: 14,
+    zIndex: 18,
+    padding: 14,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(12,18,32,0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.28)',
+    gap: 8,
+  },
+  scheduledHostTitle: { ...typography.h3, fontSize: 16, color: colors.neutral.white },
+  scheduledHostMeta: { ...typography.bodySmall, color: colors.dark.textMuted },
+  promoteBtn: {
+    marginTop: 4,
+    backgroundColor: colors.primary.teal,
+    borderRadius: borderRadius.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  promoteBtnTxt: { ...typography.button, fontWeight: '800', color: colors.dark.bg },
+  mockLiveKitBanner: {
+    position: 'absolute',
+    top: 108,
+    left: 14,
+    right: 14,
+    zIndex: 17,
+    padding: 14,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(12,18,32,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(250,204,21,0.35)',
+    gap: 8,
+  },
+  lkErrorBanner: {
+    position: 'absolute',
+    top: 108,
+    left: 14,
+    right: 14,
+    zIndex: 19,
+    padding: 12,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(127,29,29,0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(252,165,165,0.35)',
+  },
+  lkErrorTxt: { ...typography.bodySmall, color: colors.neutral.white },
   shell: { flex: 1, paddingHorizontal: 14 },
 
   topBar: {

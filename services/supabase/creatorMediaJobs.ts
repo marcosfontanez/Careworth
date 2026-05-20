@@ -45,13 +45,20 @@ export interface CreatorMediaJobRow {
   id: string;
   user_id: string;
   kind: CreatorMediaJobKind;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  status: 'queued' | 'running' | 'awaiting_post_patch' | 'succeeded' | 'failed' | 'cancelled';
   input: Record<string, unknown>;
   output: Record<string, unknown> | null;
   error: string | null;
   idempotency_key: string | null;
   created_at: string;
   updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  attempt_count?: number;
+  max_attempts?: number;
+  last_error_code?: string | null;
+  next_retry_at?: string | null;
+  encode_complete?: boolean;
 }
 
 /**
@@ -124,7 +131,11 @@ export async function waitForCreatorMediaJob(
   while (Date.now() < deadline) {
     const row = await getCreatorMediaJob(jobId);
     if (!row) throw new Error('JOB_NOT_FOUND');
-    if (row.status === 'succeeded' || row.status === 'failed' || row.status === 'cancelled') {
+    if (
+      row.status === 'succeeded' ||
+      row.status === 'failed' ||
+      row.status === 'cancelled'
+    ) {
       return row;
     }
     await sleep(intervalMs);

@@ -1,7 +1,13 @@
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { streamsService } from '@/services/streams';
-import type { LiveHubCategoryTab, LiveHubHomePayload, LiveHubStream } from '@/types/liveHub';
-import { liveStreamToHub } from '@/types/liveHub';
+import { streamsLiveService, profilesService } from '@/services/supabase';
+import type { LiveStream } from '@/types';
+import type { LiveHubCategoryTab, LiveHubHomePayload, LiveHubStream, LiveScheduledEvent } from '@/types/liveHub';
+import {
+  inferLiveModeType,
+  liveStreamToHub,
+  parseLiveModeFromTags,
+} from '@/types/liveHub';
 import { DEMO_LIVE_STREAMS, DEMO_UPCOMING_SESSIONS } from '@/services/live/mockLiveHubData';
 
 function dedupeStreams(list: LiveHubStream[]): LiveHubStream[] {
@@ -26,6 +32,8 @@ function filterForTab(tab: LiveHubCategoryTab, streams: LiveHubStream[]): LiveHu
       return streams;
     case 'following':
       return streams.filter((s) => s.isFollowingHost);
+    case 'casual':
+      return streams.filter((s) => s.liveType === 'casual');
     case 'gaming':
       return streams.filter((s) => s.liveType === 'gaming');
     case 'irl':
@@ -43,13 +51,46 @@ function sortByViewers(a: LiveHubStream, b: LiveHubStream): number {
   return b.viewerCount - a.viewerCount;
 }
 
+function scheduledStreamToEvent(stream: LiveStream, hasReminder: boolean): LiveScheduledEvent | null {
+  const startsAt = stream.scheduledFor?.trim();
+  if (!startsAt) return null;
+
+  const mode = parseLiveModeFromTags(stream.tags) ?? inferLiveModeType(stream.category);
+  const category =
+    mode === 'casual' || mode === 'irl' || mode === 'gaming' || mode === 'learn' || mode === 'shop'
+      ? mode
+      : 'casual';
+
+  return {
+    id: stream.id,
+    hostName: stream.host.displayName,
+    title: stream.title,
+    startsAt,
+    category,
+    rsvpState: hasReminder ? 'going' : 'none',
+  };
+}
+
 /**
  * Discovery payload for the Live hub tab. Merges DB-backed streams with optional
  * demo rows (`liveDiscoveryDemos` flag) for founder previews.
  */
-export async function fetchLiveHubHome(tab: LiveHubCategoryTab): Promise<LiveHubHomePayload> {
-  const { live } = await streamsService.getAllStreams();
-  const realHub = live.map((s) => liveStreamToHub(s));
+export async function fetchLiveHubHome(
+  tab: LiveHubCategoryTab,
+  viewerId?: string | null,
+): Promise<LiveHubHomePayload> {
+  const [{ live, scheduled }, reminderIds, followedIds] = await Promise.all([
+    streamsService.getAllStreams(),
+    viewerId ? streamsLiveService.listMyReminderStreamIds() : Promise.resolve(new Set<string>()),
+    viewerId ? profilesService.getFollowedIdsForUser(viewerId) : Promise.resolve(new Set<string>()),
+  ]);
+
+  const realHub = live.map((s) =>
+    liveStreamToHub(s, {
+      isFollowingHost: viewerId ? followedIds.has(s.hostId) : false,
+    }),
+  );
+
   const merged = mergeWithDemos(realHub).sort(sortByViewers);
   const allFiltered = filterForTab(tab, merged);
 
@@ -63,21 +104,30 @@ export async function fetchLiveHubHome(tab: LiveHubCategoryTab): Promise<LiveHub
   const featured = featuredPool.slice(0, 5);
   const trending = allFiltered.filter((s) => !featured.some((f) => f.id === s.id)).slice(0, 8);
 
-  const shopLiveDeals = filterForTab(
-    'shop',
-    merged,
-  ).slice(0, 12);
+  const shopLiveDeals = filterForTab('shop', merged).slice(0, 12);
 
-  const circleLives = DEMO_LIVE_STREAMS.filter(
-    (s) => s.communityName || s.tags.some((t) => /circle/i.test(t)),
-  ).slice(0, 6);
+  const upcomingDb = scheduled
+    .map((s) => scheduledStreamToEvent(s, reminderIds.has(s.id)))
+    .filter((e): e is LiveScheduledEvent => e != null);
+
+  const upcoming =
+    upcomingDb.length > 0 ? upcomingDb : isFeatureEnabled('liveDiscoveryDemos') ? DEMO_UPCOMING_SESSIONS : [];
+
+  const circleFromReal = merged.filter((s) => Boolean(s.communityId || s.communityName)).slice(0, 6);
+
+  const circleLives =
+    circleFromReal.length > 0
+      ? circleFromReal
+      : isFeatureEnabled('liveDiscoveryDemos')
+        ? DEMO_LIVE_STREAMS.filter((s) => s.communityName || s.tags.some((t) => /circle/i.test(t))).slice(0, 6)
+        : [];
 
   return {
     tab,
     featured,
     trending,
     shopLiveDeals,
-    upcoming: DEMO_UPCOMING_SESSIONS,
+    upcoming,
     circleLives,
     allFiltered,
   };
@@ -101,6 +151,10 @@ export async function getLiveStreamsByCategory(tab: LiveHubCategoryTab): Promise
   return home.allFiltered;
 }
 
-export async function getUpcomingLiveSessions() {
-  return DEMO_UPCOMING_SESSIONS;
+export async function getUpcomingLiveSessions(viewerId?: string | null): Promise<LiveScheduledEvent[]> {
+  const scheduled = await streamsService.getScheduledStreams();
+  const reminderIds = viewerId ? await streamsLiveService.listMyReminderStreamIds() : new Set<string>();
+  return scheduled
+    .map((s) => scheduledStreamToEvent(s, reminderIds.has(s.id)))
+    .filter((e): e is LiveScheduledEvent => e != null);
 }

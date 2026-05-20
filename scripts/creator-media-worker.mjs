@@ -1,57 +1,35 @@
 #!/usr/bin/env node
 import { Buffer } from 'node:buffer';
+import { createWriteStream } from 'node:fs';
+import { PassThrough } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 
 /**
  * Poll worker for `public.creator_media_jobs` (service role).
  *
+ * Requires migrations **184** (`claim_next_creator_media_job`) and **186**
+ * (retry metadata, `awaiting_post_patch`, stale recovery).
+ *
  * Env:
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
- *   CREATOR_MEDIA_BUCKET   optional, default `post-media`
+ *   CREATOR_MEDIA_BUCKET           optional, default `post-media`
+ *   CREATOR_MEDIA_MAX_CLIP_BYTES   optional, default 450mb per downloaded segment
+ *   CREATOR_MEDIA_MAX_CLIP_DURATION_SEC   optional, default 600
+ *   CREATOR_MEDIA_MAX_SUM_DURATION_SEC    optional, default 900 (concat sum cap)
+ *   CREATOR_MEDIA_FFMPEG_TIMEOUT_MS       optional, default 20m per ffmpeg invoke
+ *   CREATOR_MEDIA_FFPROBE_TIMEOUT_MS      optional, default 60s
+ *   CREATOR_MEDIA_STALE_RUNNING_SECONDS   optional, default 2700 (recover_stale_* threshold)
+ *   CREATOR_MEDIA_SKIP_STARTUP_RECOVERY   optional, set to `1` to skip stale sweep
  *
- * Requires **ffmpeg** on PATH for `stitch` and `broll` kinds (concat → MP4).
+ * Requires **ffmpeg** + **ffprobe** on PATH for `stitch` and `broll`.
  *
- * ## Input contract (`input` jsonb)
+ * ## Beta streaming downloads
  *
- * ### stitch
- * Concatenate clips **in order** (same codec/container may allow stream copy; mismatch triggers re-encode).
- * ```json
- * {
- *   "bucket": "post-media",
- *   "clipPaths": ["<user_id>/videos/a.mp4", "<user_id>/videos/b.mp4"],
- *   "outputPath": "<user_id>/exports/stitch-<optional>.mp4"
- * }
- * ```
- * - Every path must live under `<user_id>/` (matches job.user_id).
- * - `outputPath` optional; default `<user_id>/exports/<job_id>.mp4`
- *
- * ### broll
- * A-roll then each cutaway, concatenated (timeline = main + B-roll segments back-to-back; not PiP).
- * ```json
- * {
- *   "bucket": "post-media",
- *   "mainPath": "<user_id>/videos/main.mp4",
- *   "cutawayPaths": ["<user_id>/videos/br1.mp4"],
- *   "outputPath": "<user_id>/exports/broll-<optional>.mp4"
- * }
- * ```
- *
- * ### Success `output` jsonb
- * ```json
- * {
- *   "bucket": "post-media",
- *   "storagePath": "<user_id>/exports/<job_id>.mp4",
- *   "bytes": 1234567,
- *   "ffmpegMode": "copy" | "reencode",
- *   "clipCount": 3
- * }
- * ```
- *
- * Other `kind` values remain unsupported here (explicit failed row + message).
- *
- * Usage:
- *   node scripts/creator-media-worker.mjs           # one queued job
- *   node scripts/creator-media-worker.mjs --watch   # poll every 5s
+ * Inputs are downloaded via signed URL + streaming write (not a single Buffer).
+ * `CREATOR_MEDIA_MAX_CLIP_BYTES` is enforced while streaming; oversize aborts with
+ * `PERMANENT_OVERSIZED_INPUT`.
  */
 import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs/promises';
@@ -67,6 +45,25 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const watch = process.argv.includes('--watch');
 const DEFAULT_BUCKET = process.env.CREATOR_MEDIA_BUCKET?.trim() || 'post-media';
 
+const MAX_CLIP_BYTES = Math.max(
+  8 * 1024 * 1024,
+  Number(process.env.CREATOR_MEDIA_MAX_CLIP_BYTES || 450 * 1024 * 1024) || 450 * 1024 * 1024,
+);
+const MAX_CLIP_DURATION_SEC = Math.max(30, Number(process.env.CREATOR_MEDIA_MAX_CLIP_DURATION_SEC || 600) || 600);
+const MAX_SUM_DURATION_SEC = Math.max(60, Number(process.env.CREATOR_MEDIA_MAX_SUM_DURATION_SEC || 900) || 900);
+const FFMPEG_TIMEOUT_MS = Math.max(
+  60_000,
+  Number(process.env.CREATOR_MEDIA_FFMPEG_TIMEOUT_MS || 20 * 60 * 1000) || 20 * 60 * 1000,
+);
+const FFPROBE_TIMEOUT_MS = Math.max(
+  5000,
+  Number(process.env.CREATOR_MEDIA_FFPROBE_TIMEOUT_MS || 60 * 1000) || 60 * 1000,
+);
+const STALE_RUNNING_SECONDS = Math.max(
+  300,
+  Number(process.env.CREATOR_MEDIA_STALE_RUNNING_SECONDS || 2700) || 2700,
+);
+
 if (!url || !key) {
   console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment.');
   process.exit(1);
@@ -76,11 +73,11 @@ const supabase = createClient(url, key, { auth: { persistSession: false } });
 
 /** @param {string} userId */
 function assertUserScopedStoragePath(userId, p) {
-  if (typeof p !== 'string' || !p.trim()) throw new Error('invalid storage path');
+  if (typeof p !== 'string' || !p.trim()) throw new Error('PERMANENT_PAYLOAD: invalid storage path');
   const normalized = path.posix.normalize(p.replace(/\\/g, '/')).replace(/^\/+/, '');
-  if (normalized.includes('..')) throw new Error('path must not contain ..');
+  if (normalized.includes('..')) throw new Error('PERMANENT_PAYLOAD: path must not contain ..');
   const prefix = `${userId}/`;
-  if (!normalized.startsWith(prefix)) throw new Error(`path must start with ${prefix}`);
+  if (!normalized.startsWith(prefix)) throw new Error(`PERMANENT_PAYLOAD: path must start with ${prefix}`);
   return normalized;
 }
 
@@ -91,6 +88,36 @@ function concatFileLine(absLocalPath) {
   return `file '${escaped}'`;
 }
 
+function backoffMs(attemptCount) {
+  const base = 900 + Math.min(120_000, 1000 * 2 ** Math.min(attemptCount, 8));
+  const jitter = Math.floor(Math.random() * 400);
+  return Math.min(15 * 60 * 1000, base + jitter);
+}
+
+/**
+ * @param {unknown} err
+ * @returns {{ code: string; transient: boolean }}
+ */
+function classifyFailure(err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  const code = err && typeof err === 'object' && 'code' in err ? String((/** @type {{ code?: unknown }} */ (err)).code) : '';
+
+  if (code === 'ETIMEDOUT') return { code: 'FFMPEG_TIMEOUT', transient: true };
+
+  if (msg.includes('PERMANENT_MISSING_MEDIA')) return { code: 'PERMANENT_MISSING_MEDIA', transient: false };
+  if (msg.includes('PERMANENT_OVERSIZED_INPUT')) return { code: 'PERMANENT_OVERSIZED_INPUT', transient: false };
+  if (msg.includes('PERMANENT_PAYLOAD')) return { code: 'PERMANENT_PAYLOAD', transient: false };
+  if (msg.includes('PERMANENT_CORRUPT')) return { code: 'PERMANENT_CORRUPT', transient: false };
+  if (msg.includes('PERMANENT_DURATION_CAP')) return { code: 'PERMANENT_DURATION_CAP', transient: false };
+
+  if (msg.includes('TRANSIENT_DOWNLOAD')) return { code: 'TRANSIENT_DOWNLOAD', transient: true };
+  if (msg.includes('TRANSIENT_DB')) return { code: 'TRANSIENT_DB', transient: true };
+
+  if (/ENOTFOUND|ECONNRESET|ETIMEDOUT|ECONNREFUSED/i.test(msg)) return { code: 'TRANSIENT_NETWORK', transient: true };
+
+  return { code: 'UNCLASSIFIED', transient: true };
+}
+
 async function ffmpegConcat(localFiles, outPath, tryCopyFirst) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pv-media-'));
   const listPath = path.join(tmpDir, 'concat.txt');
@@ -98,7 +125,11 @@ async function ffmpegConcat(localFiles, outPath, tryCopyFirst) {
   await fs.writeFile(listPath, `${lines.join('\n')}\n`, 'utf8');
 
   const run = async (args) => {
-    await execFileAsync('ffmpeg', args, { maxBuffer: 20 * 1024 * 1024 });
+    await execFileAsync('ffmpeg', args, {
+      maxBuffer: 20 * 1024 * 1024,
+      timeout: FFMPEG_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+    });
   };
 
   try {
@@ -157,13 +188,71 @@ async function ffmpegConcat(localFiles, outPath, tryCopyFirst) {
   }
 }
 
-async function downloadTo(supabaseClient, bucket, storagePath, destFsPath) {
-  const { data, error } = await supabaseClient.storage.from(bucket).download(storagePath);
-  if (error || !data) throw new Error(error?.message || 'download failed');
-  const buf = Buffer.from(await data.arrayBuffer());
-  if (buf.length === 0) throw new Error(`empty object: ${storagePath}`);
+/**
+ * Stream object from Storage to disk via signed URL (avoids whole-file Buffer).
+ */
+async function downloadToStreaming(supabaseClient, bucket, storagePath, destFsPath) {
+  const { data: signed, error: signErr } = await supabaseClient.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, 3600);
+  if (signErr || !signed?.signedUrl) {
+    throw new Error(`TRANSIENT_DOWNLOAD: sign failed ${signErr?.message || 'unknown'}`);
+  }
+
+  const res = await fetch(signed.signedUrl);
+  if (!res.ok) {
+    if (res.status === 404) throw new Error(`PERMANENT_MISSING_MEDIA: ${storagePath}`);
+    throw new Error(`TRANSIENT_DOWNLOAD: HTTP ${res.status} ${storagePath}`);
+  }
+
+  const cl = res.headers.get('content-length');
+  if (cl && Number(cl) > MAX_CLIP_BYTES) {
+    throw new Error(`PERMANENT_OVERSIZED_INPUT: Content-Length ${cl} for ${storagePath}`);
+  }
+
+  if (!res.body) throw new Error(`TRANSIENT_DOWNLOAD: empty body ${storagePath}`);
+
   await fs.mkdir(path.dirname(destFsPath), { recursive: true });
-  await fs.writeFile(destFsPath, buf);
+
+  let received = 0;
+  const meter = new PassThrough();
+  meter.on('data', (chunk) => {
+    received += chunk.length;
+    if (received > MAX_CLIP_BYTES) {
+      meter.destroy(new Error(`PERMANENT_OVERSIZED_INPUT: exceeded ${MAX_CLIP_BYTES} bytes for ${storagePath}`));
+    }
+  });
+
+  await pipeline(Readable.fromWeb(/** @type {import('stream/web').ReadableStream} */ (res.body)), meter, createWriteStream(destFsPath));
+}
+
+async function ffprobeDurationSeconds(localPath) {
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync(
+      'ffprobe',
+      [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
+        localPath,
+      ],
+      { maxBuffer: 64 * 1024, timeout: FFPROBE_TIMEOUT_MS, killSignal: 'SIGKILL' },
+    ));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : '';
+    if (code === 'ETIMEDOUT') throw new Error(`FFMPEG_TIMEOUT: ffprobe ${msg}`);
+    throw new Error(`PERMANENT_CORRUPT: ffprobe failed ${msg}`);
+  }
+  const sec = parseFloat(String(stdout).trim());
+  if (!Number.isFinite(sec) || sec <= 0) {
+    throw new Error(`PERMANENT_CORRUPT: invalid duration for ${localPath}`);
+  }
+  return sec;
 }
 
 /**
@@ -177,10 +266,10 @@ function normalizeStitchOrBroll(job) {
   if (job.kind === 'stitch') {
     const clipPathsRaw = input.clipPaths;
     if (!Array.isArray(clipPathsRaw) || clipPathsRaw.length === 0) {
-      throw new Error('stitch requires input.clipPaths: non-empty string[]');
+      throw new Error('PERMANENT_PAYLOAD: stitch requires input.clipPaths: non-empty string[]');
     }
     const clipPaths = clipPathsRaw.map((p, i) => {
-      if (typeof p !== 'string') throw new Error(`clipPaths[${i}] must be string`);
+      if (typeof p !== 'string') throw new Error(`PERMANENT_PAYLOAD: clipPaths[${i}] must be string`);
       return assertUserScopedStoragePath(uid, p);
     });
     let outputPath =
@@ -193,11 +282,11 @@ function normalizeStitchOrBroll(job) {
   if (job.kind === 'broll') {
     const mainPathRaw = input.mainPath;
     const cutawaysRaw = input.cutawayPaths;
-    if (typeof mainPathRaw !== 'string') throw new Error('broll requires input.mainPath: string');
-    if (!Array.isArray(cutawaysRaw)) throw new Error('broll requires input.cutawayPaths: string[]');
+    if (typeof mainPathRaw !== 'string') throw new Error('PERMANENT_PAYLOAD: broll requires input.mainPath: string');
+    if (!Array.isArray(cutawaysRaw)) throw new Error('PERMANENT_PAYLOAD: broll requires input.cutawayPaths: string[]');
     const mainPath = assertUserScopedStoragePath(uid, mainPathRaw.trim());
     const cutaways = cutawaysRaw.map((p, i) => {
-      if (typeof p !== 'string') throw new Error(`cutawayPaths[${i}] must be string`);
+      if (typeof p !== 'string') throw new Error(`PERMANENT_PAYLOAD: cutawayPaths[${i}] must be string`);
       return assertUserScopedStoragePath(uid, p.trim());
     });
     const clipPaths = [mainPath, ...cutaways];
@@ -208,19 +297,32 @@ function normalizeStitchOrBroll(job) {
     return { bucket, clipPaths, outputPath };
   }
 
-  throw new Error(`unsupported kind: ${job.kind}`);
+  throw new Error(`PERMANENT_PAYLOAD: unsupported kind: ${job.kind}`);
 }
 
-async function processStitchOrBroll(job) {
+async function processStitchOrBrollEncode(job) {
   const { bucket, clipPaths, outputPath } = normalizeStitchOrBroll(job);
   const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pv-job-'));
   const locals = [];
+  let sumDur = 0;
   try {
     for (let i = 0; i < clipPaths.length; i += 1) {
       const sp = clipPaths[i];
       const ext = path.extname(sp) || '.mp4';
       const local = path.join(workDir, `seg_${i}${ext}`);
-      await downloadTo(supabase, bucket, sp, local);
+      await downloadToStreaming(supabase, bucket, sp, local);
+      const dur = await ffprobeDurationSeconds(local);
+      if (dur > MAX_CLIP_DURATION_SEC) {
+        throw new Error(
+          `PERMANENT_DURATION_CAP: clip ${i} duration ${dur}s exceeds CREATOR_MEDIA_MAX_CLIP_DURATION_SEC (${MAX_CLIP_DURATION_SEC})`,
+        );
+      }
+      sumDur += dur;
+      if (sumDur > MAX_SUM_DURATION_SEC) {
+        throw new Error(
+          `PERMANENT_DURATION_CAP: combined duration ${sumDur}s exceeds CREATOR_MEDIA_MAX_SUM_DURATION_SEC (${MAX_SUM_DURATION_SEC})`,
+        );
+      }
       locals.push(local);
     }
 
@@ -234,7 +336,7 @@ async function processStitchOrBroll(job) {
       contentType: 'video/mp4',
       upsert: true,
     });
-    if (upErr) throw new Error(upErr.message);
+    if (upErr) throw new Error(`TRANSIENT_DOWNLOAD: upload failed ${upErr.message}`);
 
     return {
       bucket,
@@ -248,13 +350,27 @@ async function processStitchOrBroll(job) {
   }
 }
 
+async function setPostMediaProcessingStatus(job, status) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const tid = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
+  if (!tid || (job.kind !== 'stitch' && job.kind !== 'broll')) return;
+
+  const { error } = await supabase
+    .from('posts')
+    .update({ media_processing_status: status })
+    .eq('id', tid)
+    .eq('creator_id', job.user_id);
+  if (error) console.error('[worker] posts media_processing_status patch failed', error.message);
+}
+
 /**
  * When input.target_post_id is set, patch posts.media_url after successful concat.
+ * @returns {Promise<boolean>} false if post was not updated (investigate / retry manually).
  */
 async function patchTargetPostAfterStitch(job, output) {
   const input = job.input && typeof job.input === 'object' ? job.input : {};
   const tid = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
-  if (!tid || (job.kind !== 'stitch' && job.kind !== 'broll')) return;
+  if (!tid || (job.kind !== 'stitch' && job.kind !== 'broll')) return true;
 
   const { data: postRow, error: selErr } = await supabase
     .from('posts')
@@ -263,7 +379,7 @@ async function patchTargetPostAfterStitch(job, output) {
     .maybeSingle();
   if (selErr || !postRow || postRow.creator_id !== job.user_id) {
     console.error('[worker] target_post_id invalid or ownership mismatch', tid, selErr?.message);
-    return;
+    return false;
   }
 
   const bucket = output.bucket;
@@ -272,7 +388,7 @@ async function patchTargetPostAfterStitch(job, output) {
   const mediaUrl = pub?.publicUrl?.trim();
   if (!mediaUrl) {
     console.error('[worker] getPublicUrl returned empty for stitched output');
-    return;
+    return false;
   }
 
   const { error: upErr } = await supabase
@@ -285,7 +401,11 @@ async function patchTargetPostAfterStitch(job, output) {
     })
     .eq('id', tid)
     .eq('creator_id', job.user_id);
-  if (upErr) console.error('[worker] posts patch after stitch failed', upErr.message);
+  if (upErr) {
+    console.error('[worker] posts patch after stitch failed', upErr.message);
+    return false;
+  }
+  return true;
 }
 
 async function patchTargetPostOnFailure(job, errorMsg) {
@@ -305,71 +425,212 @@ async function patchTargetPostOnFailure(job, errorMsg) {
   if (error) console.error('[worker] posts patch on job failure', error.message);
 }
 
-async function processOne() {
-  const { data: jobs, error: qErr } = await supabase
+function normalizeClaimedJob(raw) {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw;
+}
+
+function terminalTs() {
+  return new Date().toISOString();
+}
+
+async function recoverStaleRunningOnce() {
+  if (process.env.CREATOR_MEDIA_SKIP_STARTUP_RECOVERY === '1') return;
+  const { data, error } = await supabase.rpc('recover_stale_creator_media_jobs', {
+    p_after_seconds: STALE_RUNNING_SECONDS,
+  });
+  if (error) {
+    console.warn('[worker] recover_stale_creator_media_jobs skipped:', error.message);
+    return;
+  }
+  const n = typeof data === 'number' ? data : Number(data);
+  if (n > 0) console.warn(`[worker] recovered ${n} stale running creator_media_jobs`);
+}
+
+async function finalizePermanentFailure(job, msg, lastCode) {
+  const safe = msg.length > 2000 ? `${msg.slice(0, 1997)}…` : msg;
+  await supabase
     .from('creator_media_jobs')
-    .select('id, kind, input, user_id')
-    .eq('status', 'queued')
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .update({
+      status: 'failed',
+      error: safe,
+      last_error_code: lastCode,
+      updated_at: terminalTs(),
+      completed_at: terminalTs(),
+    })
+    .eq('id', job.id);
 
-  if (qErr) {
-    console.error('[worker] query', qErr.message);
+  await patchTargetPostOnFailure(job, safe);
+  console.error('[worker] failed permanently', job.id, job.kind, lastCode, msg);
+}
+
+async function requeueWithBackoff(job, msg, lastCode) {
+  const safe = msg.length > 2000 ? `${msg.slice(0, 1997)}…` : msg;
+  const when = new Date(Date.now() + backoffMs(job.attempt_count ?? 0)).toISOString();
+  await supabase
+    .from('creator_media_jobs')
+    .update({
+      status: 'queued',
+      error: safe,
+      last_error_code: lastCode,
+      next_retry_at: when,
+      started_at: null,
+      updated_at: terminalTs(),
+      encode_complete: false,
+      output: null,
+    })
+    .eq('id', job.id);
+  console.warn('[worker] requeued transient', job.id, job.kind, lastCode, 'next_retry_at', when);
+}
+
+async function requeueAwaitingPostPatch(job, msg) {
+  const safe = msg.length > 2000 ? `${msg.slice(0, 1997)}…` : msg;
+  const when = new Date(Date.now() + backoffMs(job.attempt_count ?? 0)).toISOString();
+  await supabase
+    .from('creator_media_jobs')
+    .update({
+      status: 'awaiting_post_patch',
+      error: safe,
+      last_error_code: 'POST_PATCH_FAILED',
+      next_retry_at: when,
+      started_at: null,
+      updated_at: terminalTs(),
+    })
+    .eq('id', job.id);
+  console.warn('[worker] post-patch will retry', job.id, 'next_retry_at', when);
+}
+
+async function markAwaitingPostPatch(job, output) {
+  await supabase
+    .from('creator_media_jobs')
+    .update({
+      status: 'awaiting_post_patch',
+      output,
+      encode_complete: true,
+      error: null,
+      last_error_code: null,
+      updated_at: terminalTs(),
+      completed_at: null,
+    })
+    .eq('id', job.id);
+
+  await setPostMediaProcessingStatus(job, 'running');
+}
+
+async function markSucceeded(job, output) {
+  await supabase
+    .from('creator_media_jobs')
+    .update({
+      status: 'succeeded',
+      output,
+      error: null,
+      last_error_code: null,
+      updated_at: terminalTs(),
+      completed_at: terminalTs(),
+    })
+    .eq('id', job.id);
+}
+
+async function runPatchOnlyPass(job) {
+  const output = job.output;
+  if (!output || typeof output !== 'object') {
+    await finalizePermanentFailure(job, 'PATCH_ONLY_MISSING_OUTPUT', 'PERMANENT_PAYLOAD');
     return;
   }
 
-  const job = jobs?.[0];
-  if (!job) {
-    console.log('[worker] no queued jobs');
+  const posted = await patchTargetPostAfterStitch(job, output);
+  if (posted) {
+    await markSucceeded(job, output);
+    console.log('[worker] succeeded (post-patch retry)', job.id, job.kind, output?.storagePath);
     return;
   }
 
-  const now = new Date().toISOString();
-  await supabase.from('creator_media_jobs').update({ status: 'running', updated_at: now }).eq('id', job.id);
+  const msg = 'Post patch failed after encode (retry scheduled if attempts remain)';
+  const maxA = typeof job.max_attempts === 'number' ? job.max_attempts : Number(job.max_attempts) || 5;
+  const attempts = typeof job.attempt_count === 'number' ? job.attempt_count : Number(job.attempt_count) || 0;
+
+  if (attempts >= maxA) {
+    await finalizePermanentFailure(job, msg, 'POST_PATCH_FAILED');
+    return;
+  }
+
+  await requeueAwaitingPostPatch(job, msg);
+}
+
+async function runFullEncodePass(job) {
+  await execFileAsync('ffmpeg', ['-version'], { maxBuffer: 1024 * 1024 });
+  await execFileAsync('ffprobe', ['-version'], { maxBuffer: 1024 * 1024 });
+
+  const output = await processStitchOrBrollEncode(job);
+
+  await markAwaitingPostPatch(job, output);
+
+  const posted = await patchTargetPostAfterStitch(job, output);
+  if (posted) {
+    await markSucceeded(job, output);
+    console.log('[worker] succeeded', job.id, job.kind, output?.storagePath);
+    return;
+  }
+
+  const msg = 'Post patch failed after successful encode';
+  const maxA = typeof job.max_attempts === 'number' ? job.max_attempts : Number(job.max_attempts) || 5;
+  const attempts = typeof job.attempt_count === 'number' ? job.attempt_count : Number(job.attempt_count) || 0;
+
+  if (attempts >= maxA) {
+    await finalizePermanentFailure(job, msg, 'POST_PATCH_FAILED');
+    return;
+  }
+
+  await requeueAwaitingPostPatch(job, msg);
+}
+
+async function processOne() {
+  const { data: claimed, error: claimErr } = await supabase.rpc('claim_next_creator_media_job');
+
+  if (claimErr) {
+    console.error('[worker] claim_next_creator_media_job RPC failed — apply migrations 184/186?', claimErr.message);
+    return;
+  }
+
+  const job = normalizeClaimedJob(claimed);
+  if (!job?.id) {
+    console.log('[worker] no queued stitch/broll jobs');
+    return;
+  }
+
+  const maxA = typeof job.max_attempts === 'number' ? job.max_attempts : Number(job.max_attempts) || 5;
 
   try {
-    let output = null;
-
-    if (job.kind === 'stitch' || job.kind === 'broll') {
-      await execFileAsync('ffmpeg', ['-version'], { maxBuffer: 1024 * 1024 });
-      output = await processStitchOrBroll(job);
-    } else {
+    if (job.kind !== 'stitch' && job.kind !== 'broll') {
       throw new Error(
-        `Worker does not implement kind "${job.kind}" yet. Extend scripts/creator-media-worker.mjs or use stitch/broll.`,
+        `PERMANENT_PAYLOAD: Worker does not implement kind "${job.kind}" yet. Extend scripts/creator-media-worker.mjs or use stitch/broll.`,
       );
     }
 
-    await supabase
-      .from('creator_media_jobs')
-      .update({
-        status: 'succeeded',
-        output,
-        error: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', job.id);
-
-    console.log('[worker] succeeded', job.id, job.kind, output?.storagePath);
-
-    await patchTargetPostAfterStitch(job, output);
+    if (job.encode_complete && job.output) {
+      await runPatchOnlyPass(job);
+    } else {
+      await runFullEncodePass(job);
+    }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await supabase
-      .from('creator_media_jobs')
-      .update({
-        status: 'failed',
-        error: msg.length > 2000 ? `${msg.slice(0, 1997)}…` : msg,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', job.id);
+    const rawMsg = e instanceof Error ? e.message : String(e);
+    const { code, transient } = classifyFailure(e);
 
-    await patchTargetPostOnFailure(job, msg);
+    const attempts = typeof job.attempt_count === 'number' ? job.attempt_count : Number(job.attempt_count) || 0;
 
-    console.error('[worker] failed', job.id, job.kind, msg);
+    if (!transient || attempts >= maxA) {
+      await finalizePermanentFailure(job, rawMsg, code);
+      return;
+    }
+
+    await requeueWithBackoff(job, rawMsg, code);
   }
 }
 
 async function main() {
+  await recoverStaleRunningOnce();
+
   if (!watch) {
     await processOne();
     return;

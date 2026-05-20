@@ -83,6 +83,9 @@
       "backgroundColor": "#0A1628"
     },
     "plugins": [
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc",
+      "@react-native-community/datetimepicker",
       "expo-router",
       "expo-video",
       "react-native-compressor",

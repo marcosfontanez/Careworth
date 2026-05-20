@@ -23,9 +23,29 @@ interface FeatureFlagStore extends FeatureFlags {
   setFlags: (flags: Partial<FeatureFlags>) => void;
 }
 
+/**
+ * Live UI defaults **off** in production builds. In **development** (`__DEV__`) it defaults **on**
+ * so the Live tab and `/live/*` routes work without opening Admin first.
+ *
+ * Override at build time: `EXPO_PUBLIC_LIVE_STREAMING=0` or `=1`.
+ */
+function defaultLiveStreaming(): boolean {
+  const raw = process.env.EXPO_PUBLIC_LIVE_STREAMING?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+function defaultLiveDiscoveryDemos(): boolean {
+  const raw = process.env.EXPO_PUBLIC_LIVE_DISCOVERY_DEMOS?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
 const DEFAULT_FLAGS: FeatureFlags = {
-  liveStreaming: false,
-  liveDiscoveryDemos: true,
+  liveStreaming: defaultLiveStreaming(),
+  liveDiscoveryDemos: defaultLiveDiscoveryDemos(),
   feedCreatorGifting: true,
   sponsoredPosts: false,
   pulseversePro: false,

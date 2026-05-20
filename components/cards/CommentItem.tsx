@@ -282,6 +282,7 @@ export function CommentItem({
           {!anonymousMode && !isDeleted ? (
             <PulseTierBadge
               tier={comment.author.pulseTier ?? null}
+              score={comment.author.pulseScoreCurrent}
               size="xs"
               hideMurmur
               showIcon={false}

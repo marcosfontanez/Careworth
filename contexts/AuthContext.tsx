@@ -296,7 +296,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .map((s) => String(s).trim())
             .filter(Boolean)
         : undefined,
-      hideRecentPostsOnMyPage: Boolean((row as { hide_recent_posts_on_my_page?: boolean }).hide_recent_posts_on_my_page),
+      hidePulseMusicPlayerOnMyPage: Boolean(
+        (row as { hide_pulse_music_player_on_my_page?: boolean }).hide_pulse_music_player_on_my_page,
+      ),
       pulseTier: typeof pr.pulse_tier === 'string' ? pr.pulse_tier : 'murmur',
       pulseScoreCurrent:
         typeof pr.pulse_score_current === 'number' ? pr.pulse_score_current : 0,

@@ -53,6 +53,8 @@ import type { ProfileUpdateComment } from '@/types';
 import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { MY_PULSE_VISUALS } from '@/components/mypage/cards/MyPulseCardShell';
 import { CirclesOrbitIcon } from '@/components/mypage/cards/icons/CirclesOrbitIcon';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
+import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -1195,14 +1197,14 @@ function CommentRow({
 
   return (
     <View style={styles.comment}>
-      <Pressable onPress={onPressAuthor}>
-        <AvatarDisplay
-          size={36}
-          avatarUrl={avatarThumb(comment.authorAvatarUrl, 36)}
-          prioritizeRemoteAvatar
-          ringColor={colors.dark.border}
-        />
-      </Pressable>
+      <BorderedAvatar
+        size={36}
+        avatarUrl={avatarThumb(comment.authorAvatarUrl, 36)}
+        ringColor={colors.dark.border}
+        pulseAvatarFrame={comment.authorPulseAvatarFrame}
+        ownerDisplayName={comment.authorName ?? 'Someone'}
+        onPress={onPressAuthor}
+      />
       <View style={styles.commentBody}>
         <View style={styles.commentHeaderRow}>
           <Pressable onPress={onPressAuthor} style={styles.commentNameHit}>
@@ -1210,6 +1212,13 @@ function CommentRow({
               {comment.authorName || 'Someone'}
             </Text>
           </Pressable>
+          <PulseTierBadge
+            tier={comment.authorPulseTier ?? null}
+            score={comment.authorPulseScoreCurrent}
+            size="xs"
+            hideMurmur
+            showIcon={false}
+          />
           <View style={{ flex: 1 }} />
           {(canEdit || canDelete) && !editing ? (
             <TouchableOpacity

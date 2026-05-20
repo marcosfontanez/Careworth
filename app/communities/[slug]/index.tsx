@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   InteractionManager,
   ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +47,7 @@ import {
 import type { CircleThread, Post, PostReactionKind } from '@/types';
 import { feedPerfEnabled, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
 import { getCommunityWallFeedListWindow } from '@/lib/feedVideoListWindow';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
 
 const COMMUNITY_WALL_LIST_WINDOW = getCommunityWallFeedListWindow();
 
@@ -68,11 +69,19 @@ function hotScore(post: Post): number {
 
 export default function CommunityDetailScreen() {
   const params = useLocalSearchParams<{ slug?: string | string[]; focusPost?: string | string[] }>();
+  const segments = useSegments();
+  const slugFromSegments = useMemo(() => {
+    const segs = segments as string[];
+    const i = segs.indexOf('communities');
+    if (i < 0 || i >= segs.length - 1) return '';
+    return normalizeCommunitySlug(segs[i + 1]);
+  }, [segments]);
+
   const slug = useMemo(() => {
-    const raw = params.slug;
-    const s = Array.isArray(raw) ? raw[0] : raw;
-    return (s ?? '').trim();
-  }, [params.slug]);
+    const fromParam = normalizeCommunitySlug(params.slug);
+    return fromParam || slugFromSegments;
+  }, [params.slug, slugFromSegments]);
+
   const focusPostId = useMemo(() => {
     const raw = params.focusPost;
     const s = Array.isArray(raw) ? raw[0] : raw;
@@ -83,19 +92,40 @@ export default function CommunityDetailScreen() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
-  const { data: community, isPending, isError, isFetching, refetch } = useCommunity(slug);
-  const slugNorm = slug.trim().toLowerCase();
+  const {
+    data: community,
+    isPending,
+    isError,
+    isFetching,
+    fetchStatus: communityFetchStatus,
+    refetch,
+  } = useCommunity(slug);
   /** Ignore cached rows from another slug (defense if anything primes the wrong key). */
   const activeCommunity =
-    community && community.slug?.trim().toLowerCase() === slugNorm ? community : undefined;
+    community && normalizeCommunitySlug(community.slug) === slug ? community : undefined;
   const staleSlugMismatch = Boolean(
-    community && community.slug?.trim().toLowerCase() !== slugNorm,
+    community && slug && normalizeCommunitySlug(community.slug) !== slug,
   );
+  const communityQuerySettled = !isPending && !isFetching;
+  const slugMismatchAfterSettled = communityQuerySettled && staleSlugMismatch;
+  /**
+   * Drop mismatched rows immediately (persisted cache / bad primes). Otherwise
+   * `refetchOnMount` keeps `isFetching` true while the row never matches the URL,
+   * and `(isFetching || staleSlugMismatch)` traps the room on “Loading circle…”
+   * until navigation resets the observer.
+   */
+  useLayoutEffect(() => {
+    if (!slug || community == null) return;
+    if (normalizeCommunitySlug(community.slug) === slug) return;
+    queryClient.removeQueries({ queryKey: ['community', slug], exact: true });
+  }, [slug, community, queryClient]);
+  /** True pending or cache row that doesn’t match the URL (cleared in layout effect). */
   const showRoomLoadingShell =
     !!slug &&
     !isError &&
     !activeCommunity &&
-    (isPending || isFetching || staleSlugMismatch);
+    !slugMismatchAfterSettled &&
+    (isPending || staleSlugMismatch);
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const setCommunityJoined = useAppStore((s) => s.setCommunityJoined);
 
@@ -136,16 +166,58 @@ export default function CommunityDetailScreen() {
   const {
     data: allPosts,
     refetch: refetchPosts,
-    isPending: postsPending,
+    isWallInitialLoading,
     isError: postsError,
   } = useCommunityPosts(activeCommunity?.id ?? '');
-  const postsStillLoading = postsPending && allPosts === undefined;
+  const postsStillLoading = isWallInitialLoading;
   const {
     data: circleThreadsRaw,
     refetch: refetchThreads,
-    isPending: threadsPending,
+    isThreadsInitialLoading,
   } = useCircleThreads(slug, activeCommunity?.id);
   const circleThreads = circleThreadsRaw ?? [];
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const cid = activeCommunity?.id ?? '';
+    // eslint-disable-next-line no-console -- intentional dev-only Circle room diagnostics
+    console.log('[circleRoom:diag]', {
+      slug: slug || undefined,
+      slugFromSegments: slugFromSegments || undefined,
+      activeCommunityId: cid || undefined,
+      communityRowSlug: community?.slug,
+      communityQuery: {
+        isPending,
+        isFetching,
+        isError,
+        fetchStatus: communityFetchStatus,
+      },
+      wall: {
+        enabled: !!cid,
+        isWallInitialLoading,
+        hasPostsData: allPosts !== undefined,
+        postsError,
+      },
+      threads: {
+        isThreadsInitialLoading,
+        count: circleThreadsRaw?.length ?? 0,
+      },
+    });
+  }, [
+    slug,
+    slugFromSegments,
+    activeCommunity?.id,
+    community?.slug,
+    isPending,
+    isFetching,
+    isError,
+    communityFetchStatus,
+    isWallInitialLoading,
+    allPosts,
+    postsError,
+    isThreadsInitialLoading,
+    circleThreadsRaw?.length,
+  ]);
 
   useEffect(() => {
     perfRoomT0Ref.current = feedPerfNow();
@@ -584,6 +656,16 @@ export default function CommunityDetailScreen() {
     );
   }
 
+  if (slug && slugMismatchAfterSettled) {
+    return (
+      <ErrorState
+        title="Couldn’t open this circle"
+        subtitle="Cached room data didn’t match this link. Tap retry to reload."
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
   const shellAccent = getCircleAccent(slug);
   if (showRoomLoadingShell) {
     return (
@@ -631,8 +713,8 @@ export default function CommunityDetailScreen() {
 
   const flatData: (Post | CircleThread)[] = mode === 'questions' ? threadsSorted : postsList;
 
-  const wallPostsLoading = postsPending && allPosts === undefined;
-  const questionsThreadsLoading = threadsPending && circleThreadsRaw === undefined;
+  const wallPostsLoading = isWallInitialLoading;
+  const questionsThreadsLoading = isThreadsInitialLoading;
 
   const ListHeader = (
     <View>

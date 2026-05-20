@@ -64,6 +64,7 @@ export default function CreateTextScreen() {
         type: 'discussion',
         caption: content.trim(),
         hashtags: tags,
+        privacy_mode: 'public',
         feed_type_eligible: ['forYou', 'following'],
         comments_disabled: !commentsOn || undefined,
       });

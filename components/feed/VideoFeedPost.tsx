@@ -23,9 +23,8 @@ import type { Post } from '@/types';
 import { getMoodPreset, resolveFeedGradeLookId } from '@/lib/moodPresets';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
-import { trySignedUrlFromPostMediaPublicUrl, avatarThumb } from '@/lib/storage';
+import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
 import { pickAbCoverUrl } from '@/lib/coverAbPoster';
-import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { usePostCoverAbImpression } from '@/hooks/usePostCoverAbImpression';
 import { usePost } from '@/hooks/useQueries';
@@ -99,6 +98,9 @@ function VideoFeedPostInner({
   const pauseTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const videoUri = post.mediaUrl?.trim() ?? '';
   const hasVideo = post.type === 'video' && videoUri.length > 0;
+  const mediaCombineFailed =
+    Boolean(user?.id && user.id === post.creatorId) &&
+    (post.mediaProcessingStatus ?? '').trim().toLowerCase() === 'failed';
   const posterUri = useMemo(() => pickAbCoverUrl(post), [post]);
 
   const carouselUrls = useMemo(() => {
@@ -292,6 +294,18 @@ function VideoFeedPostInner({
               onFailed={() => setAttributedSoundFailed(true)}
             />
           ) : null}
+          {mediaCombineFailed ? (
+            <View
+              style={[styles.mediaProcessingFailedBanner, { top: tabFeedEmbedded ? 40 : 52 }]}
+              pointerEvents="none"
+              accessibilityRole="alert"
+              accessibilityLabel="Clip combine failed; viewers may only see the first clip."
+            >
+              <Text style={styles.mediaProcessingFailedText}>
+                Combine failed — viewers may only see your first clip. Post again or remove this from your profile.
+              </Text>
+            </View>
+          ) : null}
           {post.videoOverlayText?.trim() ? (
             <View
               pointerEvents="none"
@@ -414,32 +428,20 @@ function VideoFeedPostInner({
         )}
 
         {!isAnon && (
-          <View style={styles.identityRow}>
-            <View style={styles.avatarTouch}>
-              <BorderedAvatar
-                size={32}
-                avatarUrl={avatarThumb(post.creator.avatarUrl, 36)}
-                ringColor={colors.onVideo.borderAvatar}
-                pulseAvatarFrame={post.creator.pulseAvatarFrame}
-                ownerDisplayName={post.creator.displayName}
-                onPress={onProfile}
-              />
+          <View style={styles.identityBlock}>
+            <View style={styles.nameLine}>
+              <TouchableOpacity onPress={onProfile} activeOpacity={0.85}>
+                <Text style={[styles.displayName, typography.creatorName]} numberOfLines={1}>
+                  {post.creator.displayName}
+                </Text>
+              </TouchableOpacity>
+              {post.creator.isVerified && (
+                <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
+              )}
             </View>
-            <View style={styles.identityText}>
-              <View style={styles.nameLine}>
-                <TouchableOpacity onPress={onProfile} activeOpacity={0.85}>
-                  <Text style={[styles.displayName, typography.creatorName]} numberOfLines={1}>
-                    {post.creator.displayName}
-                  </Text>
-                </TouchableOpacity>
-                {post.creator.isVerified && (
-                  <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
-                )}
-              </View>
-              <Text style={styles.creatorHandle} numberOfLines={1}>
-                {profileHandleLineForCreator(post.creator)}
-              </Text>
-            </View>
+            <Text style={styles.creatorHandle} numberOfLines={1}>
+              {profileHandleLineForCreator(post.creator)}
+            </Text>
           </View>
         )}
 
@@ -664,6 +666,7 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.audioReference !== n.audioReference ||
     p.soundTitle !== n.soundTitle ||
     p.soundSourcePostId !== n.soundSourcePostId ||
+    p.stitchSourcePostId !== n.stitchSourcePostId ||
     p.soundSourceMediaUrl !== n.soundSourceMediaUrl ||
     p.isAnonymous !== n.isAnonymous ||
     p.isSponsored !== n.isSponsored ||
@@ -1198,22 +1201,11 @@ const styles = StyleSheet.create({
     right: 72,
     zIndex: 5,
   },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+  identityBlock: {
     marginBottom: 8,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
-  avatarTouch: { borderRadius: 18 },
-  creatorAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: colors.onVideo.borderAvatar,
-    backgroundColor: colors.glass.sm,
-  },
-  identityText: { flex: 1, minWidth: 0 },
   nameLine: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1410,6 +1402,26 @@ const styles = StyleSheet.create({
     color: colors.onVideo.primary,
     fontSize: 16,
     fontWeight: '800',
+  },
+
+  mediaProcessingFailedBanner: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 20,
+    backgroundColor: 'rgba(153,27,27,0.92)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  mediaProcessingFailedText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 
   // Pause/play overlay

@@ -55,6 +55,35 @@ function HubSectionDivider() {
   );
 }
 
+/** Thin top-edge color glow — defines card boundaries without heavy neon rings. */
+function CreatorHubTileTopSheen({
+  accent,
+  radius,
+  height = 5,
+}: {
+  accent: string;
+  radius: number;
+  height?: number;
+}) {
+  return (
+    <LinearGradient
+      colors={[`${accent}EE`, `${accent}38`, `${accent}00`]}
+      locations={[0, 0.42, 1]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      pointerEvents="none"
+      style={[
+        styles.tileTopSheen,
+        {
+          height,
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: radius,
+        },
+      ]}
+    />
+  );
+}
+
 /** PulseVerse Creator Hub — use a PNG with alpha so the gradient background shows through. */
 const CREATOR_HUB_BANNER = require('../../assets/images/pulseverse-creator-hub-banner.png');
 
@@ -154,7 +183,7 @@ export default function CreateScreen() {
             leading={<CreatorHubSectionLeading icon="film-outline" accent={pulseverse.hubTilePurple} />}
             kicker="Create"
             title="Start creating"
-            subtitle="Record or upload, add photos, or start Combine clips for multi-part / B-roll merges. Thumbnails, schedules, and extra polish live under Advanced on the video screen."
+            subtitle="Record or upload, add photos, start a feed discussion, or combine clips for multi-part / B-roll merges. Thumbnails, schedules, and extra polish live under Advanced on the video screen."
           />
           <View style={styles.hubPanel}>
             <CreatorHubGlassBackdrop borderRadius={borderRadius['2xl']} blurIntensity={44} />
@@ -168,6 +197,7 @@ export default function CreateScreen() {
                   accessibilityLabel="Record video"
                 >
                   <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <CreatorHubTileTopSheen accent={pulseverse.hubTilePurple} radius={borderRadius.card} />
                   <View style={styles.heroTileForeground}>
                     <View style={[styles.heroTileIcon, { backgroundColor: pulseverse.hubTilePurpleBg }]}>
                       <Ionicons name="videocam" size={28} color={pulseverse.hubTilePurple} />
@@ -185,6 +215,7 @@ export default function CreateScreen() {
                   accessibilityLabel="Upload video"
                 >
                   <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <CreatorHubTileTopSheen accent={pulseverse.hubTileGreen} radius={borderRadius.card} />
                   <View style={styles.heroTileForeground}>
                     <View style={[styles.heroTileIcon, { backgroundColor: pulseverse.hubTileGreenBg }]}>
                       <Ionicons name="cloud-upload" size={28} color={pulseverse.hubTileGreen} />
@@ -203,6 +234,7 @@ export default function CreateScreen() {
                 accessibilityLabel="Add photo or carousel"
               >
                 <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                <CreatorHubTileTopSheen accent={pulseverse.hubTileBlue} radius={borderRadius.card} />
                 <View style={styles.tileForeground}>
                   <View style={[styles.tileIcon, { backgroundColor: pulseverse.hubTileBlueBg }]}>
                     <Ionicons name="images" size={26} color={pulseverse.hubTileBlue} />
@@ -218,11 +250,44 @@ export default function CreateScreen() {
               <TouchableOpacity
                 style={styles.photoTile}
                 activeOpacity={0.88}
+                onPress={() => router.push('/create/text' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Feed discussion — text post for main feed"
+              >
+                <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                <CreatorHubTileTopSheen accent={colors.primary.teal} radius={borderRadius.card} />
+                <View style={styles.tileForeground}>
+                  <View
+                    style={[
+                      styles.tileIcon,
+                      {
+                        backgroundColor: 'rgba(45,212,191,0.12)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(45,212,191,0.28)',
+                      },
+                    ]}
+                  >
+                    <Ionicons name="chatbubbles-outline" size={26} color={colors.primary.teal} />
+                  </View>
+                  <View style={styles.tileText}>
+                    <Text style={styles.tileTitle}>Feed discussion</Text>
+                    <Text style={styles.tileSub}>
+                      Text for For You / Following — separate from My Pulse Thoughts (profile tab)
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.photoTile}
+                activeOpacity={0.88}
                 onPress={() => router.push('/create/video?openStitch=series' as any)}
                 accessibilityRole="button"
                 accessibilityLabel="Combine video clips"
               >
                 <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                <CreatorHubTileTopSheen accent={pulseverse.electric} radius={borderRadius.card} />
                 <View style={styles.tileForeground}>
                   <View
                     style={[
@@ -261,6 +326,7 @@ export default function CreateScreen() {
                   }
                 >
                   <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                  <CreatorHubTileTopSheen accent={colors.primary.teal} radius={borderRadius.lg} height={4} />
                   <View style={styles.quickPillInner}>
                     <Ionicons name="document-text-outline" size={18} color={colors.primary.teal} />
                     <Text style={styles.quickPillText}>Drafts</Text>
@@ -280,6 +346,7 @@ export default function CreateScreen() {
                   accessibilityLabel="Scheduled posts"
                 >
                   <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                  <CreatorHubTileTopSheen accent={pulseverse.storeAccent} radius={borderRadius.lg} height={4} />
                   <View style={styles.quickPillInner}>
                     <Ionicons name="calendar-outline" size={18} color={pulseverse.storeAccent} />
                     <Text style={styles.quickPillText}>Scheduled</Text>
@@ -294,12 +361,45 @@ export default function CreateScreen() {
                   accessibilityLabel="Co-create hub"
                 >
                   <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                  <CreatorHubTileTopSheen accent={colors.status.invite} radius={borderRadius.lg} height={4} />
                   <View style={styles.quickPillInner}>
                     <Ionicons name="people-outline" size={18} color={colors.status.invite} />
                     <Text style={styles.quickPillText}>Co-create</Text>
                   </View>
                 </TouchableOpacity>
               </View>
+
+              {liveStreaming ? (
+                <TouchableOpacity
+                  style={styles.photoTile}
+                  activeOpacity={0.88}
+                  onPress={() => router.push(liveGoLiveHref())}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go Live — broadcast live"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <CreatorHubTileTopSheen accent={pulseverse.livePink} radius={borderRadius.card} />
+                  <View style={styles.tileForeground}>
+                    <View
+                      style={[
+                        styles.tileIcon,
+                        {
+                          backgroundColor: pulseverse.livePink + '22',
+                          borderWidth: 1,
+                          borderColor: pulseverse.livePink + '44',
+                        },
+                      ]}
+                    >
+                      <Ionicons name="radio" size={26} color={pulseverse.livePink} />
+                    </View>
+                    <View style={styles.tileText}>
+                      <Text style={styles.tileTitle}>Go Live</Text>
+                      <Text style={styles.tileSub}>Broadcast live to your audience</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                  </View>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </View>
@@ -309,40 +409,6 @@ export default function CreateScreen() {
         <View style={styles.hubBlockShopAfterCreate}>
           <ShopEntryCard onPress={openShop} motionActive={hubFocused} />
         </View>
-
-        {liveStreaming ? (
-          <>
-            <HubSectionDivider />
-            <View style={styles.hubSection}>
-              <PVSectionHeader
-                leading={<CreatorHubSectionLeading icon="radio-outline" accent={pulseverse.livePink} />}
-                kicker="Live"
-                title="Broadcast"
-                subtitle="Go live to your audience with the PulseVerse live stack."
-              />
-              <View style={styles.hubPanelFlush}>
-                <CreatorHubGlassBackdrop borderRadius={borderRadius['2xl']} blurIntensity={44} />
-                <TouchableOpacity
-                  style={styles.goLive}
-                  activeOpacity={0.88}
-                  onPress={() => router.push(liveGoLiveHref())}
-                >
-                  <View style={styles.goLiveAccent} />
-                  <View style={styles.goLiveInner}>
-                    <View style={styles.goLiveIcon}>
-                      <Ionicons name="radio" size={24} color={pulseverse.livePink} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.goLiveTitle}>Go Live</Text>
-                      <Text style={styles.goLiveSub}>Broadcast live</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={colors.dark.textMuted} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </>
-        ) : null}
 
         <HubSectionDivider />
 
@@ -468,13 +534,12 @@ const styles = StyleSheet.create({
     zIndex: 1,
     gap: layout.sectionGap,
   },
-  hubPanelFlush: {
-    borderRadius: borderRadius['2xl'],
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.18)',
-    overflow: 'hidden',
-    position: 'relative',
-    ...shadows.subtle,
+  tileTopSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
   hero: {
     alignItems: 'center',
@@ -509,7 +574,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2,
   },
   heroTileIcon: {
     width: 56,
@@ -546,7 +611,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2,
   },
   tileIcon: {
     width: 52,
@@ -602,7 +667,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2,
   },
   quickPillText: {
     fontSize: 12,
@@ -623,43 +688,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     color: colors.dark.bg,
-  },
-  goLive: {
-    position: 'relative',
-    zIndex: 1,
-    overflow: 'hidden',
-    borderRadius: borderRadius['2xl'],
-    backgroundColor: 'transparent',
-  },
-  goLiveAccent: {
-    height: 3,
-    width: '100%',
-    backgroundColor: pulseverse.livePink,
-    opacity: 0.85,
-  },
-  goLiveInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 16,
-    paddingHorizontal: layout.screenPadding,
-  },
-  goLiveIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: borderRadius.lg,
-    backgroundColor: pulseverse.livePink + '1F',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  goLiveTitle: {
-    ...typography.h4,
-    color: colors.dark.text,
-  },
-  goLiveSub: {
-    ...typography.caption,
-    fontWeight: '500',
-    color: colors.dark.textMuted,
-    marginTop: 4,
   },
 });

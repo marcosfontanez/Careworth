@@ -228,6 +228,8 @@ export default function CreateVideoScreen() {
     ? stitchSourcePostIdRaw[0]
     : stitchSourcePostIdRaw;
   const stitchSourcePostIdTrim = stitchSourcePostId?.trim() ?? '';
+  const openStitchParam = Array.isArray(openStitchRaw) ? openStitchRaw[0] : openStitchRaw;
+  const openStitchKey = openStitchParam?.trim() ?? '';
   const {
     data: stitchSourcePost,
     isPending: stitchSourceLoading,
@@ -308,6 +310,11 @@ export default function CreateVideoScreen() {
   /** Avoid clearing AsyncStorage draft before the first loadDraft + pending capture pass finishes. */
   const [draftBootstrapped, setDraftBootstrapped] = useState(false);
   /**
+   * When opening Stitch from a feed post, wait until hydrate finishes (or fails) before opening
+   * MultiClipStitchModal — otherwise draft-restored media wins first and Part 1 is wrong.
+   */
+  const [stitchFeedHydrateReady, setStitchFeedHydrateReady] = useState(() => !stitchSourcePostIdTrim);
+  /**
    * Android: {@link VideoView} + soft keyboard has crashed native media (SIGABRT / JNI pending
    * exception). Swap to a static poster whenever the keyboard is visible.
    */
@@ -380,6 +387,14 @@ export default function CreateVideoScreen() {
   }, [stitchSourcePostIdTrim]);
 
   useEffect(() => {
+    if (!stitchSourcePostIdTrim) {
+      setStitchFeedHydrateReady(true);
+      return;
+    }
+    setStitchFeedHydrateReady(false);
+  }, [stitchSourcePostIdTrim]);
+
+  useEffect(() => {
     if (!stitchSourcePostIdTrim) return;
     if (!draftBootstrapped) return;
     if (stitchSourceLoading) return;
@@ -390,6 +405,7 @@ export default function CreateVideoScreen() {
         stitchHydrateAttemptedRef.current = true;
         toast.show('Couldn’t load this post', 'error');
       }
+      setStitchFeedHydrateReady(true);
       return;
     }
 
@@ -399,6 +415,7 @@ export default function CreateVideoScreen() {
         stitchHydrateAttemptedRef.current = true;
         toast.show('This post has no video to use as your main clip', 'info');
       }
+      setStitchFeedHydrateReady(true);
       return;
     }
 
@@ -407,6 +424,7 @@ export default function CreateVideoScreen() {
         stitchHydrateAttemptedRef.current = true;
         toast.show('Stitch from a feed video isn’t available on web yet — upload a clip instead.', 'info');
       }
+      setStitchFeedHydrateReady(true);
       return;
     }
 
@@ -436,6 +454,12 @@ export default function CreateVideoScreen() {
           height: meta.height,
         });
         openedPickerRef.current = true;
+        if (__DEV__) {
+          console.log('[stitch] hydrated primary from feed', {
+            stitchSourcePostId: stitchSourcePostIdTrim,
+            durationSec: meta.duration,
+          });
+        }
       } catch (e: unknown) {
         if (gen !== stitchHydrateGenRef.current) return;
         const msg = e instanceof Error ? e.message : 'Could not download video';
@@ -443,6 +467,7 @@ export default function CreateVideoScreen() {
       } finally {
         if (!cancelled && gen === stitchHydrateGenRef.current) {
           stitchHydrateAttemptedRef.current = true;
+          setStitchFeedHydrateReady(true);
         }
       }
     })();
@@ -472,12 +497,20 @@ export default function CreateVideoScreen() {
     if (!draftBootstrapped) return;
     const intent = stitchIntentRef.current;
     if (!intent || !media) return;
+    if (stitchSourcePostIdTrim && !stitchFeedHydrateReady) return;
     stitchIntentRef.current = null;
     stitchGalleryPromptedRef.current = true;
+    if (__DEV__) {
+      console.log('[stitch] opening MultiClipStitchModal', {
+        variant: intent,
+        stitchSourcePostId: stitchSourcePostIdTrim || undefined,
+        primaryUriPrefix: media.uri?.slice(0, 48),
+      });
+    }
     setStitchVariant(intent);
     setStitchOpen(true);
     setAdvancedCreatorOpen(true);
-  }, [draftBootstrapped, media?.uri]);
+  }, [draftBootstrapped, media?.uri, stitchSourcePostIdTrim, stitchFeedHydrateReady]);
 
   useEffect(() => {
     if (!draftBootstrapped) return;
@@ -624,7 +657,7 @@ export default function CreateVideoScreen() {
         ) {
           setDuetLayoutMode(draft.videoDuetLayout);
         }
-        if (draft.followUpClipUris?.length) {
+        if (draft.followUpClipUris?.length && !stitchSourcePostIdTrim) {
           setFollowUpClips(
             draft.followUpClipUris.map((uri, i) => ({
               uri,
@@ -635,7 +668,7 @@ export default function CreateVideoScreen() {
           );
           setAdvancedCreatorOpen(true);
         }
-        if (draft.mediaUris?.[0] && !pending) {
+        if (draft.mediaUris?.[0] && !pending && !stitchSourcePostIdTrim) {
           skipNextTrimResetRef.current = true;
           const u = draft.mediaUris[0];
           setMedia({
@@ -676,7 +709,7 @@ export default function CreateVideoScreen() {
     return () => {
       cancelled = true;
     };
-  }, [mode, soundPostIdTrim, duetPostIdTrim]);
+  }, [mode, soundPostIdTrim, duetPostIdTrim, stitchSourcePostIdTrim, openStitchKey]);
 
   const buildVideoDraftData = useCallback((): DraftData => {
     const payload: DraftData = {
@@ -904,6 +937,10 @@ export default function CreateVideoScreen() {
           toast.show('Still loading duet reference — wait a moment and try again', 'info');
           return;
         }
+        if (stitchSourcePostIdTrim && stitchSourceLoading) {
+          toast.show('Still loading the clip you’re stitching — wait a moment and try again', 'info');
+          return;
+        }
         const sourceMediaEarly =
           soundSourcePost?.soundSourceMediaUrl?.trim() || soundSourcePost?.mediaUrl?.trim();
         if (sid && soundSourcePost && !sourceMediaEarly) {
@@ -1003,8 +1040,19 @@ export default function CreateVideoScreen() {
               }
             : {};
 
+        const stitchPersistPayload = stitchSourcePostIdTrim
+          ? { stitch_source_post_id: stitchSourcePostIdTrim }
+          : {};
+
         let createdStitch;
         try {
+          if (__DEV__) {
+            console.log('[stitch] publishing concat post', {
+              stitchSourcePostId: stitchSourcePostIdTrim || undefined,
+              clipCount: 1 + followUpClips.length,
+              hasBorrowedSound: Boolean(soundPostIdTrim),
+            });
+          }
           createdStitch = await postsService.create({
             creator_id: user.id,
             type: postTypeStitch,
@@ -1038,7 +1086,15 @@ export default function CreateVideoScreen() {
             ...soundPayloadStitch,
             ...ownSoundPayloadStitch,
             ...duetPayloadStitch,
+            ...stitchPersistPayload,
           });
+          if (__DEV__) {
+            console.log('[stitch] post row created', {
+              postId: createdStitch.id,
+              stitchSourcePostId: stitchSourcePostIdTrim || undefined,
+              processing: createdStitch.mediaProcessingStatus,
+            });
+          }
         } catch (createErr: unknown) {
           const msg =
             createErr && typeof createErr === 'object' && 'message' in createErr
@@ -1086,18 +1142,24 @@ export default function CreateVideoScreen() {
           /* non-fatal — worker still runs */
         }
 
+        let stitchCombineSucceeded = false;
         try {
           const done = await waitForCreatorMediaJob(jobRow.id, { timeoutMs: 180_000, intervalMs: 2000 });
           if (done.status === 'failed') {
-            toast.show(done.error?.trim() ? done.error.trim().slice(0, 160) : 'Clip combine failed', 'error');
+            const raw = done.error?.trim() ? done.error.trim().slice(0, 140) : 'Clip combine failed';
+            toast.show(
+              `${raw} — check your profile: the post may show processing failed or only the first clip until you delete or retry.`,
+              'error',
+            );
           } else if (done.status === 'succeeded') {
             toast.show('Clips combined — your video is ready.', 'success');
+            stitchCombineSucceeded = true;
           }
         } catch (pollErr: unknown) {
           const msg = pollErr instanceof Error ? pollErr.message : String(pollErr);
           if (msg === 'TIMEOUT') {
             toast.show(
-              'Combining clips is taking longer — open your profile or feed shortly and pull to refresh.',
+              'Combining clips is taking longer — the worker may still finish. Pull to refresh on your profile or feed in a minute.',
               'info',
             );
           } else {
@@ -1105,14 +1167,24 @@ export default function CreateVideoScreen() {
           }
         }
 
-        analytics.track('post_created', { type: postTypeStitch, stitch: true });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        analytics.track('post_created', {
+          type: postTypeStitch,
+          stitch: true,
+          combine_succeeded: stitchCombineSucceeded,
+        });
+        if (stitchCombineSucceeded) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
         await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
 
         setFollowUpClips([]);
         setClipQueueVariant(null);
         clearDraft('video');
-        setShowSuccess(true);
+        if (stitchCombineSucceeded) {
+          setShowSuccess(true);
+        } else {
+          router.replace('/(tabs)/feed');
+        }
         return;
       }
 

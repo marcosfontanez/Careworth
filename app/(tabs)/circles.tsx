@@ -42,7 +42,7 @@ import {
   getRecentCircleSearches,
 } from '@/lib/circleExperience';
 import { hrefCommunity, hrefCommunityThread, hrefCommunityWallPost, hrefPost } from '@/lib/communityRoutes';
-import { prefetchCircleRoom } from '@/lib/communityCache';
+import { prefetchCircleRoom, prefetchCircleRoomBySlug } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { addSearchQuery } from '@/lib/searchHistory';
 import { FEATURED_CIRCLE_SLUGS_ORDER } from '@/constants/circleDiscovery';
@@ -612,6 +612,7 @@ export default function CirclesScreen() {
                         preview={t.preview}
                         accentColor={pulseverse.electric}
                         onPress={() => {
+                          prefetchCircleRoomBySlug(queryClient, t.circleSlug, user?.id ?? null);
                           if (t.postId) router.push(hrefPost(t.postId, t.circleSlug));
                           else if (t.threadId) router.push(hrefCommunityThread(t.circleSlug, t.threadId));
                           else router.push(hrefCommunity(t.circleSlug));

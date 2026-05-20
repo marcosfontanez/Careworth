@@ -7,6 +7,7 @@ export type LiveModeType = 'casual' | 'irl' | 'gaming' | 'learn' | 'shop';
 export type LiveHubCategoryTab =
   | 'for-you'
   | 'following'
+  | 'casual'
   | 'gaming'
   | 'irl'
   | 'learn'

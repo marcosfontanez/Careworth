@@ -95,6 +95,7 @@ export default function FeedScreen() {
 
   const {
     data: feedInfData,
+    dataUpdatedAt,
     isPending,
     isFetching,
     isError,
@@ -105,11 +106,18 @@ export default function FeedScreen() {
     error: feedError,
   } = useFeedInfinite(feedTab, user?.id);
 
-  /** Ranked feed caches aggressively; refetch when the Feed tab gains focus so new posts appear without force-quit. */
+  /**
+   * Refresh when returning to Feed so new posts appear — but skip if we already
+   * fetched recently (`useFeedInfinite` staleTime is 60s). Unconditional `refetch()`
+   * on every tab blur→focus duplicated ranked-merge + continuation work and spiked
+   * Supabase load during rapid tab switching.
+   */
   useFocusEffect(
     useCallback(() => {
+      const minStaleMs = 25_000;
+      if (feedInfData && Date.now() - dataUpdatedAt < minStaleMs) return;
       void refetch();
-    }, [refetch]),
+    }, [refetch, feedInfData, dataUpdatedAt]),
   );
 
   const posts = useMemo(() => feedInfData?.pages.flatMap((p) => p.posts) ?? [], [feedInfData]);

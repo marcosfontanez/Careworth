@@ -24,11 +24,17 @@ export function pushVideoRemixRoute(router: Pick<Router, 'push'>, post: Post, ke
       router.push(`/create/video-camera?duetPostId=${encodeURIComponent(post.id)}`);
       break;
     case 'stitch':
+      if (__DEV__) {
+        console.log('[stitch] navigate composer', { stitchSourcePostId: post.id, variant: 'series' });
+      }
       router.push(
         `/create/video?openStitch=series&stitchSourcePostId=${encodeURIComponent(post.id)}`,
       );
       break;
     case 'stitchBroll':
+      if (__DEV__) {
+        console.log('[stitch] navigate composer', { stitchSourcePostId: post.id, variant: 'broll' });
+      }
       router.push(`/create/video?openStitch=broll&stitchSourcePostId=${encodeURIComponent(post.id)}`);
       break;
     case 'composer':

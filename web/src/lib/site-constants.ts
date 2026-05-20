@@ -9,6 +9,10 @@ export function getPrivacyEmail(): string {
   return process.env.NEXT_PUBLIC_PRIVACY_EMAIL?.trim() || "privacy@pulseverse.app";
 }
 
+export function getLegalEmail(): string {
+  return process.env.NEXT_PUBLIC_LEGAL_EMAIL?.trim() || "legal@pulseverse.app";
+}
+
 /** Responsible disclosure / security.txt contact (defaults to security@ if env unset). */
 export function getSecurityEmail(): string {
   return process.env.NEXT_PUBLIC_SECURITY_EMAIL?.trim() || "security@pulseverse.app";

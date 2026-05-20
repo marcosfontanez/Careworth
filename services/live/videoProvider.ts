@@ -4,25 +4,12 @@
  * Narrow contract the app uses to publish / consume live video, independent
  * of whatever real-time backend (LiveKit, Agora, Mux, 100ms, …) we adopt.
  *
- * The app today runs against `MockVideoProvider`, which returns a ready
- * "session" immediately but doesn't transport frames. All of the social
- * layer (chat, gifts, polls, presence, pins, follows) works off Supabase and
- * is already fully wired — swapping a real provider in only lights up the
- * actual video bytes.
- *
- * When you're ready to go live for real:
- *   1. Pick a vendor (recommended: LiveKit open-source, self-hosted or cloud).
- *   2. Install the RN SDK (`@livekit/react-native` + webrtc) and add the
- *      native config via EAS config plugin.
- *   3. Spin up an edge function that mints tokens (so secrets don't live on
- *      the client). The function should accept `{ streamId, role }` and
- *      return a short-lived JWT.
- *   4. Implement a new provider matching the `VideoProvider` shape below,
- *      and flip the `videoProvider` export at the bottom.
- *
- * The UI layer doesn't need to change — it already calls `getSession()` and
- * displays the returned `playbackUrl` or embeds the provider's native view.
+ * Engagement (chat, gifts, polls, pins) stays on Supabase — only media bytes
+ * flow through the active provider.
  */
+
+import { isExpoGo } from '@/lib/expoRuntime';
+import { mintLiveKitCredentials } from '@/services/live/liveKitToken';
 
 export type VideoRole = 'host' | 'viewer';
 
@@ -33,9 +20,9 @@ export interface VideoSession {
   role: VideoRole;
   /** Short-lived token the native SDK uses to connect. */
   token: string;
-  /** Playback URL for `expo-video` fallback (HLS / DASH). */
+  /** LiveKit WSS URL — informational; native SDK connects with serverUrl + token. */
   playbackUrl?: string;
-  /** Provider-specific room name. Some vendors use this instead of streamId. */
+  /** Provider-specific room name. */
   roomName: string;
   /** Seconds-since-epoch when the token expires. Re-request a session past this. */
   expiresAt: number;
@@ -59,9 +46,6 @@ export interface VideoProvider {
 }
 
 // ─── Mock provider ───────────────────────────────────────────────────────
-// Returns a no-op session immediately. The app treats "no playbackUrl" as a
-// signal to render the thumbnail image as the background (which is what the
-// viewer room does today).
 export const MockVideoProvider: VideoProvider = {
   id: 'mock',
 
@@ -81,13 +65,39 @@ export const MockVideoProvider: VideoProvider = {
   },
 };
 
-// ─── LiveKit placeholder ─────────────────────────────────────────────────
-// Not functional yet — kept here as a signpost so future integration has a
-// clear landing spot. Uncomment & implement when the native SDK is added.
-//
-// import { Room } from '@livekit/react-native';
-// export const LiveKitVideoProvider: VideoProvider = { ... };
+// ─── LiveKit (native SDK — dev/EAS builds only; not Expo Go) ──────────────
 
-// ─── Active provider ─────────────────────────────────────────────────────
-// Flip this to the real provider when you're ready to go live with video.
-export const videoProvider: VideoProvider = MockVideoProvider;
+export const LiveKitVideoProvider: VideoProvider = {
+  id: 'livekit',
+
+  async getSession({ streamId }) {
+    const cred = await mintLiveKitCredentials(streamId);
+    if (!cred) {
+      throw new Error('Could not mint LiveKit credentials');
+    }
+    return {
+      streamId: cred.streamId,
+      role: cred.role,
+      token: cred.token,
+      roomName: cred.roomName,
+      playbackUrl: cred.serverUrl,
+      expiresAt: cred.expiresAt,
+    };
+  },
+
+  async endSession() {
+    // Disconnect is owned by `LiveKitStage` mount lifecycle / navigation teardown.
+  },
+};
+
+function liveKitConfigured(): boolean {
+  if (isExpoGo()) return false;
+  const url = process.env.EXPO_PUBLIC_LIVEKIT_URL?.trim();
+  return Boolean(url && url.startsWith('wss://'));
+}
+
+/**
+ * Active provider — LiveKit when `EXPO_PUBLIC_LIVEKIT_URL` is set (dev/EAS),
+ * otherwise mock thumbnail-only behaviour for founders without Cloud wired yet.
+ */
+export const videoProvider: VideoProvider = liveKitConfigured() ? LiveKitVideoProvider : MockVideoProvider;

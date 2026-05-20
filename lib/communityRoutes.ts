@@ -1,4 +1,5 @@
 import type { Href } from 'expo-router';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
 
 /** Typed routes for Circles / community surfaces (avoids `as any` on `router.push`). */
 export function hrefTabCircles(scope?: 'yours' | 'discover'): Href {
@@ -8,15 +9,15 @@ export function hrefTabCircles(scope?: 'yours' | 'discover'): Href {
 }
 
 export function hrefCommunity(slug: string): Href {
-  return `/communities/${slug}`;
+  return `/communities/${normalizeCommunitySlug(slug)}`;
 }
 
 export function hrefCommunityThread(slug: string, threadId: string): Href {
-  return `/communities/${slug}/thread/${threadId}`;
+  return `/communities/${normalizeCommunitySlug(slug)}/thread/${threadId}`;
 }
 
 export function hrefPost(postId: string, circleSlug?: string): Href {
-  if (circleSlug) return `/post/${postId}?circle=${encodeURIComponent(circleSlug)}`;
+  if (circleSlug) return `/post/${postId}?circle=${encodeURIComponent(normalizeCommunitySlug(circleSlug))}`;
   return `/post/${postId}`;
 }
 
@@ -34,5 +35,5 @@ export function hrefPostFocusComments(postId: string, circleSlug?: string): Href
 
 /** Circle wall scrolled to a specific post (e.g. opening a pin from My Pulse). */
 export function hrefCommunityWallPost(slug: string, postId: string): Href {
-  return `/communities/${slug}?focusPost=${encodeURIComponent(postId)}`;
+  return `/communities/${normalizeCommunitySlug(slug)}?focusPost=${encodeURIComponent(postId)}`;
 }

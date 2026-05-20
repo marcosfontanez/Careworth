@@ -28,6 +28,7 @@ function soundLabel(post: Post): string {
 }
 
 function subtitle(post: Post): string {
+  if (post.stitchSourcePostId?.trim()) return 'Stitched clip';
   if (post.soundSourcePostId) return 'Uses sound';
   return post.creator.displayName;
 }

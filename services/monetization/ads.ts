@@ -106,6 +106,7 @@ export const adsService = {
     };
   },
 
+  /** Requires a signed-in Supabase session (RPC is authenticated-only post–migration 180). */
   async trackImpression(campaignId: string): Promise<void> {
     if (!isFeatureEnabled('sponsoredPosts')) return;
 
@@ -114,6 +115,7 @@ export const adsService = {
     } catch {}
   },
 
+  /** Requires a signed-in Supabase session (RPC is authenticated-only post–migration 180). */
   async trackClick(campaignId: string): Promise<void> {
     if (!isFeatureEnabled('sponsoredPosts')) return;
 

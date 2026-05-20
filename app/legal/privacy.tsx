@@ -4,8 +4,10 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { colors, layout, spacing, typography } from '@/theme';
+import { CONTACT_EMAILS } from '@/lib/contactEmails';
 
 export default function PrivacyScreen() {
+  const privacyEmail = CONTACT_EMAILS.privacy;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -60,8 +62,8 @@ export default function PrivacyScreen() {
         <Text style={styles.body}>
           We retain personal information for as long as your account is active and as needed to
           provide the service, comply with law, resolve disputes, and enforce our agreements.
-          You may request deletion of your account and associated personal information by contacting
-          privacy@pulseverse.app. We will respond within a reasonable time; some records may be
+          You may request deletion of your account and associated personal information by contacting{' '}
+          {privacyEmail}. We will respond within a reasonable time; some records may be
           retained where law or legitimate security / fraud‑prevention needs require it.
         </Text>
 
@@ -76,8 +78,8 @@ export default function PrivacyScreen() {
         <Text style={styles.body}>
           PulseVerse is intended for adults. We do not knowingly collect personal information from
           children under 13 (or the minimum digital‑consent age in your jurisdiction, if higher).
-          If you believe we collected a child’s information in error, contact us at
-          privacy@pulseverse.app and we will take appropriate steps, which may include deletion.
+          If you believe we collected a child’s information in error, contact us at {privacyEmail} and we will take
+          appropriate steps, which may include deletion.
         </Text>
 
         <Text style={styles.h2}>9. Push notifications</Text>
@@ -104,7 +106,7 @@ export default function PrivacyScreen() {
 
         <Text style={styles.h2}>12. Contact Us</Text>
         <Text style={styles.body}>
-          For privacy-related questions or data requests, contact us at privacy@pulseverse.app.
+          For privacy-related questions or data requests, contact us at {privacyEmail}.
         </Text>
 
         <View style={styles.bottomSpacer} />

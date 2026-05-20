@@ -19,40 +19,49 @@ function Block({ h, style }: { h: number; style?: object }) {
   );
 }
 
-/**
- * Premium placeholder layout while Live hub payload loads — keeps header visible elsewhere.
- */
+/** Placeholder layout aligned with premium Live hub: hero → rails → CTA. */
 export function LiveHubSkeleton() {
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={[styles.scroll, { paddingBottom: spacing['3xl'] }]}
     >
-      <Block h={380} style={{ width: CARD_W, alignSelf: 'center', borderRadius: borderRadius['3xl'] - 4 }} />
-
-      <View style={styles.rowTitle}>
-        <Block h={14} style={{ width: '42%', borderRadius: 6 }} />
-      </View>
-      <View style={styles.pairRow}>
-        <Block h={200} style={{ flex: 1, borderRadius: borderRadius.xl }} />
-        <Block h={200} style={{ flex: 1, borderRadius: borderRadius.xl }} />
+      <View style={styles.headerGap}>
+        <Block h={12} style={{ width: '36%', borderRadius: 6, alignSelf: 'center' }} />
+        <Block h={18} style={{ width: '52%', borderRadius: 8, marginTop: spacing.sm, alignSelf: 'center' }} />
+        <Block h={11} style={{ width: '72%', borderRadius: 6, marginTop: spacing.xs, alignSelf: 'center' }} />
       </View>
 
-      <View style={styles.rowTitle}>
-        <Block h={14} style={{ width: '38%', borderRadius: 6 }} />
+      <Block h={400} style={{ width: CARD_W, alignSelf: 'center', borderRadius: borderRadius['3xl'] - 4 }} />
+
+      <View style={styles.sectionHead}>
+        <Block h={13} style={{ width: '44%', borderRadius: 6 }} />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hStrip}>
         {[1, 2, 3].map((k) => (
-          <Block key={k} h={160} style={{ width: 140, borderRadius: borderRadius.xl }} />
+          <Block key={k} h={268} style={{ width: 220, borderRadius: borderRadius['2xl'], marginRight: spacing.md }} />
         ))}
       </ScrollView>
 
-      <View style={styles.rowTitle}>
-        <Block h={14} style={{ width: '52%', borderRadius: 6 }} />
+      <View style={styles.sectionHead}>
+        <Block h={13} style={{ width: '40%', borderRadius: 6 }} />
       </View>
-      {[1, 2].map((k) => (
-        <Block key={k} h={96} style={{ marginBottom: spacing.md, borderRadius: borderRadius.xl }} />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hStrip}>
+        {[1, 2].map((k) => (
+          <Block key={k} h={148} style={{ width: 260, borderRadius: borderRadius.xl, marginRight: spacing.md }} />
+        ))}
+      </ScrollView>
+
+      <View style={styles.sectionHead}>
+        <Block h={13} style={{ width: '48%', borderRadius: 6 }} />
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hStrip}>
+        {[1, 2].map((k) => (
+          <Block key={k} h={132} style={{ width: 300, borderRadius: borderRadius.xl, marginRight: spacing.md }} />
+        ))}
+      </ScrollView>
+
+      <Block h={120} style={{ marginHorizontal: layout.screenPadding, borderRadius: borderRadius['2xl'] }} />
     </ScrollView>
   );
 }
@@ -60,8 +69,16 @@ export function LiveHubSkeleton() {
 const styles = StyleSheet.create({
   scroll: {
     paddingTop: spacing.sm,
-    paddingHorizontal: layout.screenPadding,
     gap: spacing.md,
+  },
+  headerGap: {
+    paddingHorizontal: layout.screenPadding,
+    marginBottom: spacing.sm,
+  },
+  sectionHead: {
+    marginTop: spacing.lg,
+    paddingHorizontal: layout.screenPadding,
+    marginBottom: spacing.xs,
   },
   block: {
     backgroundColor: colors.dark.card,
@@ -69,16 +86,10 @@ const styles = StyleSheet.create({
     borderColor: colors.dark.borderSubtle,
     opacity: 0.85,
   },
-  rowTitle: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  pairRow: {
+  hStrip: {
     flexDirection: 'row',
-    gap: spacing.md,
-  },
-  hScroll: {
-    gap: spacing.md,
+    alignItems: 'center',
+    paddingHorizontal: layout.screenPadding,
     paddingVertical: spacing.xs,
   },
 });

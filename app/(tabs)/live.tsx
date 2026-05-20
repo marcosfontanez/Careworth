@@ -1,15 +1,19 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   RefreshControl,
   ScrollView,
-  Pressable,
   Platform,
+  type LayoutChangeEvent,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+  Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -17,28 +21,28 @@ import { colors, borderRadius, layout, spacing, typography, pulseverse } from '@
 import { FeaturedLiveCarousel } from '@/components/live/FeaturedLiveCarousel';
 import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useAuth } from '@/contexts/AuthContext';
 import { isFeatureEnabled } from '@/lib/featureFlags';
-import { liveGoLiveHref, liveHostControlsHref, liveStreamHref } from '@/lib/navigation/liveRoutes';
+import { liveGoLiveHref, liveStreamHref } from '@/lib/navigation/liveRoutes';
+import { normalizeLiveHubTabQueryParam } from '@/lib/liveHubTabParam';
+import { normalizeLiveHubSectionQueryParam, type LiveHubSection } from '@/lib/liveHubSectionParam';
 import { useLiveHubHome } from '@/hooks/useLiveHubHome';
 import type { LiveHubCategoryTab, LiveHubStream } from '@/types/liveHub';
 import {
   HubCircleLiveCard,
   HubShopLiveCard,
-  HubTrendingCard,
-  HubUpcomingCard,
+  HubUpcomingSessionCard,
   LiveHubCategoryBar,
   StartLivePromoCard,
   liveModeLabel,
 } from '@/components/live/hub/HubDiscoveryCards';
+import { LiveHubHeader } from '@/components/live/hub/LiveHubHeader';
+import { heroCategoryLabel } from '@/components/live/hub/liveHubHeroCategory';
 import { LiveHubSkeleton } from '@/components/live/hub/LiveHubSkeleton';
 import { useToast } from '@/components/ui/Toast';
 import type { LiveStream } from '@/types';
-
-function chunkPairs<T>(arr: T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += 2) out.push(arr.slice(i, i + 2));
-  return out;
-}
+import { analytics } from '@/lib/analytics';
+import { streamsLiveService } from '@/services/supabase';
 
 /** Shown when the Live tab is visible but streaming is not enabled yet (e.g. pre–store launch). */
 function LivePrelaunchPlaceholder() {
@@ -48,12 +52,17 @@ function LivePrelaunchPlaceholder() {
   return (
     <SafeAreaView style={styles.safeRoot} edges={['top']}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={styles.prelaunchHeader}>
           <View style={styles.headerSideBtn} />
           <View style={styles.headerCenter}>
-            <View style={styles.liveHeaderDot} />
-            <View>
-              <Text style={styles.headerTitle}>Live</Text>
+            <View style={styles.headerTitleBlock}>
+              <View style={styles.headerTitleRow}>
+                <Text style={styles.prelaunchHeaderTitle}>Live</Text>
+                <View style={styles.headerLivePill}>
+                  <View style={styles.headerLivePulse} />
+                  <Text style={styles.headerLivePillTxt}>LIVE</Text>
+                </View>
+              </View>
               <Text style={styles.headerSubtitle}>Real conversations. Real impact.</Text>
             </View>
           </View>
@@ -63,7 +72,7 @@ function LivePrelaunchPlaceholder() {
           <EmptyState
             icon="radio-outline"
             title="Coming after launch"
-            subtitle="Turn on Live streaming in Admin → Feature flags when you’re ready."
+            subtitle="In release builds, turn on Live streaming in Admin → Feature flags, or set EXPO_PUBLIC_LIVE_STREAMING=1 for your environment."
             accent={colors.status.live}
             ctaLabel="Back to Feed"
             onCtaPress={() => router.replace('/(tabs)/feed')}
@@ -83,11 +92,62 @@ export default function LiveScreen() {
 
 function LiveHubScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{ tab?: string | string[]; section?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const showToast = useToast((s) => s.show);
+  const queryClient = useQueryClient();
+  const hubScrollRef = useRef<ScrollView>(null);
+  const shopDealsSectionY = useRef(0);
+  const upcomingSectionY = useRef(0);
+  const pendingScrollToSection = useRef<LiveHubSection | null>(null);
+  const featuredSectionY = useRef(0);
+  const circlesSectionY = useRef(0);
+  const [headerCompact, setHeaderCompact] = useState(false);
   const [tab, setTab] = useState<LiveHubCategoryTab>('for-you');
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useLiveHubHome(tab);
+
+  useFocusEffect(
+    useCallback(() => {
+      analytics.track('live_tab_viewed', { tab });
+      return undefined;
+    }, [tab]),
+  );
+
+  useEffect(() => {
+    const rawTab = params.tab;
+    const tabStr = typeof rawTab === 'string' ? rawTab : Array.isArray(rawTab) ? rawTab[0] : undefined;
+    const nextTab = normalizeLiveHubTabQueryParam(tabStr);
+
+    const rawSec = params.section;
+    const secStr = typeof rawSec === 'string' ? rawSec : Array.isArray(rawSec) ? rawSec[0] : undefined;
+    const nextSec = normalizeLiveHubSectionQueryParam(secStr);
+
+    if (!nextTab && !nextSec) return;
+
+    if (nextTab) setTab(nextTab);
+    if (nextSec) pendingScrollToSection.current = nextSec;
+
+    router.replace('/(tabs)/live' as Href);
+
+    if (!nextSec) return;
+    const sectionForTimeout = nextSec;
+    setTimeout(() => {
+      if (pendingScrollToSection.current !== sectionForTimeout) return;
+      pendingScrollToSection.current = null;
+      let y = 0;
+      const inset = sectionForTimeout === 'featured' ? spacing.sm : spacing.md;
+      if (sectionForTimeout === 'featured' || sectionForTimeout === 'discover') {
+        y = featuredSectionY.current;
+      } else if (sectionForTimeout === 'shop') {
+        y = shopDealsSectionY.current;
+      } else if (sectionForTimeout === 'upcoming') {
+        y = upcomingSectionY.current;
+      }
+      hubScrollRef.current?.scrollTo({ y: Math.max(0, y - inset), animated: true });
+    }, 480);
+  }, [params.tab, params.section, router]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -104,6 +164,7 @@ function LiveHubScreen() {
 
   const featuredSubtitle = useCallback((s: LiveStream) => {
     const hub = s as LiveHubStream;
+    if (hub.description?.trim()) return hub.description.trim();
     const mode = liveModeLabel(hub.liveType);
     return hub.promoTag ? `${mode} · ${hub.promoTag}` : mode;
   }, []);
@@ -111,29 +172,63 @@ function LiveHubScreen() {
   const featuredShopBadge = useCallback((s: LiveStream) => {
     const hub = s as LiveHubStream;
     if (!hub.hasProducts) return undefined;
-    if (hub.promoTag?.trim()) return hub.promoTag.trim();
-    const t = hub.products?.[0]?.title?.trim();
-    if (!t) return 'Shop Live';
-    return t.length > 32 ? `${t.slice(0, 31)}…` : t;
+    return hub.promoTag?.trim() || 'Live Deal';
   }, []);
 
   const upcoming = data?.upcoming ?? [];
-  const [rsvp, setRsvp] = useState<Record<string, 'none' | 'going' | 'reminder'>>({});
+  const upcomingPreview = useMemo(() => upcoming.slice(0, 12), [upcoming]);
 
   const emptyFollowing = tab === 'following' && (data?.allFiltered.length ?? 0) === 0;
 
-  const trendingRows = useMemo(() => chunkPairs(data?.trending ?? []), [data?.trending]);
+  const scrollToSectionY = useCallback((y: number, inset: number) => {
+    hubScrollRef.current?.scrollTo({
+      y: Math.max(0, y - inset),
+      animated: true,
+    });
+  }, []);
+
+  const tryConsumePendingScrollForSection = useCallback(
+    (sec: LiveHubSection, layoutY: number) => {
+      if (pendingScrollToSection.current !== sec) return;
+      pendingScrollToSection.current = null;
+      const inset = sec === 'featured' ? spacing.sm : spacing.md;
+      requestAnimationFrame(() => scrollToSectionY(layoutY, inset));
+    },
+    [scrollToSectionY],
+  );
+
+  const onShopSectionLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const y = e.nativeEvent.layout.y;
+      shopDealsSectionY.current = y;
+      tryConsumePendingScrollForSection('shop', y);
+    },
+    [tryConsumePendingScrollForSection],
+  );
+
+  const onHubScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    setHeaderCompact(y > 48);
+  }, []);
+
+  const viewAllHint = useCallback(
+    (msg: string) => {
+      showToast(msg, 'info');
+    },
+    [showToast],
+  );
 
   return (
     <SafeAreaView style={styles.safeRoot} edges={['top']}>
       <View style={styles.container}>
-        <HubHeader
+        <LiveHubHeader
+          compact={headerCompact}
           onSearch={() => router.push('/search')}
           onBell={() => router.push('/notifications')}
           onGoLive={() => router.push(liveGoLiveHref())}
         />
 
-        <LiveHubCategoryBar active={tab} onChange={setTab} />
+        <LiveHubCategoryBar compact={headerCompact} active={tab} onChange={setTab} />
 
         {isLoading || !data ? (
           <LiveHubSkeleton />
@@ -141,13 +236,17 @@ function LiveHubScreen() {
           <ErrorState title="Couldn't load Live" onRetry={() => refetch()} />
         ) : (
           <ScrollView
+            ref={hubScrollRef}
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            onScroll={onHubScroll}
+            scrollEventThrottle={16}
             contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'never' : 'automatic'}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />
             }
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing['3xl'] }]}
           >
             {emptyFollowing ? (
               <View style={{ paddingHorizontal: layout.screenPadding, marginBottom: spacing.lg }}>
@@ -162,18 +261,36 @@ function LiveHubScreen() {
               </View>
             ) : null}
 
-            {/* Featured Live Now */}
+            {/* 1. Happening Now — hero carousel */}
             {data.featured.length > 0 ? (
-              <View style={styles.section}>
+              <View
+                style={styles.sectionTightTop}
+                collapsable={false}
+                onLayout={(e) => {
+                  const y = e.nativeEvent.layout.y;
+                  featuredSectionY.current = y;
+                  tryConsumePendingScrollForSection('featured', y);
+                  tryConsumePendingScrollForSection('discover', y);
+                }}
+              >
                 <PVSectionHeader
-                  title="Featured Live Now"
+                  kicker="PulseVerse Live"
+                  title="Happening Now"
+                  subtitle="Spotlight streams picked for you."
                   leading={<Ionicons name="radio" size={16} color={colors.status.live} />}
-                  style={styles.pvSectionPad}
+                  style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
+                  rightSlot={
+                    <Pressable onPress={() => viewAllHint('Switch tabs above to explore more live rooms.')} hitSlop={8}>
+                      <Text style={styles.viewAllLink}>View all</Text>
+                    </Pressable>
+                  }
                 />
                 <FeaturedLiveCarousel
                   streams={data.featured}
                   onPressStream={(s) => openStream(s as LiveHubStream)}
-                  maxCards={5}
+                  maxCards={6}
+                  variant="hero"
+                  getCategoryLabel={(s) => heroCategoryLabel(s as LiveHubStream)}
                   getSubtitle={featuredSubtitle}
                   getShopBadge={featuredShopBadge}
                 />
@@ -186,38 +303,30 @@ function LiveHubScreen() {
               )
             )}
 
-            {/* Trending */}
-            {data.trending.length > 0 ? (
-              <View style={styles.section}>
-                <PVSectionHeader
-                  title="Trending Live"
-                  leading={<Ionicons name="flame" size={16} color={colors.primary.gold} />}
-                  style={styles.pvSectionPad}
-                />
-                <View style={{ paddingHorizontal: layout.screenPadding, gap: spacing.md }}>
-                  {trendingRows.map((row, ri) => (
-                    <View key={ri} style={styles.trendRow}>
-                      {row.map((s) => (
-                        <HubTrendingCard key={s.id} stream={s} onPress={() => openStream(s)} />
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            {/* Shop Live Deals */}
+            {/* 2. Shop Live */}
             {data.shopLiveDeals.length > 0 ? (
-              <View style={styles.section}>
+              <View
+                style={styles.section}
+                collapsable={false}
+                onLayout={onShopSectionLayout}
+              >
                 <PVSectionHeader
-                  title="Shop Live Deals"
+                  kicker="Pulse Shop"
+                  title="Shop Live"
+                  subtitle="Watch demos, ask questions, and buy in real time."
                   leading={<Ionicons name="bag-handle" size={16} color={colors.primary.gold} />}
-                  style={styles.pvSectionPad}
+                  style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
+                  rightSlot={
+                    <Pressable onPress={() => setTab('shop')} hitSlop={8}>
+                      <Text style={styles.viewAllLink}>View all</Text>
+                    </Pressable>
+                  }
                 />
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: layout.screenPadding }}
+                  style={styles.hubHorizScroll}
+                  contentContainerStyle={styles.hubHorizScrollContent}
                 >
                   {data.shopLiveDeals.map((s) => (
                     <HubShopLiveCard key={s.id} stream={s} onPress={() => openStream(s)} />
@@ -226,46 +335,26 @@ function LiveHubScreen() {
               </View>
             ) : null}
 
-            {/* Upcoming */}
-            {upcoming.length > 0 ? (
-              <View style={styles.section}>
-                <PVSectionHeader
-                  title="Upcoming Live Sessions"
-                  leading={<Ionicons name="calendar" size={16} color={pulseverse.electric} />}
-                  style={styles.pvSectionPad}
-                />
-                {upcoming.map((ev) => (
-                  <HubUpcomingCard
-                    key={ev.id}
-                    ev={{
-                      ...ev,
-                      rsvpState: rsvp[ev.id] ?? ev.rsvpState ?? 'none',
-                    }}
-                    onRsvp={() => {
-                      setRsvp((prev) => {
-                        const cur = prev[ev.id] ?? 'none';
-                        const next: 'none' | 'going' = cur === 'going' ? 'none' : 'going';
-                        return { ...prev, [ev.id]: next };
-                      });
-                      showToast('Reminder updated (demo)', 'success');
-                    }}
-                  />
-                ))}
-              </View>
-            ) : null}
-
-            {/* Circles */}
+            {/* 3. From Your Circles */}
             {data.circleLives.length > 0 ? (
               <View style={styles.section}>
                 <PVSectionHeader
+                  kicker="Circles"
                   title="From Your Circles"
+                  subtitle="Live discussions tied to communities you're part of."
                   leading={<Ionicons name="people" size={16} color={pulseverse.electric} />}
-                  style={styles.pvSectionPad}
+                  style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
+                  rightSlot={
+                    <Pressable onPress={() => router.push('/discover')} hitSlop={8}>
+                      <Text style={styles.viewAllLink}>View all</Text>
+                    </Pressable>
+                  }
                 />
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: layout.screenPadding }}
+                  style={styles.hubHorizScroll}
+                  contentContainerStyle={styles.hubHorizScrollContent}
                 >
                   {data.circleLives.map((s) => (
                     <HubCircleLiveCard key={s.id} stream={s} onPress={() => openStream(s)} />
@@ -274,22 +363,75 @@ function LiveHubScreen() {
               </View>
             ) : null}
 
-            {/* Host tools (preview) */}
-            <View style={[styles.section, { paddingHorizontal: layout.screenPadding }]}>
-              <Pressable
-                style={styles.hostToolsRow}
-                onPress={() => router.push(liveHostControlsHref({ demo: true }))}
+            {/* 4. Upcoming — horizontal rail */}
+            {upcomingPreview.length > 0 ? (
+              <View
+                style={styles.section}
+                collapsable={false}
+                onLayout={(e) => {
+                  const y = e.nativeEvent.layout.y;
+                  upcomingSectionY.current = y;
+                  tryConsumePendingScrollForSection('upcoming', y);
+                }}
               >
-                <Ionicons name="construct" size={18} color={pulseverse.electric} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.hostToolsTitle}>Seller control panel (preview)</Text>
-                  <Text style={styles.hostToolsSub}>Pin products, flash deals, metrics — demo UI</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
-              </Pressable>
-            </View>
+                <PVSectionHeader
+                  kicker="Schedule"
+                  title="Upcoming Sessions"
+                  subtitle="Set reminders for lives you don't want to miss."
+                  leading={<Ionicons name="calendar" size={16} color={pulseverse.electric} />}
+                  style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
+                  rightSlot={
+                    upcoming.length > upcomingPreview.length ? (
+                      <Pressable onPress={() => viewAllHint('Full schedule view — coming soon.')} hitSlop={8}>
+                        <Text style={styles.viewAllLink}>View all sessions</Text>
+                      </Pressable>
+                    ) : null
+                  }
+                />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.hubHorizScroll}
+                  contentContainerStyle={styles.hubHorizScrollContentUpcoming}
+                >
+                  {upcomingPreview.map((ev) => (
+                    <Pressable key={ev.id} onPress={() => router.push(liveStreamHref(ev.id))}>
+                      <HubUpcomingSessionCard
+                        ev={ev}
+                        onRsvp={async () => {
+                          if (!user?.id) {
+                            showToast('Sign in to save reminders.', 'info');
+                            return;
+                          }
+                          try {
+                            const next = await streamsLiveService.toggleReminder(ev.id);
+                            if (next === null) {
+                              showToast('Couldn\u2019t update reminder.', 'error');
+                              return;
+                            }
+                            analytics.track('reminder_clicked', { stream_id: ev.id, enabled: next });
+                            await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+                            showToast(
+                              next
+                                ? 'Reminder saved. Push at go-live is not wired yet — watch Upcoming on Live.'
+                                : 'Reminder removed.',
+                              'success',
+                            );
+                          } catch {
+                            showToast('Couldn\u2019t update reminder.', 'error');
+                          }
+                        }}
+                      />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
 
-            <StartLivePromoCard onGoLive={() => router.push(liveGoLiveHref())} />
+            {/* 5. Creator CTA */}
+            <View style={styles.section}>
+              <StartLivePromoCard onGoLive={() => router.push(liveGoLiveHref())} />
+            </View>
           </ScrollView>
         )}
       </View>
@@ -297,53 +439,14 @@ function LiveHubScreen() {
   );
 }
 
-function HubHeader({
-  onSearch,
-  onBell,
-  onGoLive,
-}: {
-  onSearch: () => void;
-  onBell: () => void;
-  onGoLive: () => void;
-}) {
-  return (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={onSearch} hitSlop={12} style={styles.headerSideBtn} accessibilityLabel="Search">
-        <Ionicons name="search-outline" size={22} color={colors.dark.textSecondary} />
-      </TouchableOpacity>
-
-      <View style={styles.headerCenter}>
-        <View style={styles.liveHeaderDot} />
-        <View>
-          <Text style={styles.headerTitle}>Live</Text>
-          <Text style={styles.headerSubtitle}>Discover · Learn · Shop · Go Live</Text>
-        </View>
-      </View>
-
-      <View style={styles.headerRight}>
-        <TouchableOpacity onPress={onBell} hitSlop={10} accessibilityLabel="Notifications">
-          <Ionicons name="notifications-outline" size={21} color={colors.dark.textSecondary} />
-        </TouchableOpacity>
-        <Pressable
-          style={({ pressed }) => [styles.goLiveBtn, pressed && styles.goLiveBtnPressed]}
-          onPress={onGoLive}
-        >
-          <Ionicons name="videocam-outline" size={14} color={colors.primary.teal} />
-          <Text style={styles.goLiveText}>Go Live</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safeRoot: { flex: 1, backgroundColor: colors.dark.bg },
-  container: { flex: 1, backgroundColor: colors.dark.bg },
+  container: { flex: 1, backgroundColor: colors.dark.bg, position: 'relative' },
   scrollView: { flex: 1 },
   scrollContent: { paddingTop: spacing.sm },
   prelaunchBody: { flex: 1, justifyContent: 'center' },
 
-  header: {
+  prelaunchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -358,17 +461,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerTitleBlock: { alignItems: 'center', maxWidth: '78%' },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
   },
-  liveHeaderDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.status.live,
+  headerLivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'rgba(239,68,68,0.22)',
     borderWidth: 1,
-    borderColor: colors.primary.gold + 'AA',
+    borderColor: 'rgba(252,165,165,0.45)',
   },
-  headerTitle: {
+  headerLivePulse: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FCA5A5',
+  },
+  headerLivePillTxt: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FEE2E2',
+    letterSpacing: 1,
+  },
+  prelaunchHeaderTitle: {
     ...typography.h3,
     fontSize: 18,
     color: colors.dark.text,
@@ -384,32 +508,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     textAlign: 'center',
   },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  goLiveBtn: {
+
+  hubHorizScroll: { flexGrow: 0 },
+  hubHorizScrollContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-    borderRadius: borderRadius.button,
-    borderWidth: 1,
-    borderColor: colors.primary.teal + '44',
-    backgroundColor: colors.primary.teal + '12',
+    alignItems: 'stretch',
+    paddingHorizontal: layout.screenPadding,
+    paddingBottom: spacing.xs,
+    gap: 0,
   },
-  goLiveBtnPressed: { opacity: 0.85, backgroundColor: colors.primary.teal + '24' },
-  goLiveText: {
-    ...typography.button,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary.teal,
+  hubHorizScrollContentUpcoming: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: layout.screenPadding,
+    paddingBottom: spacing.xs,
+    paddingRight: spacing.md,
   },
 
-  section: { marginTop: spacing.xl },
+  section: { marginTop: spacing['2xl'] },
+  sectionTightTop: { marginTop: spacing.md },
   pvSectionPad: { paddingHorizontal: layout.screenPadding },
-  trendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+  pvHeaderBreathing: { marginBottom: spacing.md },
+  viewAllLink: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '700',
+    color: pulseverse.electric,
   },
   mutedCenter: {
     ...typography.caption,
@@ -417,16 +541,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: spacing.md,
   },
-  hostToolsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.16)',
-    backgroundColor: 'rgba(15,23,42,0.65)',
-  },
-  hostToolsTitle: { ...typography.h3, fontSize: 15, color: colors.dark.text },
-  hostToolsSub: { ...typography.caption, color: colors.dark.textMuted, marginTop: 2 },
 });

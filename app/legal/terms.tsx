@@ -5,8 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { colors, layout, spacing, typography } from '@/theme';
 import { HIPAA_ENFORCEMENT_SUMMARY } from '@/constants/authLegal';
+import { CONTACT_EMAILS } from '@/lib/contactEmails';
 
 export default function TermsScreen() {
+  const legalEmail = CONTACT_EMAILS.legal;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -96,7 +98,7 @@ export default function TermsScreen() {
 
         <Text style={styles.h2}>11. Contact</Text>
         <Text style={styles.body}>
-          For questions about these Terms, please contact us at legal@pulseverse.app.
+          For questions about these Terms, please contact us at {legalEmail}.
         </Text>
 
         <Text style={styles.h2}>12. Patient privacy, HIPAA, and enforcement</Text>

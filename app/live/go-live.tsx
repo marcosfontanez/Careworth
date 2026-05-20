@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
@@ -24,11 +24,14 @@ export default function GoLiveScreen() {
         leftIcon="close"
         leftAccessibilityLabel="Close"
       />
-      <GoLiveWizard />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <GoLiveWizard />
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.dark.bg },
+  flex: { flex: 1 },
 });

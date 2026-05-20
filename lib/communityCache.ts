@@ -1,12 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { Community } from '@/types';
 import { circleContentKeys } from '@/lib/queryKeys';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
 import { postsService, communitiesService } from '@/services/supabase';
 import { circleContentService } from '@/services/circleContent';
 
 /** Matches `useCommunity` in `hooks/useQueries.ts` — seed before `router.push` when the row is already in hand. */
 export function primeCommunityDetailCache(queryClient: QueryClient, community: Community) {
-  const key = (community.slug ?? '').trim();
+  const key = normalizeCommunitySlug(community.slug ?? '');
   if (!key || !community.id) return;
   queryClient.setQueryData(['community', key], community);
 }
@@ -22,7 +23,7 @@ export function prefetchCircleRoom(
 ) {
   primeCommunityDetailCache(queryClient, community);
   const id = community.id;
-  const slug = (community.slug ?? '').trim();
+  const slug = normalizeCommunitySlug(community.slug ?? '');
   if (!id || !slug) return;
 
   void queryClient.prefetchQuery({
@@ -45,7 +46,7 @@ export function prefetchCircleRoomBySlug(
   rawSlug: string,
   viewerId: string | null,
 ) {
-  const slug = (rawSlug ?? '').trim();
+  const slug = normalizeCommunitySlug(rawSlug);
   if (!slug) return;
   void (async () => {
     const row = await communitiesService.getBySlug(slug);

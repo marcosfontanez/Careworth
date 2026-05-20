@@ -10,7 +10,7 @@
  *   2. Profile Header (avatar, name, handle, neon tags, one-line intro)
  *   3. PulseStatsRow — three boxed cards (Followers · Following · Pulse Score)
  *   4. Visitor actions (Follow / Message / Share) — visitors only
- *   5. Current Vibe music player
+ *   5. Current Vibe music player (owners can hide via Customize)
  *   6. My Pulse (composer chips + rolling 5 cards)
  *   7. Media Hub (videos / favorites / photos strip) — last, so visitors scroll
  *      through your story before browsing media.
@@ -547,19 +547,21 @@ export function MyPageContent({
             { paddingHorizontal: layout.screenPaddingWide, gap: spacing.lg },
           ]}
         >
-          <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
-            <FeaturedSoundCard
-              user={user}
-              accent={pulseverse.electric}
-              profileViewAutoplay
-              alwaysShow={isOwner}
-              onCustomize={
-                isOwner
-                  ? () => router.push('/my-pulse-appearance?section=sound' as any)
-                  : undefined
-              }
-            />
-          </MyPulseGlassPanel>
+          {!(isOwner && user.hidePulseMusicPlayerOnMyPage) ? (
+            <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+              <FeaturedSoundCard
+                user={user}
+                accent={pulseverse.electric}
+                profileViewAutoplay
+                alwaysShow={isOwner}
+                onCustomize={
+                  isOwner
+                    ? () => router.push('/my-pulse-appearance?section=sound' as any)
+                    : undefined
+                }
+              />
+            </MyPulseGlassPanel>
+          ) : null}
 
           <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
             <MyPulseSection

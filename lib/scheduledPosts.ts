@@ -51,12 +51,15 @@ export async function listScheduledPosts(userId: string): Promise<ScheduledPostR
 }
 
 /** Cancel a queued post — marks `cancelled` and clears time so it is not auto-published or listed as queued. */
-export async function cancelScheduledPost(postId: string): Promise<boolean> {
+export async function cancelScheduledPost(postId: string, creatorId: string): Promise<boolean> {
   try {
+    const cid = creatorId.trim();
+    if (!cid) return false;
     const { error } = await supabase
       .from('posts')
       .update({ scheduled_at: null, scheduled_status: 'cancelled' })
-      .eq('id', postId);
+      .eq('id', postId)
+      .eq('creator_id', cid);
     return !error;
   } catch {
     return false;

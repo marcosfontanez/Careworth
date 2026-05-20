@@ -13,6 +13,12 @@ export const PROFILE_SELECT_CREATOR_SUMMARY_BASE =
 export const PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED =
   'selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)';
 
+/**
+ * `profiles` embed for {@code profile_update_comments} — avatar, Pulse tier/score, equipped border.
+ */
+export const PROFILE_SELECT_MY_PULSE_COMMENT_AUTHOR =
+  `id, display_name, username, avatar_url, pulse_tier, pulse_score_current, ${PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED}`;
+
 export const PROFILE_SELECT_CREATOR_WITH_FRAME = `${PROFILE_SELECT_CREATOR_SUMMARY_BASE}, ${PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED}`;
 
 /**

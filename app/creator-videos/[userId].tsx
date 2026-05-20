@@ -27,14 +27,18 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { TopSegmentTabs } from '@/components/ui/TopSegmentTabs';
 import { PulseHistorySheet } from '@/components/mypage/PulseHistorySheet';
 import { PulseScorePill } from '@/components/mypage/PulseScorePill';
-import type { Post, UserProfile } from '@/types';
-import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
+import type { Post } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
 import { avatarThumb } from '@/lib/storage';
 import { usePulseScorePillModel } from '@/hooks/usePulseScorePillModel';
 import { userKeys } from '@/lib/queryKeys';
 import { getCreatorVideosGridListWindow } from '@/lib/feedVideoListWindow';
+import {
+  filterCreatorVideos,
+  sortCreatorVideos,
+  type CreatorVideoSort,
+} from '@/lib/creatorVideosCatalog';
 
 const CREATOR_VIDEOS_GRID_WINDOW = getCreatorVideosGridListWindow();
 
@@ -47,29 +51,14 @@ const THUMB_H = COL_W * 1.45;
 const ROW_H = THUMB_H + GAP;
 const AVATAR_SIZE = 88;
 
-type VideoSort = 'newest' | 'popular';
-
-function filterCreatorVideos(
-  posts: Post[] | undefined,
-  isOwner: boolean,
-  viewedProfile: UserProfile | null | undefined,
+function openCreatorFeed(
+  router: ReturnType<typeof useRouter>,
+  creatorId: string,
+  postId: string,
+  sort: CreatorVideoSort,
 ) {
-  const list = posts ?? [];
-  if (isOwner) {
-    return list.filter(
-      (p) =>
-        !postHasDemoCatalogMedia(p) &&
-        p.type === 'video' &&
-        Boolean(p.mediaUrl?.trim() || p.thumbnailUrl?.trim()),
-    );
-  }
-  /** Only hide when we know the profile is private — not while `useUser` is still resolving (was emptying the grid). */
-  if (viewedProfile?.privacyMode === 'private') return [];
-  return list.filter(
-    (p) =>
-      !postHasDemoCatalogMedia(p) &&
-      p.type === 'video' &&
-      Boolean(p.mediaUrl?.trim() || p.thumbnailUrl?.trim()),
+  router.push(
+    `/creator-videos/feed?userId=${encodeURIComponent(creatorId)}&start=${encodeURIComponent(postId)}&sort=${sort}` as any,
   );
 }
 
@@ -89,7 +78,7 @@ export default function CreatorVideosGridScreen() {
   const fromPostId = (Array.isArray(rawFrom) ? rawFrom[0] : rawFrom)?.trim() ?? '';
 
   const [refreshing, setRefreshing] = useState(false);
-  const [sort, setSort] = useState<VideoSort>('newest');
+  const [sort, setSort] = useState<CreatorVideoSort>('newest');
   const [pulseHistoryOpen, setPulseHistoryOpen] = useState(false);
   const listRef = useRef<FlatList<Post>>(null);
   /** Shared by banner + alert so dismissing one cancels the other (effect cleanup clears pending Alert). */
@@ -132,19 +121,7 @@ export default function CreatorVideosGridScreen() {
     [posts, isOwner, profile],
   );
 
-  const sortedVideos = useMemo(() => {
-    const v = [...videos];
-    if (sort === 'newest') {
-      v.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-    } else {
-      v.sort((a, b) => {
-        if (b.viewCount !== a.viewCount) return b.viewCount - a.viewCount;
-        if (b.likeCount !== a.likeCount) return b.likeCount - a.likeCount;
-        return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
-      });
-    }
-    return v;
-  }, [videos, sort]);
+  const sortedVideos = useMemo(() => sortCreatorVideos(videos, sort), [videos, sort]);
 
   const fromPostIdx = useMemo(() => {
     if (!fromPostId) return -1;
@@ -169,13 +146,12 @@ export default function CreatorVideosGridScreen() {
     if (!fromPostId || jumpOfferDismissed || postsLoading || privacyGateLoading) return;
     if (privateBlocked) return;
     if (fromPostIdx < 0) return;
-    const idx = fromPostIdx;
     let cancelled = false;
     const t = setTimeout(() => {
       if (cancelled) return;
       Alert.alert(
-        'Jump to this video?',
-        'Scroll the grid to the clip you were watching.',
+        'Watch this video?',
+        'Open a scrollable feed of all their videos starting from the clip you were watching.',
         [
           {
             text: 'Not now',
@@ -183,10 +159,10 @@ export default function CreatorVideosGridScreen() {
             onPress: () => setJumpOfferDismissed(true),
           },
           {
-            text: 'Jump',
+            text: 'Watch',
             onPress: () => {
               setJumpOfferDismissed(true);
-              scrollGridToPostIndex(idx);
+              openCreatorFeed(router, creatorId, fromPostId, sort);
             },
           },
         ],
@@ -298,7 +274,7 @@ export default function CreatorVideosGridScreen() {
                     { key: 'popular', label: 'Most popular' },
                   ]}
                   activeKey={sort}
-                  onSelect={(k) => setSort(k as VideoSort)}
+                  onSelect={(k) => setSort(k as CreatorVideoSort)}
                 />
               </View>
             </>
@@ -324,14 +300,14 @@ export default function CreatorVideosGridScreen() {
             showFromPostJumpBanner ? (
               <View style={styles.fromPostBanner}>
                 <Text style={styles.fromPostBannerText}>
-                  Jump to the video you opened from the feed?
+                  Open a scrollable feed starting from the video you were watching?
                 </Text>
                 <View style={styles.fromPostBannerActions}>
                   <TouchableOpacity
                     style={styles.fromPostBannerGhost}
                     onPress={() => setJumpOfferDismissed(true)}
                     accessibilityRole="button"
-                    accessibilityLabel="Dismiss jump to video banner"
+                    accessibilityLabel="Dismiss watch feed banner"
                   >
                     <Text style={styles.fromPostBannerGhostText}>Not now</Text>
                   </TouchableOpacity>
@@ -339,12 +315,12 @@ export default function CreatorVideosGridScreen() {
                     style={styles.fromPostBannerPrimary}
                     onPress={() => {
                       setJumpOfferDismissed(true);
-                      scrollGridToPostIndex(fromPostIdx);
+                      openCreatorFeed(router, creatorId, fromPostId, sort);
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel="Scroll grid to the video from the feed"
+                    accessibilityLabel="Open scrollable creator video feed"
                   >
-                    <Text style={styles.fromPostBannerPrimaryText}>Jump</Text>
+                    <Text style={styles.fromPostBannerPrimaryText}>Watch</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -365,7 +341,7 @@ export default function CreatorVideosGridScreen() {
             <View style={styles.cell}>
               <TouchableOpacity
                 style={styles.thumbTouch}
-                onPress={() => router.push(`/feed/${p.id}` as any)}
+                onPress={() => openCreatorFeed(router, creatorId, p.id, sort)}
                 activeOpacity={0.85}
               >
                 <RecentMediaThumb

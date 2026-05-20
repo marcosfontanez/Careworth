@@ -10,6 +10,7 @@ import { useEventListener } from 'expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { Ionicons } from '@expo/vector-icons';
@@ -1417,27 +1418,22 @@ function CommentNode({
           <Text style={styles.commentAnonGlyph}>?</Text>
         </View>
       ) : !isDeleted && comment.author.id ? (
-        <TouchableOpacity
-          onPress={() => router.push(`/profile/${comment.author.id}` as never)}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${displayName} profile`}
-        >
-          <AvatarDisplay
-            size={36}
-            avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
-            prioritizeRemoteAvatar
-            ringColor={colors.dark.border}
-            pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
-          />
-        </TouchableOpacity>
-      ) : (
-        <AvatarDisplay
+        <BorderedAvatar
           size={36}
           avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
-          prioritizeRemoteAvatar
           ringColor={colors.dark.border}
-          pulseFrame={pulseFrameFromUser(comment.author.pulseAvatarFrame)}
+          pulseAvatarFrame={comment.author.pulseAvatarFrame}
+          ownerDisplayName={displayName}
+          onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+        />
+      ) : (
+        <BorderedAvatar
+          size={36}
+          avatarUrl={avatarThumb(comment.author.avatarUrl, 36)}
+          ringColor={colors.dark.border}
+          pulseAvatarFrame={comment.author.pulseAvatarFrame}
+          ownerDisplayName={displayName}
+          disableLongPressInfo={maskAuthors}
         />
       )}
       <View style={styles.commentBody}>
@@ -1466,6 +1462,7 @@ function CommentNode({
           {!maskAuthors && !isDeleted ? (
             <PulseTierBadge
               tier={comment.author.pulseTier ?? null}
+              score={comment.author.pulseScoreCurrent}
               size="xs"
               hideMurmur
               showIcon={false}

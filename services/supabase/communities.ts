@@ -82,11 +82,13 @@ export const communitiesService = {
   },
 
   async getBySlug(slug: string): Promise<Community | null> {
+    const key = slug.trim().toLowerCase();
+    if (!key) return null;
     const { data, error } = await supabase
       .from('communities')
       .select('*')
-      .eq('slug', slug)
-      .single();
+      .eq('slug', key)
+      .maybeSingle();
 
     if (error || !data) return null;
     return rowToCommunity(data);

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,14 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { borderRadius, colors, layout, spacing, typography, shadows, pulseverse } from '@/theme';
 import { streamsLiveService } from '@/services/supabase';
@@ -22,6 +25,7 @@ import { useToast } from '@/components/ui/Toast';
 import type { StreamCategory } from '@/types';
 import { PV_LIVE_MODE_TAG_PREFIX, type LiveModeType } from '@/types/liveHub';
 import { liveStreamHref } from '@/lib/navigation/liveRoutes';
+import { analytics } from '@/lib/analytics';
 
 const MODES: { id: LiveModeType; title: string; desc: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -93,6 +97,15 @@ export function GoLiveWizard() {
   const [giveaway, setGiveaway] = useState(false);
   const [disclosuresOk, setDisclosuresOk] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState(() => {
+    const d = new Date();
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 2);
+    return d;
+  });
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  /** Extra scroll padding so actions below fields stay reachable when the keyboard is open (esp. step 2 → Review). */
+  const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('front');
@@ -108,6 +121,20 @@ export function GoLiveWizard() {
     [tags],
   );
 
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (e: { endCoordinates: { height: number } }) =>
+      setKeyboardBottomInset(Math.ceil(e.endCoordinates.height));
+    const onHide = () => setKeyboardBottomInset(0);
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
   const mergedTags = useMemo(() => {
     const extra: string[] = [];
     if (mode) extra.push(`${PV_LIVE_MODE_TAG_PREFIX}${mode}`);
@@ -115,7 +142,7 @@ export function GoLiveWizard() {
       extra.push(`topic:${learnTopic.trim().slice(0, 24)}`);
     }
     if (!giftsEnabled) extra.push('gifts:off');
-    if (scheduled) extra.push('live:schedule-intent');
+    if (scheduled) extra.push('live:scheduled');
     const room = Math.max(0, 8 - extra.length);
     const userSlice = parsedTags.slice(0, room);
     return [...extra, ...userSlice].slice(0, 8);
@@ -134,6 +161,10 @@ export function GoLiveWizard() {
       Alert.alert('Disclosures', 'Confirm accurate descriptions & disclosures for commerce.');
       return;
     }
+    if (scheduled && scheduleAt.getTime() <= Date.now() + 60_000) {
+      Alert.alert('Schedule time', 'Pick a start time at least a few minutes from now.');
+      return;
+    }
     if (!mode) return;
 
     setCreating(true);
@@ -145,12 +176,17 @@ export function GoLiveWizard() {
         category: modeToCategory(mode),
         tags: mergedTags,
         thumbnailUrl: profile?.avatarUrl || undefined,
+        scheduledFor: scheduled ? scheduleAt.toISOString() : undefined,
       });
 
       if (!stream) {
         showToast('Couldn\u2019t start your stream. Try again.', 'error');
         return;
       }
+      analytics.track(scheduled ? 'scheduled_live_created' : 'live_stream_created', {
+        stream_id: stream.id,
+        mode,
+      });
       router.replace(liveStreamHref(stream.id));
     } catch (e) {
       if (__DEV__) console.warn('[go-live]', e);
@@ -163,8 +199,17 @@ export function GoLiveWizard() {
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
+      contentContainerStyle={[
+        styles.scroll,
+        {
+          paddingBottom:
+            insets.bottom + spacing.xl + keyboardBottomInset + (step === 2 ? spacing['2xl'] : 0),
+        },
+      ]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      nestedScrollEnabled
     >
       <Text style={styles.stepHint}>Step {step} of 3</Text>
 
@@ -266,7 +311,35 @@ export function GoLiveWizard() {
             />
           </AccentComposerFrame>
 
-          <RowToggle label="Schedule for later (demo)" value={scheduled} onChange={setScheduled} />
+          <RowToggle label="Schedule for later" value={scheduled} onChange={setScheduled} />
+          {scheduled ? (
+            <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+              <TouchableOpacity
+                style={styles.schedulePickBtn}
+                onPress={() => setShowSchedulePicker((v) => !v)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="calendar-outline" size={18} color={pulseverse.electric} />
+                <Text style={styles.schedulePickTxt}>{scheduleAt.toLocaleString()}</Text>
+                <Text style={styles.schedulePickHint}>Tap to adjust</Text>
+              </TouchableOpacity>
+              {showSchedulePicker ? (
+                <DateTimePicker
+                  value={scheduleAt}
+                  mode="datetime"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  minimumDate={new Date(Date.now() + 120_000)}
+                  onChange={(_, date) => {
+                    if (Platform.OS === 'android') setShowSchedulePicker(false);
+                    if (date) setScheduleAt(date);
+                  }}
+                />
+              ) : null}
+              <Text style={styles.hint}>
+                Push notifications at go-live are not wired yet — reminders sync across devices when you use Remind Me on the Live hub.
+              </Text>
+            </View>
+          ) : null}
           <RowToggle label="Enable gifts / Sparks" value={giftsEnabled} onChange={setGiftsEnabled} />
 
           {mode === 'learn' ? (
@@ -346,7 +419,7 @@ export function GoLiveWizard() {
           </View>
 
           <Text style={styles.disclaimer}>
-            Encoder / CDN ingest — TODO. Chat, gifts, polls wire to `live_streams` today.
+            Mobile broadcast uses LiveKit on development / EAS builds (not Expo Go). Chat, gifts, polls stay on Supabase.
           </Text>
 
           <View style={{ flexDirection: 'row', gap: spacing.md }}>
@@ -363,7 +436,7 @@ export function GoLiveWizard() {
               ) : (
                 <>
                   <View style={styles.startDot} />
-                  <Text style={styles.startText}>Start Live</Text>
+                  <Text style={styles.startText}>{scheduled ? 'Schedule Session' : 'Go Live'}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -457,6 +530,19 @@ const styles = StyleSheet.create({
   },
   inputMulti: { minHeight: 80, textAlignVertical: 'top' },
   hint: { ...typography.bodySmall, color: colors.dark.textMuted, marginTop: spacing.sm },
+  schedulePickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+    backgroundColor: colors.dark.card,
+  },
+  schedulePickTxt: { ...typography.body, color: colors.dark.text, flex: 1 },
+  schedulePickHint: { ...typography.caption, color: colors.dark.textMuted, width: '100%' },
 
   toggleRow: {
     flexDirection: 'row',

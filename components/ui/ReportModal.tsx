@@ -31,7 +31,7 @@ const REASONS = [
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  targetType: 'post' | 'comment' | 'profile' | 'circle_thread';
+  targetType: 'post' | 'comment' | 'profile' | 'circle_thread' | 'live_stream' | 'stream_message';
   targetId: string;
 }
 

@@ -1,5 +1,13 @@
 import { supabase } from '@/lib/supabase';
-import type { Community, CircleReply, CircleThread, CircleThreadKind, CreatorSummary, RecentCircleActivity, TrendingTopic24h } from '@/types';
+import type {
+  Community,
+  CircleReply,
+  CircleThread,
+  CircleThreadKind,
+  CreatorSummary,
+  RecentCircleActivity,
+  TrendingTopic24h,
+} from '@/types';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { isDemoCatalogMediaUrl } from '@/utils/postPreviewMedia';
 import { communitiesService, rowToCommunity } from './communities';
@@ -80,6 +88,41 @@ const THREAD_SELECT = `
 `;
 
 export const circleThreadsDb = {
+  /**
+   * Creates a Questions-tab discussion row (`circle_threads`). Wall-only composer
+   * flows use {@link postsService.create} instead.
+   */
+  async createThread(params: {
+    communityId: string;
+    authorId: string;
+    kind: CircleThreadKind;
+    title: string;
+    body: string;
+    mediaThumbUrl?: string | null;
+    linkedPostId?: string | null;
+  }): Promise<CircleThread> {
+    const cid = (params.communityId ?? '').trim();
+    const aid = (params.authorId ?? '').trim();
+    if (!cid || !aid) throw new Error('Missing community or author');
+    const title = (params.title.trim() || 'Discussion').slice(0, 500);
+    const body = params.body.trim().slice(0, 12000);
+    const { data, error } = await supabase
+      .from('circle_threads')
+      .insert({
+        community_id: cid,
+        author_id: aid,
+        kind: params.kind,
+        title,
+        body,
+        media_thumb_url: params.mediaThumbUrl?.trim() || null,
+        linked_post_id: params.linkedPostId ?? null,
+      })
+      .select(THREAD_SELECT)
+      .single();
+    if (error || !data) throw error ?? new Error('Failed to create discussion');
+    return rowToThread(data);
+  },
+
   async listByCommunityId(communityId: string): Promise<CircleThread[]> {
     const id = (communityId ?? '').trim();
     if (!id) return [];

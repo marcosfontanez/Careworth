@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -17,9 +17,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { storageService } from '@/lib/storage';
 import { postsService, communitiesService } from '@/services/supabase';
 import { profileUpdatesService } from '@/services/profileUpdates';
+import { circleContentService } from '@/services/circleContent';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
-import { communityKeys } from '@/lib/queryKeys';
+import { communityKeys, circleContentKeys, profileUpdateKeys } from '@/lib/queryKeys';
 import { useToast } from '@/components/ui/Toast';
 import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
 import { clearDraft } from '@/lib/drafts';
@@ -42,6 +43,13 @@ import { VIDEO_MAX_SECONDS } from '@/lib/media';
 
 /** Legacy AsyncStorage key for circle drafts — purged on open/post so nothing lingers. */
 const LEGACY_CIRCLE_DRAFT = 'circle';
+
+function deriveCircleThreadTitle(raw: string): string {
+  const t = raw.trim();
+  if (!t) return 'Discussion';
+  const first = (t.split('\n')[0] ?? t).trim();
+  return first.length > 200 ? `${first.slice(0, 197)}…` : first;
+}
 
 export default function CommunityCreatePostScreen() {
   const router = useRouter();
@@ -79,6 +87,7 @@ export default function CommunityCreatePostScreen() {
   const [overlayLine, setOverlayLine] = useState('');
   const [posting, setPosting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const pendingThreadNavRef = useRef<{ slug: string; threadId: string } | null>(null);
   const [settings, setSettings] = useState<CirclePostSettings>({
     /* Default ON for memes/threads — the brief calls Share to My Pulse the
      * key bridge between the room and the user's profile. */
@@ -167,6 +176,67 @@ export default function CommunityCreatePostScreen() {
 
     setPosting(true);
     try {
+      /* ── Questions tab: real `circle_threads` rows (not wall posts). ── */
+      if (postType === 'thread' || postType === 'question') {
+        if (!body.trim()) {
+          toast.show('Add some content for your post', 'error');
+          return;
+        }
+        if (!params.communityId) {
+          toast.show('Missing circle — go back and open the room again.', 'error');
+          return;
+        }
+        const threadBody = body.trim().slice(0, 12000);
+        const title = deriveCircleThreadTitle(threadBody);
+        const threadKind = postType === 'question' ? ('question' as const) : ('story' as const);
+        let createdThread;
+        try {
+          createdThread = await circleContentService.createThread({
+            communityId: params.communityId,
+            authorId: user.id,
+            kind: threadKind,
+            title,
+            body: threadBody,
+          });
+        } catch (e: unknown) {
+          toast.show(e instanceof Error ? e.message : 'Could not start discussion', 'error');
+          return;
+        }
+
+        if (settings.shareToMyPulse && createdThread?.id) {
+          try {
+            await profileUpdatesService.add(user.id, {
+              type: 'link_circle',
+              content: `${title} — on My Pulse`,
+              previewText: threadBody.slice(0, 140),
+              linkedCircleSlug: params.communitySlug,
+              linkedDiscussionTitle: title,
+              linkedThreadId: createdThread.id,
+            });
+          } catch (mirrorErr) {
+            console.warn('[community-create-post] My Pulse mirror failed', mirrorErr);
+            toast.show(
+              'Discussion posted — My Pulse pin did not save. Open the thread and use Share to My Pulse.',
+              'info',
+            );
+          }
+        }
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        await queryClient.invalidateQueries({
+          queryKey: circleContentKeys.threadsForRoom(slug || '__', params.communityId),
+        });
+        if (settings.shareToMyPulse && user.id) {
+          await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
+        }
+        if (slug) await clearDraft(`circle:${slug}`);
+        await clearDraft(LEGACY_CIRCLE_DRAFT);
+        pendingThreadNavRef.current =
+          slug && createdThread.id ? { slug, threadId: createdThread.id } : null;
+        setShowSuccess(true);
+        return;
+      }
+
       let mediaUrl: string | undefined;
       let postKind: 'image' | 'video' | 'text' = 'text';
       if (mediaUri) {
@@ -249,6 +319,7 @@ export default function CommunityCreatePostScreen() {
       ]);
       if (slug) await clearDraft(`circle:${slug}`);
       await clearDraft(LEGACY_CIRCLE_DRAFT);
+      pendingThreadNavRef.current = null;
       setShowSuccess(true);
     } catch (err: any) {
       toast.show(err.message ?? 'Failed to post', 'error');
@@ -268,6 +339,12 @@ export default function CommunityCreatePostScreen() {
         visible={showSuccess}
         message="Posted!"
         onComplete={() => {
+          const nav = pendingThreadNavRef.current;
+          pendingThreadNavRef.current = null;
+          if (nav) {
+            router.replace(`/communities/${nav.slug}/thread/${nav.threadId}` as never);
+            return;
+          }
           if (params.communitySlug) router.replace(`/communities/${params.communitySlug}`);
           else router.back();
         }}

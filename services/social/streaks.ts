@@ -45,7 +45,7 @@ export const streaksService = {
         { onConflict: 'user_id,activity_date,activity_type' },
       );
 
-    const { data } = await supabase.rpc('update_user_streak', { p_user_id: user.id });
+    const { data } = await supabase.rpc('update_user_streak');
     const streakRow = data as { current_streak?: number; best_streak?: number } | null;
 
     const newStreak = streakRow?.current_streak ?? 0;

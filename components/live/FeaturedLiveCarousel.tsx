@@ -20,10 +20,14 @@ type Props = {
   onPressStream: (stream: LiveStream) => void;
   /** Cap how many hero cards to show. Defaults to 5 (per design spec). */
   maxCards?: number;
+  /** Category pill (Learn, Circle Live, …). */
+  getCategoryLabel?: (stream: LiveStream) => string | undefined;
   /** Optional second line under title (e.g. hub mode + promo tag). */
   getSubtitle?: (stream: LiveStream) => string | undefined;
   /** Shop Live / commerce pill under LIVE badge on hero cards. */
   getShopBadge?: (stream: LiveStream) => string | undefined;
+  /** Shorter hero cards for hub layouts closer to compact marketing mocks. */
+  variant?: 'hero' | 'compact';
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -38,8 +42,10 @@ export function FeaturedLiveCarousel({
   streams,
   onPressStream,
   maxCards = 5,
+  getCategoryLabel,
   getSubtitle,
   getShopBadge,
+  variant = 'hero',
 }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<LiveStream>>(null);
@@ -68,11 +74,12 @@ export function FeaturedLiveCarousel({
   if (data.length === 0) return null;
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, variant === 'hero' ? styles.wrapHero : styles.wrapCompact]}>
       <FlatList
         ref={listRef}
         data={data}
         keyExtractor={(item) => item.id}
+        nestedScrollEnabled
         initialNumToRender={FEATURED_LIVE_CAROUSEL_WINDOW.initialNumToRender}
         maxToRenderPerBatch={FEATURED_LIVE_CAROUSEL_WINDOW.maxToRenderPerBatch}
         windowSize={FEATURED_LIVE_CAROUSEL_WINDOW.windowSize}
@@ -82,8 +89,10 @@ export function FeaturedLiveCarousel({
               stream={item}
               width={CARD_WIDTH}
               onPress={() => onPressStream(item)}
+              categoryLabel={getCategoryLabel?.(item)}
               subtitle={getSubtitle?.(item)}
               shopBadge={getShopBadge?.(item)}
+              variant={variant}
             />
           </View>
         )}
@@ -122,6 +131,8 @@ export function FeaturedLiveCarousel({
 
 const styles = StyleSheet.create({
   wrap: { width: '100%' },
+  wrapCompact: { minHeight: 352 },
+  wrapHero: { minHeight: 468 },
   scroll: {
     paddingLeft: SIDE_PADDING,
     /** trailing padding so last card snaps cleanly without trailing gap */

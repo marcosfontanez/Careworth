@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { colors, borderRadius, layout, pulseverse, semantic, shadows, gradients, spacing } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { ShopItemRow, GiftContext } from '@/lib/shop/types';
+import { buildSparkPackStoreIdsForStaff } from '@/lib/shop/buildSparkPackStoreIdsForStaff';
 import type { PurchaseOutcome } from '@/services/shop/purchaseService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileByHandle } from '@/hooks/useShopEconomy';
@@ -26,6 +28,7 @@ import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
 import { BorderCompactMetaRow } from '@/components/shop/border/BorderCompactMetaRow';
 import { BorderPreviewPlate } from '@/components/shop/border/BorderPreviewPlate';
+import { useToast } from '@/components/ui/Toast';
 import { CreatorGiftOrb } from '@/components/shop/CreatorGiftOrb';
 import { CREATOR_GIFT_TIER_META, creatorGiftTierForItem } from '@/lib/shop/creatorGiftTiers';
 
@@ -544,6 +547,8 @@ type CreditPackProps = {
   onPurchase?: () => Promise<PurchaseOutcome>;
   /** Fulfilled purchase payload from Edge/RPC (e.g. `purchase_receipt_id`). Not used for `web_info`. */
   onSuccess?: (data: Record<string, unknown>) => void;
+  /** When set (e.g. `profiles.role_admin`), show a staff-only link to copy spark-pack IAP IDs from catalog. */
+  staffSparkPackCatalog?: ShopItemRow[] | null;
 };
 
 export function CreditPackConfirmModal({
@@ -555,11 +560,15 @@ export function CreditPackConfirmModal({
   mode = 'purchase',
   onPurchase,
   onSuccess,
+  staffSparkPackCatalog,
 }: CreditPackProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const toast = useToast((s) => s.show);
 
   const webInfo = mode === 'web_info';
+  const showStaffIds =
+    Array.isArray(staffSparkPackCatalog) && staffSparkPackCatalog.length > 0;
 
   useEffect(() => {
     if (!visible) {
@@ -620,6 +629,37 @@ export function CreditPackConfirmModal({
             </Text>
           )}
           {err ? <Text style={styles.errorText}>{err}</Text> : null}
+          {showStaffIds ? (
+            <TouchableOpacity
+              onPress={() => {
+                if (!staffSparkPackCatalog?.length) return;
+                const text = buildSparkPackStoreIdsForStaff(staffSparkPackCatalog);
+                Alert.alert('Spark pack IAP IDs', text, [
+                  {
+                    text: 'Copy all',
+                    onPress: () =>
+                      void (async () => {
+                        try {
+                          const { setStringAsync } = await import('expo-clipboard');
+                          await setStringAsync(text);
+                          toast('Copied IAP IDs to clipboard', 'success');
+                        } catch {
+                          toast('Could not copy', 'error');
+                        }
+                      })(),
+                  },
+                  { text: 'Close', style: 'cancel' },
+                ]);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Staff: view store product IDs for spark packs"
+              style={styles.staffIdsLinkWrap}
+            >
+              <Ionicons name="key-outline" size={14} color={colors.primary.teal} />
+              <Text style={styles.staffIdsLinkText}>Staff: view store product IDs</Text>
+            </TouchableOpacity>
+          ) : null}
           <View style={styles.sheetActions}>
             {webInfo ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
@@ -708,6 +748,21 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(34,211,238,0.22)',
   },
   modeBadgeSparksText: { fontSize: 11, fontWeight: '800', color: '#A5F3FC' },
+  staffIdsLinkWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
+  staffIdsLinkText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.primary.teal,
+    textDecorationLine: 'underline',
+  },
   sheetTitle: {
     fontSize: 19,
     fontWeight: '900',

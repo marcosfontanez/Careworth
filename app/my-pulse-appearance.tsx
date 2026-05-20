@@ -135,7 +135,7 @@ export default function MyPageAppearanceScreen() {
   const [avatarCropAsset, setAvatarCropAsset] = useState<MediaAsset | null>(null);
   const [identityTagsInput, setIdentityTagsInput] = useState('');
   const [pageIntroLine, setPageIntroLine] = useState('');
-  const [hideRecentPostsStrip, setHideRecentPostsStrip] = useState(false);
+  const [hidePulseMusicPlayerOnMyPage, setHidePulseMusicPlayerOnMyPage] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   /** Per-field editor sheets for the text rows. */
@@ -143,8 +143,8 @@ export default function MyPageAppearanceScreen() {
   const [introSheetOpen, setIntroSheetOpen] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
-  /** Light debounce for the recent-posts switch so a quick toggle doesn't double-fire. */
-  const hideStripPendingRef = useRef<NodeJS.Timeout | null>(null);
+  /** Light debounce for the music-player visibility switch so a quick toggle doesn't double-fire. */
+  const hideMusicPlayerPendingRef = useRef<NodeJS.Timeout | null>(null);
 
   const getSongFields = useCallback(
     () => ({
@@ -166,7 +166,7 @@ export default function MyPageAppearanceScreen() {
     setAvatarPreview(profile.avatarUrl || null);
     setIdentityTagsInput((profile.identityTags ?? []).join(', '));
     setPageIntroLine(profile.bio?.trim() ? profile.bio : '');
-    setHideRecentPostsStrip(Boolean(profile.hideRecentPostsOnMyPage));
+    setHidePulseMusicPlayerOnMyPage(Boolean(profile.hidePulseMusicPlayerOnMyPage));
   }, [profile]);
 
   if (!uid || !profile) {
@@ -320,22 +320,21 @@ export default function MyPageAppearanceScreen() {
   };
 
   /**
-   * Recent-posts toggle: optimistic local update + debounced persist so
-   * tapping the switch feels instant and we don't fire two writes for a
-   * quick double-toggle.
+   * Current Vibe player visibility (owner My Pulse only): optimistic local
+   * update + debounced persist so tapping the switch feels instant.
    */
-  const onToggleHideRecentPosts = useCallback(
+  const onToggleHidePulseMusicPlayer = useCallback(
     (next: boolean) => {
-      setHideRecentPostsStrip(next);
-      if (hideStripPendingRef.current) clearTimeout(hideStripPendingRef.current);
-      hideStripPendingRef.current = setTimeout(async () => {
+      setHidePulseMusicPlayerOnMyPage(next);
+      if (hideMusicPlayerPendingRef.current) clearTimeout(hideMusicPlayerPendingRef.current);
+      hideMusicPlayerPendingRef.current = setTimeout(async () => {
         try {
-          await profilesService.update(uid, { hide_recent_posts_on_my_page: next });
+          await profilesService.update(uid, { hide_pulse_music_player_on_my_page: next });
           await refreshProfile();
         } catch (e: unknown) {
           Alert.alert('Could not save preference', supabaseMessage(e));
           /** Revert the optimistic update so the UI matches the server. */
-          setHideRecentPostsStrip(!next);
+          setHidePulseMusicPlayerOnMyPage(!next);
         }
       }, 220);
     },
@@ -455,7 +454,7 @@ export default function MyPageAppearanceScreen() {
               songTitle={songTitle}
               songArtist={songArtist}
               songArtworkUrl={songArtworkUrl}
-              hideRecentPostsStrip={hideRecentPostsStrip}
+              hidePulseMusicPlayerOnMyPage={hidePulseMusicPlayerOnMyPage}
               uploadingBanner={uploading === 'banner'}
               uploadingAvatar={uploading === 'avatar'}
               onChangeBanner={pickBanner}
@@ -464,7 +463,7 @@ export default function MyPageAppearanceScreen() {
               onEditPageIntro={() => setIntroSheetOpen(true)}
               onChangeVibe={() => setPickerOpen(true)}
               onClearVibe={clearSong}
-              onToggleHideRecentPosts={onToggleHideRecentPosts}
+              onToggleHidePulseMusicPlayer={onToggleHidePulseMusicPlayer}
             />
 
             <View

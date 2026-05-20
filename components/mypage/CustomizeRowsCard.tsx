@@ -109,7 +109,7 @@ export type CustomizeRowsCardProps = {
   songTitle: string;
   songArtist: string;
   songArtworkUrl: string;
-  hideRecentPostsStrip: boolean;
+  hidePulseMusicPlayerOnMyPage: boolean;
   uploadingBanner: boolean;
   uploadingAvatar: boolean;
   onChangeBanner: () => void;
@@ -118,7 +118,7 @@ export type CustomizeRowsCardProps = {
   onEditPageIntro: () => void;
   onChangeVibe: () => void;
   onClearVibe: () => void;
-  onToggleHideRecentPosts: (value: boolean) => void;
+  onToggleHidePulseMusicPlayer: (value: boolean) => void;
 };
 
 export function CustomizeRowsCard({
@@ -131,7 +131,7 @@ export function CustomizeRowsCard({
   songTitle,
   songArtist,
   songArtworkUrl,
-  hideRecentPostsStrip,
+  hidePulseMusicPlayerOnMyPage,
   uploadingBanner,
   uploadingAvatar,
   onChangeBanner,
@@ -140,7 +140,7 @@ export function CustomizeRowsCard({
   onEditPageIntro,
   onChangeVibe,
   onClearVibe,
-  onToggleHideRecentPosts,
+  onToggleHidePulseMusicPlayer,
 }: CustomizeRowsCardProps) {
   const introTrim = pageIntroValue.trim();
   const tagsPreview = neonTags.slice(0, 3);
@@ -309,23 +309,23 @@ export function CustomizeRowsCard({
 
       <RowDivider />
 
-      {/* Hide recent posts strip — quiet utility row at the bottom. */}
+      {/* Hide Current Vibe player — owner-only; visitors still hear your vibe. */}
       <CustomizeRow
-        iconName="eye-off-outline"
+        iconName="volume-mute-outline"
         iconColor="rgba(203,213,225,0.95)"
         iconBgColor="rgba(148,163,184,0.10)"
         iconBorderColor="rgba(148,163,184,0.28)"
-        label="Hide recent posts strip"
-        sublabel="Only on your own My Pulse tab"
+        label="Hide Current Vibe player"
+        sublabel="Only on your own My Pulse tab — visitors still see it"
         hideChevron
         disabled
         rightSlot={
           <Switch
-            value={hideRecentPostsStrip}
-            onValueChange={onToggleHideRecentPosts}
+            value={hidePulseMusicPlayerOnMyPage}
+            onValueChange={onToggleHidePulseMusicPlayer}
             trackColor={{ false: 'rgba(148,163,184,0.35)', true: colors.primary.teal + 'AA' }}
             thumbColor={
-              hideRecentPostsStrip
+              hidePulseMusicPlayerOnMyPage
                 ? colors.primary.teal
                 : Platform.OS === 'android'
                   ? 'rgba(241,245,249,0.95)'

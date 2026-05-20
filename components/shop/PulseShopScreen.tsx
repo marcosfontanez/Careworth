@@ -102,7 +102,7 @@ export default function PulseShopScreen() {
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const insets = useSafeAreaInsets();
   const showToast = useToast((s) => s.show);
-  const { user: authUser } = useAuth();
+  const { user: authUser, profile } = useAuth();
   const userId = authUser?.id;
 
   const initialTab = useMemo((): ShopTabKey => {
@@ -1216,6 +1216,7 @@ export default function PulseShopScreen() {
               )
             : undefined
         }
+        staffSparkPackCatalog={profile?.roleAdmin ? packs : undefined}
         onPurchase={
           Platform.OS === 'web'
             ? undefined

@@ -175,6 +175,7 @@ function rowToPost(row: any): Post {
     locationContext: row.location_context != null ? String(row.location_context) : '',
     soundTitle: row.sound_title?.trim() || undefined,
     soundSourcePostId: row.sound_source_post_id ?? undefined,
+    stitchSourcePostId: row.stitch_source_post_id ? String(row.stitch_source_post_id) : undefined,
     soundSourceMediaUrl: normalizeMediaUrl(row.sound_source_media_url),
     duetParentId: row.duet_parent_id ? String(row.duet_parent_id) : undefined,
     ...(duetLay ? { duetLayoutMode: duetLay } : {}),
@@ -279,6 +280,7 @@ const POST_SELECT = [
   'sound_title',
   'sound_source_post_id',
   'sound_source_media_url',
+  'stitch_source_post_id',
   // Duet / evidence / shift context (Innovation feed)
   'duet_parent_id',
   'duet_layout_mode',
@@ -335,6 +337,7 @@ const POST_SELECT_FEED = [
   'sound_title',
   'sound_source_post_id',
   'sound_source_media_url',
+  'stitch_source_post_id',
   'duet_parent_id',
   'duet_layout_mode',
   'evidence_url',
@@ -1254,6 +1257,8 @@ export const postsService = {
     sound_title?: string | null;
     sound_source_post_id?: string | null;
     sound_source_media_url?: string | null;
+    /** Migration 183 — feed stitch / combine Part 1 attribution. */
+    stitch_source_post_id?: string | null;
     duet_parent_id?: string | null;
     /** Migration 161 — strip vs floating parent chrome in feed. */
     duet_layout_mode?: 'strip' | 'floating' | null;
@@ -1305,6 +1310,7 @@ export const postsService = {
       sound_title: soundTitleIn,
       sound_source_post_id: soundSourceIn,
       sound_source_media_url: soundMediaIn,
+      stitch_source_post_id: stitchSourcePostIdIn,
       duet_parent_id: duetParentIn,
       duet_layout_mode: duetLayoutModeIn,
       evidence_url: evidenceUrlIn,
@@ -1436,6 +1442,10 @@ export const postsService = {
     if (dp) {
       extensionPayload.duet_layout_mode = duetLayoutModeIn === 'floating' ? 'floating' : 'strip';
     }
+
+    const stitchSrc =
+      stitchSourcePostIdIn != null ? String(stitchSourcePostIdIn).trim() : '';
+    if (stitchSrc) extensionPayload.stitch_source_post_id = stitchSrc;
 
     const fullPayload = { ...insertPayload, ...extensionPayload };
 

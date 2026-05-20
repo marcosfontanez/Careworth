@@ -60,12 +60,25 @@ Prefer **[EAS Environment Variables](https://docs.expo.dev/build-reference/varia
 | `EXPO_PUBLIC_SENTRY_DSN` | Optional; Sentry React Native DSN |
 | `EXPO_PUBLIC_SENTRY_ENABLE_DEV` | Set `1` only to send dev-build events |
 | `EXPO_PUBLIC_SUPPORT_EMAIL` | Overrides default `support@pulseverse.app` in Settings |
+| `EXPO_PUBLIC_PRIVACY_EMAIL` | In-app Privacy Policy contact lines |
+| `EXPO_PUBLIC_LEGAL_EMAIL` | In-app Terms contact line |
+| `EXPO_PUBLIC_SECURITY_EMAIL` | Optional; reserved for future in-app security copy |
+| `EXPO_PUBLIC_CHILD_SAFETY_EMAIL` | Optional; reserved for future in-app child-safety copy |
+| `NEXT_PUBLIC_LEGAL_EMAIL` | Web `/terms` contact (`legal@pulseverse.app` default) |
 | `EXPO_PUBLIC_MARKETING_SITE` | Base marketing URL (future deep links) |
 | `EXPO_PUBLIC_TERMS_URL` | If set, Settings → Terms opens browser |
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | If set, Settings → Privacy opens browser |
-| `EXPO_PUBLIC_LIVE_STREAMING` | Set `1` for TestFlight/App Store builds so Live tab + Go Live appear (`lib/featureFlags.ts`; dev builds default on via `__DEV__`). Root `eas.json` sets this for **preview** and **production** profiles. |
+| `EXPO_PUBLIC_LIVE_STREAMING` | Set `1` for TestFlight/App Store builds so Live tab + Go Live appear (`lib/featureFlags.ts`; dev builds default on via `__DEV__`). Root `eas.json` sets this for **preview** and **production** profiles. Set `0` on EAS if LiveKit is not configured yet. |
+| `EXPO_PUBLIC_LIVEKIT_URL` | **Required for real Live video** — same WSS URL as Supabase secret `LIVEKIT_URL` (see `supabase/functions/README.txt`). Without it, release builds use mock/poster mode. |
 
-Sentry: create a project at [sentry.io](https://sentry.io), add the React Native DSN, then add `EXPO_PUBLIC_SENTRY_DSN` in EAS. New native build required after adding `@sentry/react-native` (already in `app.json` plugins).
+**Vercel (marketing site)** also needs:
+
+| Variable | Purpose |
+| -------- | ------- |
+| `APPLE_UNIVERSAL_LINKS_APP_ID` | e.g. `GF8CJ5XZB8.com.pulseverse.app` — without it, AASA returns 503 |
+| `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` | Comma-separated Play signing SHA-256 fingerprints |
+
+**Full ordered checklist:** [`../LAUNCH_RUNBOOK.md`](../LAUNCH_RUNBOOK.md)
 
 ## 4. App Store Connect (`eas submit`)
 
@@ -81,4 +94,4 @@ In **`lib/featureFlags.ts`**, `liveStreaming` defaults **on** only in **developm
 - `liveStreaming` — Live tab, `/live/*`, Create → Go Live
 - `feedCreatorGifting` — Feed rail creator gifts (`FeedActionRail` / `VideoFeedPost`); baseline QA doc: `docs/GIFT_SYSTEM_PHASE0_BASELINE.md`
 
-In-app **Admin → Feature flags** toggles are **per device** only (Zustand); they do **not** replace build-time env for TestFlight. To ship Live widely, keep **`EXPO_PUBLIC_LIVE_STREAMING=1`** on **preview** / **production** EAS profiles (already in root `eas.json`).
+In-app **Admin → Feature flags** toggles are **per device** only (Zustand); they do **not** replace build-time env for TestFlight. To ship Live widely, keep **`EXPO_PUBLIC_LIVE_STREAMING=1`** on **preview** / **production** EAS profiles (already in root `eas.json`) **and** set **`EXPO_PUBLIC_LIVEKIT_URL`** + deploy **`livekit-token`** with LiveKit secrets.

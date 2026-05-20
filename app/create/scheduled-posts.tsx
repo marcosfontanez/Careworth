@@ -62,6 +62,8 @@ export default function ScheduledPostsScreen() {
 
   const confirmCancel = useCallback(
     (row: ScheduledPostRow) => {
+      const uid = user?.id ?? '';
+      if (!uid) return;
       Alert.alert(
         'Cancel scheduled post?',
         'This post will not go live at the planned time. You can compose again anytime.',
@@ -73,7 +75,7 @@ export default function ScheduledPostsScreen() {
             onPress: () => {
               setBusyId(row.id);
               void (async () => {
-                const ok = await cancelScheduledPost(row.id);
+                const ok = await cancelScheduledPost(row.id, uid);
                 setBusyId(null);
                 if (ok) {
                   setRows((prev) => prev.filter((r) => r.id !== row.id));
@@ -86,7 +88,7 @@ export default function ScheduledPostsScreen() {
         ],
       );
     },
-    [],
+    [user?.id],
   );
 
   return (

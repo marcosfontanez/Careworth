@@ -32,17 +32,21 @@ On **Vercel**, add the same variables under Project → Settings → Environment
 
 ## Database
 
-Apply migrations in `../supabase/migrations` (including `064_web_marketing_leads_and_admin_rls.sql`) so marketing tables and admin RLS policies exist.
+Apply migrations in `../supabase/migrations` through **189** (see `../supabase/migrations/LAUNCH_NOTES.md`).  
+Migration **181** is **parked** under `../scripts/sql/parked/` — do not apply until feed QA signs off.
 
 ## Launch checklist
 
-1. Set all variables in `.env.example` on Vercel (especially `NEXT_PUBLIC_SITE_URL` and contact emails).
-2. Apply Supabase migrations (including `064_web_marketing_leads_and_admin_rls.sql`).
-3. Add **Auth redirect URLs** for your production domain in Supabase.
-4. Have **counsel review** Privacy Policy and Terms before public marketing push.
-5. Confirm at least one `profiles.role_admin` account can sign in at `/admin/login`.
-6. **Production DB:** from repo root, point Supabase CLI at the production project and run `supabase db push` (or apply SQL migrations in order through the dashboard) so production matches `../supabase/migrations` (including `065`–`068` if not yet applied).
-7. **Deploy:** push to `main` if the repo is connected to Vercel, or from `web/` run `npx vercel deploy --prod`.
+**Full step-by-step:** [`../docs/LAUNCH_RUNBOOK.md`](../docs/LAUNCH_RUNBOOK.md)
+
+1. Set all variables in `.env.example` on Vercel (especially `NEXT_PUBLIC_SITE_URL`, contact emails, **`APPLE_UNIVERSAL_LINKS_APP_ID`**, **`ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS`**).
+2. Apply Supabase migrations **176–189** (`npm run db:push` from repo root).
+3. Deploy edge functions (`supabase/functions/README.txt`) — at minimum **pulse-shop-fulfillment** if IAP matters; **livekit-token** if Live is on.
+4. Add **Auth redirect URLs** for your production domain in Supabase.
+5. Have **counsel review** Privacy Policy and Terms before public marketing push.
+6. Confirm at least one `profiles.role_admin` account can sign in at `/admin/login`.
+7. **Deploy:** push to `main` if connected to Vercel, or `npx vercel deploy --prod` from `web/`.
+8. **Mobile:** set EAS production secrets (Supabase URL/key, optional LiveKit, Sentry) and run a new `eas build`.
 
 | Area | Path |
 |------|------|

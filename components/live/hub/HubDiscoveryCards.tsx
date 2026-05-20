@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, layout, spacing, typography, pulseverse } from '@/theme';
+import { CreatorHubGlassBackdrop } from '@/components/pv/CreatorHubGlassBackdrop';
+import { PROFILE_NEON_BORDER_PRESETS } from '@/components/mypage/ProfileNeonPills';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { LivePill } from '@/components/live/LivePill';
 import { LiveViewerBadge } from '@/components/live/LiveViewerBadge';
@@ -30,51 +32,226 @@ export function liveModeLabel(mode: LiveModeType): string {
   }
 }
 
+const FILTER_PRIMARY: LiveHubCategoryTab[] = ['for-you', 'following', 'learn', 'shop'];
+const FILTER_OVERFLOW: LiveHubCategoryTab[] = ['casual', 'gaming', 'irl'];
+
+const FILTER_LABELS: Record<LiveHubCategoryTab, string> = {
+  'for-you': 'For You',
+  following: 'Following',
+  casual: 'Casual',
+  gaming: 'Gaming',
+  irl: 'IRL',
+  learn: 'Learn',
+  shop: 'Shop Live',
+};
+
+const TAB_NEON_PRESET_ORDER: LiveHubCategoryTab[] = [
+  'for-you',
+  'following',
+  'casual',
+  'gaming',
+  'irl',
+  'learn',
+  'shop',
+];
+
+function neonPresetForTab(id: LiveHubCategoryTab): readonly [string, string] {
+  const i = TAB_NEON_PRESET_ORDER.indexOf(id);
+  const idx = i >= 0 ? i : 0;
+  return PROFILE_NEON_BORDER_PRESETS[idx % PROFILE_NEON_BORDER_PRESETS.length];
+}
+
+/**
+ * Single discovery rail: primary chips + **More** expands Casual / Gaming / IRL (no duplicate spotlight row).
+ * Frosted shell matches Creator Hub / Shop glass.
+ */
 export function LiveHubCategoryBar({
   active,
   onChange,
+  compact = false,
 }: {
   active: LiveHubCategoryTab;
   onChange: (t: LiveHubCategoryTab) => void;
+  /** Tighter vertical padding when the Live header is collapsed on scroll. */
+  compact?: boolean;
 }) {
-  const tabs: { id: LiveHubCategoryTab; label: string }[] = [
-    { id: 'for-you', label: 'For You' },
-    { id: 'following', label: 'Following' },
-    { id: 'gaming', label: 'Gaming' },
-    { id: 'irl', label: 'IRL' },
-    { id: 'learn', label: 'Learn' },
-    { id: 'shop', label: 'Shop Live' },
-  ];
+  const [expanded, setExpanded] = useState(() => FILTER_OVERFLOW.includes(active));
+
+  useEffect(() => {
+    if (FILTER_OVERFLOW.includes(active)) setExpanded(true);
+  }, [active]);
+
+  const orderedTabs = useMemo(() => {
+    const all: LiveHubCategoryTab[] = [
+      'for-you',
+      'following',
+      'casual',
+      'gaming',
+      'irl',
+      'learn',
+      'shop',
+    ];
+    return expanded ? all : FILTER_PRIMARY;
+  }, [expanded]);
+
+  const showLess = expanded && FILTER_PRIMARY.includes(active);
+
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipScroll}
-    >
-      {tabs.map((t) => {
-        const on = t.id === active;
-        return (
+    <View style={styles.chipRailShell}>
+      <View style={styles.chipRailGlass} pointerEvents="none">
+        <CreatorHubGlassBackdrop borderRadius={0} blurIntensity={28} />
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipScrollView}
+        contentContainerStyle={[styles.chipScrollContent, compact && styles.chipScrollContentCompact]}
+      >
+        {orderedTabs.map((id) => {
+          const on = id === active;
+          const preset = neonPresetForTab(id);
+          if (on) {
+            return (
+              <Pressable
+                key={id}
+                onPress={() => onChange(id)}
+                style={({ pressed }) => [pressed && styles.chipNeonPressed]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: true }}
+              >
+                <LinearGradient
+                  colors={[preset[0], preset[1]]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.chipNeonRing}
+                >
+                  <View style={styles.chipNeonInner}>
+                    <Text style={styles.chipTxtNeon} numberOfLines={1}>
+                      {FILTER_LABELS[id]}
+                    </Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            );
+          }
+          return (
+            <Pressable
+              key={id}
+              onPress={() => onChange(id)}
+              style={styles.chip}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: false }}
+            >
+              <Text style={styles.chipTxt} numberOfLines={1}>
+                {FILTER_LABELS[id]}
+              </Text>
+            </Pressable>
+          );
+        })}
+        {!expanded ? (
           <Pressable
-            key={t.id}
-            onPress={() => onChange(t.id)}
-            style={[styles.chip, on && styles.chipOn]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
+            onPress={() => setExpanded(true)}
+            style={styles.chipMore}
+            accessibilityRole="button"
+            accessibilityLabel="More live filters"
           >
-            <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>{t.label}</Text>
+            <Text style={styles.chipMoreTxt}>More</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.dark.textMuted} />
           </Pressable>
-        );
-      })}
-    </ScrollView>
+        ) : showLess ? (
+          <Pressable
+            onPress={() => setExpanded(false)}
+            style={styles.chipMore}
+            accessibilityRole="button"
+            accessibilityLabel="Fewer filters"
+          >
+            <Text style={styles.chipMoreTxt}>Less</Text>
+            <Ionicons name="chevron-up" size={14} color={colors.dark.textMuted} />
+          </Pressable>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 
-export function HubTrendingCard({ stream, onPress }: { stream: LiveHubStream; onPress: () => void }) {
-  const h = 200;
+function modeAccentBorder(mode: LiveModeType): string {
+  switch (mode) {
+    case 'gaming':
+      return 'rgba(139,92,246,0.35)';
+    case 'irl':
+      return 'rgba(74,222,128,0.35)';
+    case 'learn':
+      return 'rgba(59,130,246,0.38)';
+    case 'shop':
+      return 'rgba(251,191,36,0.4)';
+    default:
+      return 'rgba(56,189,248,0.28)';
+  }
+}
+
+/** Slim commerce cue under mode tiles — jumps to Shop Live chip filter (mockup “live selling” lane). */
+export function LiveShopDealsShortcut({
+  dealCount,
+  onPress,
+}: {
+  dealCount: number;
+  onPress: () => void;
+}) {
+  if (dealCount <= 0) return null;
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.trendCard, { width: TREND_COL_W, height: h }]}
+      style={({ pressed }) => [styles.shopShortcutOuter, pressed && styles.shopShortcutPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`Shop live deals, ${dealCount} streams`}
+    >
+      <View style={styles.shopShortcutGlass} pointerEvents="none">
+        <CreatorHubGlassBackdrop borderRadius={borderRadius.xl} blurIntensity={40} />
+      </View>
+      <LinearGradient
+        colors={['rgba(251,191,36,0.12)', 'rgba(251,191,36,0.02)', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={styles.shopShortcutRow}>
+        <View style={styles.shopShortcutIconWrap}>
+          <Ionicons name="bag-handle" size={18} color={colors.primary.gold} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.shopShortcutTitle}>Shop Live deals</Text>
+          <Text style={styles.shopShortcutSub}>
+            {dealCount} selling now · jump to deals
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
+export function HubTrendingCard({
+  stream,
+  onPress,
+  posterHeight = 200,
+}: {
+  stream: LiveHubStream;
+  onPress: () => void;
+  /** Taller tiles read closer to TikTok-style discover mocks. */
+  posterHeight?: number;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.trendCard,
+        {
+          width: TREND_COL_W,
+          height: posterHeight,
+          borderColor: modeAccentBorder(stream.liveType),
+        },
+      ]}
       accessibilityRole="button"
       accessibilityLabel={stream.title}
     >
@@ -93,7 +270,7 @@ export function HubTrendingCard({ stream, onPress }: { stream: LiveHubStream; on
         <LiveViewerBadge count={stream.viewerCount} />
       </View>
       <View style={styles.trendBottom}>
-        <View style={styles.modeTag}>
+        <View style={[styles.modeTag, { borderColor: modeAccentBorder(stream.liveType) }]}>
           <Text style={styles.modeTagTxt}>{liveModeLabel(stream.liveType)}</Text>
         </View>
         <Text style={styles.trendTitle} numberOfLines={2}>
@@ -115,6 +292,10 @@ export function HubTrendingCard({ stream, onPress }: { stream: LiveHubStream; on
 }
 
 export function HubShopLiveCard({ stream, onPress }: { stream: LiveHubStream; onPress: () => void }) {
+  const dealLabel =
+    stream.promoTag?.trim() || (stream.hasProducts ? 'Live Deal' : null);
+  const priceLine = stream.products?.[0]?.price?.trim();
+
   return (
     <Pressable style={styles.shopCard} onPress={onPress} accessibilityRole="button">
       <Image
@@ -129,25 +310,46 @@ export function HubShopLiveCard({ stream, onPress }: { stream: LiveHubStream; on
       />
       <View style={styles.shopTop}>
         <LivePill />
-        {stream.promoTag ? (
-          <View style={styles.dealTag}>
-            <Text style={styles.dealTagTxt}>{stream.promoTag}</Text>
-          </View>
-        ) : null}
+        <LiveViewerBadge count={stream.viewerCount} />
       </View>
+      {dealLabel ? (
+        <View style={styles.shopDealFloating}>
+          <Ionicons name="bag-handle" size={11} color={colors.primary.gold} />
+          <Text style={styles.shopDealFloatingTxt} numberOfLines={1}>
+            {dealLabel}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.shopBody}>
         <Text style={styles.shopTitle} numberOfLines={2}>
           {stream.products?.[0]?.title ?? stream.title}
         </Text>
         <Text style={styles.shopMeta} numberOfLines={1}>
-          {stream.host.displayName} · {formatCount(stream.viewerCount)} watching
+          {stream.host.displayName}
         </Text>
+        {priceLine ? (
+          <Text style={styles.shopPrice} numberOfLines={1}>
+            {priceLine}
+          </Text>
+        ) : (
+          <Text style={styles.shopMetaMuted} numberOfLines={1}>
+            {formatCount(stream.viewerCount)} watching
+          </Text>
+        )}
       </View>
     </Pressable>
   );
 }
 
-export function HubUpcomingCard({
+export function upcomingSessionCategoryLabel(ev: LiveScheduledEvent): string {
+  if (ev.circleLabel?.trim()) return 'Circle Live';
+  if (ev.category === 'panel') return 'Panel';
+  if (ev.category === 'shop') return 'Shop Live';
+  return liveModeLabel(ev.category as LiveModeType);
+}
+
+/** Compact horizontal card for Upcoming rail on Live hub. */
+export function HubUpcomingSessionCard({
   ev,
   onRsvp,
 }: {
@@ -155,28 +357,48 @@ export function HubUpcomingCard({
   onRsvp: () => void;
 }) {
   const d = new Date(ev.startsAt);
-  const dateStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const month = d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
+  const dayNum = d.getDate();
+  const weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
   const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
   return (
-    <View style={styles.upCard}>
-      <View style={styles.upLeft}>
-        <Text style={styles.upCat}>{ev.category === 'panel' ? 'Panel' : 'Learn'}</Text>
-        <Text style={styles.upTitle} numberOfLines={2}>
-          {ev.title}
-        </Text>
-        <Text style={styles.upHost} numberOfLines={1}>
-          {ev.hostName}
-          {ev.hostTitle ? ` · ${ev.hostTitle}` : ''}
-        </Text>
-        <Text style={styles.upWhen}>
-          {dateStr} · {timeStr}
-        </Text>
+    <View style={styles.upRailCard}>
+      <View style={styles.upRailGlass} pointerEvents="none">
+        <CreatorHubGlassBackdrop borderRadius={borderRadius.xl} blurIntensity={34} />
       </View>
-      <Pressable onPress={onRsvp} style={styles.upBtn} accessibilityRole="button">
-        <Text style={styles.upBtnTxt}>{ev.rsvpState === 'going' ? 'Saved' : 'Remind Me'}</Text>
-      </Pressable>
+      <View style={styles.upRailInner}>
+        <View style={styles.upRailDateCol}>
+          <Text style={styles.upRailMonth}>{month}</Text>
+          <Text style={styles.upRailDay}>{dayNum}</Text>
+        </View>
+        <View style={styles.upRailMid}>
+          <Text style={styles.upRailCat}>{upcomingSessionCategoryLabel(ev)}</Text>
+          <Text style={styles.upRailTitle} numberOfLines={2}>
+            {ev.title}
+          </Text>
+          <Text style={styles.upRailHost} numberOfLines={2}>
+            {ev.hostName}
+            {ev.hostTitle ? ` · ${ev.hostTitle}` : ''}
+          </Text>
+          <View style={styles.upRailWhenRow}>
+            <Ionicons name="calendar-outline" size={13} color={pulseverse.electric} />
+            <Text style={styles.upRailWhenTxt}>
+              {weekday} · {timeStr}
+            </Text>
+          </View>
+        </View>
+        <Pressable onPress={onRsvp} style={styles.upRailBtn} accessibilityRole="button">
+          <Text style={styles.upRailBtnTxt}>{ev.rsvpState === 'going' ? 'Saved' : 'Remind Me'}</Text>
+        </Pressable>
+      </View>
     </View>
   );
+}
+
+/** @deprecated Use {@link HubUpcomingSessionCard} in horizontal rails. */
+export function HubUpcomingCard(props: { ev: LiveScheduledEvent; onRsvp: () => void }) {
+  return <HubUpcomingSessionCard {...props} />;
 }
 
 export function HubCircleLiveCard({ stream, onPress }: { stream: LiveHubStream; onPress: () => void }) {
@@ -189,6 +411,10 @@ export function HubCircleLiveCard({ stream, onPress }: { stream: LiveHubStream; 
         {...pulseImageFeedHeroProps}
       />
       <LinearGradient colors={['rgba(6,14,26,0.2)', 'rgba(6,14,26,0.92)']} style={StyleSheet.absoluteFill} />
+      <View style={styles.circleTop}>
+        <LivePill />
+        <LiveViewerBadge count={stream.viewerCount} />
+      </View>
       <View style={styles.circleBody}>
         <View style={styles.circleBadge}>
           <Ionicons name="people" size={12} color={pulseverse.electric} />
@@ -210,14 +436,14 @@ export function HubCircleLiveCard({ stream, onPress }: { stream: LiveHubStream; 
 export function StartLivePromoCard({ onGoLive }: { onGoLive: () => void }) {
   return (
     <LinearGradient
-      colors={['rgba(56,189,248,0.16)', 'rgba(99,102,241,0.14)']}
+      colors={['rgba(88,28,135,0.45)', 'rgba(15,23,42,0.94)', 'rgba(34,211,238,0.18)']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.promoCard}
     >
-      <Text style={styles.promoTitle}>Start Your Own Live</Text>
+      <Text style={styles.promoTitle}>Create Something Live</Text>
       <Text style={styles.promoSub}>
-        Host a stream, teach a class, sell a product, or build your community — all in one trusted space.
+        Stream, teach, sell, or build your community — all in one trusted space.
       </Text>
       <Pressable onPress={onGoLive} style={styles.promoCta} accessibilityRole="button">
         <Ionicons name="videocam" size={18} color={colors.dark.bg} />
@@ -228,28 +454,131 @@ export function StartLivePromoCard({ onGoLive }: { onGoLive: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  chipScroll: {
+  chipRailShell: {
+    flexGrow: 0,
+    flexShrink: 0,
+    position: 'relative',
+    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(56,189,248,0.14)',
+  },
+  chipRailGlass: { ...StyleSheet.absoluteFillObject },
+  chipScrollView: {
+    flexGrow: 0,
+    zIndex: 1,
+  },
+  chipScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
     paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing.sm + 2,
     gap: spacing.sm,
-    paddingBottom: spacing.sm,
+  },
+  chipScrollContentCompact: {
+    paddingVertical: spacing.sm,
+  },
+  chipMore: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+    backgroundColor: 'rgba(18,26,44,0.45)',
+  },
+  chipMoreTxt: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.dark.textSecondary,
   },
   chip: {
+    flexShrink: 0,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+    backgroundColor: 'rgba(18,26,44,0.38)',
+  },
+  chipNeonRing: {
+    borderRadius: borderRadius.full,
+    padding: 1.5,
+    flexShrink: 0,
+  },
+  chipNeonInner: {
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
     borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(6,14,26,0.94)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  chipNeonPressed: { opacity: 0.9 },
+  chipTxt: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+  },
+  chipTxtNeon: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#A5F3FC',
+    letterSpacing: 0.2,
+  },
+
+  shopShortcutOuter: {
+    flexGrow: 0,
+    marginHorizontal: layout.screenPadding,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.25)',
+    borderColor: 'rgba(251,191,36,0.28)',
+    position: 'relative',
+  },
+  shopShortcutGlass: { ...StyleSheet.absoluteFillObject },
+  shopShortcutPressed: { opacity: 0.92 },
+  shopShortcutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    zIndex: 1,
+  },
+  shopShortcutIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(15,23,42,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.25)',
   },
-  chipOn: {
-    borderColor: pulseverse.electric + '88',
-    backgroundColor: 'rgba(56,189,248,0.12)',
+  shopShortcutTitle: {
+    ...typography.h3,
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.dark.text,
   },
-  chipTxt: { ...typography.caption, fontWeight: '600', color: colors.dark.textMuted },
-  chipTxtOn: { color: colors.dark.text },
+  shopShortcutSub: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.dark.textMuted,
+    marginTop: 2,
+  },
 
   trendCard: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.12)',
@@ -268,7 +597,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(6,14,26,0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.35)',
     marginBottom: 6,
   },
   modeTagTxt: { fontSize: 10, fontWeight: '800', color: pulseverse.electric, letterSpacing: 0.6 },
@@ -289,20 +617,39 @@ const styles = StyleSheet.create({
   },
   shopThumb: { ...StyleSheet.absoluteFillObject },
   shopTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     padding: spacing.sm,
+    zIndex: 2,
   },
-  dealTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  shopDealFloating: {
+    position: 'absolute',
+    left: spacing.sm,
+    bottom: 108,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: '78%',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
     backgroundColor: 'rgba(251,191,36,0.22)',
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.45)',
+    borderColor: 'rgba(251,191,36,0.5)',
+    zIndex: 2,
   },
-  dealTagTxt: { fontSize: 10, fontWeight: '800', color: colors.primary.gold },
+  shopDealFloatingTxt: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '900',
+    color: colors.primary.gold,
+    letterSpacing: 0.4,
+  },
   shopBody: {
     position: 'absolute',
     left: 0,
@@ -312,37 +659,87 @@ const styles = StyleSheet.create({
   },
   shopTitle: { ...typography.h3, fontSize: 15, color: '#FFF', marginBottom: 4 },
   shopMeta: { ...typography.caption, color: colors.dark.textSecondary },
-
-  upCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.14)',
-    backgroundColor: 'rgba(15,23,42,0.72)',
-    marginBottom: spacing.sm,
-    marginHorizontal: layout.screenPadding,
+  shopPrice: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary.gold,
+    marginTop: 4,
   },
-  upLeft: { flex: 1 },
-  upCat: { fontSize: 10, fontWeight: '800', color: pulseverse.electric, letterSpacing: 1, marginBottom: 4 },
-  upTitle: { ...typography.h3, fontSize: 16, color: colors.dark.text },
-  upHost: { ...typography.caption, color: colors.dark.textMuted, marginTop: 4 },
-  upWhen: { ...typography.caption, color: colors.dark.textSecondary, marginTop: 6, fontWeight: '600' },
-  upBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+  shopMetaMuted: {
+    ...typography.caption,
+    fontSize: 11,
+    color: 'rgba(248,250,252,0.55)',
+    marginTop: 4,
+  },
+
+  upRailCard: {
+    width: 300,
+    marginRight: spacing.md,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.2)',
+    position: 'relative',
+  },
+  upRailGlass: { ...StyleSheet.absoluteFillObject },
+  upRailInner: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    padding: spacing.md,
+    zIndex: 1,
+  },
+  upRailDateCol: {
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(56,189,248,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.25)',
+  },
+  upRailMonth: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: pulseverse.electric,
+    letterSpacing: 0.6,
+  },
+  upRailDay: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: colors.dark.text,
+    marginTop: 2,
+  },
+  upRailMid: { flex: 1, minWidth: 0 },
+  upRailCat: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: pulseverse.electric,
+    letterSpacing: 0.9,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  upRailTitle: { ...typography.h3, fontSize: 14, color: colors.dark.text, lineHeight: 18 },
+  upRailHost: { ...typography.caption, color: colors.dark.textMuted, marginTop: 4, fontSize: 11 },
+  upRailWhenRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  upRailWhenTxt: { ...typography.caption, fontSize: 11, color: colors.dark.textSecondary, fontWeight: '600' },
+  upRailBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 9,
     borderRadius: borderRadius.button,
     borderWidth: 1,
     borderColor: pulseverse.electric + '55',
-    backgroundColor: 'rgba(56,189,248,0.12)',
+    backgroundColor: 'rgba(56,189,248,0.1)',
+    maxWidth: 84,
   },
-  upBtnTxt: { ...typography.button, fontSize: 12, color: pulseverse.electric },
+  upRailBtnTxt: { ...typography.button, fontSize: 11, color: pulseverse.electric, textAlign: 'center' },
 
   circleCard: {
     width: 260,
-    height: 140,
+    height: 148,
     marginRight: spacing.md,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
@@ -350,6 +747,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148,163,184,0.14)',
   },
   circleThumb: { ...StyleSheet.absoluteFillObject },
+  circleTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: spacing.sm,
+    zIndex: 2,
+  },
   circleBody: { flex: 1, justifyContent: 'flex-end', padding: spacing.md },
   circleBadge: {
     flexDirection: 'row',
@@ -368,13 +776,14 @@ const styles = StyleSheet.create({
 
   promoCard: {
     marginHorizontal: layout.screenPadding,
-    padding: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     borderRadius: borderRadius['2xl'],
     borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.22)',
+    borderColor: 'rgba(167,139,250,0.22)',
     marginBottom: spacing.xl,
   },
-  promoTitle: { ...typography.h3, fontSize: 18, color: colors.dark.text },
+  promoTitle: { ...typography.h3, fontSize: 17, fontWeight: '800', color: colors.dark.text, letterSpacing: -0.3 },
   promoSub: { ...typography.body, color: colors.dark.textMuted, marginTop: spacing.sm, lineHeight: 22 },
   promoCta: {
     marginTop: spacing.md,

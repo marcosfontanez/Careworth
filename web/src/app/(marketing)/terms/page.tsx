@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { LegalDoc } from "@/components/marketing/legal-doc";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
-import { getLegalNotice, legalDocumentsLastUpdatedDisplay } from "@/lib/site-constants";
+import { getLegalEmail, getLegalNotice, legalDocumentsLastUpdatedDisplay } from "@/lib/site-constants";
 import { marketingInlineLink } from "@/lib/ui-classes";
 
 export const generateMetadata = () => generateMarketingMetadata("terms");
@@ -14,9 +14,12 @@ const toc = [
   { id: "acceptable", label: "Acceptable use" },
   { id: "disclaimers", label: "Disclaimers" },
   { id: "termination", label: "Termination" },
+  { id: "contact", label: "Contact" },
 ];
 
 export default function TermsPage() {
+  const legalEmail = getLegalEmail();
+
   return (
     <LegalDoc title="Terms of Service" toc={toc} breadcrumbPath="/terms">
       <h2 id="intro">Introduction</h2>
@@ -63,6 +66,14 @@ export default function TermsPage() {
       <p>
         We may suspend or terminate access for conduct that risks community safety or violates these terms. Where the
         product provides appeals or review flows, those processes apply as described in our community guidelines.
+      </p>
+      <h2 id="contact">Contact</h2>
+      <p>
+        For questions about these Terms, contact us at{" "}
+        <a href={`mailto:${legalEmail}`} className={marketingInlineLink}>
+          {legalEmail}
+        </a>
+        .
       </p>
     </LegalDoc>
   );

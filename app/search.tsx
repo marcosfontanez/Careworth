@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { FilterChips } from '@/components/ui/FilterChips';
@@ -27,6 +27,7 @@ import { usePersistedCommunityJoinToggle } from '@/hooks/usePersistedCommunityJo
 import { useAuth } from '@/contexts/AuthContext';
 import { prefetchCircleRoom } from '@/lib/communityCache';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
+import { avatarThumb } from '@/lib/storage';
 import type { UserProfile, Community, SoundLibraryRow, ViralSoundRow } from '@/types';
 import { getUniversalSearchListWindow } from '@/lib/feedVideoListWindow';
 
@@ -367,12 +368,13 @@ export default function SearchScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.creatorAvatarCell}>
-                    <AvatarDisplay
+                    <BorderedAvatar
                       size={48}
-                      avatarUrl={user.avatarUrl}
-                      prioritizeRemoteAvatar
+                      avatarUrl={avatarThumb(user.avatarUrl, 48)}
+                      pulseAvatarFrame={user.pulseAvatarFrame}
+                      ownerDisplayName={user.displayName}
                       ringColor={colors.dark.border}
-                      pulseFrame={pulseFrameFromUser(user.pulseAvatarFrame)}
+                      onPress={() => router.push(`/profile/${user.id}`)}
                     />
                   </View>
                   <View style={styles.creatorBody}>
@@ -394,18 +396,15 @@ export default function SearchScreen() {
                       <ProfileNeonPills tags={neonTags} style={styles.creatorNeonPills} />
                     ) : null}
                   </View>
-                  {user.pulseTier && user.pulseTier !== 'murmur' ? (
-                    <View style={styles.creatorRail}>
+                  <View style={styles.creatorRail}>
                       <PulseTierBadge
                         tier={user.pulseTier}
                         score={user.pulseScoreCurrent}
                         size="xs"
-                        hideMurmur
+                        hideMurmur={false}
+                        showIcon={false}
                       />
                     </View>
-                  ) : (
-                    <View style={styles.creatorRail} />
-                  )}
                 </TouchableOpacity>
               );
             }
