@@ -17,6 +17,13 @@ function revalidateReportSurfaces() {
 
 type DbReportStatus = "pending" | "reviewed" | "action_taken" | "dismissed";
 
+/** App reports live streams as `live_stream`; admin actions expect `live`. */
+function normalizeModerationTargetType(raw: string): string {
+  const tt = String(raw).trim();
+  if (tt === "live_stream") return "live";
+  return tt;
+}
+
 function mergeStaffNote(existing: string | null | undefined, addition: string): string {
   const line = `[${new Date().toISOString()}] ${addition.trim()}`;
   const prev = (existing ?? "").trim();
@@ -161,7 +168,7 @@ export async function removeReportedContent(
 
   if (repErr || !rep) return { ok: false, error: repErr?.message ?? "Report not found" };
 
-  const tt = String(rep.target_type);
+  const tt = normalizeModerationTargetType(String(rep.target_type));
   const tid = String(rep.target_id);
 
   if (tt === "post") {
@@ -176,6 +183,18 @@ export async function removeReportedContent(
       .update({
         status: "ended",
         ended_at: new Date().toISOString(),
+      })
+      .eq("id", tid);
+    if (error) return { ok: false, error: error.message };
+  } else if (tt === "circle_thread") {
+    const { error } = await supabase.from("circle_threads").delete().eq("id", tid);
+    if (error) return { ok: false, error: error.message };
+  } else if (tt === "stream_message") {
+    const { error } = await supabase
+      .from("stream_messages")
+      .update({
+        deleted_at: new Date().toISOString(),
+        content: "[removed by moderation]",
       })
       .eq("id", tid);
     if (error) return { ok: false, error: error.message };
@@ -220,7 +239,7 @@ export async function suspendSubjectFromReport(
   if (repErr || !rep) return { ok: false, error: repErr?.message ?? "Report not found" };
 
   let subjectUserId: string | null = null;
-  const tt = String(rep.target_type);
+  const tt = normalizeModerationTargetType(String(rep.target_type));
   const tid = String(rep.target_id);
 
   if (tt === "profile") {
@@ -234,6 +253,12 @@ export async function suspendSubjectFromReport(
   } else if (tt === "live") {
     const { data: row } = await supabase.from("live_streams").select("host_id").eq("id", tid).maybeSingle();
     subjectUserId = (row?.host_id as string) ?? null;
+  } else if (tt === "circle_thread") {
+    const { data: row } = await supabase.from("circle_threads").select("author_id").eq("id", tid).maybeSingle();
+    subjectUserId = (row?.author_id as string) ?? null;
+  } else if (tt === "stream_message") {
+    const { data: row } = await supabase.from("stream_messages").select("user_id").eq("id", tid).maybeSingle();
+    subjectUserId = (row?.user_id as string) ?? null;
   }
 
   if (!subjectUserId) {

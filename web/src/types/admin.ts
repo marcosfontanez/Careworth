@@ -6,7 +6,8 @@ export type ReportType =
   | "profile"
   | "live"
   | "pulse"
-  | "circle_thread";
+  | "circle_thread"
+  | "stream_message";
 export type ReportReason =
   | "harassment"
   | "misinformation"

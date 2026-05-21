@@ -35,7 +35,7 @@ Paste the reference ID when prompted.
 npm run db:push
 ```
 
-**You should see** migrations through **189** apply.  
+**You should see** migrations through **190** apply.  
 **Do not** copy `scripts/sql/parked/181_*` into `supabase/migrations/` until engineering signs off.
 
 #### If `db push` tries to re-run migration 001 (`profiles already exists`)
@@ -65,6 +65,8 @@ https://pulseverse.app/**
 https://www.pulseverse.app/**
 https://app.pulseverse.app/**
 http://localhost:3000/**
+pulseverse://auth/callback
+pulseverse://auth/reset-password
 ```
 
 ### 4. Deploy edge functions (YOU)
@@ -74,6 +76,7 @@ From repo root, after `supabase link`:
 ```powershell
 npx supabase functions deploy pulse-shop-fulfillment
 npx supabase functions deploy livekit-token
+npx supabase functions deploy delete-account
 npx supabase functions deploy apple-music-developer-token
 npx supabase functions deploy notify-expo-push --no-verify-jwt
 npx supabase functions deploy dispatch-scheduled --no-verify-jwt

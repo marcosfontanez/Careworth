@@ -112,14 +112,22 @@ export type PurchaseReceiptRow = {
   created_at: string;
 };
 
+/** Postgres bigint columns may arrive as string in PostgREST JSON. */
+export function walletAmount(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  const n = Number(String(v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Total spendable Sparks (paid + promo); server is source of truth. */
 export function totalSparkBalance(w: SparkWalletRow | null | undefined): number {
   if (!w) return 0;
-  return Number(w.paid_sparks_balance ?? 0) + Number(w.promo_sparks_balance ?? 0);
+  return walletAmount(w.paid_sparks_balance) + walletAmount(w.promo_sparks_balance);
 }
 
 /** All Diamonds credited (pending release + already available). */
 export function totalDiamondBalance(w: DiamondWalletRow | null | undefined): number {
   if (!w) return 0;
-  return Number(w.diamonds_pending ?? 0) + Number(w.diamonds_available ?? 0);
+  return walletAmount(w.diamonds_pending) + walletAmount(w.diamonds_available);
 }

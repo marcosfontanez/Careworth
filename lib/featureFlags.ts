@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isProductionReleaseBuild, liveKitConfigured } from '@/lib/liveKitConfig';
 
 export interface FeatureFlags {
   /** TikTok-style live rooms (mock video provider today). Off for v1 store launch. */
@@ -24,22 +25,37 @@ interface FeatureFlagStore extends FeatureFlags {
 }
 
 /**
- * Live UI defaults **off** in production builds. In **development** (`__DEV__`) it defaults **on**
- * so the Live tab and `/live/*` routes work without opening Admin first.
+ * Live UI defaults **off** in production builds unless LiveKit is configured.
+ * In **development** (`__DEV__`) it defaults **on** so the Live tab works without LiveKit.
  *
  * Override at build time: `EXPO_PUBLIC_LIVE_STREAMING=0` or `=1`.
  */
 function defaultLiveStreaming(): boolean {
   const raw = process.env.EXPO_PUBLIC_LIVE_STREAMING?.trim().toLowerCase();
-  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
   if (raw === '0' || raw === 'false' || raw === 'no') return false;
-  return typeof __DEV__ !== 'undefined' && __DEV__;
+
+  const explicitlyOn = raw === '1' || raw === 'true' || raw === 'yes';
+  const liveKitReady = liveKitConfigured();
+
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    if (explicitlyOn) return true;
+    return true;
+  }
+
+  // Release builds: require explicit flag AND LiveKit URL (prevents poster-only false-ready Live).
+  if (isProductionReleaseBuild()) {
+    return explicitlyOn && liveKitReady;
+  }
+
+  return explicitlyOn || liveKitReady;
 }
 
 function defaultLiveDiscoveryDemos(): boolean {
   const raw = process.env.EXPO_PUBLIC_LIVE_DISCOVERY_DEMOS?.trim().toLowerCase();
   if (raw === '1' || raw === 'true' || raw === 'yes') return true;
   if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  // Never merge demo streams in release builds unless explicitly enabled.
+  if (isProductionReleaseBuild()) return false;
   return typeof __DEV__ !== 'undefined' && __DEV__;
 }
 

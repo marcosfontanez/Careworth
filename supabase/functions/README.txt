@@ -75,3 +75,18 @@ LiveKit access tokens (Edge Function: livekit-token)
    (see `services/live/videoProvider.ts`). Never put LIVEKIT_API_SECRET in the app bundle.
 
 4) Callers: logged-in `supabase.functions.invoke('livekit-token', { body: { streamId } })` — see `services/live/liveKitToken.ts`.
+
+---
+
+Account deletion (Edge Function: delete-account)
+
+1) Deploy (JWT verification ON — default):
+   npx supabase functions deploy delete-account
+
+2) App: Settings → Delete Account calls `lib/deleteAccount.ts` (Bearer user JWT + apikey).
+
+3) Uses service role to `auth.admin.deleteUser`. profiles and most FK-linked rows cascade.
+   Purchase/wallet audit rows may retain per schema ON DELETE rules — verify before marketing hard-delete.
+
+4) Add `pulseverse://auth/reset-password` to Supabase Auth redirect URLs for native password reset.
+

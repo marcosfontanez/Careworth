@@ -107,8 +107,18 @@ export function parseAndNavigate(url: string) {
     }
 
     const pLower = path.toLowerCase();
+    if (pLower === 'auth/reset-password' || pLower.startsWith('auth/reset-password')) {
+      router.push('/auth/reset-password' as any);
+      return true;
+    }
+
     if (pLower === 'live') {
       pushLiveHubFromParsed(parsed);
+      return true;
+    }
+
+    if (pLower === 'pulse-shop' || pLower.startsWith('pulse-shop/')) {
+      router.push('/pulse-shop' as any);
       return true;
     }
 

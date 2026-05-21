@@ -26,7 +26,6 @@ import { profilesService } from '@/services/supabase';
 import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
 import { sanitizeUsername, isValidUsername } from '@/utils/profileHandle';
 import { PatientPrivacyHipaaPanel } from '@/components/auth/PatientPrivacyHipaaPanel';
-import { TERMS_PRIVACY_CHECKBOX_LABEL } from '@/constants/authLegal';
 import { mapAuthErrorForAlert } from '@/utils/authUserMessages';
 import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
@@ -143,7 +142,6 @@ export default function LoginScreen() {
     'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'disallowed'
   >('idle');
   const [showPassword, setShowPassword] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -201,15 +199,6 @@ export default function LoginScreen() {
   const authBlockingUi = isAuthenticated && isLoading;
   const busy = loading || authBlockingUi;
 
-  const requireLegal = (forLabel: string) => {
-    if (acceptedTerms) return true;
-    Alert.alert(
-      'Agree to Terms and privacy expectations',
-      `Please read the patient privacy section and confirm the checkbox before ${forLabel}.`,
-    );
-    return false;
-  };
-
   const handleEmailLogin = async () => {
     if (!email || !password) {
       Alert.alert('Missing fields', 'Please enter your email and password.');
@@ -258,7 +247,6 @@ export default function LoginScreen() {
       Alert.alert('Passwords do not match', 'Please re-enter your password and confirmation so they match.');
       return;
     }
-    if (!requireLegal('creating your account')) return;
     if (password.length < 6) {
       Alert.alert('Weak password', 'Password must be at least 6 characters.');
       return;
@@ -298,7 +286,6 @@ export default function LoginScreen() {
       setConfirmEmail('');
       setPassword('');
       setEmail(emailNorm);
-      setAcceptedTerms(false);
       setHandleStatus('idle');
       setPostSignupNotice(true);
       InteractionManager.runAfterInteractions(() => {
@@ -308,7 +295,6 @@ export default function LoginScreen() {
   };
 
   const handleGoogle = async () => {
-    if (authTab === 'signup' && !requireLegal('continuing with Google')) return;
     setLoading(true);
     const { error } = await signInWithGoogle();
     setLoading(false);
@@ -317,15 +303,12 @@ export default function LoginScreen() {
   };
 
   const handleApple = async () => {
-    if (authTab === 'signup' && !requireLegal('continuing with Apple')) return;
     setLoading(true);
     const { error } = await signInWithApple();
     setLoading(false);
     if (error) Alert.alert('Apple failed', error.message);
     else schedulePostSignInNavigation(router);
   };
-
-  const socialDisabledSignup = authTab === 'signup' && !acceptedTerms;
 
   const logoW = Math.min(winW - spacing['2xl'] * 2, 340);
   const logoH = logoW * 0.75;
@@ -570,20 +553,9 @@ export default function LoginScreen() {
                       <Text style={styles.link}>Privacy Policy</Text>
                     </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.checkRow}
-                    onPress={() => setAcceptedTerms((v) => !v)}
-                    activeOpacity={0.85}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: acceptedTerms }}
-                  >
-                    <View style={[styles.checkBox, acceptedTerms && styles.checkBoxOn]}>
-                      {acceptedTerms ? (
-                        <Ionicons name="checkmark" size={16} color={colors.dark.bg} />
-                      ) : null}
-                    </View>
-                    <Text style={styles.checkLabel}>{TERMS_PRIVACY_CHECKBOX_LABEL}</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.signupLegalHint}>
+                    After your first sign-in, you will confirm Terms and Privacy in the app before using PulseVerse.
+                  </Text>
                 </>
               )}
 
@@ -594,7 +566,7 @@ export default function LoginScreen() {
                   label="Create account"
                   onPress={handleSignup}
                   busy={busy}
-                  disabled={busy || !acceptedTerms || signupHandleBlocked}
+                  disabled={busy || signupHandleBlocked}
                 />
               )}
 
@@ -606,18 +578,18 @@ export default function LoginScreen() {
 
               <View style={styles.socialRow}>
                 <TouchableOpacity
-                  style={[styles.socialBtn, socialDisabledSignup && styles.socialBtnDisabled]}
+                  style={styles.socialBtn}
                   onPress={handleGoogle}
-                  disabled={busy || socialDisabledSignup}
+                  disabled={busy}
                 >
                   <Ionicons name="logo-google" size={20} color={colors.dark.text} />
                   <Text style={styles.socialBtnText}>Google</Text>
                 </TouchableOpacity>
                 {Platform.OS === 'ios' ? (
                   <TouchableOpacity
-                    style={[styles.socialBtn, socialDisabledSignup && styles.socialBtnDisabled]}
+                    style={styles.socialBtn}
                     onPress={handleApple}
-                    disabled={busy || socialDisabledSignup}
+                    disabled={busy}
                   >
                     <Ionicons name="logo-apple" size={20} color={colors.dark.text} />
                     <Text style={styles.socialBtnText}>Apple</Text>
@@ -851,25 +823,11 @@ const styles = StyleSheet.create({
   },
   link: { ...typography.bodySmall, color: pulseverse.electric, fontWeight: '700' },
   linkSep: { color: colors.form.hint },
-  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-  checkBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: `${pulseverse.electric}AA`,
-    marginTop: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  checkBoxOn: { backgroundColor: colors.primary.teal, borderColor: colors.primary.teal },
-  checkLabel: {
+  signupLegalHint: {
     ...typography.bodySmall,
-    flex: 1,
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: 20,
-    fontWeight: '600',
+    color: colors.form.hint,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   secureRow: {
     flexDirection: 'row',

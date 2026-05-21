@@ -475,13 +475,16 @@ export function useComments(postId: string) {
   });
 }
 
+const NOTIFICATION_QUERY_STALE_MS = 15_000;
+
 export function useNotifications() {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['notifications', user?.id ?? null],
     queryFn: () => notificationService.getAll(user!.id),
     enabled: !!user?.id,
-    staleTime: 45_000,
+    staleTime: NOTIFICATION_QUERY_STALE_MS,
+    refetchInterval: NOTIFICATION_QUERY_STALE_MS,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: false,
   });
@@ -493,7 +496,8 @@ export function useUnreadCount() {
     queryKey: ['notifications', 'unread', user?.id ?? null],
     queryFn: () => notificationService.getUnreadCount(user!.id),
     enabled: !!user?.id,
-    staleTime: 45_000,
+    staleTime: NOTIFICATION_QUERY_STALE_MS,
+    refetchInterval: NOTIFICATION_QUERY_STALE_MS,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: false,
   });

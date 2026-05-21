@@ -34,7 +34,11 @@ export function useSparkWallet(userId: string | undefined) {
     queryKey: shopKeys.sparkWallet(userId),
     queryFn: async () => {
       if (!userId) return null;
-      await shopQueriesService.ensureWallets(userId);
+      try {
+        await shopQueriesService.ensureWallets(userId);
+      } catch {
+        /* ensure is best-effort; still read an existing wallet row */
+      }
       return shopQueriesService.getSparkWallet(userId);
     },
     enabled: !!userId,
@@ -49,7 +53,11 @@ export function useDiamondWallet(userId: string | undefined) {
     queryKey: shopKeys.diamondWallet(userId),
     queryFn: async () => {
       if (!userId) return null;
-      await shopQueriesService.ensureWallets(userId);
+      try {
+        await shopQueriesService.ensureWallets(userId);
+      } catch {
+        /* ensure is best-effort; still read an existing wallet row */
+      }
       return shopQueriesService.getDiamondWallet(userId);
     },
     enabled: !!userId,

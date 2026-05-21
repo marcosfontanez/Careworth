@@ -124,7 +124,9 @@ function AppShell() {
 
     if (isAuthenticated && inAuth && !hasRedirected.current) {
       const onLegalAck = segments[0] === 'auth' && segments.some((s) => s === 'legal-ack');
-      if (!onLegalAck) {
+      const onResetPassword =
+        segments[0] === 'auth' && segments.some((s) => s === 'reset-password');
+      if (!onLegalAck && !onResetPassword) {
         hasRedirected.current = true;
         schedulePostSignInNavigation(router);
       }
@@ -262,7 +264,7 @@ function AppShell() {
       queryClient.prefetchQuery({
         queryKey: ['notifications', 'unread', uid],
         queryFn: () => notificationService.getUnreadCount(uid),
-        staleTime: 45_000,
+        staleTime: 15_000,
       }),
     ]);
 
@@ -271,7 +273,7 @@ function AppShell() {
       void queryClient.prefetchQuery({
         queryKey: ['notifications', uid],
         queryFn: () => notificationService.getAll(uid),
-        staleTime: 45_000,
+        staleTime: 15_000,
       });
     });
 

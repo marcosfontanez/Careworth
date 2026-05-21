@@ -95,8 +95,18 @@ function mapReportStatus(dbStatus: string): ReportStatus {
 }
 
 function mapTargetType(t: string): ReportType {
-  if (t === "post" || t === "comment" || t === "profile") return t;
-  if (t === "live") return "live";
+  const raw = String(t).trim().toLowerCase();
+  if (raw === "live_stream") return "live";
+  if (
+    raw === "post" ||
+    raw === "comment" ||
+    raw === "profile" ||
+    raw === "live" ||
+    raw === "circle_thread" ||
+    raw === "stream_message"
+  ) {
+    return raw as ReportType;
+  }
   return "post";
 }
 
@@ -135,6 +145,22 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
     const commentTargetIds = [
       ...new Set(rows.filter((r) => String(r.target_type) === "comment").map((r) => String(r.target_id))),
     ];
+    const circleThreadTargetIds = [
+      ...new Set(rows.filter((r) => String(r.target_type) === "circle_thread").map((r) => String(r.target_id))),
+    ];
+    const liveTargetIds = [
+      ...new Set(
+        rows
+          .filter((r) => {
+            const tt = String(r.target_type);
+            return tt === "live" || tt === "live_stream";
+          })
+          .map((r) => String(r.target_id)),
+      ),
+    ];
+    const streamMessageTargetIds = [
+      ...new Set(rows.filter((r) => String(r.target_type) === "stream_message").map((r) => String(r.target_id))),
+    ];
 
     const reportersQ = supabase.from("profiles").select("id, display_name, role").in("id", reporterIds);
     const profileTargetsQ =
@@ -152,23 +178,45 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
       commentTargetIds.length > 0
         ? supabase.from("comments").select("id, content, author_id").in("id", commentTargetIds)
         : Promise.resolve({ data: [] as { id: string; content: string; author_id: string }[] });
+    const circleThreadsQ =
+      circleThreadTargetIds.length > 0
+        ? supabase.from("circle_threads").select("id, title, body, author_id").in("id", circleThreadTargetIds)
+        : Promise.resolve({ data: [] as { id: string; title: string; body: string; author_id: string }[] });
+    const liveStreamsQ =
+      liveTargetIds.length > 0
+        ? supabase.from("live_streams").select("id, title, host_id").in("id", liveTargetIds)
+        : Promise.resolve({ data: [] as { id: string; title: string; host_id: string }[] });
+    const streamMessagesQ =
+      streamMessageTargetIds.length > 0
+        ? supabase.from("stream_messages").select("id, content, user_id, stream_id").in("id", streamMessageTargetIds)
+        : Promise.resolve({ data: [] as { id: string; content: string; user_id: string; stream_id: string }[] });
 
-    const [reporters, profileTargets, posts, comments] = await Promise.all([
+    const [reporters, profileTargets, posts, comments, circleThreads, liveStreams, streamMessages] =
+      await Promise.all([
       reportersQ,
       profileTargetsQ,
       postsQ,
       commentsQ,
+      circleThreadsQ,
+      liveStreamsQ,
+      streamMessagesQ,
     ]);
 
     const reporterMap = new Map((reporters.data ?? []).map((p) => [p.id as string, p]));
     const profileById = new Map((profileTargets.data ?? []).map((p) => [p.id as string, p]));
     const postById = new Map((posts.data ?? []).map((p) => [p.id as string, p]));
     const commentById = new Map((comments.data ?? []).map((c) => [c.id as string, c]));
+    const circleThreadById = new Map((circleThreads.data ?? []).map((t) => [t.id as string, t]));
+    const liveStreamById = new Map((liveStreams.data ?? []).map((s) => [s.id as string, s]));
+    const streamMessageById = new Map((streamMessages.data ?? []).map((m) => [m.id as string, m]));
 
     const extraIds = [
       ...new Set([
         ...(posts.data ?? []).map((p) => p.creator_id as string),
         ...(comments.data ?? []).map((c) => c.author_id as string),
+        ...(circleThreads.data ?? []).map((t) => t.author_id as string),
+        ...(liveStreams.data ?? []).map((s) => s.host_id as string),
+        ...(streamMessages.data ?? []).map((m) => m.user_id as string),
       ]),
     ].filter((id) => id && !profileById.has(id));
 
@@ -215,8 +263,34 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
           const author = profileById.get(c.author_id as string);
           subjectMeta = author ? `Comment · ${author.display_name}` : "Comment";
         }
-      } else if (tt === "live") {
-        subjectMeta = "Live stream";
+      } else if (tt === "circle_thread") {
+        const thread = circleThreadById.get(String(r.target_id));
+        if (thread) {
+          const title = String(thread.title || thread.body || "").trim();
+          subjectDisplayName = (title || "Circle thread").slice(0, 140);
+          const author = profileById.get(thread.author_id as string);
+          subjectMeta = author ? `Circle thread · ${author.display_name}` : "Circle thread";
+        } else {
+          subjectMeta = "Circle thread";
+        }
+      } else if (tt === "live" || tt === "live_stream") {
+        const stream = liveStreamById.get(String(r.target_id));
+        if (stream) {
+          subjectDisplayName = String(stream.title || "Live stream").slice(0, 140);
+          const host = profileById.get(stream.host_id as string);
+          subjectMeta = host ? `Live stream · ${host.display_name}` : "Live stream";
+        } else {
+          subjectMeta = "Live stream";
+        }
+      } else if (tt === "stream_message") {
+        const msg = streamMessageById.get(String(r.target_id));
+        if (msg) {
+          subjectDisplayName = String(msg.content || "Live chat message").slice(0, 140);
+          const author = profileById.get(msg.user_id as string);
+          subjectMeta = author ? `Live chat · ${author.display_name}` : "Live chat message";
+        } else {
+          subjectMeta = "Live chat message";
+        }
       }
 
       const rep = reporterMap.get(r.reporter_id as string);
@@ -768,6 +842,12 @@ function sourceLabelForTargetType(targetType: string): string {
     case "profile":
       return "Profiles";
     case "live":
+      return "Live";
+    case "circle_thread":
+      return "Circle threads";
+    case "stream_message":
+      return "Live chat";
+    case "live_stream":
       return "Live";
     default:
       return targetType || "Other";

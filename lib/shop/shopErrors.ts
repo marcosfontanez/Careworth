@@ -9,6 +9,8 @@ export function shopErrorHint(code: string, isBorderGift = false): string {
       return 'You can’t gift a border to yourself.';
     case 'INVALID_RECIPIENT':
       return 'We couldn’t find that @handle.';
+    case 'INVALID_GIFT_CONTEXT':
+      return 'That gift target is no longer valid. Refresh and try again.';
     case 'INSUFFICIENT_SPARKS':
       return 'Not enough Sparks.';
     case 'USER_CANCELLED':

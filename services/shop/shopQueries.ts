@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { rpcEconomyCreateOrGetWallets } from '@/services/shop/economyRpc';
+import { supabaseMessage } from '@/utils/supabaseErrors';
 import type {
   ShopItemRow,
   UserInventoryRow,
@@ -52,8 +53,11 @@ export const shopQueriesService = {
           .order('sort_order', { ascending: true }),
       ),
     );
-    for (const r of results) {
-      if (r.error) throw r.error;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.error) {
+        throw new Error(`shop_items (${types[i]}): ${supabaseMessage(r.error)}`);
+      }
     }
     const byId = new Map<string, ShopItemRow>();
     for (const r of results) {

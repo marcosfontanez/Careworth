@@ -76,6 +76,8 @@ export type MyPageContentProps = {
   onToggleFollow?: () => void;
   onMessage?: () => void;
   onBlock?: () => void;
+  /** Visitor: report this profile (moderation). */
+  onReport?: () => void;
   /**
    * Auto-open the PulseHistorySheet on first mount — set from a deep-link
    * query param (e.g. a tier-up notification tapping through to
@@ -106,6 +108,7 @@ export function MyPageContent({
   onToggleFollow,
   onMessage,
   onBlock,
+  onReport,
   initialOpenPulseHistory = false,
   highlightShareTier = false,
   creatorPostNotificationsOn = false,
@@ -207,40 +210,41 @@ export function MyPageContent({
     }
 
     const block = onBlock;
+    const report = onReport;
+    const visitorOptions: string[] = ['Share profile'];
+    if (report) visitorOptions.push('Report profile');
+    if (block) visitorOptions.push('Block');
+    visitorOptions.push('Cancel');
+    const blockIndex = block ? visitorOptions.indexOf('Block') : -1;
+    const reportIndex = report ? visitorOptions.indexOf('Report profile') : -1;
+    const cancelIndex = visitorOptions.length - 1;
+
     if (Platform.OS === 'ios') {
-      if (block) {
-        ActionSheetIOS.showActionSheetWithOptions(
-          {
-            options: ['Share profile', 'Block', 'Cancel'],
-            cancelButtonIndex: 2,
-            destructiveButtonIndex: 1,
-          },
-          (i) => {
-            if (i === 0) share();
-            else if (i === 1) block();
-          },
-        );
-      } else {
-        ActionSheetIOS.showActionSheetWithOptions(
-          {
-            options: ['Share profile', 'Cancel'],
-            cancelButtonIndex: 1,
-          },
-          (i) => {
-            if (i === 0) share();
-          },
-        );
-      }
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: visitorOptions,
+          cancelButtonIndex: cancelIndex,
+          destructiveButtonIndex: blockIndex >= 0 ? blockIndex : undefined,
+        },
+        (i) => {
+          if (i === 0) share();
+          else if (i === reportIndex) report?.();
+          else if (i === blockIndex) block?.();
+        },
+      );
     } else {
       Alert.alert(user.displayName, undefined, [
         { text: 'Share profile', onPress: share },
+        ...(report
+          ? [{ text: 'Report profile', onPress: report }]
+          : []),
         ...(block
           ? [{ text: 'Block', style: 'destructive' as const, onPress: block }]
           : []),
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
-  }, [isOwner, onBlock, router, user.displayName, user.id]);
+  }, [isOwner, onBlock, onReport, router, user.displayName, user.id]);
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();

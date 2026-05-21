@@ -71,8 +71,8 @@ function LivePrelaunchPlaceholder() {
         <View style={[styles.prelaunchBody, { paddingBottom: insets.bottom + spacing.xl }]}>
           <EmptyState
             icon="radio-outline"
-            title="Coming after launch"
-            subtitle="In release builds, turn on Live streaming in Admin → Feature flags, or set EXPO_PUBLIC_LIVE_STREAMING=1 for your environment."
+            title="Live unavailable"
+            subtitle="Live streaming requires EXPO_PUBLIC_LIVEKIT_URL on your production EAS build. Until LiveKit is configured, the Live tab stays hidden in release builds."
             accent={colors.status.live}
             ctaLabel="Back to Feed"
             onCtaPress={() => router.replace('/(tabs)/feed')}

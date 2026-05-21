@@ -8,6 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "environment": "development",
       "ios": {
         "simulator": false
       },
@@ -19,6 +20,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "environment": "development",
       "ios": {
         "simulator": true
       },
@@ -29,6 +31,7 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "environment": "preview",
       "ios": {
         "simulator": false
       },
@@ -42,6 +45,7 @@
     },
     "production": {
       "channel": "production",
+      "environment": "production",
       "node": "20.19.4",
       "autoIncrement": true,
       "ios": {

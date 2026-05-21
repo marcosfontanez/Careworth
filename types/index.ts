@@ -73,7 +73,9 @@ export type NotificationType =
   | 'creator_new_post'
   | 'job_alert'
   | 'badge_earned'
-  | 'tier_up';
+  | 'tier_up'
+  | 'diamonds_earned'
+  | 'gift_sent';
 
 export type ContentInterest =
   | 'humor'

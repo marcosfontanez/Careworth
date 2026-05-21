@@ -104,7 +104,10 @@ Deno.serve(async (req) => {
   ) {
     /* My Pulse comment / reply — same prefix as migration 049 mentions. */
     data.url = `${site}/my-pulse`;
-  } else if (type === "comment" && targetId) {
+  } else if (
+    (type === "comment" || type === "reply") &&
+    targetId
+  ) {
     data.postId = targetId;
     data.url = `${site}/post/${targetId}`;
   } else if (
@@ -154,6 +157,11 @@ Deno.serve(async (req) => {
   } else if (type === "tier_up") {
     data.profileId = userId;
     data.url = `${site}/profile/${userId}`;
+  } else if (type === "diamonds_earned") {
+    data.url = `${site}/pulse-shop`;
+  } else if (type === "gift_sent" && targetId) {
+    data.profileId = targetId;
+    data.url = `${site}/profile/${targetId}`;
   }
 
   if (!data.url) {

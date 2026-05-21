@@ -11,7 +11,7 @@ import { colors, typography, spacing, layout, borderRadius, shadows } from '@/th
 import { iconSize } from '@/theme/sizes';
 import { StackScreenHeader } from '@/components/ui/StackScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { invokeDeleteAccount } from '@/lib/deleteAccount';
 import { profilesService } from '@/services/supabase';
 import { clearImageCache } from '@/lib/imageCache';
 import { useToast } from '@/components/ui/Toast';
@@ -129,7 +129,7 @@ export default function SettingsScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your account and all your data. This cannot be undone.',
+      'This permanently deletes your PulseVerse account, profile, and associated app data. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -138,18 +138,23 @@ export default function SettingsScreen() {
           onPress: async () => {
             setDeleting(true);
             try {
-              if (user) {
-                await supabase.from('profiles').delete().eq('id', user.id);
+              const result = await invokeDeleteAccount();
+              if (!result.ok) {
+                Alert.alert('Could not delete account', result.message);
+                return;
               }
               await signOut();
               replaceWithLogin(router);
-            } catch (err: any) {
-              Alert.alert('Error', err.message ?? 'Failed to delete account. Please contact support.');
+            } catch (err: unknown) {
+              const message =
+                err instanceof Error ? err.message : 'Failed to delete account. Please contact support.';
+              Alert.alert('Error', message);
+            } finally {
               setDeleting(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -381,6 +386,23 @@ export default function SettingsScreen() {
           )}
         </TouchableOpacity>
 
+        {__DEV__ ? (
+          <View style={styles.devLinks}>
+            <Text style={styles.devPreviewText}>
+              Dev Supabase:{' '}
+              {(process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'missing')
+                .replace(/^https:\/\//, '')
+                .replace(/\/$/, '') || 'missing'}
+            </Text>
+            <Text style={styles.devPreviewText} selectable>
+              User id: {user?.id ?? '—'}
+            </Text>
+            <Text style={styles.devPreviewHint}>
+              Compare this user id to the one in your SQL query. They must match exactly.
+            </Text>
+          </View>
+        ) : null}
+
         {__DEV__ && profile?.roleAdmin ? (
           <View style={styles.devLinks}>
             <TouchableOpacity
@@ -484,6 +506,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.dark.textSecondary,
+  },
+  devPreviewHint: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '500',
+    color: colors.dark.textMuted,
+    marginTop: 4,
   },
 
   version: {

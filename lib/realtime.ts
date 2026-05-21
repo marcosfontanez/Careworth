@@ -6,9 +6,9 @@ type RealtimeCallback = (payload: any) => void;
 class RealtimeService {
   private channels: Map<string, RealtimeChannel> = new Map();
 
-  subscribeToNotifications(userId: string, onNew: RealtimeCallback) {
+  subscribeToNotifications(userId: string, onChange: RealtimeCallback) {
     const key = `notifications:${userId}`;
-    if (this.channels.has(key)) return;
+    this.unsubscribe(key);
 
     const channel = supabase
       .channel(key)
@@ -20,7 +20,17 @@ class RealtimeService {
           table: 'notifications',
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => onNew(payload.new)
+        (payload) => onChange(payload.new),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => onChange(payload.new),
       )
       .subscribe();
 

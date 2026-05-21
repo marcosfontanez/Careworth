@@ -202,7 +202,9 @@ export const purchaseService = {
           ? 'SELF_GIFT_NOT_ALLOWED'
           : lower.includes('invalid_recipient')
             ? 'INVALID_RECIPIENT'
-            : lower.includes('item_not_active') || lower.includes('gift_not_found')
+            : lower.includes('invalid_gift_context')
+              ? 'INVALID_GIFT_CONTEXT'
+              : lower.includes('item_not_active') || lower.includes('gift_not_found')
               ? 'ITEM_INACTIVE'
               : lower.includes('not_allowed')
                 ? 'NOT_ALLOWED'

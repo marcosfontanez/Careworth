@@ -9,6 +9,7 @@
  */
 
 import { isExpoGo } from '@/lib/expoRuntime';
+import { liveKitConfigured } from '@/lib/liveKitConfig';
 import { mintLiveKitCredentials } from '@/services/live/liveKitToken';
 
 export type VideoRole = 'host' | 'viewer';
@@ -90,14 +91,15 @@ export const LiveKitVideoProvider: VideoProvider = {
   },
 };
 
-function liveKitConfigured(): boolean {
+function liveKitConfiguredForProvider(): boolean {
   if (isExpoGo()) return false;
-  const url = process.env.EXPO_PUBLIC_LIVEKIT_URL?.trim();
-  return Boolean(url && url.startsWith('wss://'));
+  return liveKitConfigured();
 }
 
 /**
  * Active provider — LiveKit when `EXPO_PUBLIC_LIVEKIT_URL` is set (dev/EAS),
  * otherwise mock thumbnail-only behaviour for founders without Cloud wired yet.
  */
-export const videoProvider: VideoProvider = liveKitConfigured() ? LiveKitVideoProvider : MockVideoProvider;
+export const videoProvider: VideoProvider = liveKitConfiguredForProvider()
+  ? LiveKitVideoProvider
+  : MockVideoProvider;

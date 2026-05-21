@@ -5,13 +5,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, pulseverse, typography } from '@/theme';
 
+import type { DiamondWalletRow } from '@/lib/shop/types';
+import { totalDiamondBalance, walletAmount } from '@/lib/shop/types';
+import { supabaseMessage } from '@/utils/supabaseErrors';
+
 type Props = {
   visible: boolean;
   onClose: () => void;
+  wallet?: DiamondWalletRow | null;
+  walletError?: string | null;
+  authUserId?: string | null;
 };
 
-export function DiamondsInfoModal({ visible, onClose }: Props) {
+export function DiamondsInfoModal({
+  visible,
+  onClose,
+  wallet,
+  walletError,
+  authUserId,
+}: Props) {
   const insets = useSafeAreaInsets();
+  const total = totalDiamondBalance(wallet);
+  const pending = walletAmount(wallet?.diamonds_pending);
+  const available = walletAmount(wallet?.diamonds_available);
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -36,6 +52,20 @@ export function DiamondsInfoModal({ visible, onClose }: Props) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
+              {wallet ? (
+                <View style={styles.balanceCard}>
+                  <Text style={styles.balanceTotal}>{total.toLocaleString()} Diamonds total</Text>
+                  <Text style={styles.balanceMeta}>
+                    {available.toLocaleString()} available · {pending.toLocaleString()} pending
+                  </Text>
+                </View>
+              ) : walletError ? (
+                <Text style={styles.warn}>
+                  Could not load your Diamond balance from the server. Pull to refresh on the shop screen, then try
+                  again.
+                </Text>
+              ) : null}
+
               <Text style={styles.lede}>
                 Diamonds are creator earnings. When someone spends Sparks on you—during live, on a post, or from your
                 profile—that support becomes Diamonds in your balance.
@@ -59,6 +89,11 @@ export function DiamondsInfoModal({ visible, onClose }: Props) {
                 Balances update from the server after gifts are processed. If something looks off, pull to refresh on
                 the shop screen or check back shortly.
               </Text>
+              {__DEV__ && authUserId ? (
+                <Text style={styles.devHint} selectable>
+                  Dev: signed-in user {authUserId}
+                </Text>
+              ) : null}
             </ScrollView>
 
             <TouchableOpacity style={styles.doneBtn} onPress={onClose} activeOpacity={0.9}>
@@ -112,6 +147,32 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   body: { paddingBottom: 16 },
+  balanceCard: {
+    marginBottom: 18,
+    padding: 14,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(212,166,58,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,166,58,0.22)',
+  },
+  balanceTotal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.primary.gold,
+    marginBottom: 4,
+  },
+  balanceMeta: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+  },
+  warn: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: colors.status.warning,
+    marginBottom: 14,
+  },
   lede: {
     fontSize: 15,
     lineHeight: 22,
@@ -142,6 +203,13 @@ const styles = StyleSheet.create({
     color: colors.dark.textMuted,
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  devHint: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.dark.textMuted,
+    marginTop: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   doneBtn: {
     marginTop: 8,

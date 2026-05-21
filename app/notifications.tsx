@@ -219,6 +219,10 @@ export default function NotificationsScreen() {
         router.push(
           `/profile/${notification.targetId}?openPulseHistory=1&tierUp=1` as any,
         );
+      } else if (notification.type === 'diamonds_earned') {
+        router.push('/pulse-shop' as any);
+      } else if (notification.type === 'gift_sent' && notification.targetId) {
+        router.push(`/profile/${notification.targetId}` as any);
       }
     }
   }, [router, queryClient, authUser?.id]);

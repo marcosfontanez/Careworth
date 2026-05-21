@@ -1,54 +1,76 @@
 import { useRouter, type Href } from 'expo-router';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { needsLegalAcknowledgment } from '@/lib/legalAck';
+import { resolveAccountEntryGate } from '@/lib/accountGate';
 import { rootIndexRedirectIfNeeded, resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
-import { colors } from '@/theme';
+import { colors, spacing } from '@/theme';
 
-function routeHref(
-  isLoading: boolean,
-  isAuthenticated: boolean,
-  profile: ReturnType<typeof useAuth>['profile'],
-): Href | null {
-  if (isLoading) return null;
-  if (!isAuthenticated) return '/auth/login';
-  if (needsLegalAcknowledgment(profile)) return '/auth/legal-ack';
-  return '/(tabs)/feed';
+function routeHref(gate: ReturnType<typeof resolveAccountEntryGate>): Href | null {
+  switch (gate) {
+    case 'loading':
+      return null;
+    case 'guest':
+      return '/auth/login';
+    case 'profile_unavailable':
+      return null;
+    case 'needs_legal_ack':
+      return '/auth/legal-ack';
+    case 'ready':
+      return '/(tabs)/feed';
+    default:
+      return '/(tabs)/feed';
+  }
 }
 
 export default function Index() {
-  const { isAuthenticated, isLoading, profile } = useAuth();
+  const { isAuthenticated, isLoading, profile, refreshProfile } = useAuth();
   const router = useRouter();
 
-  /** Primitives only — `profile` object identity changes with any `AuthProvider` render. */
+  const gate = useMemo(
+    () =>
+      resolveAccountEntryGate({
+        isLoading,
+        isAuthenticated,
+        profile,
+      }),
+    [isLoading, isAuthenticated, profile],
+  );
+
   const routeKey = useMemo(
     () =>
       [
+        gate,
         isLoading,
         isAuthenticated,
         profile?.id ?? '',
         profile?.termsPrivacyAcceptedAt ?? '',
       ].join('\0'),
-    [isLoading, isAuthenticated, profile?.id, profile?.termsPrivacyAcceptedAt],
+    [gate, isLoading, isAuthenticated, profile?.id, profile?.termsPrivacyAcceptedAt],
   );
 
-  /**
-   * Avoid `<Redirect />` here: it runs `replace` inside `useFocusEffect`, which can
-   * recurse with tab/stack focus churn and hit "Maximum update depth exceeded".
-   */
   useEffect(() => {
     if (!isAuthenticated) resetRootIndexRedirectDedupe();
-    const next = routeHref(isLoading, isAuthenticated, profile);
+    const next = routeHref(gate);
     if (next == null) return;
     rootIndexRedirectIfNeeded(router, next);
-  }, [routeKey, isLoading, isAuthenticated, router, profile]);
+  }, [routeKey, gate, router]);
 
-  /**
-   * Matches root background. After login, `isLoading` stays true until the profile bundle returns
-   * — if that hangs, a bare view reads as a “black screen”; show a minimal spinner when we
-   * know the user is signed in.
-   */
+  if (gate === 'profile_unavailable') {
+    return (
+      <View style={styles.blocked}>
+        <Text style={styles.blockedTitle}>Could not load your profile</Text>
+        <Text style={styles.blockedSub}>
+          Your account is signed in, but we could not verify your profile or legal acknowledgment yet.
+          Check your connection and try again.
+        </Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={() => void refreshProfile()} activeOpacity={0.85}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.loading}>
       {isAuthenticated && isLoading ? (
@@ -66,4 +88,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   spinner: { marginTop: 8 },
+  blocked: {
+    flex: 1,
+    backgroundColor: colors.dark.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  blockedTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.dark.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  blockedSub: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.dark.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary.teal + '22',
+    borderWidth: 1,
+    borderColor: colors.primary.teal + '55',
+  },
+  retryBtnText: { color: colors.primary.teal, fontWeight: '700', fontSize: 15 },
 });

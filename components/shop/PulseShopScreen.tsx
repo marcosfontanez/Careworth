@@ -77,6 +77,7 @@ import { rewardDeliveryKeys } from '@/lib/queryKeys';
 import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetadata';
 import { readPurchaseReceiptId, readUserInventoryId } from '@/lib/rewardDelivery/fulfillmentPayload';
 import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
+import { supabaseMessage } from '@/utils/supabaseErrors';
 
 /** Shown as native browser tooltip on web when hovering the Diamonds balance pill. */
 const DIAMONDS_PILL_TOOLTIP_WEB =
@@ -389,6 +390,16 @@ export default function PulseShopScreen() {
               <Text style={styles.errorBanner}>
                 Check your connection, then pull to refresh or try again.
               </Text>
+              {catalogQ.error ? (
+                <Text style={styles.errorDetail} selectable>
+                  {supabaseMessage(catalogQ.error)}
+                </Text>
+              ) : null}
+              {__DEV__ ? (
+                <Text style={styles.errorDetail} selectable>
+                  Supabase: {(process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'missing').replace(/^https:\/\//, '').replace(/\/$/, '')}
+                </Text>
+              ) : null}
               <TouchableOpacity style={styles.retryBtn} onPress={() => void catalogQ.refetch()} activeOpacity={0.88}>
                 <Text style={styles.retryBtnText}>Retry</Text>
               </TouchableOpacity>
@@ -1301,7 +1312,19 @@ export default function PulseShopScreen() {
         onClose={() => setCelebration(null)}
       />
 
-      <DiamondsInfoModal visible={diamondsInfoOpen} onClose={() => setDiamondsInfoOpen(false)} />
+      <DiamondsInfoModal
+        visible={diamondsInfoOpen}
+        onClose={() => setDiamondsInfoOpen(false)}
+        wallet={diamondQ.data}
+        walletError={
+          diamondQ.error
+            ? supabaseMessage(diamondQ.error)
+            : diamondQ.isFetched && !diamondQ.isLoading && diamondQ.data == null
+              ? 'No wallet row returned (check user id matches SQL query).'
+              : null
+        }
+        authUserId={userId}
+      />
     </View>
   );
 }
@@ -1335,6 +1358,14 @@ const styles = StyleSheet.create({
     color: colors.dark.text,
   },
   errorBanner: { color: colors.dark.textSecondary, textAlign: 'center', marginTop: 8, fontWeight: '500', lineHeight: 20 },
+  errorDetail: {
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: spacing.md,
+  },
   retryBtn: {
     marginTop: 14,
     paddingHorizontal: 20,
