@@ -148,6 +148,11 @@ export function parseLiveModeFromTags(tags: string[]): LiveModeType | null {
   return null;
 }
 
+/** Go Live wizard stores `gifts:off` when host disables Sparks gifts. */
+export function liveStreamGiftsEnabled(tags: string[]): boolean {
+  return !tags.includes('gifts:off');
+}
+
 export function liveStreamToHub(stream: LiveStream, overrides?: Partial<LiveHubStream>): LiveHubStream {
   return {
     ...stream,

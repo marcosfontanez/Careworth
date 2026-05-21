@@ -129,15 +129,28 @@ interface LiveChatProps {
   messages: StreamMessage[];
   pinned: StreamPinnedMessage | null;
   isHost: boolean;
+  /** Signed-in viewer/host — used to hide report on own messages. */
+  currentUserId?: string;
   onUnpin?: () => void;
-  /** Fired when host long-presses a chat message — used to offer Pin option. */
+  /** Long-press on a chat row — host gets pin/report; viewers get report. */
   onMessageLongPress?: (message: StreamMessage) => void;
+}
+
+function canLongPressChatMessage(
+  message: StreamMessage,
+  isHost: boolean,
+  currentUserId?: string,
+): boolean {
+  if (message.messageType !== 'chat' || !message.content.trim()) return false;
+  if (isHost) return true;
+  return !!currentUserId && message.userId !== currentUserId;
 }
 
 export function LiveChatList({
   messages,
   pinned,
   isHost,
+  currentUserId,
   onUnpin,
   onMessageLongPress,
 }: LiveChatProps) {
@@ -158,7 +171,11 @@ export function LiveChatList({
         renderItem={({ item }) => (
           <ChatMessage
             message={item}
-            onLongPress={isHost ? onMessageLongPress : undefined}
+            onLongPress={
+              onMessageLongPress && canLongPressChatMessage(item, isHost, currentUserId)
+                ? () => onMessageLongPress(item)
+                : undefined
+            }
           />
         )}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}

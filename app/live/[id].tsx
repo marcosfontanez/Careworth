@@ -71,6 +71,7 @@ const LiveKitStageLazy = lazy(() =>
 import { analytics } from '@/lib/analytics';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { messagesService } from '@/services/supabase/messages';
+import { liveStreamGiftsEnabled } from '@/types/liveHub';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const CHAT_MAX_H = SCREEN_H * 0.38;
@@ -146,6 +147,8 @@ function StreamViewerScreenContent() {
   const [lkServerUrl, setLkServerUrl] = useState<string | null>(null);
   const [lkError, setLkError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportMessageOpen, setReportMessageOpen] = useState(false);
+  const [reportMessageId, setReportMessageId] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
   const [demoContinuing, setDemoContinuing] = useState(false);
   const [reminderOn, setReminderOn] = useState(false);
@@ -206,6 +209,15 @@ function StreamViewerScreenContent() {
     }, 4000);
     return () => clearInterval(iv);
   }, [streamId, isHost, stream?.status, stream?.broadcastStartedAt, queryClient]);
+
+  /** Viewer refreshes stream row while live so ended state appears after host stops. */
+  useEffect(() => {
+    if (!streamId || isHost || stream?.status !== 'live') return;
+    const iv = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+    }, 12_000);
+    return () => clearInterval(iv);
+  }, [streamId, isHost, stream?.status, queryClient]);
 
   useEffect(() => {
     let cancelled = false;
@@ -290,9 +302,14 @@ function StreamViewerScreenContent() {
       });
     });
 
+    const unsubscribeDeletes = streamMessagesService.subscribeDeletes(streamId, (messageId) => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    });
+
     return () => {
       cancelled = true;
       unsubscribe();
+      unsubscribeDeletes();
     };
   }, [streamId]);
 
@@ -527,6 +544,10 @@ function StreamViewerScreenContent() {
         showToast('Sign in to send gifts.', 'info');
         return;
       }
+      if (!broadcastLive) {
+        showToast('Gifts unlock once the host is broadcasting.', 'info');
+        return;
+      }
 
       setGiftSending(true);
 
@@ -545,10 +566,13 @@ function StreamViewerScreenContent() {
           quantity,
         });
       } catch (err: any) {
+        const raw = String(err?.message ?? '').toLowerCase();
         showToast(
-          err?.message?.toLowerCase().includes('insufficient')
+          raw.includes('insufficient')
             ? 'Not enough Sparks. Top up in Pulse Shop.'
-            : 'Couldn\u2019t send gift. Try again.',
+            : raw.includes('stream_not_live') || raw.includes('stream_not_broadcasting')
+              ? 'This stream is no longer accepting gifts.'
+              : 'Couldn\u2019t send gift. Try again.',
           'error',
         );
       } finally {
@@ -558,7 +582,7 @@ function StreamViewerScreenContent() {
         }, 400);
       }
     },
-    [streamId, user?.id, showToast, queryClient],
+    [streamId, user?.id, broadcastLive, showToast, queryClient],
   );
 
   const handleToggleFollow = useCallback(async () => {
@@ -706,53 +730,80 @@ function StreamViewerScreenContent() {
     }
   }, [isHost, activePoll, showToast]);
 
-  /** Host-only: long-press a chat message to pin it. */
-  const handleMessageLongPress = useCallback(
+  /** Host-only: pin a chat message after long-press. */
+  const pinChatMessage = useCallback(
+    async (msg: StreamMessage) => {
+      if (!isHost || !user?.id) return;
+
+      const optimisticPin: StreamPinnedMessage = {
+        id: `local-pin-${Date.now()}`,
+        streamId,
+        content: msg.content,
+        pinnedBy: user.id,
+        pinnedByName: profile?.displayName ?? 'Host',
+        createdAt: new Date().toISOString(),
+      };
+      const previous = pinnedMessage;
+      setPinnedMessage(optimisticPin);
+
+      const persisted = await streamPinsService.pin({
+        streamId,
+        content: msg.content,
+        pinnedBy: user.id,
+        pinnedByName: profile?.displayName ?? 'Host',
+      });
+      if (!persisted) {
+        setPinnedMessage(previous);
+        showToast('Couldn\u2019t pin. Try again.', 'error');
+      }
+    },
+    [isHost, user?.id, profile?.displayName, pinnedMessage, streamId, showToast],
+  );
+
+  /** Long-press chat row — host can pin/report; viewers can report others' messages. */
+  const handleChatMessageLongPress = useCallback(
     (msg: StreamMessage) => {
-      if (!isHost) return;
-      // Skip system, gift, and already-empty messages.
       if (!msg.content.trim() || msg.messageType !== 'chat') return;
 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      Alert.alert(
-        'Pin message?',
-        `"${msg.content.slice(0, 80)}${msg.content.length > 80 ? '\u2026' : ''}"`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Pin',
-            onPress: async () => {
-              if (!user?.id) return;
+      const isOwn = msg.userId === user?.id;
+      const canReport = !isOwn && !!user?.id;
 
-              // Optimistic pin — replaced when realtime echoes it.
-              const optimisticPin: StreamPinnedMessage = {
-                id: `local-pin-${Date.now()}`,
-                streamId,
-                content: msg.content,
-                pinnedBy: user.id,
-                pinnedByName: profile?.displayName ?? 'Host',
-                createdAt: new Date().toISOString(),
-              };
-              const previous = pinnedMessage;
-              setPinnedMessage(optimisticPin);
-
-              const persisted = await streamPinsService.pin({
-                streamId,
-                content: msg.content,
-                pinnedBy: user.id,
-                pinnedByName: profile?.displayName ?? 'Host',
-              });
-              if (!persisted) {
-                setPinnedMessage(previous);
-                showToast('Couldn\u2019t pin. Try again.', 'error');
-              }
+      if (isHost) {
+        Alert.alert(
+          'Message actions',
+          `"${msg.content.slice(0, 80)}${msg.content.length > 80 ? '\u2026' : ''}"`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            ...(canReport
+              ? [
+                  {
+                    text: 'Report',
+                    onPress: () => {
+                      setReportMessageId(msg.id);
+                      setReportMessageOpen(true);
+                    },
+                  },
+                ]
+              : []),
+            {
+              text: 'Pin',
+              onPress: () => {
+                void pinChatMessage(msg);
+              },
             },
-          },
-        ],
-      );
+          ],
+        );
+        return;
+      }
+
+      if (canReport) {
+        setReportMessageId(msg.id);
+        setReportMessageOpen(true);
+      }
     },
-    [isHost, user?.id, profile?.displayName, pinnedMessage, streamId, showToast],
+    [isHost, user?.id, pinChatMessage],
   );
 
   /** Host-only: end the stream and return to the Live tab. */
@@ -844,6 +895,7 @@ function StreamViewerScreenContent() {
   if (isLoading || !stream) return <LoadingState />;
 
   const posterUri = (stream.thumbnailUrl ?? '').trim() || (stream.host.avatarUrl ?? '').trim();
+  const giftsEnabled = liveStreamGiftsEnabled(stream.tags);
   const showLiveKitLayer =
     liveKitEnabled && !!lkToken && !!lkServerUrl && stream.status === 'live';
 
@@ -998,7 +1050,7 @@ function StreamViewerScreenContent() {
         </View>
       ) : null}
 
-      {lkError && isHost && streamIsLive ? (
+      {lkError && streamIsLive ? (
         <View style={styles.lkErrorBanner}>
           <Text style={styles.lkErrorTxt}>{lkError}</Text>
         </View>
@@ -1160,8 +1212,9 @@ function StreamViewerScreenContent() {
                 messages={messages}
                 pinned={pinnedMessage}
                 isHost={isHost}
+                currentUserId={user?.id}
                 onUnpin={handleUnpin}
-                onMessageLongPress={handleMessageLongPress}
+                onMessageLongPress={handleChatMessageLongPress}
               />
             </View>
 
@@ -1178,7 +1231,7 @@ function StreamViewerScreenContent() {
                 >
                   <Ionicons name="stats-chart-outline" size={18} color={colors.primary.teal} />
                 </TouchableOpacity>
-              ) : (
+              ) : giftsEnabled ? (
                 <View style={styles.viewerGiftBtns}>
                   <TouchableOpacity
                     style={styles.giftBtn}
@@ -1213,7 +1266,7 @@ function StreamViewerScreenContent() {
                     <Ionicons name="flash" size={18} color={colors.status.premium} />
                   </TouchableOpacity>
                 </View>
-              )}
+              ) : null}
 
               <AccentComposerFrame
                 accentColor={colors.primary.teal}
@@ -1249,7 +1302,7 @@ function StreamViewerScreenContent() {
         )}
       </View>
 
-      {stream && user?.id && !isHost ? (
+      {stream && user?.id && !isHost && giftsEnabled ? (
         <SendCreatorGiftTray
           visible={sparkGiftOpen}
           onClose={() => setSparkGiftOpen(false)}
@@ -1292,6 +1345,18 @@ function StreamViewerScreenContent() {
         targetType="live_stream"
         targetId={stream.id}
       />
+
+      {reportMessageId ? (
+        <ReportModal
+          visible={reportMessageOpen}
+          onClose={() => {
+            setReportMessageOpen(false);
+            setReportMessageId(null);
+          }}
+          targetType="stream_message"
+          targetId={reportMessageId}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }

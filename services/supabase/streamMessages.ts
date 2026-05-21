@@ -151,4 +151,32 @@ export const streamMessagesService = {
       supabase.removeChannel(channel);
     };
   },
+
+  /**
+   * Subscribe to soft-deletes (admin moderation or host delete). Removes rows from UI.
+   */
+  subscribeDeletes(streamId: string, onDelete: (messageId: string) => void): () => void {
+    if (!streamId) return () => {};
+
+    const channel: RealtimeChannel = supabase
+      .channel(`stream_messages_del:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'stream_messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload) => {
+          const row = payload.new as StreamMessageRow;
+          if (row.deleted_at) onDelete(row.id);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
 };
