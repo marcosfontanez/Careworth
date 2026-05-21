@@ -1,7 +1,7 @@
 // Deploy (JWT verified — caller must be the account owner):
 //   npx supabase functions deploy delete-account
 //
-// Uses SUPABASE_SERVICE_ROLE_KEY (auto) to delete auth.users.
+// Uses Supabase secret key (auto) to delete auth.users.
 // profiles and most app rows cascade from auth.users / profiles FKs.
 //
 // Retention note: purchase_receipts / wallet_transactions may remain if FKs
@@ -10,6 +10,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+import {
+  getSupabasePublishableKey,
+  getSupabaseSecretKey,
+  getSupabaseUrl,
+  isProjectApiKey,
+} from "../_shared/supabaseEnv.ts";
 
 function corsHeaders(): Record<string, string> {
   return edgeCorsHeaders({
@@ -26,9 +32,7 @@ function json(body: unknown, status = 200) {
 }
 
 function hasProjectApiKey(req: Request): boolean {
-  const anon = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!anon) return false;
-  return req.headers.get("apikey") === anon;
+  return isProjectApiKey(req);
 }
 
 async function getAuthedUserId(
@@ -54,11 +58,11 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, 405);
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")?.trim();
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  const supabaseUrl = getSupabaseUrl();
+  const publishableKey = getSupabasePublishableKey();
+  const secretKey = getSupabaseSecretKey();
 
-  if (!supabaseUrl || !anonKey || !serviceKey) {
+  if (!supabaseUrl || !publishableKey || !secretKey) {
     return json({ ok: false, error: "Server misconfigured.", code: "SERVER_MISCONFIGURED" }, 503);
   }
 
@@ -66,12 +70,12 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "Forbidden", code: "FORBIDDEN" }, 403);
   }
 
-  const userId = await getAuthedUserId(supabaseUrl, anonKey, req.headers.get("Authorization"));
+  const userId = await getAuthedUserId(supabaseUrl, publishableKey, req.headers.get("Authorization"));
   if (!userId) {
     return json({ ok: false, error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
   }
 
-  const admin = createClient(supabaseUrl, serviceKey, {
+  const admin = createClient(supabaseUrl, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 

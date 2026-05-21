@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+import { getSupabasePublishableKey, getSupabaseUrl } from "../_shared/supabaseEnv.ts";
 
 const corsHeaders = edgeCorsHeaders({
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -20,12 +21,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const anon = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!supabaseUrl || !anon) return json({ error: "missing_env" }, 503);
+  const supabaseUrl = getSupabaseUrl();
+  const publishableKey = getSupabasePublishableKey();
+  if (!supabaseUrl || !publishableKey) return json({ error: "missing_env" }, 503);
 
   const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(supabaseUrl, anon, {
+  const supabase = createClient(supabaseUrl, publishableKey, {
     global: { headers: { Authorization: authHeader } },
   });
 

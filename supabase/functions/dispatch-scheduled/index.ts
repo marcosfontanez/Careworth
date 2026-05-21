@@ -9,6 +9,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+import { getSupabaseSecretKey, getSupabaseUrl } from "../_shared/supabaseEnv.ts";
 
 const corsHeaders = edgeCorsHeaders({
   "Access-Control-Allow-Headers":
@@ -41,13 +42,13 @@ Deno.serve(async (req) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) {
-    return json({ error: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing" }, 503);
+  const supabaseUrl = getSupabaseUrl();
+  const secretKey = getSupabaseSecretKey();
+  if (!supabaseUrl || !secretKey) {
+    return json({ error: "SUPABASE_URL or secret API key missing" }, 503);
   }
 
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = createClient(supabaseUrl, secretKey);
 
   const { data: due, error: dueErr } = await supabase
     .from("scheduled_posts_due_v1")

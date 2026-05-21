@@ -17,7 +17,7 @@ In **Supabase Dashboard → Project Settings → Edge Functions → Secrets** (o
 | Secret | Purpose |
 |--------|---------|
 | `SUPABASE_URL` | Usually auto-injected; confirm present |
-| `SUPABASE_SERVICE_ROLE_KEY` | Read `profiles.push_token`, `communities.slug` |
+| `SUPABASE_SECRET_KEYS` | Auto-injected secret key (replaces legacy service_role) |
 | `PUBLIC_SITE_URL` | Canonical HTTPS base for `data.url` (default `https://pulseverse.app`) |
 | `EXPO_ACCESS_TOKEN` | Optional but recommended for Expo Push API ([Expo docs](https://docs.expo.dev/push-notifications/sending-notifications/)) |
 | `NOTIFY_PUSH_WEBHOOK_SECRET` | Optional; if set, webhook must send header `x-webhook-secret: <same value>` |

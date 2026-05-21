@@ -12,6 +12,12 @@ import { AccessToken } from "npm:livekit-server-sdk@2";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { edgeCorsHeaders } from "../_shared/edgeCors.ts";
+import {
+  getSupabasePublishableKey,
+  getSupabaseSecretKey,
+  getSupabaseUrl,
+  isProjectApiKey,
+} from "../_shared/supabaseEnv.ts";
 
 function corsHeaders(): Record<string, string> {
   return edgeCorsHeaders({
@@ -27,20 +33,13 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function hasProjectApiKey(req: Request): boolean {
-  const anon = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!anon) return false;
-  const apikey = req.headers.get("apikey");
-  return apikey === anon;
-}
-
 async function getAuthedUserId(
   supabaseUrl: string,
-  anonKey: string,
+  publishableKey: string,
   authHeader: string | null,
 ): Promise<string | null> {
   if (!authHeader?.startsWith("Bearer ")) return null;
-  const sb = createClient(supabaseUrl, anonKey, {
+  const sb = createClient(supabaseUrl, publishableKey, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data, error } = await sb.auth.getUser();
@@ -55,27 +54,27 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders() });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")?.trim();
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  const supabaseUrl = getSupabaseUrl();
+  const publishableKey = getSupabasePublishableKey();
+  const secretKey = getSupabaseSecretKey();
 
   const lkUrl = Deno.env.get("LIVEKIT_URL")?.trim();
   const lkKey = Deno.env.get("LIVEKIT_API_KEY")?.trim();
   const lkSecret = Deno.env.get("LIVEKIT_API_SECRET")?.trim();
 
-  if (!supabaseUrl || !anonKey || !serviceKey) {
+  if (!supabaseUrl || !publishableKey || !secretKey) {
     return json({ error: "Server misconfigured." }, 503);
   }
   if (!lkUrl || !lkKey || !lkSecret) {
     return json({ error: "LiveKit is not configured on the server." }, 503);
   }
 
-  if (!hasProjectApiKey(req)) {
+  if (!isProjectApiKey(req)) {
     return json({ error: "Forbidden" }, 403);
   }
 
   const authHeader = req.headers.get("Authorization");
-  const userId = await getAuthedUserId(supabaseUrl, anonKey, authHeader);
+  const userId = await getAuthedUserId(supabaseUrl, publishableKey, authHeader);
   if (!userId) {
     return json({ error: "Unauthorized" }, 401);
   }
@@ -94,7 +93,7 @@ Deno.serve(async (req) => {
     return json({ error: "streamId is required" }, 400);
   }
 
-  const admin = createClient(supabaseUrl, serviceKey);
+  const admin = createClient(supabaseUrl, secretKey);
   const { data: row, error: rowErr } = await admin
     .from("live_streams")
     .select(

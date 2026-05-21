@@ -11,6 +11,11 @@ import { SignJWT, importPKCS8 } from 'npm:jose@5';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 import { edgeCorsHeaders } from '../_shared/edgeCors.ts';
+import {
+  getSupabasePublishableKey,
+  getSupabaseUrl,
+  isProjectApiKey,
+} from '../_shared/supabaseEnv.ts';
 
 function corsHeaders(): Record<string, string> {
   return edgeCorsHeaders({
@@ -27,10 +32,7 @@ function json(body: unknown, status = 200) {
 
 /** Supabase clients send this — blocks drive-by traffic that isn’t using your project. */
 function hasProjectApiKey(req: Request): boolean {
-  const anon = Deno.env.get('SUPABASE_ANON_KEY');
-  if (!anon) return false;
-  const apikey = req.headers.get('apikey');
-  return apikey === anon;
+  return isProjectApiKey(req);
 }
 
 async function getAuthedUserId(
@@ -70,9 +72,9 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders() });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')?.trim();
-  if (!supabaseUrl || !anonKey) {
+  const supabaseUrl = getSupabaseUrl();
+  const publishableKey = getSupabasePublishableKey();
+  if (!supabaseUrl || !publishableKey) {
     return json({ error: 'Server misconfigured.' }, 503);
   }
 
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get('Authorization');
-  const userId = await getAuthedUserId(supabaseUrl, anonKey, authHeader);
+  const userId = await getAuthedUserId(supabaseUrl, publishableKey, authHeader);
   if (!userId) {
     return json({ error: 'Unauthorized', hint: 'Sign in required.' }, 401);
   }

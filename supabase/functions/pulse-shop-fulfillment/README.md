@@ -18,7 +18,7 @@ Uses **JWT verification** (default): the caller must send `Authorization: Bearer
 | `GOOGLE_PLAY_PACKAGE_NAME` | Android `applicationId` (same as Play Console package) |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Full JSON for a service account with **Google Play Android Developer** access |
 
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
+`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, and `SUPABASE_SECRET_KEYS` are provided automatically (legacy anon/service_role still supported).
 
 ## Request body
 

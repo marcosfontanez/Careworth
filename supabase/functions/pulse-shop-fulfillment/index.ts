@@ -8,13 +8,18 @@
  *   APPLE_IAP_SHARED_SECRET     — App Store Connect app-specific shared secret
  *   GOOGLE_PLAY_PACKAGE_NAME  — Android applicationId
  *   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON — Service account JSON (full string)
- *   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (auto)
+ *   SUPABASE_URL, SUPABASE_PUBLISHABLE_KEYS, SUPABASE_SECRET_KEYS (auto; legacy anon/service_role still supported)
  */
 
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { err, jsonResponse, mapRpcException, ok, optionsResponse } from "../_shared/pulse-shop/responses.ts";
 import { verifyAppleReceipt } from "../_shared/pulse-shop/validate-apple.ts";
 import { verifyGoogleProduct } from "../_shared/pulse-shop/validate-google.ts";
+import {
+  getSupabasePublishableKey,
+  getSupabaseSecretKey,
+  getSupabaseUrl,
+} from "../_shared/supabaseEnv.ts";
 
 type ShopItemRow = {
   id: string;
@@ -198,16 +203,16 @@ async function ensurePurchaseReceiptAndFulfill(params: {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return optionsResponse(req);
 
-  const supabaseUrl = requireEnv("SUPABASE_URL");
-  const anonKey = requireEnv("SUPABASE_ANON_KEY");
-  const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = getSupabaseUrl();
+  const publishableKey = getSupabasePublishableKey();
+  const secretKey = getSupabaseSecretKey();
 
-  if (!supabaseUrl || !anonKey || !serviceKey) {
+  if (!supabaseUrl || !publishableKey || !secretKey) {
     return jsonResponse(req, err("SERVER_MISCONFIGURED", "Missing Supabase environment variables."), 503);
   }
 
   const authHeader = req.headers.get("Authorization");
-  const user = await getAuthedUser(supabaseUrl, anonKey, authHeader);
+  const user = await getAuthedUser(supabaseUrl, publishableKey, authHeader);
   if (!user) {
     return jsonResponse(req, err("UNAUTHORIZED", "Valid Authorization Bearer token required."), 401);
   }
@@ -224,8 +229,8 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, err("INVALID_INPUT", "action and shop_item_id are required."), 400);
   }
 
-  const admin = createClient(supabaseUrl, serviceKey);
-  const userSb = createClient(supabaseUrl, anonKey, {
+  const admin = createClient(supabaseUrl, secretKey);
+  const userSb = createClient(supabaseUrl, publishableKey, {
     global: { headers: { Authorization: authHeader! } },
   });
 
