@@ -292,4 +292,46 @@ export const streamsLiveService = {
     }
     return true;
   },
+
+  /**
+   * Subscribe to `live_streams` UPDATE events (status, broadcast_started_at, ended_at).
+   * Used for near-instant ended-state propagation without polling.
+   */
+  subscribeStatus(
+    streamId: string,
+    onUpdate: (row: { status?: string; broadcast_started_at?: string | null; ended_at?: string | null }) => void,
+  ): () => void {
+    if (!streamId) return () => {};
+
+    const channel = supabase
+      .channel(`live_streams:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'live_streams',
+          filter: `id=eq.${streamId}`,
+        },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>;
+          onUpdate({
+            status: typeof row.status === 'string' ? row.status : undefined,
+            broadcast_started_at:
+              row.broadcast_started_at === null || typeof row.broadcast_started_at === 'string'
+                ? (row.broadcast_started_at as string | null)
+                : undefined,
+            ended_at:
+              row.ended_at === null || typeof row.ended_at === 'string'
+                ? (row.ended_at as string | null)
+                : undefined,
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
 };

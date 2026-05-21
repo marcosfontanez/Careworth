@@ -72,6 +72,8 @@ import { analytics } from '@/lib/analytics';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { messagesService } from '@/services/supabase/messages';
 import { liveStreamGiftsEnabled } from '@/types/liveHub';
+import { useLiveKitSession } from '@/hooks/useLiveKitSession';
+import { getBlockRelationship } from '@/services/supabase/blocks';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const CHAT_MAX_H = SCREEN_H * 0.38;
@@ -143,15 +145,34 @@ function StreamViewerScreenContent() {
   /** Host modal visibility + end-stream busy flag. */
   const [hostPollVisible, setHostPollVisible] = useState(false);
   const [endingStream, setEndingStream] = useState(false);
-  const [lkToken, setLkToken] = useState<string | null>(null);
-  const [lkServerUrl, setLkServerUrl] = useState<string | null>(null);
-  const [lkError, setLkError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportMessageOpen, setReportMessageOpen] = useState(false);
   const [reportMessageId, setReportMessageId] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
   const [demoContinuing, setDemoContinuing] = useState(false);
   const [reminderOn, setReminderOn] = useState(false);
+  const [liveChatBlocked, setLiveChatBlocked] = useState(false);
+
+  const allowViewerLiveKit = !isHost && broadcastLive;
+  const allowHostLiveKit = isHost && stream?.status === 'live';
+  const liveKitSessionEnabled =
+    liveKitEnabled && !!stream && !!streamId && (allowViewerLiveKit || allowHostLiveKit);
+
+  const {
+    token: lkToken,
+    serverUrl: lkServerUrl,
+    error: lkError,
+    sessionKey: lkSessionKey,
+  } = useLiveKitSession({
+    streamId,
+    enabled: liveKitSessionEnabled,
+    isHost,
+    userId: user?.id,
+    onJoined: () => analytics.track('live_stream_joined', { stream_id: streamId }),
+    onRefreshFailed: () => {
+      showToast('Live video reconnecting\u2026', 'info');
+    },
+  });
 
   /* ---------------- Followed set (hydrated from store) ------------------- */
   const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
@@ -210,70 +231,30 @@ function StreamViewerScreenContent() {
     return () => clearInterval(iv);
   }, [streamId, isHost, stream?.status, stream?.broadcastStartedAt, queryClient]);
 
-  /** Viewer refreshes stream row while live so ended state appears after host stops. */
+  /** Realtime stream row updates — ended state + broadcast_started_at without polling. */
   useEffect(() => {
-    if (!streamId || isHost || stream?.status !== 'live') return;
-    const iv = setInterval(() => {
+    if (!streamId) return;
+    return streamsLiveService.subscribeStatus(streamId, () => {
       void queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
-    }, 12_000);
-    return () => clearInterval(iv);
-  }, [streamId, isHost, stream?.status, queryClient]);
+      void queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
+      void queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+    });
+  }, [streamId, queryClient]);
 
+  /** Blocked users cannot post in the host's live chat (RLS + client guard). */
   useEffect(() => {
+    if (!user?.id || !stream?.host.id || isHost) {
+      setLiveChatBlocked(false);
+      return;
+    }
     let cancelled = false;
-
-    if (!stream || !streamId || !liveKitEnabled) {
-      setLkToken(null);
-      setLkServerUrl(null);
-      setLkError(null);
-      return;
-    }
-
-    const allowViewer = !isHost && broadcastLive;
-    const allowHost = isHost && stream.status === 'live';
-
-    if (!allowViewer && !allowHost) {
-      setLkToken(null);
-      setLkServerUrl(null);
-      setLkError(null);
-      return;
-    }
-
-    (async () => {
-      try {
-        const session = await videoProvider.getSession({
-          streamId,
-          role: isHost ? 'host' : 'viewer',
-          userId: user?.id ?? '',
-        });
-        if (cancelled) return;
-        setLkToken(session.token);
-        setLkServerUrl(session.playbackUrl ?? '');
-        setLkError(null);
-        if (!isHost) analytics.track('live_stream_joined', { stream_id: streamId });
-      } catch (e: any) {
-        if (cancelled) return;
-        setLkToken(null);
-        setLkServerUrl(null);
-        const msg = typeof e?.message === 'string' ? e.message : 'Live unavailable';
-        setLkError(msg);
-        analytics.track('live_stream_watch_failed', { stream_id: streamId, reason: msg });
-      }
-    })();
-
+    void getBlockRelationship(user.id, stream.host.id).then((rel) => {
+      if (!cancelled) setLiveChatBlocked(rel !== 'none');
+    });
     return () => {
       cancelled = true;
     };
-  }, [
-    streamId,
-    stream?.status,
-    stream?.broadcastStartedAt,
-    broadcastLive,
-    isHost,
-    liveKitEnabled,
-    stream,
-    user?.id,
-  ]);
+  }, [user?.id, stream?.host.id, isHost]);
 
   useFocusEffect(
     useCallback(() => {
@@ -314,10 +295,15 @@ function StreamViewerScreenContent() {
   }, [streamId]);
 
   /* ==========================================================================
-   *  REAL — gift firehose for DB-backed streams.
+   *  REAL — gift firehose + DB-backed leaderboard hydrate.
    * ==========================================================================*/
   useEffect(() => {
     if (!streamId) return;
+
+    let cancelled = false;
+    void streamGiftsService.fetchLeaderboard(streamId).then((rows) => {
+      if (!cancelled && rows.length > 0) setLeaderboard(rows);
+    });
 
     const unsubscribe = streamGiftsService.subscribe(streamId, (event) => {
       const giftMsg: StreamMessage = {
@@ -363,7 +349,10 @@ function StreamViewerScreenContent() {
       });
     });
 
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [streamId]);
 
   /* ==========================================================================
@@ -484,6 +473,11 @@ function StreamViewerScreenContent() {
     const body = inputText.trim().slice(0, STREAM_CHAT_MAX_LENGTH);
     if (!body) return;
 
+    if (liveChatBlocked) {
+      showToast('You can\u2019t message this live.', 'error');
+      return;
+    }
+
     // Clear the input immediately so it feels snappy.
     setInputText('');
 
@@ -521,6 +515,9 @@ function StreamViewerScreenContent() {
         setMessages((prev) =>
           prev.map((m) => (m.id === optimistic.id ? persisted : m)),
         );
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+        showToast('Couldn\u2019t send message. Try again.', 'error');
       }
     } catch {
       // Rollback on failure.
@@ -535,6 +532,7 @@ function StreamViewerScreenContent() {
     profile?.avatarUrl,
     profile?.role,
     stream?.host.id,
+    liveChatBlocked,
     showToast,
   ]);
 
@@ -965,6 +963,7 @@ function StreamViewerScreenContent() {
         {showLiveKitLayer ? (
           <Suspense fallback={<View style={[styles.streamBg, { backgroundColor: '#020617' }]} />}>
             <LiveKitStageLazy
+              key={lkSessionKey}
               serverUrl={lkServerUrl!}
               token={lkToken!}
               role={isHost ? 'host' : 'viewer'}
@@ -1284,17 +1283,29 @@ function StreamViewerScreenContent() {
               >
                 <TextInput
                   style={styles.chatInputPlain}
-                  placeholder={isHost ? 'Talk to your viewers\u2026' : 'Message the room\u2026'}
+                  placeholder={
+                    liveChatBlocked
+                      ? 'Chat unavailable for this live'
+                      : isHost
+                        ? 'Talk to your viewers\u2026'
+                        : 'Message the room\u2026'
+                  }
                   placeholderTextColor={colors.dark.textQuiet}
                   value={inputText}
                   onChangeText={setInputText}
                   onSubmitEditing={sendMessage}
                   returnKeyType="send"
                   maxLength={STREAM_CHAT_MAX_LENGTH}
+                  editable={!liveChatBlocked}
                 />
               </AccentComposerFrame>
 
-              <TouchableOpacity onPress={sendMessage} style={styles.sendBtn} activeOpacity={0.85}>
+              <TouchableOpacity
+                onPress={sendMessage}
+                style={[styles.sendBtn, liveChatBlocked && { opacity: 0.45 }]}
+                activeOpacity={0.85}
+                disabled={liveChatBlocked}
+              >
                 <Ionicons name="arrow-up" size={20} color={colors.dark.bg} />
               </TouchableOpacity>
             </View>
