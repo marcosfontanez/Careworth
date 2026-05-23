@@ -8,7 +8,7 @@
  * flow through the active provider.
  */
 
-import { isExpoGo } from '@/lib/expoRuntime';
+import { shouldBootstrapLiveKitNative } from '@/lib/expoRuntime';
 import { liveKitConfigured } from '@/lib/liveKitConfig';
 import { mintLiveKitCredentials } from '@/services/live/liveKitToken';
 
@@ -92,7 +92,7 @@ export const LiveKitVideoProvider: VideoProvider = {
 };
 
 function liveKitConfiguredForProvider(): boolean {
-  if (isExpoGo()) return false;
+  if (!shouldBootstrapLiveKitNative()) return false;
   return liveKitConfigured();
 }
 
