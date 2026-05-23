@@ -171,12 +171,22 @@ Both should return **200** (AASA must not be 503).
 | `EXPO_PUBLIC_VIDEO_EXPORT_URL` | Optional (export worker) |
 | `SENTRY_ORG` / `SENTRY_PROJECT` | If using Sentry source maps |
 
-2. Build and submit:
+2. Build and submit (avoid duplicate build-number errors):
 
 ```powershell
+# See recent builds + which build id is safe to submit
+npm run eas:builds
+
 npx eas-cli build --platform ios --profile production
-npx eas-cli submit --platform ios --latest
+
+# Submit by build id (copy id from eas:builds — do NOT reuse an id already in docs/eas-store-submissions.json)
+npx eas-cli submit --platform ios --profile production --id PASTE_BUILD_ID_HERE
+
+# After submit (success or fail), log it so we do not submit the same build twice:
+npm run eas:log:ios -- PASTE_BUILD_ID_HERE 1.0.1 BUILD_NUMBER submitted
 ```
+
+**Build numbers:** `eas.json` production profile has `"autoIncrement": true` — each **new** production build gets the next number. Re-running `eas submit` on the **same** build id fails with “build number already used”. Fix: check **TestFlight** first; if missing, run a **new** `eas build`, not another submit.
 
 3. **TestFlight** → enable build for testers.
 

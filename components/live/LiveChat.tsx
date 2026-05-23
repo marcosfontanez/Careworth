@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, roleColor } from '@/theme';
+import { FALLBACK_GIFT_EMOJI } from '@/lib/live/liveInteractionDebug';
 import type { StreamMessage, StreamPinnedMessage, Role } from '@/types';
 import { getThreadListWindow } from '@/lib/feedVideoListWindow';
 
@@ -27,43 +28,48 @@ function RoleBadgeInline({ role }: { role?: Role }) {
 interface ChatMessageProps {
   message: StreamMessage;
   onLongPress?: (message: StreamMessage) => void;
+  variant?: 'default' | 'overlay';
 }
 
-function ChatMessage({ message, onLongPress }: ChatMessageProps) {
+function ChatMessage({ message, onLongPress, variant = 'default' }: ChatMessageProps) {
+  const overlay = variant === 'overlay';
   const isGift = message.messageType === 'gift';
   const isSystem = message.messageType === 'system';
   const isRaid = message.messageType === 'raid';
 
   if (isSystem || isRaid) {
     return (
-      <View style={[styles.msgRow, styles.systemMsg]}>
-        <Ionicons
-          name={isRaid ? 'flash' : 'information-circle'}
-          size={14}
-          color={isRaid ? colors.status.premium : colors.primary.teal}
-        />
-        <Text style={[styles.msgContent, styles.systemText]}>{message.content}</Text>
+      <View style={[styles.msgRow, overlay ? styles.msgRowOverlay : styles.systemMsg, overlay && styles.systemOverlay]}>
+        {!overlay ? (
+          <Ionicons
+            name={isRaid ? 'flash' : 'information-circle'}
+            size={14}
+            color={isRaid ? colors.status.premium : colors.primary.teal}
+          />
+        ) : null}
+        <Text style={[styles.msgContent, overlay ? styles.msgContentOverlay : styles.systemText]} numberOfLines={2}>
+          {message.content}
+        </Text>
       </View>
     );
   }
 
   if (isGift && message.giftData) {
+    const gift = message.giftData.gift;
+    const emoji = gift?.emoji?.trim() || FALLBACK_GIFT_EMOJI;
+    const giftName = gift?.name?.trim() || 'Gift';
+    const giftColor = gift?.color ?? colors.status.premium;
     return (
-      <View style={[styles.msgRow, styles.giftMsg]}>
-        <Text style={styles.giftEmoji}>{message.giftData.gift.emoji}</Text>
-        <Text style={styles.msgContent}>
-          <Text style={[styles.msgName, { color: colors.status.premium }]}>
+      <View style={[styles.msgRow, overlay ? styles.msgRowOverlay : styles.giftMsg]}>
+        <Text style={styles.giftEmoji}>{emoji}</Text>
+        <Text style={[styles.msgContent, overlay && styles.msgContentOverlay]} numberOfLines={2}>
+          <Text style={[styles.msgName, overlay && styles.msgNameOverlay, { color: colors.status.premium }]}>
             {message.displayName}
           </Text>
-          {' sent '}
-          <Text style={{ fontWeight: '800', color: message.giftData.gift.color }}>
-            {message.giftData.gift.name}
+          {' '}
+          <Text style={{ fontWeight: '700', color: giftColor }}>
+            {giftName}
           </Text>
-          {message.giftData.quantity > 1 && (
-            <Text style={{ fontWeight: '800', color: colors.status.premium }}>
-              {' '}x{message.giftData.quantity}
-            </Text>
-          )}
         </Text>
       </View>
     );
@@ -74,29 +80,30 @@ function ChatMessage({ message, onLongPress }: ChatMessageProps) {
       activeOpacity={onLongPress ? 0.8 : 1}
       onLongPress={onLongPress ? () => onLongPress(message) : undefined}
       delayLongPress={350}
-      style={styles.msgRow}
+      style={[styles.msgRow, overlay && styles.msgRowOverlay]}
     >
-      {message.isHost && (
+      {!overlay && message.isHost && (
         <View style={styles.hostBadge}>
           <Text style={styles.hostBadgeText}>HOST</Text>
         </View>
       )}
-      {message.isModerator && !message.isHost && (
+      {!overlay && message.isModerator && !message.isHost && (
         <View style={styles.modBadge}>
           <Ionicons name="shield-checkmark" size={10} color="#FFF" />
         </View>
       )}
-      {message.isSubscriber && (
+      {!overlay && message.isSubscriber && (
         <View style={styles.subBadge}>
           <Ionicons name="diamond" size={9} color={colors.status.premium} />
         </View>
       )}
-      <RoleBadgeInline role={message.role} />
-      <Text style={styles.msgContent}>
-        <Text style={[styles.msgName, { color: roleColor(message.role) }]}>
+      {!overlay ? <RoleBadgeInline role={message.role} /> : null}
+      <Text style={[styles.msgContent, overlay && styles.msgContentOverlay]} numberOfLines={overlay ? 2 : undefined}>
+        <Text style={[styles.msgName, overlay && styles.msgNameOverlay, { color: roleColor(message.role) }]}>
           {message.displayName}
+          {message.isHost && overlay ? ' ·' : ''}
         </Text>
-        {'  '}
+        {overlay ? ' ' : '  '}
         {message.content}
       </Text>
     </TouchableOpacity>
@@ -125,7 +132,7 @@ export function PinnedMessageBar({ pinned, onUnpin, isHost }: PinnedBarProps) {
   );
 }
 
-interface LiveChatProps {
+type LiveChatProps = {
   messages: StreamMessage[];
   pinned: StreamPinnedMessage | null;
   isHost: boolean;
@@ -134,7 +141,15 @@ interface LiveChatProps {
   onUnpin?: () => void;
   /** Long-press on a chat row — host gets pin/report; viewers get report. */
   onMessageLongPress?: (message: StreamMessage) => void;
-}
+  /** Compact translucent overlay styling for immersive viewer player. */
+  variant?: 'default' | 'overlay';
+  maxOverlayMessages?: number;
+  /**
+   * Render inside a fixed-height host (Stream Manager, bottom sheets) using
+   * ScrollView instead of FlatList — avoids VirtualizedList-in-ScrollView warnings.
+   */
+  embedded?: boolean;
+};
 
 function canLongPressChatMessage(
   message: StreamMessage,
@@ -153,35 +168,74 @@ export function LiveChatList({
   currentUserId,
   onUnpin,
   onMessageLongPress,
+  variant = 'default',
+  maxOverlayMessages = 6,
+  embedded = false,
 }: LiveChatProps) {
   const listRef = useRef<FlatList>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const overlay = variant === 'overlay';
+  const visibleMessages = overlay ? messages.slice(-maxOverlayMessages) : messages;
+
+  useEffect(() => {
+    if (embedded && visibleMessages.length > 0) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [embedded, visibleMessages.length, visibleMessages[visibleMessages.length - 1]?.id]);
+
+  const renderMessage = (item: StreamMessage) => (
+    <ChatMessage
+      key={item.id}
+      message={item}
+      variant={variant}
+      onLongPress={
+        onMessageLongPress && canLongPressChatMessage(item, isHost, currentUserId)
+          ? () => onMessageLongPress(item)
+          : undefined
+      }
+    />
+  );
 
   return (
-    <View style={styles.chatContainer}>
-      <PinnedMessageBar pinned={pinned} onUnpin={onUnpin} isHost={isHost} />
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        initialNumToRender={LIVE_CHAT_LIST_WINDOW.initialNumToRender}
-        maxToRenderPerBatch={LIVE_CHAT_LIST_WINDOW.maxToRenderPerBatch}
-        windowSize={LIVE_CHAT_LIST_WINDOW.windowSize}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={false}
-        renderItem={({ item }) => (
-          <ChatMessage
-            message={item}
-            onLongPress={
-              onMessageLongPress && canLongPressChatMessage(item, isHost, currentUserId)
-                ? () => onMessageLongPress(item)
-                : undefined
-            }
-          />
-        )}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-        showsVerticalScrollIndicator={false}
-        style={styles.chatList}
-      />
+    <View style={[styles.chatContainer, overlay && styles.chatContainerOverlay]}>
+      {!overlay ? <PinnedMessageBar pinned={pinned} onUnpin={onUnpin} isHost={isHost} /> : null}
+      {overlay && pinned ? (
+        <View style={styles.pinnedOverlay}>
+          <Ionicons name="pin" size={11} color={colors.primary.teal} />
+          <Text style={styles.pinnedOverlayTxt} numberOfLines={1}>
+            {pinned.content}
+          </Text>
+        </View>
+      ) : null}
+      {embedded || overlay ? (
+        <ScrollView
+          ref={scrollRef}
+          scrollEnabled={!overlay}
+          showsVerticalScrollIndicator={false}
+          style={[styles.chatList, overlay && styles.chatListOverlay]}
+          contentContainerStyle={styles.embeddedListContent}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {visibleMessages.map(renderMessage)}
+        </ScrollView>
+      ) : (
+        <FlatList
+          ref={listRef}
+          data={visibleMessages}
+          keyExtractor={(item) => item.id}
+          initialNumToRender={LIVE_CHAT_LIST_WINDOW.initialNumToRender}
+          maxToRenderPerBatch={LIVE_CHAT_LIST_WINDOW.maxToRenderPerBatch}
+          windowSize={LIVE_CHAT_LIST_WINDOW.windowSize}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={false}
+          scrollEnabled={!overlay}
+          renderItem={({ item }) => renderMessage(item)}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+          style={[styles.chatList, overlay && styles.chatListOverlay]}
+        />
+      )}
     </View>
   );
 }
@@ -189,6 +243,7 @@ export function LiveChatList({
 const styles = StyleSheet.create({
   chatContainer: { flex: 1 },
   chatList: { flex: 1 },
+  embeddedListContent: { flexGrow: 1, justifyContent: 'flex-end', paddingBottom: 2 },
 
   msgRow: {
     flexDirection: 'row',
@@ -246,4 +301,46 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.primary.teal + '22',
   },
   pinnedText: { flex: 1, fontSize: 12, color: '#E8EEF8', fontWeight: '600', lineHeight: 17 },
+
+  chatContainerOverlay: { flexGrow: 0 },
+  chatListOverlay: { flexGrow: 0, maxHeight: 132 },
+  msgRowOverlay: {
+    alignSelf: 'flex-start',
+    maxWidth: '92%',
+    marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(12,18,32,0.45)',
+    borderRadius: 8,
+    borderWidth: 0,
+    flexWrap: 'nowrap',
+  },
+  msgContentOverlay: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: 'rgba(248,250,252,0.92)',
+  },
+  msgNameOverlay: { fontSize: 12, fontWeight: '800' },
+  systemOverlay: {
+    backgroundColor: 'rgba(20,184,166,0.12)',
+    borderWidth: 0,
+  },
+  pinnedOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    maxWidth: '92%',
+    marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(20,184,166,0.14)',
+  },
+  pinnedOverlayTxt: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(248,250,252,0.88)',
+  },
 });

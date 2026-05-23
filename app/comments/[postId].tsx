@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, RefreshControl, Alert, Dimensions,
+  StyleSheet, RefreshControl, Alert, Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +26,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { postShouldMaskIdentity } from '@/lib/anonymousCircle';
 import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+import { composerDockPadding } from '@/lib/keyboardAware';
 import { getCircleAccent } from '@/lib/circleAccents';
 import { COMMENT_MAX_LENGTH } from '@/constants';
 import { pickCoverForSession } from '@/lib/coverAbRotation';
@@ -213,6 +216,7 @@ export default function CommentsScreen() {
   const circle = asParamString(raw.circle);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
   const { user } = useAuth();
   const { data: comments = [], isPending, refetch } = useComments(postId ?? '');
   const { data: post } = usePost(postId ?? '', { enabled: !!postId });
@@ -368,10 +372,9 @@ export default function CommentsScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareRoot
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
+      keyboardVerticalOffset={insets.top + 52}
     >
       <StackScreenHeader
         insetTop={insets.top}
@@ -456,7 +459,7 @@ export default function CommentsScreen() {
       )}
 
       {!commentsLocked ? (
-      <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+      <View style={[styles.inputBar, { paddingBottom: composerDockPadding(insets.bottom, keyboardInset, spacing.sm) }]}>
         <AccentComposerFrame
           accentColor={accentColor}
           hint={commentHint}
@@ -526,7 +529,7 @@ export default function CommentsScreen() {
         targetType="comment"
         targetId={reportCommentId ?? ''}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAwareRoot>
   );
 }
 

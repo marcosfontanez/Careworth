@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet, Dimensions, Alert, Platform,
-  KeyboardAvoidingView, ActivityIndicator,
+  ActivityIndicator,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -37,6 +37,9 @@ import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import { MentionAutocomplete, type MentionRef } from '@/components/ui/MentionAutocomplete';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+import { scrollComposerExtraPadding } from '@/lib/keyboardAware';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import { ReportModal } from '@/components/ui/ReportModal';
@@ -199,6 +202,7 @@ export default function PostDetailScreen() {
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user: authUser } = useAuth();
@@ -514,18 +518,7 @@ export default function PostDetailScreen() {
     : (post.caption ?? '');
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      /**
-       * iOS responds best to `padding` (the view shrinks; ScrollView keeps
-       * its content height and we can scroll the focused input into view).
-       * Android handles `windowSoftInputMode=adjustResize` natively at the
-       * window level, so we leave `behavior` undefined there to avoid
-       * double-resizing the layout (which would clip the header).
-       */
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <KeyboardAwareRoot style={styles.container}>
       {/* ============================ HEADER ============================ */}
       <LinearGradient
         colors={[`${accent.color}33`, `${accent.color}10`, 'transparent']}
@@ -596,7 +589,10 @@ export default function PostDetailScreen() {
 
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: scrollComposerExtraPadding(keyboardInset, 24) },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={Platform.OS === 'android'}
@@ -877,7 +873,7 @@ export default function PostDetailScreen() {
           contextId={post.id}
         />
       ) : null}
-    </KeyboardAvoidingView>
+    </KeyboardAwareRoot>
   );
 }
 

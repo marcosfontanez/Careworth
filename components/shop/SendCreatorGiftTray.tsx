@@ -230,6 +230,13 @@ export function SendCreatorGiftTray({
         sparks: gift.spark_price,
       });
       setSentCelebrationOpen(true);
+    } catch (err) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Could not send gift',
+        err instanceof Error ? err.message : 'Something went wrong. Try again.',
+      );
+      if (__DEV__) console.warn('[SendCreatorGiftTray.sendGift]', err);
     } finally {
       setSending(false);
     }

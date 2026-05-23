@@ -4,7 +4,6 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   Share,
@@ -34,6 +33,9 @@ import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { colors, borderRadius, typography, spacing, iconSize, layout } from '@/theme';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+import { composerDockPadding } from '@/lib/keyboardAware';
 import { MentionAutocomplete, type MentionRef } from '@/components/ui/MentionAutocomplete';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { avatarThumb, storageService } from '@/lib/storage';
@@ -68,6 +70,7 @@ export default function MyPulseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
   const queryClient = useQueryClient();
   const { profile, user: authUser } = useAuth();
   const storeUser = useAppStore((s) => s.currentUser);
@@ -517,10 +520,9 @@ export default function MyPulseDetailScreen() {
   const commentCount = comments.length;
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareRoot
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
+      keyboardVerticalOffset={insets.top + 52}
     >
       <View style={{ paddingTop: insets.top + 6 }}>
         <Header
@@ -723,7 +725,7 @@ export default function MyPulseDetailScreen() {
       />
 
       {/* Sticky composer — matches `/comments/[postId]` (attach + field + send). */}
-      <View style={[styles.composerBar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+      <View style={[styles.composerBar, { paddingBottom: composerDockPadding(insets.bottom, keyboardInset, spacing.sm) }]}>
         <AccentComposerFrame
           accentColor={colors.primary.teal}
           allowOverflow
@@ -850,7 +852,7 @@ export default function MyPulseDetailScreen() {
           contextId={giftContext.id}
         />
       ) : null}
-    </KeyboardAvoidingView>
+    </KeyboardAwareRoot>
   );
 }
 

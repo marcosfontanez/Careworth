@@ -23,7 +23,7 @@
         "NSCameraUsageDescription": "PulseVerse needs camera access to record videos and take photos for your posts.",
         "NSPhotoLibraryUsageDescription": "PulseVerse needs photo library access to share images and videos.",
         "NSPhotoLibraryAddUsageDescription": "PulseVerse saves videos and photos you download to your library.",
-        "NSMicrophoneUsageDescription": "PulseVerse needs microphone access to record videos with audio.",
+        "NSMicrophoneUsageDescription": "PulseVerse needs microphone access for live streams and videos with audio.",
         "NSFaceIDUsageDescription": "PulseVerse uses Face ID for secure authentication.",
         "ITSAppUsesNonExemptEncryption": false
       },

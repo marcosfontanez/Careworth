@@ -1,4 +1,9 @@
 import { supabase } from '@/lib/supabase';
+import {
+  friendlyLiveChatError,
+  liveInteractionDebug,
+  mapLiveChatError,
+} from '@/lib/live/liveInteractionDebug';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { StreamMessage } from '@/types';
 import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
@@ -51,6 +56,10 @@ export interface SendStreamMessageInput {
   isModerator?: boolean;
 }
 
+export type SendStreamMessageResult =
+  | { ok: true; message: StreamMessage }
+  | { ok: false; reason: string; friendly: string };
+
 export const streamMessagesService = {
   /**
    * Load the most recent N messages for a stream, oldest-first so the chat
@@ -78,14 +87,26 @@ export const streamMessagesService = {
    * Insert a chat message. Content is defensively trimmed + length-capped so
    * clients that sidestep the UI still hit the server CHECK predictably.
    */
-  async send(input: SendStreamMessageInput): Promise<StreamMessage | null> {
+  async send(input: SendStreamMessageInput): Promise<SendStreamMessageResult> {
+    if (!input.streamId?.trim()) {
+      return { ok: false, reason: 'missing_stream_id', friendly: friendlyLiveChatError('unknown') };
+    }
+    if (!input.userId?.trim()) {
+      return { ok: false, reason: 'not_authenticated', friendly: friendlyLiveChatError('not_authenticated') };
+    }
+
+    const displayName = (input.displayName ?? '').trim() || 'PulseVerse Member';
     const trimmed = input.content.trim().slice(0, STREAM_CHAT_MAX_LENGTH);
-    if (!trimmed) return null;
+    if (!trimmed) {
+      return { ok: false, reason: 'empty_message', friendly: friendlyLiveChatError('empty_message') };
+    }
+
+    liveInteractionDebug.chatSendRequested(input.streamId);
 
     const payload = {
-      stream_id: input.streamId,
-      user_id: input.userId,
-      display_name: input.displayName,
+      stream_id: input.streamId.trim(),
+      user_id: input.userId.trim(),
+      display_name: displayName.slice(0, 80),
       avatar_url: input.avatarUrl ?? null,
       role: input.role ?? null,
       content: trimmed,
@@ -102,10 +123,14 @@ export const streamMessagesService = {
       .single();
 
     if (error) {
-      if (__DEV__) console.warn('[streamMessages.send]', error.message);
-      return null;
+      const reason = mapLiveChatError(error.message);
+      liveInteractionDebug.chatSendFailed(input.streamId, reason);
+      if (__DEV__) console.warn('[streamMessages.send]', error.message, error.code);
+      return { ok: false, reason, friendly: friendlyLiveChatError(reason) };
     }
-    return rowToMessage(data as StreamMessageRow);
+
+    liveInteractionDebug.chatSendOk(input.streamId);
+    return { ok: true, message: rowToMessage(data as StreamMessageRow) };
   },
 
   /** Soft-delete by the author or the stream host. */
@@ -140,9 +165,13 @@ export const streamMessagesService = {
           filter: `stream_id=eq.${streamId}`,
         },
         (payload) => {
-          const row = payload.new as StreamMessageRow;
-          if (row.deleted_at) return;
-          onMessage(rowToMessage(row));
+          try {
+            const row = payload.new as StreamMessageRow;
+            if (row.deleted_at) return;
+            onMessage(rowToMessage(row));
+          } catch (err) {
+            if (__DEV__) console.warn('[streamMessages.subscribe]', err);
+          }
         },
       )
       .subscribe();

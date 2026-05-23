@@ -15,7 +15,10 @@ export function useLiveHubHome(tab: LiveHubCategoryTab) {
   return useQuery({
     queryKey: liveHubQueryKey(tab, viewerId),
     queryFn: () => fetchLiveHubHome(tab, viewerId),
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 30_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
   });
 }

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { friendlyLivePollError, liveInteractionDebug } from '@/lib/live/liveInteractionDebug';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { StreamPoll, StreamPollOption } from '@/types';
 
@@ -89,13 +90,23 @@ export const streamPollsService = {
    * tally, and `counts_applied` in one DB transaction. Returns `false` if the
    * poll is inactive, the viewer already voted, or the RPC reports failure.
    */
-  async vote(pollId: string, optionId: string, userId: string): Promise<boolean> {
-    if (!pollId || !optionId || !userId) return false;
+  async vote(
+    pollId: string,
+    optionId: string,
+    userId: string,
+  ): Promise<{ ok: boolean; reason?: string; friendly?: string }> {
+    if (!pollId || !optionId || !userId) {
+      return { ok: false, reason: 'missing_fields' };
+    }
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user || user.id !== userId) return false;
+    if (!user || user.id !== userId) {
+      return { ok: false, reason: 'not_authenticated' };
+    }
+
+    liveInteractionDebug.pollVoteRequested(pollId, optionId);
 
     const { data, error } = await supabase.rpc('cast_stream_poll_vote', {
       p_poll_id: pollId,
@@ -103,18 +114,22 @@ export const streamPollsService = {
     });
 
     if (error) {
+      const reason = error.message.includes('not_authenticated') ? 'not_authenticated' : error.message;
+      liveInteractionDebug.pollVoteFailed(pollId, reason);
       if (__DEV__) console.warn('[streamPolls.vote/rpc]', error.message);
-      return false;
+      return { ok: false, reason, friendly: friendlyLivePollError(reason) };
     }
 
     const payload = data as { ok?: boolean; reason?: string } | null;
     if (payload?.ok !== true) {
-      if (__DEV__ && payload?.reason)
-        console.warn('[streamPolls.vote]', payload.reason);
-      return false;
+      const reason = payload?.reason ?? 'vote_rejected';
+      liveInteractionDebug.pollVoteFailed(pollId, reason);
+      if (__DEV__) console.warn('[streamPolls.vote]', reason);
+      return { ok: false, reason, friendly: friendlyLivePollError(reason) };
     }
 
-    return true;
+    liveInteractionDebug.pollVoteOk(pollId);
+    return { ok: true };
   },
 
   /**
@@ -205,13 +220,17 @@ export const streamPollsService = {
           filter: `stream_id=eq.${streamId}`,
         },
         (payload) => {
-          const row = (payload.new ?? payload.old) as StreamPollRow | undefined;
-          if (!row) return;
-          if (!row.is_active) {
-            onPoll(null);
-            return;
+          try {
+            const row = (payload.new ?? payload.old) as StreamPollRow | undefined;
+            if (!row) return;
+            if (!row.is_active) {
+              onPoll(null);
+              return;
+            }
+            onPoll(rowToPoll(row));
+          } catch (err) {
+            if (__DEV__) console.warn('[streamPolls.subscribe]', err);
           }
-          onPoll(rowToPoll(row));
         },
       )
       .subscribe();

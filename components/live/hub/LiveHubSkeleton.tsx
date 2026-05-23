@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { layout, spacing, borderRadius, colors } from '@/theme';
-
-const W = Dimensions.get('window').width;
-const CARD_W = W - layout.screenPadding * 2;
+import { HappeningNowHeroSkeleton } from '@/components/live/hub/HappeningNowHeroSkeleton';
 
 function Block({ h, style }: { h: number; style?: object }) {
   return (
@@ -32,7 +30,7 @@ export function LiveHubSkeleton() {
         <Block h={11} style={{ width: '72%', borderRadius: 6, marginTop: spacing.xs, alignSelf: 'center' }} />
       </View>
 
-      <Block h={400} style={{ width: CARD_W, alignSelf: 'center', borderRadius: borderRadius['3xl'] - 4 }} />
+      <HappeningNowHeroSkeleton />
 
       <View style={styles.sectionHead}>
         <Block h={13} style={{ width: '44%', borderRadius: 6 }} />

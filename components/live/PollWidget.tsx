@@ -12,9 +12,10 @@ interface Props {
   votedOptionId?: string;
   /** Slimmer padding and type for overlay / live room */
   compact?: boolean;
+  votingDisabled?: boolean;
 }
 
-export function PollWidget({ poll, onVote, hasVoted, votedOptionId, compact }: Props) {
+export function PollWidget({ poll, onVote, hasVoted, votedOptionId, compact, votingDisabled }: Props) {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -57,12 +58,12 @@ export function PollWidget({ poll, onVote, hasVoted, votedOptionId, compact }: P
               key={opt.id}
               style={[styles.option, compact && styles.optionCompact, isMyVote && styles.optionVoted]}
               onPress={() => {
-                if (hasVoted) return;
+                if (hasVoted || votingDisabled) return;
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 onVote(opt.id);
               }}
-              disabled={hasVoted}
-              activeOpacity={hasVoted ? 1 : 0.7}
+              disabled={hasVoted || votingDisabled}
+              activeOpacity={hasVoted || votingDisabled ? 1 : 0.7}
             >
               {hasVoted && (
                 <View style={[styles.optionFill, { width: `${pct}%` }]} />

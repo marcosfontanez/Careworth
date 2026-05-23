@@ -1,3 +1,4 @@
+import { filterActiveLiveStreams } from '@/lib/live/activeLiveStreams';
 import { supabase } from '@/lib/supabase';
 import type { CreatorSummary, LiveStream, StreamCategory } from '@/types';
 import {
@@ -30,8 +31,56 @@ function rowToStream(row: any): LiveStream {
     videoProvider: row.video_provider ?? 'livekit',
     livekitRoomName: row.livekit_room_name ?? undefined,
     broadcastStartedAt: row.broadcast_started_at ?? undefined,
+    hostLastSeenAt: row.host_last_seen_at ?? undefined,
     recordingEnabled: Boolean(row.recording_enabled),
   };
+}
+
+export type EndStreamResult =
+  | { ok: true; reason?: 'already_ended' }
+  | { ok: false; reason: string };
+
+function parseEndStreamRpc(data: unknown): EndStreamResult {
+  if (data && typeof data === 'object' && 'ok' in data) {
+    const row = data as { ok?: boolean; reason?: string };
+    if (row.ok) {
+      return row.reason === 'already_ended'
+        ? { ok: true, reason: 'already_ended' }
+        : { ok: true };
+    }
+    return { ok: false, reason: row.reason ?? 'unknown' };
+  }
+  return { ok: false, reason: 'invalid_response' };
+}
+
+async function endStreamDirect(streamId: string): Promise<EndStreamResult> {
+  const endedAt = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('live_streams')
+    .update({ status: 'ended', ended_at: endedAt, viewer_count: 0 })
+    .eq('id', streamId)
+    .eq('status', 'live')
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    if (__DEV__) console.warn('[streamsLive.endStreamDirect]', error.message);
+    return { ok: false, reason: error.message };
+  }
+  if (data) return { ok: true };
+
+  const { data: existing } = await supabase
+    .from('live_streams')
+    .select('status')
+    .eq('id', streamId)
+    .maybeSingle();
+  if (existing?.status === 'ended') return { ok: true, reason: 'already_ended' };
+  return { ok: false, reason: 'not_updated' };
+}
+
+function isMissingRpcError(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes('does not exist') || m.includes('could not find the function');
 }
 
 const STREAM_SELECT = `
@@ -45,11 +94,12 @@ export const streamsLiveService = {
       .from('live_streams')
       .select(STREAM_SELECT)
       .eq('status', 'live')
+      .is('ended_at', null)
       .not('broadcast_started_at', 'is', null)
       .order('viewer_count', { ascending: false });
 
     if (error) throw error;
-    return (data ?? []).map(rowToStream);
+    return filterActiveLiveStreams((data ?? []).map(rowToStream));
   },
 
   async listScheduled(): Promise<LiveStream[]> {
@@ -68,12 +118,13 @@ export const streamsLiveService = {
       .from('live_streams')
       .select(STREAM_SELECT)
       .eq('status', 'live')
+      .is('ended_at', null)
       .not('broadcast_started_at', 'is', null)
       .eq('category', category)
       .order('viewer_count', { ascending: false });
 
     if (error) throw error;
-    return (data ?? []).map(rowToStream);
+    return filterActiveLiveStreams((data ?? []).map(rowToStream));
   },
 
   async getById(id: string): Promise<LiveStream | null> {
@@ -148,8 +199,9 @@ export const streamsLiveService = {
   /** Host: first successful LiveKit publish — makes the stream discoverable as live. */
   async markBroadcastStarted(streamId: string): Promise<boolean> {
     if (!streamId) return false;
+    const now = new Date().toISOString();
     const { error } = await (supabase.from('live_streams') as any)
-      .update({ broadcast_started_at: new Date().toISOString() })
+      .update({ broadcast_started_at: now, host_last_seen_at: now })
       .eq('id', streamId)
       .eq('status', 'live');
     if (error) {
@@ -177,6 +229,26 @@ export const streamsLiveService = {
       return false;
     }
     return true;
+  },
+
+  /** Host-only liveness ping while broadcasting (stale-stream cleanup). */
+  async touchHostHeartbeat(streamId: string): Promise<boolean> {
+    if (!streamId) return false;
+    const { data, error } = await (supabase.rpc as any)('live_host_touch_heartbeat', {
+      p_stream_id: streamId,
+    });
+    if (error) {
+      if (isMissingRpcError(error.message)) {
+        const { error: upErr } = await (supabase.from('live_streams') as any)
+          .update({ host_last_seen_at: new Date().toISOString() })
+          .eq('id', streamId)
+          .eq('status', 'live');
+        return !upErr;
+      }
+      if (__DEV__) console.warn('[streamsLive.touchHostHeartbeat]', error.message);
+      return false;
+    }
+    return data === true;
   },
 
   /**
@@ -277,20 +349,37 @@ export const streamsLiveService = {
   },
 
   /**
-   * End a stream. Flips `status` to `'ended'` and stamps `ended_at`. RLS
-   * guarantees only the host can do this.
+   * End a stream atomically via RPC (status, ended_at, viewer_count, polls).
+   * Retries once; falls back to direct update if RPC is not deployed yet.
    */
-  async endStream(streamId: string): Promise<boolean> {
-    if (!streamId) return false;
-    const { error } = await supabase
-      .from('live_streams')
-      .update({ status: 'ended', ended_at: new Date().toISOString() })
-      .eq('id', streamId);
-    if (error) {
-      if (__DEV__) console.warn('[streamsLive.endStream]', error.message);
-      return false;
+  async endStream(streamId: string): Promise<EndStreamResult> {
+    if (!streamId) return { ok: false, reason: 'missing_stream_id' };
+
+    const tryRpc = async (): Promise<EndStreamResult | 'missing_rpc'> => {
+      const { data, error } = await (supabase.rpc as any)('end_live_stream', {
+        p_stream_id: streamId,
+      });
+      if (error) {
+        if (isMissingRpcError(error.message)) return 'missing_rpc';
+        if (__DEV__) console.warn('[streamsLive.endStream]', error.message);
+        return { ok: false, reason: error.message };
+      }
+      return parseEndStreamRpc(data);
+    };
+
+    let result = await tryRpc();
+    if (result === 'missing_rpc') {
+      return endStreamDirect(streamId);
     }
-    return true;
+    if (!result.ok) {
+      await new Promise((r) => setTimeout(r, 800));
+      const retry = await tryRpc();
+      if (retry === 'missing_rpc') {
+        return endStreamDirect(streamId);
+      }
+      result = retry;
+    }
+    return result;
   },
 
   /**

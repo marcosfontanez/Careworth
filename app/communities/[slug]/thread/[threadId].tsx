@@ -5,8 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   RefreshControl,
   Alert,
 } from 'react-native';
@@ -32,6 +30,9 @@ import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+import { composerDockPadding } from '@/lib/keyboardAware';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
 import { getCircleAccent } from '@/lib/circleAccents';
@@ -52,6 +53,7 @@ export default function CircleThreadDetailScreen() {
   const threadId = Array.isArray(threadIdRaw) ? threadIdRaw[0] : threadIdRaw;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
   const { user } = useAuth();
   const { data: thread, isLoading, refetch } = useCircleThread(threadId);
   const { data: community } = useCommunity(slug);
@@ -110,11 +112,7 @@ export default function CircleThreadDetailScreen() {
   const circleName = community?.name ?? thread.circleSlug;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={insets.top + 8}
-    >
+    <KeyboardAwareRoot style={styles.flex} keyboardVerticalOffset={insets.top + 8}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn} hitSlop={10}>
           <Ionicons name="arrow-back" size={22} color={colors.dark.text} />
@@ -265,7 +263,7 @@ export default function CircleThreadDetailScreen() {
           ))}
       </ScrollView>
 
-      <View style={[styles.composerBar, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.composerBar, { paddingBottom: composerDockPadding(insets.bottom, keyboardInset, 12) }]}>
         <AccentComposerFrame
           accentColor={composerAccent.color}
           allowOverflow
@@ -341,7 +339,7 @@ export default function CircleThreadDetailScreen() {
         targetType="circle_thread"
         targetId={threadId}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAwareRoot>
   );
 }
 

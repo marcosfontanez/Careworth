@@ -1,4 +1,5 @@
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { filterActiveLiveStreams } from '@/lib/live/activeLiveStreams';
 import { streamsService } from '@/services/streams';
 import { streamsLiveService, profilesService } from '@/services/supabase';
 import type { LiveStream } from '@/types';
@@ -85,14 +86,17 @@ export async function fetchLiveHubHome(
     viewerId ? profilesService.getFollowedIdsForUser(viewerId) : Promise.resolve(new Set<string>()),
   ]);
 
-  const realHub = live.map((s) =>
+  const activeLive = filterActiveLiveStreams(live);
+
+  const realHub = activeLive.map((s) =>
     liveStreamToHub(s, {
       isFollowingHost: viewerId ? followedIds.has(s.hostId) : false,
     }),
   );
 
   const merged = mergeWithDemos(realHub).sort(sortByViewers);
-  const allFiltered = filterForTab(tab, merged);
+  const activeMerged = filterActiveLiveStreams(merged);
+  const allFiltered = filterForTab(tab, activeMerged);
 
   const featuredPool = [...allFiltered].sort((a, b) => {
     const af = a.isFeatured ? 1 : 0;
@@ -104,7 +108,7 @@ export async function fetchLiveHubHome(
   const featured = featuredPool.slice(0, 5);
   const trending = allFiltered.filter((s) => !featured.some((f) => f.id === s.id)).slice(0, 8);
 
-  const shopLiveDeals = filterForTab('shop', merged).slice(0, 12);
+  const shopLiveDeals = filterForTab('shop', activeMerged).slice(0, 12);
 
   const upcomingDb = scheduled
     .map((s) => scheduledStreamToEvent(s, reminderIds.has(s.id)))
@@ -113,7 +117,7 @@ export async function fetchLiveHubHome(
   const upcoming =
     upcomingDb.length > 0 ? upcomingDb : isFeatureEnabled('liveDiscoveryDemos') ? DEMO_UPCOMING_SESSIONS : [];
 
-  const circleFromReal = merged.filter((s) => Boolean(s.communityId || s.communityName)).slice(0, 6);
+  const circleFromReal = activeMerged.filter((s) => Boolean(s.communityId || s.communityName)).slice(0, 6);
 
   const circleLives =
     circleFromReal.length > 0

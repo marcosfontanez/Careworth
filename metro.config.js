@@ -1,5 +1,8 @@
+const path = require('path');
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { withNativeWind } = require('nativewind/metro');
+
+const liveKitNativeStub = path.resolve(__dirname, 'lib/live/liveKitNativeStub.ts');
 
 /**
  * Sentry must wrap the Expo Metro config — otherwise `@sentry/react-native`
@@ -10,9 +13,22 @@ const { withNativeWind } = require('nativewind/metro');
 const config = getSentryExpoConfig(__dirname, { includeWebReplay: false });
 
 /** Improves compatibility with packages that use `exports` + extensioned ESM paths. */
+const defaultResolveRequest = config.resolver.resolveRequest;
 config.resolver = {
   ...config.resolver,
   unstable_enablePackageExports: false,
+  resolveRequest(context, moduleName, platform) {
+    if (platform === 'web' && moduleName === '@livekit/react-native') {
+      return {
+        type: 'sourceFile',
+        filePath: liveKitNativeStub,
+      };
+    }
+    if (typeof defaultResolveRequest === 'function') {
+      return defaultResolveRequest(context, moduleName, platform);
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  },
 };
 
 module.exports = withNativeWind(config, { input: './global.css' });

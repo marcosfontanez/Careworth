@@ -1,4 +1,10 @@
 import { supabase } from '@/lib/supabase';
+import {
+  FALLBACK_GIFT_EMOJI,
+  friendlyLiveGiftError,
+  liveInteractionDebug,
+  mapLiveGiftError,
+} from '@/lib/live/liveInteractionDebug';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { LiveGift, LiveGiftEvent, StreamGiftLeaderboard } from '@/types';
 
@@ -12,22 +18,29 @@ function sparkUnitFromGiftRow(row: Record<string, unknown>): number {
   return typeof legacy === 'number' ? legacy : Number(legacy);
 }
 
+function normalizeGift(
+  raw: Record<string, unknown>,
+  fallback?: LiveGift,
+): LiveGift {
+  if (fallback?.id) return fallback;
+  const sparkCost = sparkUnitFromGiftRow(raw);
+  return {
+    id: String(raw.gift_id ?? fallback?.id ?? 'gift'),
+    name: String(raw.gift_name ?? fallback?.name ?? 'Gift'),
+    emoji: String(raw.gift_emoji ?? fallback?.emoji ?? FALLBACK_GIFT_EMOJI),
+    sparkCost: Number.isFinite(sparkCost) ? sparkCost : 0,
+    tier: fallback?.tier ?? 'standard',
+    animation: fallback?.animation ?? 'float',
+    color: fallback?.color ?? '#FFFFFF',
+  };
+}
+
 function rowToEvent(
   raw: Record<string, unknown>,
   opts: { senderName?: string; gift?: LiveGift } = {},
 ): LiveGiftEvent {
-  const unitCost = sparkUnitFromGiftRow(raw);
-  const gift: LiveGift =
-    opts.gift ??
-    ({
-      id: String(raw.gift_id ?? ''),
-      name: String(raw.gift_name ?? ''),
-      emoji: String(raw.gift_emoji ?? ''),
-      sparkCost: unitCost,
-      tier: 'standard',
-      animation: 'float',
-      color: '#FFFFFF',
-    } as LiveGift);
+  const gift = normalizeGift(raw, opts.gift);
+  const qty = Math.max(1, Number(raw.quantity ?? 1) || 1);
 
   return {
     id: String(raw.id ?? ''),
@@ -35,9 +48,9 @@ function rowToEvent(
     gift,
     senderId: String(raw.sender_id ?? ''),
     senderName: opts.senderName ?? 'Viewer',
-    quantity: Number(raw.quantity ?? 1),
+    quantity: qty,
     comboCount: 1,
-    createdAt: String(raw.created_at ?? ''),
+    createdAt: String(raw.created_at ?? new Date().toISOString()),
   };
 }
 
@@ -49,6 +62,10 @@ export interface SendGiftInput {
   idempotencyKey: string;
 }
 
+export type SendGiftResult =
+  | { ok: true; event: LiveGiftEvent }
+  | { ok: false; reason: string; friendly: string };
+
 export const streamGiftsService = {
   /**
    * Persist a live sticker gift: debit Sparks, credit host Diamonds, insert row (realtime).
@@ -56,28 +73,43 @@ export const streamGiftsService = {
    * is kept for RPC backward compatibility but ignored — UI still shows costs from LIVE_GIFTS.
    * Free catalog gifts skip wallet debits inside the RPC.
    */
-  async send(input: SendGiftInput): Promise<LiveGiftEvent | null> {
+  async send(input: SendGiftInput): Promise<SendGiftResult> {
     const { streamId, gift, quantity, idempotencyKey } = input;
 
+    if (!streamId?.trim()) {
+      return { ok: false, reason: 'missing_stream_id', friendly: friendlyLiveGiftError('unknown') };
+    }
+    if (!gift?.id?.trim()) {
+      return { ok: false, reason: 'missing_gift_id', friendly: friendlyLiveGiftError('gift_unknown') };
+    }
+    if (!idempotencyKey?.trim()) {
+      return { ok: false, reason: 'missing_idempotency', friendly: friendlyLiveGiftError('unknown') };
+    }
+
+    liveInteractionDebug.giftSendRequested(streamId, gift.id);
+
     const { data: giftId, error: rpcError } = await supabase.rpc('economy_send_live_stream_gift', {
-      p_stream_id: streamId,
+      p_stream_id: streamId.trim(),
       p_gift_id: gift.id,
-      p_gift_name: gift.name,
-      p_gift_emoji: gift.emoji,
-      p_unit_spark_cost: gift.sparkCost,
+      p_gift_name: gift.name ?? 'Gift',
+      p_gift_emoji: gift.emoji ?? FALLBACK_GIFT_EMOJI,
+      p_unit_spark_cost: gift.sparkCost ?? 0,
       p_quantity: quantity,
-      p_idempotency_key: idempotencyKey,
+      p_idempotency_key: idempotencyKey.trim(),
     });
 
     if (rpcError) {
+      const reason = mapLiveGiftError(rpcError.message);
+      liveInteractionDebug.giftSendFailed(streamId, reason);
       if (__DEV__) console.warn('[streamGifts.send/rpc]', rpcError.message);
-      throw new Error(rpcError.message);
+      return { ok: false, reason, friendly: friendlyLiveGiftError(reason) };
     }
 
     const rowId = typeof giftId === 'string' ? giftId : null;
     if (!rowId) {
+      liveInteractionDebug.giftSendFailed(streamId, 'missing_return_id');
       if (__DEV__) console.warn('[streamGifts.send/rpc]', 'missing_return_id');
-      return null;
+      return { ok: false, reason: 'missing_return_id', friendly: friendlyLiveGiftError('unknown') };
     }
 
     const { data: row, error } = await supabase
@@ -87,12 +119,28 @@ export const streamGiftsService = {
       .maybeSingle();
 
     if (error) {
+      liveInteractionDebug.giftSendFailed(streamId, 'fetch_failed');
       if (__DEV__) console.warn('[streamGifts.send/fetch]', error.message);
-      return null;
+      return {
+        ok: true,
+        event: rowToEvent(
+          { id: rowId, stream_id: streamId, gift_id: gift.id, gift_name: gift.name, gift_emoji: gift.emoji, quantity },
+          { gift },
+        ),
+      };
     }
-    if (!row) return null;
+    if (!row) {
+      return {
+        ok: true,
+        event: rowToEvent(
+          { id: rowId, stream_id: streamId, gift_id: gift.id, gift_name: gift.name, gift_emoji: gift.emoji, quantity },
+          { gift },
+        ),
+      };
+    }
 
-    return rowToEvent(row as Record<string, unknown>, { gift });
+    liveInteractionDebug.giftSendOk(streamId, gift.id);
+    return { ok: true, event: rowToEvent(row as Record<string, unknown>, { gift }) };
   },
 
   /**
@@ -169,7 +217,13 @@ export const streamGiftsService = {
           table: 'stream_gifts',
           filter: `stream_id=eq.${streamId}`,
         },
-        (payload) => onGift(rowToEvent(payload.new as Record<string, unknown>)),
+        (payload) => {
+          try {
+            onGift(rowToEvent(payload.new as Record<string, unknown>));
+          } catch (err) {
+            if (__DEV__) console.warn('[streamGifts.subscribe]', err);
+          }
+        },
       )
       .subscribe();
 

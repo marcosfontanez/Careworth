@@ -69,6 +69,8 @@ function baseStream(p: {
     viewerCount: p.viewers,
     peakViewerCount: Math.round(p.viewers * 1.12),
     startedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    broadcastStartedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    hostLastSeenAt: new Date().toISOString(),
     tags: p.tags,
     isFollowingHost: following,
     communityName: p.extra?.communityName,

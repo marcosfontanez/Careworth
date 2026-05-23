@@ -31,14 +31,19 @@ export function GiftPicker({ visible, sparkBalance, onSendGift, onClose, onBuySp
   const [selected, setSelected] = useState<LiveGift | null>(null);
   const [quantity, setQuantity] = useState(1);
 
+  const balance = Number.isFinite(sparkBalance) ? sparkBalance : 0;
   const gifts = getGiftsByTier(tab);
   const canAfford = selected
-    ? selected.sparkCost * quantity <= sparkBalance || selected.sparkCost === 0
+    ? selected.sparkCost * quantity <= balance || selected.sparkCost === 0
     : false;
 
   const handleSend = () => {
-    if (!selected) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!selected || sending) return;
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    } catch {
+      /* haptics optional */
+    }
     onSendGift(selected, quantity);
     setSelected(null);
     setQuantity(1);
@@ -55,13 +60,13 @@ export function GiftPicker({ visible, sparkBalance, onSendGift, onClose, onBuySp
             {onBuySparks ? (
               <TouchableOpacity style={styles.sparkBadge} onPress={onBuySparks} activeOpacity={0.7}>
                 <Ionicons name="flash" size={14} color={colors.status.premium} />
-                <Text style={styles.sparkText}>{sparkBalance.toLocaleString()}</Text>
+                <Text style={styles.sparkText}>{balance.toLocaleString()}</Text>
                 <Ionicons name="add-circle" size={16} color={colors.status.premium} />
               </TouchableOpacity>
             ) : (
               <View style={styles.sparkBadge}>
                 <Ionicons name="flash" size={14} color={colors.status.premium} />
-                <Text style={styles.sparkText}>{sparkBalance.toLocaleString()}</Text>
+                <Text style={styles.sparkText}>{balance.toLocaleString()}</Text>
               </View>
             )}
           </View>
@@ -104,7 +109,7 @@ export function GiftPicker({ visible, sparkBalance, onSendGift, onClose, onBuySp
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.giftEmoji}>{gift.emoji}</Text>
+                  <Text style={styles.giftEmoji}>{gift.emoji ?? '🎁'}</Text>
                   <Text style={styles.giftName} numberOfLines={1}>{gift.name}</Text>
                   {gift.sparkCost > 0 ? (
                     <View style={styles.giftCostRow}>
@@ -150,7 +155,7 @@ export function GiftPicker({ visible, sparkBalance, onSendGift, onClose, onBuySp
                   <ActivityIndicator color="#FFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.sendEmoji}>{selected.emoji}</Text>
+                    <Text style={styles.sendEmoji}>{selected.emoji ?? '🎁'}</Text>
                     <Text style={styles.sendBtnText}>
                       Send {quantity > 1 ? `x${quantity} ` : ''}
                       {selected.sparkCost > 0

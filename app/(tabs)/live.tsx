@@ -39,6 +39,9 @@ import {
 import { LiveHubHeader } from '@/components/live/hub/LiveHubHeader';
 import { heroCategoryLabel } from '@/components/live/hub/liveHubHeroCategory';
 import { LiveHubSkeleton } from '@/components/live/hub/LiveHubSkeleton';
+import { HappeningNowEmptyState } from '@/components/live/hub/HappeningNowEmptyState';
+import { filterActiveLiveStreams } from '@/lib/live/activeLiveStreams';
+import { useLiveHubRealtimeRefresh } from '@/hooks/useLiveHubRealtimeRefresh';
 import { useToast } from '@/components/ui/Toast';
 import type { LiveStream } from '@/types';
 import { analytics } from '@/lib/analytics';
@@ -107,11 +110,19 @@ function LiveHubScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useLiveHubHome(tab);
 
+  useLiveHubRealtimeRefresh(!isLoading && !isError);
+
+  const happeningNow = useMemo(
+    () => filterActiveLiveStreams(data?.featured ?? []),
+    [data?.featured],
+  );
+
   useFocusEffect(
     useCallback(() => {
       analytics.track('live_tab_viewed', { tab });
+      void refetch();
       return undefined;
-    }, [tab]),
+    }, [tab, refetch]),
   );
 
   useEffect(() => {
@@ -260,31 +271,37 @@ function LiveHubScreen() {
             ) : null}
 
             {/* 1. Happening Now — hero carousel */}
-            {data.featured.length > 0 ? (
-              <View
-                style={styles.sectionTightTop}
-                collapsable={false}
-                onLayout={(e) => {
-                  const y = e.nativeEvent.layout.y;
-                  featuredSectionY.current = y;
-                  tryConsumePendingScrollForSection('featured', y);
-                  tryConsumePendingScrollForSection('discover', y);
-                }}
-              >
-                <PVSectionHeader
-                  kicker="PulseVerse Live"
-                  title="Happening Now"
-                  subtitle="Spotlight streams picked for you."
-                  leading={<Ionicons name="radio" size={16} color={colors.status.live} />}
-                  style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
-                  rightSlot={
+            <View
+              style={styles.sectionTightTop}
+              collapsable={false}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                featuredSectionY.current = y;
+                tryConsumePendingScrollForSection('featured', y);
+                tryConsumePendingScrollForSection('discover', y);
+              }}
+            >
+              <PVSectionHeader
+                kicker="PulseVerse Live"
+                title="Happening Now"
+                subtitle={
+                  happeningNow.length > 0
+                    ? `${happeningNow.length} live ${happeningNow.length === 1 ? 'room' : 'rooms'} broadcasting now.`
+                    : 'Spotlight streams picked for you.'
+                }
+                leading={<Ionicons name="radio" size={16} color={colors.status.live} />}
+                style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
+                rightSlot={
+                  happeningNow.length > 0 ? (
                     <Pressable onPress={() => viewAllHint('Switch tabs above to explore more live rooms.')} hitSlop={8}>
                       <Text style={styles.viewAllLink}>View all</Text>
                     </Pressable>
-                  }
-                />
+                  ) : null
+                }
+              />
+              {happeningNow.length > 0 ? (
                 <FeaturedLiveCarousel
-                  streams={data.featured}
+                  streams={happeningNow}
                   onPressStream={(s) => openStream(s as LiveHubStream)}
                   maxCards={6}
                   variant="hero"
@@ -292,14 +309,13 @@ function LiveHubScreen() {
                   getSubtitle={featuredSubtitle}
                   getShopBadge={featuredShopBadge}
                 />
-              </View>
-            ) : (
-              !emptyFollowing && (
-                <View style={{ paddingHorizontal: layout.screenPadding }}>
-                  <Text style={styles.mutedCenter}>No featured streams in this filter — pull to refresh.</Text>
-                </View>
-              )
-            )}
+              ) : !emptyFollowing ? (
+                <HappeningNowEmptyState
+                  onGoLive={() => router.push(liveGoLiveHref())}
+                  showGoLive={Boolean(user?.id)}
+                />
+              ) : null}
+            </View>
 
             {/* 2. Shop Live */}
             {data.shopLiveDeals.length > 0 ? (

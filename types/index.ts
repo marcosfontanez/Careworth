@@ -750,6 +750,8 @@ export interface LiveStream {
   livekitRoomName?: string;
   /** Host successfully publishing to LiveKit; discovery hides `live` rows until set. */
   broadcastStartedAt?: string | null;
+  /** Host liveness ping while broadcasting; stale rows drop out of Happening Now. */
+  hostLastSeenAt?: string | null;
   recordingEnabled?: boolean;
 }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Animated,
+  Platform, ActivityIndicator, Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,9 @@ import { useUser } from '@/hooks/useQueries';
 import { avatarThumb } from '@/lib/storage';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+import { composerDockPadding } from '@/lib/keyboardAware';
 import { getThreadListWindow } from '@/lib/feedVideoListWindow';
 
 const DM_LIST_WINDOW = getThreadListWindow('dmInverted');
@@ -73,6 +76,7 @@ export default function ChatScreen() {
   const peerIdFromQuery = asQueryString(params.peerId);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
   const { user } = useAuth();
   const toast = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -247,10 +251,9 @@ export default function ChatScreen() {
   );
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareRoot
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
+      keyboardVerticalOffset={insets.top + 52}
     >
       <View style={[styles.headerBar, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
@@ -310,7 +313,7 @@ export default function ChatScreen() {
         />
       )}
 
-      <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+      <View style={[styles.inputBar, { paddingBottom: composerDockPadding(insets.bottom, keyboardInset, spacing.sm) }]}>
         <AccentComposerFrame
           accentColor={colors.primary.teal}
           hint="Message — link previews appear after you send."
@@ -357,7 +360,7 @@ export default function ChatScreen() {
           </View>
         </AccentComposerFrame>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAwareRoot>
   );
 }
 

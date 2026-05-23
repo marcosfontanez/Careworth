@@ -131,8 +131,8 @@ export function FeaturedLiveCarousel({
 
 const styles = StyleSheet.create({
   wrap: { width: '100%' },
-  wrapCompact: { minHeight: 352 },
-  wrapHero: { minHeight: 468 },
+  wrapCompact: { minHeight: 360 },
+  wrapHero: { minHeight: 496 },
   scroll: {
     paddingLeft: SIDE_PADDING,
     /** trailing padding so last card snaps cleanly without trailing gap */

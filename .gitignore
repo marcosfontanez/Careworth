@@ -8,6 +8,7 @@ node_modules/
 .expo/
 dist/
 dist-web-test/
+dist-web-test2/
 web-build/
 expo-env.d.ts
 
@@ -46,3 +47,5 @@ lib/*.generated.tmp
 # generated native folders
 /ios
 /android
+
+.vercel

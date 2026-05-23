@@ -20,6 +20,7 @@ Apply with `npm run db:push` after `npm run db:link` (see **docs/LAUNCH_RUNBOOK.
 | 191 | phase2 beta hardening | creator gift context validation, notifications Realtime publication |
 | 192 | economy RLS helper execute | restore `_economy_is_admin()` EXECUTE for shop/wallet RLS (fixes migration 177 gap) |
 | 193 | phase3 closed beta expansion | economy gift push mirror + lock `_economy_user_notify` |
+| 196 | is_valid_username execute | restore EXECUTE for profiles CHECK (Current Vibe / profile song saves) |
 
 ## Phase 3 (193) — economy gift push
 

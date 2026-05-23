@@ -4,10 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
   Platform,
-  Dimensions,
   Alert,
   Share,
 } from 'react-native';
@@ -24,16 +21,15 @@ import { useStream } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
-import { LiveChatList } from '@/components/live/LiveChat';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { GiftPicker } from '@/components/live/GiftPicker';
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard';
-import { PollWidget } from '@/components/live/PollWidget';
 import { HostPollCreator } from '@/components/live/HostPollCreator';
 import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
-import { RoleBadge } from '@/components/ui/RoleBadge';
-import { SpecialtyBadge } from '@/components/ui/SpecialtyBadge';
-import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
+import { HostLiveStudio } from '@/components/live/studio/HostLiveStudio';
+import { LiveStage } from '@/components/live/studio/LiveStage';
+import { ViewerLivePlayer } from '@/components/live/viewer/ViewerLivePlayer';
+import { ViewerLiveStateScreen } from '@/components/live/viewer/ViewerLiveStateScreen';
 import {
   streamMessagesService,
   streamGiftsService,
@@ -43,14 +39,13 @@ import {
   profilesService,
 } from '@/services/supabase';
 import { useToast } from '@/components/ui/Toast';
+import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
 import { isSeedStream } from '@/lib/liveSeedStreams';
 import { isDemoLiveStreamId } from '@/lib/liveDemoStreams';
 import { DemoLiveViewer } from '@/components/live/demo';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
 import { colors, borderRadius, typography } from '@/theme';
-import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
-import { formatCount } from '@/utils/format';
 import { useSparkWallet, useSparkBalanceNumber } from '@/hooks/useShopEconomy';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { liveHighlightsHref } from '@/lib/navigation/liveRoutes';
@@ -69,15 +64,15 @@ const LiveKitStageLazy = lazy(() =>
   import('@/components/live/LiveKitStage').then((m) => ({ default: m.LiveKitStage })),
 );
 import { analytics } from '@/lib/analytics';
+import { liveEndStreamDebug } from '@/lib/live/liveEndStreamDebug';
+import { friendlyLivePollError } from '@/lib/live/liveInteractionDebug';
+import { pruneStreamFromLiveDiscovery } from '@/lib/live/pruneLiveDiscoveryCache';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { messagesService } from '@/services/supabase/messages';
 import { liveStreamGiftsEnabled } from '@/types/liveHub';
 import { useLiveKitSession } from '@/hooks/useLiveKitSession';
-import { getBlockRelationship } from '@/services/supabase/blocks';
 
-const { height: SCREEN_H } = Dimensions.get('window');
-const CHAT_MAX_H = SCREEN_H * 0.38;
-const CHAT_LIST_H = CHAT_MAX_H - 54;
+import { getBlockRelationship } from '@/services/supabase/blocks';
 
 const DEFAULT_CHAT: StreamMessage[] = [
   {
@@ -145,6 +140,10 @@ function StreamViewerScreenContent() {
   /** Host modal visibility + end-stream busy flag. */
   const [hostPollVisible, setHostPollVisible] = useState(false);
   const [endingStream, setEndingStream] = useState(false);
+  const endingStreamRef = useRef(false);
+  useEffect(() => {
+    endingStreamRef.current = endingStream;
+  }, [endingStream]);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportMessageOpen, setReportMessageOpen] = useState(false);
   const [reportMessageId, setReportMessageId] = useState<string | null>(null);
@@ -156,7 +155,11 @@ function StreamViewerScreenContent() {
   const allowViewerLiveKit = !isHost && broadcastLive;
   const allowHostLiveKit = isHost && stream?.status === 'live';
   const liveKitSessionEnabled =
-    liveKitEnabled && !!stream && !!streamId && (allowViewerLiveKit || allowHostLiveKit);
+    liveKitEnabled &&
+    !!stream &&
+    !!streamId &&
+    (allowViewerLiveKit || allowHostLiveKit) &&
+    !endingStream;
 
   const {
     token: lkToken,
@@ -182,13 +185,21 @@ function StreamViewerScreenContent() {
   /* ---------------- Messages (real or simulated) ------------------------- */
   const [messages, setMessages] = useState<StreamMessage[]>(DEFAULT_CHAT);
   const [inputText, setInputText] = useState('');
-  const [showChat, setShowChat] = useState(true);
+  const [brbMode, setBrbMode] = useState(false);
+  const [flipCameraNonce, setFlipCameraNonce] = useState(0);
+  const [slowModeEnabled, setSlowModeEnabled] = useState(false);
+  const [hostMicMuted, setHostMicMuted] = useState(false);
+  const [viewerAudioMuted, setViewerAudioMuted] = useState(false);
+  const [hostMicPermissionDenied, setHostMicPermissionDenied] = useState(false);
+  const [hostAudioPublished, setHostAudioPublished] = useState<boolean | null>(null);
 
   /* ---------------- Gifts / Sparks / leaderboard -------------------------- */
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [sparkGiftOpen, setSparkGiftOpen] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
+  const [pollVoting, setPollVoting] = useState(false);
   const [leaderboard, setLeaderboard] = useState<StreamGiftLeaderboard[]>([]);
 
   /* ---------------- Polls (still simulated in this stage) ---------------- */
@@ -222,6 +233,17 @@ function StreamViewerScreenContent() {
     };
   }, [streamId, user?.id, broadcastLive, isHost, queryClient]);
 
+  /** Host liveness ping — stale streams drop out of Happening Now after crash/disconnect. */
+  useEffect(() => {
+    if (!streamId || !isHost || !broadcastLive || endingStream) return;
+    const tick = () => {
+      void streamsLiveService.touchHostHeartbeat(streamId);
+    };
+    void tick();
+    const iv = setInterval(tick, 30_000);
+    return () => clearInterval(iv);
+  }, [streamId, isHost, broadcastLive, endingStream]);
+
   /** Viewer polls while waiting for host broadcast_started_at (no LiveKit token yet). */
   useEffect(() => {
     if (!streamId || isHost || stream?.status !== 'live' || stream.broadcastStartedAt) return;
@@ -234,7 +256,10 @@ function StreamViewerScreenContent() {
   /** Realtime stream row updates — ended state + broadcast_started_at without polling. */
   useEffect(() => {
     if (!streamId) return;
-    return streamsLiveService.subscribeStatus(streamId, () => {
+    return streamsLiveService.subscribeStatus(streamId, (row) => {
+      if (row.status === 'ended' || row.ended_at) {
+        pruneStreamFromLiveDiscovery(queryClient, streamId);
+      }
       void queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
       void queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
       void queryClient.invalidateQueries({ queryKey: ['liveHub'] });
@@ -306,22 +331,24 @@ function StreamViewerScreenContent() {
     });
 
     const unsubscribe = streamGiftsService.subscribe(streamId, (event) => {
-      const giftMsg: StreamMessage = {
-        id: `gift-${event.id}`,
-        streamId: event.streamId,
-        userId: event.senderId,
-        displayName: event.senderName,
-        content: '',
-        isHost: false,
-        isModerator: false,
-        createdAt: event.createdAt,
-        messageType: 'gift',
-        giftData: event,
-      };
-      setMessages((prev) => [...prev.slice(-199), giftMsg]);
+      try {
+        if (!event?.id || !event?.gift) return;
+        const giftMsg: StreamMessage = {
+          id: `gift-${event.id}`,
+          streamId: event.streamId,
+          userId: event.senderId,
+          displayName: event.senderName,
+          content: '',
+          isHost: false,
+          isModerator: false,
+          createdAt: event.createdAt,
+          messageType: 'gift',
+          giftData: event,
+        };
+        setMessages((prev) => [...prev.slice(-199), giftMsg]);
 
-      setLeaderboard((prev) => {
-        const sparksAdded = event.gift.sparkCost * event.quantity;
+        const sparksAdded = (Number(event.gift.sparkCost) || 0) * (Number(event.quantity) || 1);
+        setLeaderboard((prev) => {
         const existing = prev.find((l) => l.userId === event.senderId);
         const next = existing
           ? prev.map((l) =>
@@ -346,7 +373,10 @@ function StreamViewerScreenContent() {
         return next
           .sort((a, b) => b.totalSparks - a.totalSparks)
           .map((l, i) => ({ ...l, rank: i + 1 }));
-      });
+        });
+      } catch (err) {
+        if (__DEV__) console.warn('[live] gift realtime', err);
+      }
     });
 
     return () => {
@@ -431,12 +461,16 @@ function StreamViewerScreenContent() {
    * ==========================================================================*/
   const handleLiveKitConnected = useCallback(async () => {
     if (!isHost || !streamId) return;
-    const ok = await streamsLiveService.markBroadcastStarted(streamId);
-    if (ok) {
-      analytics.track('live_stream_started', { stream_id: streamId });
-      await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
-      await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
-      await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+    try {
+      const ok = await streamsLiveService.markBroadcastStarted(streamId);
+      if (ok) {
+        analytics.track('live_stream_started', { stream_id: streamId });
+        await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+        await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
+        await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[live.handleLiveKitConnected]', err);
     }
   }, [isHost, streamId, queryClient]);
 
@@ -471,61 +505,71 @@ function StreamViewerScreenContent() {
 
   const sendMessage = useCallback(async () => {
     const body = inputText.trim().slice(0, STREAM_CHAT_MAX_LENGTH);
-    if (!body) return;
+    if (!body || chatSending) return;
+
+    if (!user?.id) {
+      showToast('Sign in to chat in live.', 'info');
+      return;
+    }
+
+    if (!broadcastLive && !isHost) {
+      showToast('Chat opens once the host is broadcasting.', 'info');
+      return;
+    }
 
     if (liveChatBlocked) {
       showToast('You can\u2019t message this live.', 'error');
       return;
     }
 
-    // Clear the input immediately so it feels snappy.
+    setChatSending(true);
     setInputText('');
 
-    // Optimistic append — replaced / deduped once the DB echo arrives.
     const optimistic: StreamMessage = {
       id: `local-${Date.now()}`,
       streamId,
-      userId: user?.id ?? 'me',
-      displayName: profile?.displayName ?? 'You',
+      userId: user.id,
+      displayName: profile?.displayName?.trim() || 'You',
       avatarUrl: profile?.avatarUrl,
       role: profile?.role as any,
       content: body,
-      isHost: stream?.host.id === user?.id,
+      isHost: stream?.host.id === user.id,
       isModerator: false,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    if (!user?.id) return;
-
     try {
-      const persisted = await streamMessagesService.send({
+      const result = await streamMessagesService.send({
         streamId,
         userId: user.id,
-        displayName: profile?.displayName ?? 'User',
+        displayName: profile?.displayName?.trim() || 'PulseVerse Member',
         avatarUrl: profile?.avatarUrl,
         role: profile?.role,
         content: body,
         isHost: stream?.host.id === user.id,
       });
 
-      if (persisted) {
-        // Swap the optimistic entry for the real one so edits/deletes key off
-        // the canonical id.
+      if (result.ok) {
         setMessages((prev) =>
-          prev.map((m) => (m.id === optimistic.id ? persisted : m)),
+          prev.map((m) => (m.id === optimistic.id ? result.message : m)),
         );
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-        showToast('Couldn\u2019t send message. Try again.', 'error');
+        setInputText(body);
+        showToast(result.friendly, 'error');
       }
-    } catch {
-      // Rollback on failure.
+    } catch (err: unknown) {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setInputText(body);
+      if (__DEV__) console.warn('[live.sendMessage]', err);
       showToast('Couldn\u2019t send message. Try again.', 'error');
+    } finally {
+      setChatSending(false);
     }
   }, [
     inputText,
+    chatSending,
     streamId,
     user?.id,
     profile?.displayName,
@@ -533,6 +577,8 @@ function StreamViewerScreenContent() {
     profile?.role,
     stream?.host.id,
     liveChatBlocked,
+    broadcastLive,
+    isHost,
     showToast,
   ]);
 
@@ -546,33 +592,35 @@ function StreamViewerScreenContent() {
         showToast('Gifts unlock once the host is broadcasting.', 'info');
         return;
       }
+      if (giftSending) return;
 
       setGiftSending(true);
 
       try {
-        await streamGiftsService.send({
+        const result = await streamGiftsService.send({
           streamId,
           gift,
           quantity,
           idempotencyKey: Crypto.randomUUID(),
         });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (!result.ok) {
+          showToast(result.friendly, 'error');
+          return;
+        }
+        try {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {
+          /* optional */
+        }
         await queryClient.invalidateQueries({ queryKey: shopKeys.sparkWallet(user.id) });
         analytics.track('live_gift_sent', {
           stream_id: streamId,
           gift_id: gift.id,
           quantity,
         });
-      } catch (err: any) {
-        const raw = String(err?.message ?? '').toLowerCase();
-        showToast(
-          raw.includes('insufficient')
-            ? 'Not enough Sparks. Top up in Pulse Shop.'
-            : raw.includes('stream_not_live') || raw.includes('stream_not_broadcasting')
-              ? 'This stream is no longer accepting gifts.'
-              : 'Couldn\u2019t send gift. Try again.',
-          'error',
-        );
+      } catch (err: unknown) {
+        if (__DEV__) console.warn('[live.handleSendGift]', err);
+        showToast('Couldn\u2019t send gift. Try again.', 'error');
       } finally {
         setTimeout(() => {
           setGiftSending(false);
@@ -580,13 +628,17 @@ function StreamViewerScreenContent() {
         }, 400);
       }
     },
-    [streamId, user?.id, broadcastLive, showToast, queryClient],
+    [streamId, user?.id, broadcastLive, giftSending, showToast, queryClient],
   );
+
+  const followInFlightRef = useRef(false);
 
   const handleToggleFollow = useCallback(async () => {
     if (!user?.id || !stream?.host.id) return;
     if (user.id === stream.host.id) return;
+    if (followInFlightRef.current) return;
 
+    followInFlightRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Optimistic flip.
@@ -602,14 +654,32 @@ function StreamViewerScreenContent() {
       // Rollback on failure.
       setCreatorFollowed(stream.host.id, !nextFollowing);
       showToast('Couldn\u2019t update follow. Try again.', 'error');
+    } finally {
+      followInFlightRef.current = false;
     }
   }, [user?.id, stream?.host.id, isFollowing, setCreatorFollowed, showToast]);
 
   const handlePollVote = useCallback(
     async (optionId: string) => {
-      if (!activePoll) return;
+      if (!activePoll || pollVoting) return;
 
-      // Optimistic: flip the widget immediately so the vote feels instant.
+      if (!user?.id) {
+        showToast('Sign in to vote in polls.', 'info');
+        return;
+      }
+
+      if (!broadcastLive && !isHost) {
+        showToast('Polls unlock once the host is broadcasting.', 'info');
+        return;
+      }
+
+      if (hasVotedPoll) return;
+
+      const previousPoll = activePoll;
+      const previousVoted = hasVotedPoll;
+      const previousOptionId = votedOptionId;
+
+      setPollVoting(true);
       setHasVotedPoll(true);
       setVotedOptionId(optionId);
       setActivePoll((prev) => {
@@ -628,42 +698,34 @@ function StreamViewerScreenContent() {
           }),
         };
       });
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      if (!user?.id) return;
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch {
+        /* optional */
+      }
 
       try {
-        const accepted = await streamPollsService.vote(activePoll.id, optionId, user.id);
-        if (!accepted) {
-          // User already voted (server said no) — keep their local state, it's
-          // correct-ish. No toast needed; the widget is idempotent.
+        const result = await streamPollsService.vote(activePoll.id, optionId, user.id);
+        if (!result.ok) {
+          setHasVotedPoll(previousVoted);
+          setVotedOptionId(previousOptionId);
+          setActivePoll(previousPoll);
+          showToast(
+            result.friendly ?? friendlyLivePollError(result.reason),
+            result.reason === 'already_voted' ? 'info' : 'error',
+          );
         }
-        // The realtime subscription will surface the authoritative counts as
-        // other viewers vote, so we don't need to refetch here.
-      } catch {
-        // Rollback.
-        setHasVotedPoll(false);
-        setVotedOptionId(undefined);
-        setActivePoll((prev) => {
-          if (!prev) return null;
-          const nextTotal = Math.max(0, prev.totalVotes - 1);
-          return {
-            ...prev,
-            totalVotes: nextTotal,
-            options: prev.options.map((o) => {
-              const votes = o.id === optionId ? Math.max(0, o.votes - 1) : o.votes;
-              return {
-                ...o,
-                votes,
-                percentage: Math.round((votes / Math.max(1, nextTotal)) * 100),
-              };
-            }),
-          };
-        });
+      } catch (err: unknown) {
+        setHasVotedPoll(previousVoted);
+        setVotedOptionId(previousOptionId);
+        setActivePoll(previousPoll);
+        if (__DEV__) console.warn('[live.handlePollVote]', err);
         showToast('Couldn\u2019t record vote. Try again.', 'error');
+      } finally {
+        setPollVoting(false);
       }
     },
-    [activePoll, user?.id, showToast],
+    [activePoll, user?.id, hasVotedPoll, votedOptionId, broadcastLive, isHost, pollVoting, showToast],
   );
 
   const handleUnpin = useCallback(async () => {
@@ -683,6 +745,8 @@ function StreamViewerScreenContent() {
 
   /* ────────────────────── Host controls ────────────────────── */
 
+  const pollCreatingRef = useRef(false);
+
   /** Host-only: create and launch a new poll. */
   const handleCreatePoll = useCallback(
     async (input: {
@@ -690,22 +754,31 @@ function StreamViewerScreenContent() {
       options: { id: string; text: string }[];
       durationSec: number;
     }) => {
-      if (!isHost) return;
+      if (!isHost || pollCreatingRef.current) return;
 
-      const poll = await streamPollsService.create({
-        streamId,
-        question: input.question,
-        options: input.options,
-        durationSec: input.durationSec,
-      });
+      pollCreatingRef.current = true;
+      try {
+        const poll = await streamPollsService.create({
+          streamId,
+          question: input.question,
+          options: input.options,
+          durationSec: input.durationSec,
+        });
 
-      if (poll) {
-        setActivePoll(poll);
-        setHasVotedPoll(false);
-        setVotedOptionId(undefined);
-        showToast('Poll launched.', 'success');
-      } else {
+        if (poll) {
+          setActivePoll(poll);
+          setHasVotedPoll(false);
+          setVotedOptionId(undefined);
+          setHostPollVisible(false);
+          showToast('Poll launched.', 'success');
+        } else {
+          showToast('Couldn\u2019t launch poll. Try again.', 'error');
+        }
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleCreatePoll]', err);
         showToast('Couldn\u2019t launch poll. Try again.', 'error');
+      } finally {
+        pollCreatingRef.current = false;
       }
     },
     [isHost, streamId, showToast],
@@ -817,18 +890,38 @@ function StreamViewerScreenContent() {
           text: 'End Stream',
           style: 'destructive',
           onPress: async () => {
+            liveEndStreamDebug.endRequested(streamId);
             setEndingStream(true);
+
             try {
-              const ok = await streamsLiveService.endStream(streamId);
-              if (!ok) {
-                showToast('Couldn\u2019t end stream. Try again.', 'error');
+              const result = await streamsLiveService.endStream(streamId);
+              if (!result.ok) {
+                liveEndStreamDebug.endFailed(streamId, result.reason);
                 setEndingStream(false);
+                showToast('Couldn\u2019t end stream. Try again.', 'error');
                 return;
               }
+
+              liveEndStreamDebug.supabaseUpdated(streamId, result.reason);
+              const endedAt = new Date().toISOString();
+              queryClient.setQueryData(['stream', streamId], (old: typeof stream) =>
+                old
+                  ? { ...old, status: 'ended' as const, endedAt, viewerCount: 0 }
+                  : old,
+              );
+              pruneStreamFromLiveDiscovery(queryClient, streamId);
+              await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+              await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
+              await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+              await queryClient.refetchQueries({ queryKey: ['liveHub'] });
+              liveEndStreamDebug.happeningNowRefreshed(streamId);
+
               analytics.track('live_stream_ended', { stream_id: streamId });
               showToast('Stream ended. Great work.', 'success');
               router.replace('/(tabs)/live');
-            } catch {
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : 'unknown';
+              liveEndStreamDebug.endFailed(streamId, reason);
               setEndingStream(false);
               showToast('Something went wrong. Try again.', 'error');
             }
@@ -836,7 +929,7 @@ function StreamViewerScreenContent() {
         },
       ],
     );
-  }, [isHost, endingStream, streamId, router, showToast]);
+  }, [isHost, endingStream, streamId, router, showToast, queryClient, stream]);
 
   const handleShareLive = useCallback(async () => {
     if (!stream) return;
@@ -848,6 +941,16 @@ function StreamViewerScreenContent() {
       showToast('Share cancelled', 'info');
     }
   }, [stream, showToast]);
+
+  const handleFlipCamera = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFlipCameraNonce((n) => n + 1);
+  }, []);
+
+  const handleClearChat = useCallback(() => {
+    setMessages(DEFAULT_CHAT);
+    showToast('Chat cleared on your device.', 'success');
+  }, [showToast]);
 
   const openLiveHighlights = useCallback(() => {
     router.push(liveHighlightsHref(streamId));
@@ -899,14 +1002,14 @@ function StreamViewerScreenContent() {
 
   if (stream.status === 'ended') {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, paddingHorizontal: 14 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color="#FFF" />
-        </TouchableOpacity>
-        <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 48, gap: 10 }}>
-          <Text style={styles.sessionTitle}>This live has ended</Text>
-          <Text style={{ color: colors.dark.textMuted }}>{stream.title}</Text>
-        </View>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ViewerLiveStateScreen
+          title="This live has ended"
+          message={stream.title}
+          icon="radio-outline"
+          tone="muted"
+          onBack={() => router.back()}
+        />
       </View>
     );
   }
@@ -917,49 +1020,38 @@ function StreamViewerScreenContent() {
         ? new Date(stream.scheduledFor).toLocaleString()
         : 'Time TBD';
     return (
-      <View style={[styles.container, { paddingTop: insets.top, paddingHorizontal: 14 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color="#FFF" />
-        </TouchableOpacity>
-        <LinearGradient colors={['rgba(6,14,26,0.95)', 'rgba(6,14,26,0.75)']} style={StyleSheet.absoluteFill} />
-        <View style={{ flex: 1, justifyContent: 'center', gap: 16, zIndex: 2 }}>
-          <Text style={styles.sessionTitle}>Starts later</Text>
-          <Text style={{ color: colors.neutral.white }}>{stream.title}</Text>
-          <Text style={{ color: colors.dark.textMuted }}>Hosted by {stream.host.displayName}</Text>
-          <Text style={{ color: colors.primary.teal }}>{starts}</Text>
-          <TouchableOpacity
-            style={styles.followBtn}
-            onPress={async () => {
-              if (!user?.id) {
-                showToast('Sign in to save reminders.', 'info');
-                return;
-              }
-              const next = await streamsLiveService.toggleReminder(stream.id);
-              if (next === null) {
-                showToast('Couldn\u2019t update reminder.', 'error');
-                return;
-              }
-              setReminderOn(next);
-              analytics.track('reminder_clicked', { stream_id: stream.id, enabled: next });
-              showToast(
-                next ? 'Reminder saved. Push at go-live is not wired yet.' : 'Reminder removed.',
-                'success',
-              );
-            }}
-          >
-            <Text style={styles.followBtnText}>{reminderOn ? 'Reminder on' : 'Remind me'}</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ViewerLiveStateScreen
+          title="Starts later"
+          message={`${stream.title}\nHosted by ${stream.host.displayName}\n${starts}`}
+          icon="calendar-outline"
+          actionLabel={reminderOn ? 'Reminder on' : 'Remind me'}
+          onAction={async () => {
+            if (!user?.id) {
+              showToast('Sign in to save reminders.', 'info');
+              return;
+            }
+            const next = await streamsLiveService.toggleReminder(stream.id);
+            if (next === null) {
+              showToast('Couldn\u2019t update reminder.', 'error');
+              return;
+            }
+            setReminderOn(next);
+            analytics.track('reminder_clicked', { stream_id: stream.id, enabled: next });
+            showToast(
+              next ? 'Reminder saved. Push at go-live is not wired yet.' : 'Reminder removed.',
+              'success',
+            );
+          }}
+          onBack={() => router.back()}
+        />
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.streamMediaUnderlay}>
+    <KeyboardAwareRoot style={styles.container} keyboardVerticalOffset={insets.top}>
+      <LiveStage>
         {showLiveKitLayer ? (
           <Suspense fallback={<View style={[styles.streamBg, { backgroundColor: '#020617' }]} />}>
             <LiveKitStageLazy
@@ -968,7 +1060,27 @@ function StreamViewerScreenContent() {
               token={lkToken!}
               role={isHost ? 'host' : 'viewer'}
               style={styles.streamBg}
+              brbMode={isHost && brbMode}
+              micMuted={hostMicMuted}
+              viewerAudioMuted={viewerAudioMuted}
+              flipCameraNonce={isHost ? flipCameraNonce : undefined}
+              onResumeFromBrb={isHost ? () => setBrbMode(false) : undefined}
               onConnected={handleLiveKitConnected}
+              onDisconnected={() => {
+                if (endingStreamRef.current) {
+                  liveEndStreamDebug.liveKitDisconnected(streamId);
+                }
+              }}
+              onMicPermissionDenied={() => {
+                setHostMicPermissionDenied(true);
+                showToast('Allow microphone access in Settings to broadcast audio.', 'error');
+              }}
+              onHostAudioPublished={(published) => {
+                setHostAudioPublished(published);
+                if (!published && isHost) {
+                  showToast('Viewers may not hear you — check mic permission and the Mic control.', 'info');
+                }
+              }}
               onError={(err) => {
                 if (!isHost) return;
                 Alert.alert(
@@ -980,9 +1092,14 @@ function StreamViewerScreenContent() {
                       text: 'End session',
                       style: 'destructive',
                       onPress: async () => {
-                        await streamsLiveService.abortUnbroadcastStream(streamId);
-                        await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
-                        router.replace('/(tabs)/live');
+                        try {
+                          await streamsLiveService.abortUnbroadcastStream(streamId);
+                          await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+                          router.replace('/(tabs)/live');
+                        } catch (err) {
+                          if (__DEV__) console.warn('[live.liveKit.onError.endSession]', err);
+                          showToast('Couldn\u2019t end session. Try again.', 'error');
+                        }
                       },
                     },
                   ],
@@ -1000,18 +1117,17 @@ function StreamViewerScreenContent() {
         ) : (
           <View style={[styles.streamBg, { backgroundColor: '#0f172a' }]} />
         )}
-      </View>
+      </LiveStage>
       <LinearGradient
-        colors={['rgba(6,14,26,0.65)', 'rgba(6,14,26,0.2)', 'rgba(6,14,26,0.88)']}
-        locations={[0, 0.35, 1]}
+        colors={
+          isHost
+            ? ['rgba(6,14,26,0.28)', 'transparent', 'rgba(6,14,26,0.42)']
+            : ['rgba(6,14,26,0.16)', 'transparent', 'rgba(6,14,26,0.32)']
+        }
+        locations={[0, 0.22, 1]}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
-
-      {!broadcastLive && streamIsLive && !isHost ? (
-        <View style={styles.connectBanner} pointerEvents="none">
-          <Text style={styles.connectBannerTxt}>Host is connecting\u2026</Text>
-        </View>
-      ) : null}
 
       {isHost && stream.status === 'scheduled' ? (
         <View style={styles.scheduledHostBanner}>
@@ -1049,267 +1165,128 @@ function StreamViewerScreenContent() {
         </View>
       ) : null}
 
-      {lkError && streamIsLive ? (
+      {isHost && hostMicPermissionDenied ? (
+        <View style={styles.lkErrorBanner}>
+          <Text style={styles.lkErrorTxt}>
+            Microphone access is off. Enable it in Settings to broadcast audio.
+          </Text>
+        </View>
+      ) : null}
+
+      {isHost && hostAudioPublished === false && !hostMicMuted && !hostMicPermissionDenied ? (
+        <View style={styles.connectBanner}>
+          <Text style={styles.connectBannerTxt}>
+            Your mic is not live yet — tap Mic in the dock or check permissions.
+          </Text>
+        </View>
+      ) : null}
+
+      {lkError && streamIsLive && isHost ? (
         <View style={styles.lkErrorBanner}>
           <Text style={styles.lkErrorTxt}>{lkError}</Text>
         </View>
       ) : null}
-      <View style={[styles.shell, { paddingTop: insets.top }]}>
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn} accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={22} color="#FFF" />
-          </TouchableOpacity>
-
-          <View style={styles.topCenter}>
-            <View style={styles.liveBadge}>
-              <View style={styles.livePulse} />
-              <Text style={styles.liveText}>
-                {streamIsLive ? (isHost && preparingBroadcast ? 'CONNECTING' : 'LIVE') : stream.status.toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.viewerBadge}>
-              <Ionicons name="eye-outline" size={14} color={colors.dark.textSecondary} />
-              <Text style={styles.viewerText}>{formatCount(viewerCount)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.topRight}>
-            {leaderboard.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setShowLeaderboard(true)}
-                style={styles.iconBtnSubtle}
-                accessibilityLabel="Top supporters"
-              >
-                <Ionicons name="ribbon-outline" size={18} color={colors.dark.textSecondary} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                handleShareLive();
-              }}
-              style={styles.iconBtnSubtle}
-              accessibilityLabel="Share live stream"
-            >
-              <Ionicons name="share-social-outline" size={17} color="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                openLiveHighlights();
-              }}
-              style={styles.iconBtnSubtle}
-              accessibilityLabel="Clips and highlights"
-            >
-              <Ionicons name="cut-outline" size={17} color="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowChat(!showChat)} style={styles.iconBtn} accessibilityLabel="Toggle chat">
-              <Ionicons name={showChat ? 'chatbubble' : 'chatbubble-outline'} size={19} color="#FFF" />
-            </TouchableOpacity>
-            {!isHost && user?.id ? (
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  openLiveOverflowMenu();
-                }}
-                style={styles.iconBtnSubtle}
-                accessibilityLabel="More live actions"
-              >
-                <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
-              </TouchableOpacity>
-            ) : null}
-            {isHost && (
-              <TouchableOpacity
-                onPress={handleEndStream}
-                style={[styles.iconBtn, styles.endBtn]}
-                accessibilityLabel="End stream"
-                disabled={endingStream}
-              >
-                <Ionicons name="stop-circle" size={20} color="#FFF" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.flexSpacer} />
-
-        <View style={styles.sessionBlock}>
-          <Text style={styles.sessionTitle} numberOfLines={3}>
-            {stream.title}
-          </Text>
-
-          <View style={styles.creatorRow}>
-            <Image
-              source={{ uri: stream.host.avatarUrl }}
-              style={styles.creatorAvatar}
-              {...pulseImageListThumbProps}
-            />
-            <View style={styles.creatorMeta}>
-              <View style={styles.creatorNameRow}>
-                <Text style={styles.creatorName} numberOfLines={1}>{stream.host.displayName}</Text>
-                {stream.host.isVerified && (
-                  <Ionicons name="checkmark-circle" size={15} color={colors.primary.teal} />
-                )}
-              </View>
-              <View style={styles.badgeRow}>
-                <RoleBadge role={stream.host.role} size="sm" variant="overlay" />
-                <SpecialtyBadge specialty={stream.host.specialty} />
-                {/*
-                  Pulse tier chip in the live overlay. Score is included
-                  here (unlike comments) because live is a high-signal
-                  identity moment — viewers are choosing whether to
-                  stay/follow based on the host. Murmur is still hidden.
-                */}
-                <PulseTierBadge
-                  tier={stream.host.pulseTier ?? null}
-                  score={stream.host.pulseScoreCurrent ?? null}
-                  size="sm"
-                  hideMurmur
+      <View style={[styles.shell, { paddingTop: insets.top, paddingBottom: insets.bottom + 8 }]}>
+        {isHost ? (
+          <HostLiveStudio
+            streamTitle={stream.title}
+            viewerCount={viewerCount}
+            broadcastStartedAt={stream.broadcastStartedAt}
+            preparingBroadcast={preparingBroadcast}
+            streamIsLive={streamIsLive}
+            recordingEnabled={stream.recordingEnabled}
+            giftsEnabled={giftsEnabled}
+            brbMode={brbMode}
+            onToggleBrb={() => setBrbMode((v) => !v)}
+            hostMicMuted={hostMicMuted}
+            onToggleMic={() => setHostMicMuted((v) => !v)}
+            endingStream={endingStream}
+            onEndStream={handleEndStream}
+            onShare={handleShareLive}
+            onFlipCamera={handleFlipCamera}
+            onBack={() => router.back()}
+            bottomInset={0}
+            preview={
+              posterUri ? (
+                <Image
+                  source={{ uri: posterUri }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  {...pulseImageFeedHeroProps}
                 />
-              </View>
-            </View>
-            {user?.id !== stream.host.id && (
-              <TouchableOpacity
-                style={[styles.followBtn, isFollowing && styles.followBtnActive]}
-                onPress={handleToggleFollow}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {activePoll && (
-          <View style={styles.pollOuter}>
-            <PollWidget
-              poll={activePoll}
-              onVote={handlePollVote}
-              hasVoted={hasVotedPoll}
-              votedOptionId={votedOptionId}
-              compact
-            />
-            {isHost && (
-              <TouchableOpacity
-                onPress={handleEndPoll}
-                style={styles.endPollBtn}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="stop-outline" size={13} color={colors.dark.textSecondary} />
-                <Text style={styles.endPollText}>End poll</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {showChat && (
-          <View style={[styles.chatColumn, { paddingBottom: insets.bottom + 10, maxHeight: CHAT_MAX_H }]}>
-            <View style={{ height: CHAT_LIST_H }}>
-              <LiveChatList
-                messages={messages}
-                pinned={pinnedMessage}
-                isHost={isHost}
-                currentUserId={user?.id}
-                onUnpin={handleUnpin}
-                onMessageLongPress={handleChatMessageLongPress}
-              />
-            </View>
-
-            <View style={styles.chatInputRow}>
-              {isHost ? (
-                <TouchableOpacity
-                  style={styles.giftBtn}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setHostPollVisible(true);
-                  }}
-                  activeOpacity={0.75}
-                  accessibilityLabel="Launch poll"
-                >
-                  <Ionicons name="stats-chart-outline" size={18} color={colors.primary.teal} />
-                </TouchableOpacity>
-              ) : giftsEnabled ? (
-                <View style={styles.viewerGiftBtns}>
-                  <TouchableOpacity
-                    style={styles.giftBtn}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      if (!user?.id) {
-                        showToast('Sign in to send Sparks gifts', 'error');
-                        return;
-                      }
-                      analytics.track('live_gift_opened', { stream_id: streamId, surface: 'spark_tray' });
-                      setSparkGiftOpen(true);
-                    }}
-                    activeOpacity={0.75}
-                    accessibilityLabel="Send a Sparks gift to the host"
-                  >
-                    <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.giftBtn}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      if (!user?.id) {
-                        showToast('Sign in to send gifts', 'error');
-                        return;
-                      }
-                      analytics.track('live_gift_opened', { stream_id: streamId, surface: 'sticker_picker' });
-                      setShowGiftPicker(true);
-                    }}
-                    activeOpacity={0.75}
-                    accessibilityLabel="Send quick live stickers (Sparks)"
-                  >
-                    <Ionicons name="flash" size={18} color={colors.status.premium} />
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-
-              <AccentComposerFrame
-                accentColor={colors.primary.teal}
-                compact
-                noShadow
-                style={{ flex: 1 }}
-                footer={
-                  <AccentCharCount
-                    length={inputText.length}
-                    max={STREAM_CHAT_MAX_LENGTH}
-                    accentColor={colors.primary.teal}
-                    warnWithin={40}
-                  />
-                }
-              >
-                <TextInput
-                  style={styles.chatInputPlain}
-                  placeholder={
-                    liveChatBlocked
-                      ? 'Chat unavailable for this live'
-                      : isHost
-                        ? 'Talk to your viewers\u2026'
-                        : 'Message the room\u2026'
-                  }
-                  placeholderTextColor={colors.dark.textQuiet}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  onSubmitEditing={sendMessage}
-                  returnKeyType="send"
-                  maxLength={STREAM_CHAT_MAX_LENGTH}
-                  editable={!liveChatBlocked}
-                />
-              </AccentComposerFrame>
-
-              <TouchableOpacity
-                onPress={sendMessage}
-                style={[styles.sendBtn, liveChatBlocked && { opacity: 0.45 }]}
-                activeOpacity={0.85}
-                disabled={liveChatBlocked}
-              >
-                <Ionicons name="arrow-up" size={20} color={colors.dark.bg} />
-              </TouchableOpacity>
-            </View>
-          </View>
+              ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#020617' }]} />
+              )
+            }
+            messages={messages}
+            pinned={pinnedMessage}
+            currentUserId={user?.id}
+            inputText={inputText}
+            onChangeInput={setInputText}
+            onSendMessage={sendMessage}
+            onUnpin={handleUnpin}
+            onMessageLongPress={handleChatMessageLongPress}
+            activePoll={activePoll}
+            hasVotedPoll={hasVotedPoll}
+            votedOptionId={votedOptionId}
+            onPollVote={handlePollVote}
+            onCreatePoll={() => setHostPollVisible(true)}
+            onEndPoll={handleEndPoll}
+            onClearChat={handleClearChat}
+            chatBlocked={liveChatBlocked}
+            chatSending={chatSending}
+            pollVoting={pollVoting}
+            showToast={showToast}
+            slowModeEnabled={slowModeEnabled}
+            onToggleSlowMode={() => {
+              setSlowModeEnabled((v) => {
+                const next = !v;
+                showToast(next ? 'Slow mode on (stub).' : 'Slow mode off (stub).', 'info');
+                return next;
+              });
+            }}
+          />
+        ) : (
+          <ViewerLivePlayer
+            host={stream.host}
+            viewerUserId={user?.id}
+            isFollowing={isFollowing}
+            onToggleFollow={handleToggleFollow}
+            viewerCount={viewerCount}
+            broadcastLive={broadcastLive}
+            streamIsLive={streamIsLive}
+            giftsEnabled={giftsEnabled}
+            viewerAudioMuted={viewerAudioMuted}
+            onToggleAudio={() => setViewerAudioMuted((v) => !v)}
+            onBack={() => router.back()}
+            onShare={handleShareLive}
+            onMore={openLiveOverflowMenu}
+            onOpenGifts={() => {
+              analytics.track('live_gift_opened', { stream_id: streamId, surface: 'sticker_picker' });
+              setShowGiftPicker(true);
+            }}
+            onOpenLeaderboard={() => setShowLeaderboard(true)}
+            showLeaderboard={leaderboard.length > 0}
+            messages={messages}
+            pinned={pinnedMessage}
+            inputText={inputText}
+            onChangeInput={setInputText}
+            onSendMessage={sendMessage}
+            onMessageLongPress={handleChatMessageLongPress}
+            chatBlocked={liveChatBlocked}
+            chatSending={chatSending}
+            activePoll={activePoll}
+            hasVotedPoll={hasVotedPoll}
+            votedOptionId={votedOptionId}
+            onPollVote={handlePollVote}
+            pollVoting={pollVoting}
+            pollUnavailable={!activePoll?.isActive}
+            audioUnavailable={Boolean(lkError && broadcastLive)}
+            streamConnecting={preparingBroadcast || (!broadcastLive && streamIsLive)}
+            streamVideoError={broadcastLive && !showLiveKitLayer && lkError ? lkError : null}
+            showToast={showToast}
+            welcomeMessage={DEFAULT_CHAT[0]?.content}
+          />
         )}
       </View>
 
@@ -1368,7 +1345,7 @@ function StreamViewerScreenContent() {
           targetId={reportMessageId}
         />
       ) : null}
-    </KeyboardAvoidingView>
+    </KeyboardAwareRoot>
   );
 }
 
@@ -1512,6 +1489,43 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
+  },
+  streamTitleHud: {
+    ...typography.subtitle,
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'rgba(248,250,252,0.92)',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  pollChipRow: { marginBottom: 8 },
+  managerActions: { gap: 10, paddingVertical: 8 },
+  managerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(15,28,48,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  managerActionDanger: {
+    backgroundColor: 'rgba(127,29,29,0.82)',
+    borderColor: 'rgba(252,165,165,0.35)',
+  },
+  managerActionTxt: {
+    ...typography.bodySmall,
+    fontWeight: '700',
+    color: colors.neutral.white,
+  },
+  managerEmpty: {
+    ...typography.bodySmall,
+    color: colors.dark.textMuted,
+    paddingVertical: 16,
   },
   creatorRow: {
     flexDirection: 'row',
