@@ -85,19 +85,38 @@ export function buildPostShareOg(post: PostSharePublic, siteBase: string): {
  * `generateMetadata` and the page share one round-trip.
  */
 export const loadPostSharePublic = cache(async (id: string): Promise<PostSharePublic | null> => {
-  if (!POST_SHARE_UUID_RE.test(id)) return null;
+  if (!POST_SHARE_UUID_RE.test(id)) {
+    console.warn("[post-share] uuid regex failed", { id });
+    return null;
+  }
   const supabase = createPublicSupabaseAnonClient();
-  if (!supabase) return null;
+  if (!supabase) {
+    console.warn("[post-share] anon client missing — NEXT_PUBLIC_SUPABASE_URL / ANON_KEY env var not set at runtime");
+    return null;
+  }
 
   const { data: post, error } = await supabase
-    .from("posts")
+    .from("posts_viewer_safe")
     .select(
       "caption, thumbnail_url, media_url, type, scheduled_status, is_anonymous, creator_id, like_count, comment_count",
     )
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !post) return null;
+  if (error) {
+    console.warn("[post-share] posts_viewer_safe query error", {
+      id,
+      code: (error as { code?: string }).code,
+      message: (error as { message?: string }).message,
+      details: (error as { details?: string }).details,
+      hint: (error as { hint?: string }).hint,
+    });
+    return null;
+  }
+  if (!post) {
+    console.warn("[post-share] posts_viewer_safe returned no row for id", { id });
+    return null;
+  }
   const row = post as {
     caption?: string | null;
     thumbnail_url?: string | null;
@@ -110,7 +129,13 @@ export const loadPostSharePublic = cache(async (id: string): Promise<PostSharePu
     comment_count?: number | null;
   };
 
-  if (!isLiveScheduled(row.scheduled_status)) return null;
+  if (!isLiveScheduled(row.scheduled_status)) {
+    console.warn("[post-share] scheduled_status not live", {
+      id,
+      scheduled_status: row.scheduled_status,
+    });
+    return null;
+  }
 
   let creatorLine: string | null = null;
   if (!row.is_anonymous && row.creator_id) {
