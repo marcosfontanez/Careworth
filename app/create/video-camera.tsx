@@ -12,6 +12,7 @@ import {
   FlatList,
 } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import * as Linking from 'expo-linking';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { setPendingVideoCapture } from '@/lib/pendingVideoCapture';
 import { probeVideoFile } from '@/lib/videoMetadata';
 import { looksByKind, tintForLook, type VideoLookId, type VideoLookKind } from '@/lib/videoFilters';
+import { useFeatureFlags } from '@/lib/featureFlags';
 import { postsService } from '@/services/supabase';
 import { DuetParentPreview, type DuetParentLayoutMode } from '@/components/feed/DuetParentPreview';
 import { getSoundRowPickerListWindow } from '@/lib/feedVideoListWindow';
@@ -81,9 +83,21 @@ export default function CreateVideoCameraScreen() {
   const recordPromiseRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
   const recordingBusyRef = useRef(false);
 
+  /**
+   * Recorder filters/effects rail (Creator Hub audit issue #7).
+   * Smoke tests called the current effects "low quality" — the chips only
+   * apply a flat color tint with no transform pipeline, no LUTs, no shaders.
+   * For beta the entire rail is hidden behind the `recorderEffects` flag
+   * (default OFF in production). `lookId` falls back to 'none' so the
+   * pass-through preview is unchanged when the rail is hidden.
+   */
+  const recorderEffectsEnabled = useFeatureFlags((s) => s.recorderEffects);
   const [lookKind, setLookKind] = useState<VideoLookKind>('filter');
   const [lookId, setLookId] = useState<VideoLookId>('none');
-  const tint = useMemo(() => tintForLook(lookId), [lookId]);
+  const tint = useMemo(
+    () => (recorderEffectsEnabled ? tintForLook(lookId) : null),
+    [lookId, recorderEffectsEnabled],
+  );
   const filterChips = useMemo(() => looksByKind('filter'), []);
   const effectChips = useMemo(() => looksByKind('effect'), []);
 
@@ -188,12 +202,22 @@ export default function CreateVideoCameraScreen() {
       recordPromiseRef.current = p;
       setRecording(true);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      /**
+       * The outer try/catch (`await p`) is the real error handler. This
+       * .finally() runs the same teardown the catch block runs, just earlier
+       * (so the busy flag clears the instant native recording stops, before
+       * finishAndNavigate() returns). The trailing .catch(() => {}) marks the
+       * .finally()-derived promise as handled — otherwise expo-camera's
+       * "An error occurred while recording a video" rejection re-throws
+       * through .finally() and surfaces as onunhandledrejection in Sentry,
+       * even though `await p` already caught it (iOS 26.5 background race).
+       */
       p.finally(() => {
         setRecording(false);
         setRecordElapsed(0);
         recordPromiseRef.current = null;
         recordingBusyRef.current = false;
-      });
+      }).catch(() => {});
       const result = await p;
       if (result?.uri) await finishAndNavigate(result.uri);
     } catch (e) {
@@ -227,20 +251,70 @@ export default function CreateVideoCameraScreen() {
   }
 
   if (!camPerm.granted || !micPerm.granted) {
+    /**
+     * Permission-specific copy. `canAskAgain === false` means the user has
+     * previously denied + "Don't ask again" was set (Android) or they need to
+     * change permission in iOS Settings → PulseVerse → Camera / Microphone.
+     * In that case Try Again will no-op, so we promote Open Settings.
+     */
+    const camDenied = !camPerm.granted;
+    const micDenied = !micPerm.granted;
+    const camLocked = camDenied && !camPerm.canAskAgain;
+    const micLocked = micDenied && !micPerm.canAskAgain;
+    const anyLocked = camLocked || micLocked;
+    const both = camDenied && micDenied;
+
+    let title: string;
+    let body: string;
+    if (both) {
+      title = 'Camera & microphone needed';
+      body = 'PulseVerse needs camera and microphone access to record short videos. You can change this anytime in Settings.';
+    } else if (camDenied) {
+      title = 'Camera access needed';
+      body = 'PulseVerse needs camera access to record video. Microphone is already granted.';
+    } else {
+      title = 'Microphone access needed';
+      body = 'PulseVerse needs microphone access to record audio with your video. Camera is already granted.';
+    }
+    if (anyLocked) {
+      body += '\n\nTap "Open Settings" to enable access in PulseVerse → Permissions.';
+    }
+
+    const onTryAgain = () => {
+      if (camDenied) void requestCam();
+      if (micDenied) void requestMic();
+    };
+    const onOpenSettings = () => {
+      void Linking.openSettings().catch(() => {});
+    };
+
     return (
       <View style={[styles.centered, { paddingTop: insets.top, paddingHorizontal: 24 }]}>
-        <Text style={styles.permTitle}>Camera & microphone</Text>
-        <Text style={styles.permSub}>PulseVerse needs access to record short-form video.</Text>
+        <Text style={styles.permTitle}>{title}</Text>
+        <Text style={styles.permSub}>{body}</Text>
+        {anyLocked ? (
+          <>
+            <TouchableOpacity style={styles.permBtn} onPress={onOpenSettings}>
+              <Text style={styles.permBtnText}>Open Settings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.permSecondary} onPress={onTryAgain}>
+              <Text style={styles.permSecondaryText}>Try Again</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.permBtn} onPress={onTryAgain}>
+              <Text style={styles.permBtnText}>Try Again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.permSecondary} onPress={onOpenSettings}>
+              <Text style={styles.permSecondaryText}>Open Settings</Text>
+            </TouchableOpacity>
+          </>
+        )}
         <TouchableOpacity
-          style={styles.permBtn}
-          onPress={() => {
-            void requestCam();
-            void requestMic();
-          }}
+          style={[styles.permSecondary, { marginTop: 8 }]}
+          onPress={() => router.back()}
         >
-          <Text style={styles.permBtnText}>Allow access</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.permSecondary} onPress={() => router.back()}>
           <Text style={styles.permSecondaryText}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -395,41 +469,45 @@ export default function CreateVideoCameraScreen() {
           </Text>
         ) : null}
 
-        {/* Filters / Effects rail */}
-        <View style={styles.lookSegment}>
-          {(['filter', 'effect'] as const).map((k) => (
-            <TouchableOpacity
-              key={k}
-              style={[styles.lookSegmentChip, lookKind === k && styles.lookSegmentChipOn]}
-              onPress={() => setLookKind(k)}
-            >
-              <Text style={[styles.lookSegmentText, lookKind === k && styles.lookSegmentTextOn]}>
-                {k === 'filter' ? 'Filters' : 'Effects'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Filters / Effects rail — gated behind `recorderEffects` flag (default OFF in beta). */}
+        {recorderEffectsEnabled ? (
+          <>
+            <View style={styles.lookSegment}>
+              {(['filter', 'effect'] as const).map((k) => (
+                <TouchableOpacity
+                  key={k}
+                  style={[styles.lookSegmentChip, lookKind === k && styles.lookSegmentChipOn]}
+                  onPress={() => setLookKind(k)}
+                >
+                  <Text style={[styles.lookSegmentText, lookKind === k && styles.lookSegmentTextOn]}>
+                    {k === 'filter' ? 'Filters' : 'Effects'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.lookRow}
-        >
-          {activeChips.map((c) => {
-            const isOn = lookId === c.id;
-            return (
-              <TouchableOpacity
-                key={c.id}
-                style={[styles.lookChip, isOn && styles.lookChipOn]}
-                onPress={() => setLookId(c.id)}
-                accessibilityLabel={c.label}
-              >
-                <View style={[styles.lookSwatch, { backgroundColor: c.swatch }]} />
-                <Text style={[styles.lookChipText, isOn && styles.lookChipTextOn]}>{c.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.lookRow}
+            >
+              {activeChips.map((c) => {
+                const isOn = lookId === c.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.lookChip, isOn && styles.lookChipOn]}
+                    onPress={() => setLookId(c.id)}
+                    accessibilityLabel={c.label}
+                  >
+                    <View style={[styles.lookSwatch, { backgroundColor: c.swatch }]} />
+                    <Text style={[styles.lookChipText, isOn && styles.lookChipTextOn]}>{c.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : null}
 
         <View style={styles.shutterRow}>
           <TouchableOpacity

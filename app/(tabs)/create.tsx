@@ -91,6 +91,17 @@ export default function CreateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const liveStreaming = useFeatureFlags((s) => s.liveStreaming);
+  /**
+   * Beta-stability gates. Each tile that smoke tests flagged as broken or
+   * unfinished is now feature-flagged so the Creator Hub never shows a dead
+   * affordance. See `defaultCreatorHub*` in `lib/featureFlags.ts` for defaults.
+   *   - `creatorHubFeedDiscussion`  → "Feed discussion" tile  (issue #4, hide for beta)
+   *   - `creatorHubCombineClips`    → "Combine clips" + B-roll alt link  (issue #5)
+   *   - `creatorHubCoCreate`        → "Co-create" pill  (issue #6 freezes the app)
+   */
+  const showFeedDiscussion = useFeatureFlags((s) => s.creatorHubFeedDiscussion);
+  const showCombineClips = useFeatureFlags((s) => s.creatorHubCombineClips);
+  const showCoCreate = useFeatureFlags((s) => s.creatorHubCoCreate);
   const hubFocused = useIsFocused();
 
   const [videoDraft, setVideoDraft] = useState(false);
@@ -247,73 +258,79 @@ export default function CreateScreen() {
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.photoTile}
-                activeOpacity={0.88}
-                onPress={() => router.push('/create/text' as any)}
-                accessibilityRole="button"
-                accessibilityLabel="Feed discussion — text post for main feed"
-              >
-                <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
-                <CreatorHubTileTopSheen accent={colors.primary.teal} radius={borderRadius.card} />
-                <View style={styles.tileForeground}>
-                  <View
-                    style={[
-                      styles.tileIcon,
-                      {
-                        backgroundColor: 'rgba(45,212,191,0.12)',
-                        borderWidth: 1,
-                        borderColor: 'rgba(45,212,191,0.28)',
-                      },
-                    ]}
-                  >
-                    <Ionicons name="chatbubbles-outline" size={26} color={colors.primary.teal} />
+              {showFeedDiscussion ? (
+                <TouchableOpacity
+                  style={styles.photoTile}
+                  activeOpacity={0.88}
+                  onPress={() => router.push('/create/text' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Feed discussion — text post for main feed"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <CreatorHubTileTopSheen accent={colors.primary.teal} radius={borderRadius.card} />
+                  <View style={styles.tileForeground}>
+                    <View
+                      style={[
+                        styles.tileIcon,
+                        {
+                          backgroundColor: 'rgba(45,212,191,0.12)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(45,212,191,0.28)',
+                        },
+                      ]}
+                    >
+                      <Ionicons name="chatbubbles-outline" size={26} color={colors.primary.teal} />
+                    </View>
+                    <View style={styles.tileText}>
+                      <Text style={styles.tileTitle}>Feed discussion</Text>
+                      <Text style={styles.tileSub}>
+                        Text for For You / Following — separate from My Pulse Thoughts (profile tab)
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
                   </View>
-                  <View style={styles.tileText}>
-                    <Text style={styles.tileTitle}>Feed discussion</Text>
-                    <Text style={styles.tileSub}>
-                      Text for For You / Following — separate from My Pulse Thoughts (profile tab)
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              ) : null}
 
-              <TouchableOpacity
-                style={styles.photoTile}
-                activeOpacity={0.88}
-                onPress={() => router.push('/create/video?openStitch=series' as any)}
-                accessibilityRole="button"
-                accessibilityLabel="Combine video clips"
-              >
-                <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
-                <CreatorHubTileTopSheen accent={pulseverse.electric} radius={borderRadius.card} />
-                <View style={styles.tileForeground}>
-                  <View
-                    style={[
-                      styles.tileIcon,
-                      { backgroundColor: 'rgba(56,189,248,0.14)', borderWidth: 1, borderColor: 'rgba(56,189,248,0.28)' },
-                    ]}
+              {showCombineClips ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.photoTile}
+                    activeOpacity={0.88}
+                    onPress={() => router.push('/create/video?openStitch=series' as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Combine video clips"
                   >
-                    <Ionicons name="git-merge-outline" size={26} color={pulseverse.electric} />
-                  </View>
-                  <View style={styles.tileText}>
-                    <Text style={styles.tileTitle}>Combine clips</Text>
-                    <Text style={styles.tileSub}>Multi-part series or B-roll · one post, merged on the server</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
-                </View>
-              </TouchableOpacity>
+                    <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                    <CreatorHubTileTopSheen accent={pulseverse.electric} radius={borderRadius.card} />
+                    <View style={styles.tileForeground}>
+                      <View
+                        style={[
+                          styles.tileIcon,
+                          { backgroundColor: 'rgba(56,189,248,0.14)', borderWidth: 1, borderColor: 'rgba(56,189,248,0.28)' },
+                        ]}
+                      >
+                        <Ionicons name="git-merge-outline" size={26} color={pulseverse.electric} />
+                      </View>
+                      <View style={styles.tileText}>
+                        <Text style={styles.tileTitle}>Combine clips</Text>
+                        <Text style={styles.tileSub}>Multi-part series or B-roll · one post, merged on the server</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                    </View>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.hubStitchAltLink}
-                activeOpacity={0.82}
-                onPress={() => router.push('/create/video?openStitch=broll' as any)}
-                accessibilityRole="button"
-                accessibilityLabel="Start combine flow as B-roll queue"
-              >
-                <Text style={styles.hubStitchAltLinkText}>Prefer B-roll first? Start here →</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.hubStitchAltLink}
+                    activeOpacity={0.82}
+                    onPress={() => router.push('/create/video?openStitch=broll' as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Start combine flow as B-roll queue"
+                  >
+                    <Text style={styles.hubStitchAltLinkText}>Prefer B-roll first? Start here →</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
 
               <View style={styles.quickRow}>
                 <TouchableOpacity
@@ -353,20 +370,22 @@ export default function CreateScreen() {
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.quickPill}
-                  activeOpacity={0.85}
-                  onPress={() => router.push('/create/collab' as any)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Co-create hub"
-                >
-                  <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
-                  <CreatorHubTileTopSheen accent={colors.status.invite} radius={borderRadius.lg} height={4} />
-                  <View style={styles.quickPillInner}>
-                    <Ionicons name="people-outline" size={18} color={colors.status.invite} />
-                    <Text style={styles.quickPillText}>Co-create</Text>
-                  </View>
-                </TouchableOpacity>
+                {showCoCreate ? (
+                  <TouchableOpacity
+                    style={styles.quickPill}
+                    activeOpacity={0.85}
+                    onPress={() => router.push('/create/collab' as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Co-create hub"
+                  >
+                    <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
+                    <CreatorHubTileTopSheen accent={colors.status.invite} radius={borderRadius.lg} height={4} />
+                    <View style={styles.quickPillInner}>
+                      <Ionicons name="people-outline" size={18} color={colors.status.invite} />
+                      <Text style={styles.quickPillText}>Co-create</Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               {liveStreaming ? (

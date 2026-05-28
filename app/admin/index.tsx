@@ -1315,6 +1315,10 @@ export default function AdminPanel() {
                   label="Circle video posting (video chip + upload)"
                   flag="circleVideoPosting"
                 />
+                <FlagToggle label="Creator Hub: Combine clips tile" flag="creatorHubCombineClips" />
+                <FlagToggle label="Creator Hub: Co-create pill" flag="creatorHubCoCreate" />
+                <FlagToggle label="Creator Hub: Feed discussion tile" flag="creatorHubFeedDiscussion" />
+                <FlagToggle label="Recorder: filters & effects rail" flag="recorderEffects" />
                 <FlagToggle label="Feed creator gifting (rail)" flag="feedCreatorGifting" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />

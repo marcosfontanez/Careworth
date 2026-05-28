@@ -30,6 +30,41 @@ export interface FeatureFlags {
    */
   circleVideoPosting: boolean;
   /**
+   * Surface the **Combine clips** tile + B-roll alt link on the Creator Hub.
+   * Combine clips routes into `/create/video?openStitch=…` which opens
+   * `MultiClipStitchModal` + the server-side ffmpeg `creator_media_jobs` queue.
+   * Same export-pipeline gaps that gate `feedVideoRemixAdvanced` apply, so we
+   * default this OFF in production until the merged-output QA pass completes.
+   * Override via `EXPO_PUBLIC_CREATOR_HUB_COMBINE_CLIPS=1` or admin toggle.
+   */
+  creatorHubCombineClips: boolean;
+  /**
+   * Surface the **Co-create** quick pill on the Creator Hub. The flow can
+   * freeze the app when `collab_projects` migration 096 is not applied on the
+   * connected Supabase project — the project-list query never resolves, the
+   * loading spinner sticks, and the error toast leaves the screen unresponsive.
+   * Default OFF in production until the migration ships everywhere and the
+   * timeout/retry hardening lands. Override via `EXPO_PUBLIC_CREATOR_HUB_COCREATE=1`
+   * or admin toggle.
+   */
+  creatorHubCoCreate: boolean;
+  /**
+   * Surface the **Feed discussion** tile (text post for For You / Following)
+   * on the Creator Hub. Beta smoke tests treated it as out-of-scope alongside
+   * the long-form creator tools — hide for now; routes to /create/text remain
+   * intact for any other entry point (deep link, future tab).
+   */
+  creatorHubFeedDiscussion: boolean;
+  /**
+   * Surface the recorder filter + effect chip rail (`Filters` / `Effects`
+   * segment toggle in `app/create/video-camera.tsx`). Current beta effects
+   * are placeholder tints with no transform pipeline — hiding them avoids the
+   * "weak / broken" affordance smoke tests flagged. Filters subgroup stays
+   * available behind the same flag so we don't half-show one tab. Set OFF in
+   * production by default; flip via `EXPO_PUBLIC_RECORDER_EFFECTS=1` for staff.
+   */
+  recorderEffects: boolean;
+  /**
    * Feed rail “Gift” using `SendCreatorGiftTray` — Phase 2 gifting (`FeedActionRail` / `VideoFeedPost`).
    * Default **on** in development; **off** in production release unless
    * `EXPO_PUBLIC_FEED_CREATOR_GIFTING=1`. Staff can also toggle from **Admin → Feature flags**.
@@ -130,6 +165,40 @@ export function defaultCircleVideoPosting(): boolean {
   return true;
 }
 
+/** Creator Hub → Combine clips tile. Default OFF in release until merge QA ships. */
+export function defaultCreatorHubCombineClips(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_HUB_COMBINE_CLIPS?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/** Creator Hub → Co-create pill. Default OFF until project-list freeze + migration 096 are resolved. */
+export function defaultCreatorHubCoCreate(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_HUB_COCREATE?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/** Creator Hub → Feed discussion tile. Default OFF for beta. */
+export function defaultCreatorHubFeedDiscussion(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_HUB_FEED_DISCUSSION?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  return false;
+}
+
+/** Recorder filters/effects rail. Default OFF in release until effects pipeline lands. */
+export function defaultRecorderEffects(): boolean {
+  const raw = process.env.EXPO_PUBLIC_RECORDER_EFFECTS?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
 /**
  * Feed creator gifting defaults **on** in development for local QA.
  * Production release builds stay **off** unless `EXPO_PUBLIC_FEED_CREATOR_GIFTING=1`.
@@ -149,6 +218,10 @@ const DEFAULT_FLAGS: FeatureFlags = {
   feedClipping: defaultFeedClipping(),
   feedVideoRemixAdvanced: defaultFeedVideoRemixAdvanced(),
   circleVideoPosting: defaultCircleVideoPosting(),
+  creatorHubCombineClips: defaultCreatorHubCombineClips(),
+  creatorHubCoCreate: defaultCreatorHubCoCreate(),
+  creatorHubFeedDiscussion: defaultCreatorHubFeedDiscussion(),
+  recorderEffects: defaultRecorderEffects(),
   feedCreatorGifting: defaultFeedCreatorGifting(),
   sponsoredPosts: false,
   pulseversePro: false,
