@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius } from '@/theme';
 import type { CircleAccent } from '@/lib/circleAccents';
+import { useFeatureFlags } from '@/lib/featureFlags';
 
 export type CirclePostType = 'meme' | 'thread' | 'question' | 'video';
 
@@ -32,13 +33,17 @@ type Props = {
  * pushes it toward a curated brand chip strip.
  */
 export function CirclePostTypeChips({ active, accent, onSelect }: Props) {
+  const circleVideoPosting = useFeatureFlags((s) => s.circleVideoPosting);
+  /* Hide the Video chip when the safety-net flag is off so beta users do not see a
+   * broken affordance. Other chips stay regardless. */
+  const visibleTypes = TYPES.filter((t) => t.key !== 'video' || circleVideoPosting);
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.row}
     >
-      {TYPES.map((t) => {
+      {visibleTypes.map((t) => {
         const isActive = active === t.key;
         const inner = (
           <View style={styles.chipInner}>

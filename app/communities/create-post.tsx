@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -14,8 +14,10 @@ import { useQuery } from '@tanstack/react-query';
 import { colors, borderRadius } from '@/theme';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppStore } from '@/store/useAppStore';
 import { storageService } from '@/lib/storage';
 import { postsService, communitiesService } from '@/services/supabase';
+import { looksLikeRlsPolicyDenial } from '@/services/supabase/posts';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { circleContentService } from '@/services/circleContent';
 import { queryClient } from '@/lib/queryClient';
@@ -38,8 +40,12 @@ import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComp
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
+import { isAnonymousConfessionCircle, CONFESSIONS_BETA_DISCLOSURE } from '@/lib/anonymousCircle';
 import { clampVideoOverlayText, VIDEO_OVERLAY_TEXT_MAX_LEN } from '@/lib/videoOverlayText';
-import { VIDEO_MAX_SECONDS } from '@/lib/media';
+import { isMediaUriReadable, pickVideoFromGallery, VIDEO_MAX_SECONDS, type MediaAsset } from '@/lib/media';
+import { makeVideoThumbnail, probeVideoFile } from '@/lib/videoMetadata';
+import { compressVideoIfTooLarge, VIDEO_UPLOAD_MAX_LONG_EDGE } from '@/lib/videoCompression';
+import { useFeatureFlags } from '@/lib/featureFlags';
 
 /** Legacy AsyncStorage key for circle drafts — purged on open/post so nothing lingers. */
 const LEGACY_CIRCLE_DRAFT = 'circle';
@@ -61,10 +67,12 @@ export default function CommunityCreatePostScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
+  const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const toast = useToast();
 
   const communityName = params.communityName ?? 'Community';
   const slug = (params.communitySlug ?? '').toLowerCase();
+  const isConfessionsRoom = isAnonymousConfessionCircle(slug);
   const accent = useMemo(() => getCircleAccent(slug), [slug]);
   const initialType: CirclePostType = useMemo(() => {
     if (params.intent === 'meme') return 'meme';
@@ -81,23 +89,43 @@ export default function CommunityCreatePostScreen() {
 
   const [postType, setPostType] = useState<CirclePostType>(initialType);
   const [body, setBody] = useState('');
+  /**
+   * Picked media — image flow stores just the URI like before; video flow keeps
+   * a full `MediaAsset` so the upload path knows the correct MIME (.mov vs .mp4
+   * vs .webm), duration, and dimensions. The legacy "always `video/mp4`" string
+   * caused Storage uploads to mis-tag .mov files and broke iOS playback.
+   */
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaKind, setMediaKind] = useState<'image' | 'video' | null>(null);
+  const [videoAsset, setVideoAsset] = useState<MediaAsset | null>(null);
+  /**
+   * Local poster frame for the picked video. We render this in the preview
+   * tile instead of feeding the video URI to `<Image>` (which renders nothing
+   * for video files and was the root cause of the "no preview" bug). It is
+   * also re-uploaded as `posts.thumbnail_url` so feed cards have a thumbnail.
+   * `null` = pending or unavailable (compressor lib not linked in Expo Go).
+   */
+  const [videoThumbUri, setVideoThumbUri] = useState<string | null>(null);
+  const [videoThumbLoading, setVideoThumbLoading] = useState(false);
+  /** Visible upload progress label for the docked CTA spinner (compress %, then 'Uploading…'). */
+  const [uploadLabel, setUploadLabel] = useState<string | null>(null);
   /** Same contract as main composers → `posts.video_overlay_text` / feed sticker. */
   const [overlayLine, setOverlayLine] = useState('');
   const [posting, setPosting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const pendingThreadNavRef = useRef<{ slug: string; threadId: string } | null>(null);
   const [settings, setSettings] = useState<CirclePostSettings>({
-    /* Default ON for memes/threads — the brief calls Share to My Pulse the
-     * key bridge between the room and the user's profile. */
-    shareToMyPulse: true,
+    /* Default ON for memes/threads — except anonymous rooms where My Pulse is blocked. */
+    shareToMyPulse: !isConfessionsRoom,
     allowComments: true,
     pinToHighlights: false,
   });
   const [phiAck, setPhiAck] = useState(false);
+  const circleVideoPosting = useFeatureFlags((s) => s.circleVideoPosting);
 
-  const allowsMedia = postType === 'meme' || postType === 'video';
+  /** Video tile + chip is fully gated by `circleVideoPosting` (safety-net flag). */
+  const videoTypeAvailable = circleVideoPosting;
+  const allowsMedia = postType === 'meme' || (postType === 'video' && videoTypeAvailable);
 
   /** Remove any saved circle drafts — feature disabled; avoids stale keys and room-banner checks. */
   React.useEffect(() => {
@@ -108,12 +136,28 @@ export default function CommunityCreatePostScreen() {
   }, [slug]);
 
   React.useEffect(() => {
+    if (isConfessionsRoom && settings.shareToMyPulse) {
+      setSettings((prev) => ({ ...prev, shareToMyPulse: false }));
+    }
+  }, [isConfessionsRoom, settings.shareToMyPulse]);
+
+  React.useEffect(() => {
     if (!allowsMedia) {
       setMediaUri(null);
       setMediaKind(null);
+      setVideoAsset(null);
+      setVideoThumbUri(null);
+      setVideoThumbLoading(false);
       setOverlayLine('');
     }
   }, [allowsMedia]);
+
+  /** Flag flipped off while user is on the Video tab → bounce them to Thread so we never render the broken affordance. */
+  React.useEffect(() => {
+    if (postType === 'video' && !videoTypeAvailable) {
+      setPostType('thread');
+    }
+  }, [postType, videoTypeAvailable]);
 
   const phiFindings = useMemo(() => scanForPhi(body, overlayLine), [body, overlayLine]);
   const phiSev = highestSeverity(phiFindings);
@@ -126,29 +170,81 @@ export default function CommunityCreatePostScreen() {
         ? 'Add a caption for your video…'
         : 'What\u2019s worth sharing today?';
 
+  /**
+   * Generate a local poster frame for the picked video and stash it for preview
+   * + later upload. We swallow individual failures because the compressor lib
+   * isn't linked in Expo Go — in that case we simply fall back to a play-icon
+   * placeholder; the post still uploads with `thumbnail_url = null`.
+   */
+  const generateAndSetVideoThumb = useCallback(async (uri: string) => {
+    setVideoThumbLoading(true);
+    setVideoThumbUri(null);
+    try {
+      const thumb = await makeVideoThumbnail(uri);
+      setVideoThumbUri(thumb);
+    } catch (e) {
+      if (__DEV__) console.warn('[circle-create] thumbnail generation failed', e);
+      setVideoThumbUri(null);
+    } finally {
+      setVideoThumbLoading(false);
+    }
+  }, []);
+
   const pickMedia = async () => {
+    const wantVideos = postType === 'video';
+
+    /* ── Video flow: delegates to the shared Feed picker (`pickVideoFromGallery`)
+     *    so we get duration validation, proper MIME (.mov vs .mp4 vs .webm),
+     *    dimensions, and the iOS H264_1920x1080 export preset. The legacy
+     *    `ImagePicker.launchImageLibraryAsync` path returned only `uri` and the
+     *    composer assumed `video/mp4` for every file — which broke Storage on
+     *    `.mov` (the iOS-default container) and produced 0-byte uploads on some
+     *    Android `content://` URIs. ── */
+    if (wantVideos) {
+      if (!videoTypeAvailable) return;
+      const asset = await pickVideoFromGallery();
+      if (!asset) return;
+      const readable = await isMediaUriReadable(asset.uri, asset.webBlob);
+      if (!readable) {
+        toast.show('This video file could not be read. Please choose another video.', 'error');
+        return;
+      }
+      setVideoAsset(asset);
+      setMediaUri(asset.uri);
+      setMediaKind('video');
+      void generateAndSetVideoThumb(asset.uri);
+      return;
+    }
+
+    /* ── Image flow: unchanged from the original composer (still uses ImagePicker
+     *    directly so we keep `allowsEditing: false` for the full-bleed meme crop).
+     *    Permission check stays here because pickVideoFromGallery handles its own
+     *    permission prompt internally. ── */
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       toast.show('Photo library access is needed to attach media.', 'info');
       return;
     }
-    const wantVideos = postType === 'video';
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: wantVideos ? ['videos'] : ['images'],
+      mediaTypes: ['images'],
       /** Full-bleed photos — native crop sheet was forcing an unwanted square crop on memes. */
       allowsEditing: false,
       quality: 0.85,
-      videoMaxDuration: VIDEO_MAX_SECONDS,
     });
     if (!result.canceled && result.assets?.[0]) {
       setMediaUri(result.assets[0].uri);
-      setMediaKind(wantVideos ? 'video' : 'image');
+      setMediaKind('image');
+      setVideoAsset(null);
+      setVideoThumbUri(null);
     }
   };
 
   const removeMedia = () => {
     setMediaUri(null);
     setMediaKind(null);
+    setVideoAsset(null);
+    setVideoThumbUri(null);
+    setVideoThumbLoading(false);
     setOverlayLine('');
   };
 
@@ -173,6 +269,10 @@ export default function CommunityCreatePostScreen() {
       return;
     }
     if (!checkRateLimit('post')) return;
+    if (params.communityId && !joinedIds.has(params.communityId)) {
+      toast.show('Join this Circle before posting.', 'error');
+      return;
+    }
 
     setPosting(true);
     try {
@@ -199,11 +299,15 @@ export default function CommunityCreatePostScreen() {
             body: threadBody,
           });
         } catch (e: unknown) {
+          if (looksLikeRlsPolicyDenial(e)) {
+            toast.show('Join this Circle before posting.', 'error');
+            return;
+          }
           toast.show(e instanceof Error ? e.message : 'Could not start discussion', 'error');
           return;
         }
 
-        if (settings.shareToMyPulse && createdThread?.id) {
+        if (!isConfessionsRoom && settings.shareToMyPulse && createdThread?.id) {
           try {
             await profileUpdatesService.add(user.id, {
               type: 'link_circle',
@@ -224,9 +328,9 @@ export default function CommunityCreatePostScreen() {
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         await queryClient.invalidateQueries({
-          queryKey: circleContentKeys.threadsForRoom(slug || '__', params.communityId),
+          queryKey: [...circleContentKeys.threadsForRoom(slug || '__', params.communityId), 'inf'],
         });
-        if (settings.shareToMyPulse && user.id) {
+        if (!isConfessionsRoom && settings.shareToMyPulse && user.id) {
           await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
         }
         if (slug) await clearDraft(`circle:${slug}`);
@@ -238,18 +342,144 @@ export default function CommunityCreatePostScreen() {
       }
 
       let mediaUrl: string | undefined;
+      let thumbnailUrl: string | undefined;
       let postKind: 'image' | 'video' | 'text' = 'text';
       if (mediaUri) {
         const isVideo = mediaKind === 'video';
         try {
-          mediaUrl = await storageService.uploadPostMedia(user.id, {
-            uri: mediaUri,
-            type: isVideo ? 'video/mp4' : 'image/jpeg',
-            name: `community_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`,
-          });
-          postKind = isVideo ? 'video' : 'image';
-        } catch {
-          toast.show('Could not upload media. Check your connection and try again.', 'error');
+          if (isVideo) {
+            /* ── Video upload pipeline (matches Feed `/create/video`) ──
+             *   1. Verify the local URI is actually readable on this device
+             *      (Android `content://` URIs can resolve to 0-byte payloads
+             *      when the originating app is killed between picker + post).
+             *   2. Probe duration/dimensions if we don't have them yet.
+             *   3. Compress only if the long edge exceeds `VIDEO_UPLOAD_MAX_LONG_EDGE`
+             *      so we never push raw 4K bytes through Storage.
+             *   4. Stream the file via `uploadPostMediaWithMeta` (the same proven
+             *      path the Feed composer uses — handles `ph://`, file://, blob:).
+             *   5. Generate + upload a poster thumbnail so `posts.thumbnail_url`
+             *      is populated for the Circle feed card. If thumbnail generation
+             *      fails (e.g. Expo Go w/o react-native-compressor) we still ship
+             *      the post — the feed card will fall back to a placeholder.
+             */
+            const asset = videoAsset ?? {
+              uri: mediaUri,
+              type: 'video' as const,
+              mimeType: 'video/mp4',
+              fileName: `circle_video_${Date.now()}.mp4`,
+            };
+
+            const readable = await isMediaUriReadable(asset.uri, asset.webBlob);
+            if (!readable) {
+              toast.show('This video file could not be read. Please choose another video.', 'error');
+              return;
+            }
+
+            let hydrated: MediaAsset = asset;
+            if (hydrated.duration == null || hydrated.width == null) {
+              const probed = await probeVideoFile(hydrated.uri);
+              hydrated = {
+                ...hydrated,
+                duration: hydrated.duration ?? probed.duration,
+                width: hydrated.width ?? probed.width,
+                height: hydrated.height ?? probed.height,
+              };
+            }
+
+            if (hydrated.duration != null && hydrated.duration > VIDEO_MAX_SECONDS) {
+              toast.show(`This video is too long — pick a clip under ${Math.round(VIDEO_MAX_SECONDS / 60)} minutes.`, 'error');
+              return;
+            }
+
+            const longEdge = Math.max(hydrated.width ?? 0, hydrated.height ?? 0);
+            const needsCompress = longEdge > VIDEO_UPLOAD_MAX_LONG_EDGE;
+            let ready: MediaAsset = hydrated;
+            if (needsCompress) {
+              setUploadLabel('Compressing 0%');
+              try {
+                ready = await compressVideoIfTooLarge(hydrated, (p) =>
+                  setUploadLabel(`Compressing ${Math.round(p * 100)}%`),
+                );
+              } catch (compressErr) {
+                if (__DEV__) console.warn('[circle-create] compress failed', compressErr);
+                toast.show('This video could not be prepared for upload. Try a shorter clip.', 'error');
+                setUploadLabel(null);
+                return;
+              }
+            }
+
+            setUploadLabel('Uploading…');
+            let uploadMeta: { publicUrl: string };
+            try {
+              uploadMeta = await storageService.uploadPostMediaWithMeta(user.id, {
+                uri: ready.uri,
+                type: ready.mimeType,
+                name: ready.fileName ?? `circle_video_${Date.now()}.mp4`,
+                webBlob: ready.webBlob,
+              });
+            } catch (uploadErr) {
+              setUploadLabel(null);
+              throw uploadErr;
+            }
+            mediaUrl = uploadMeta.publicUrl;
+
+            /* Thumbnail upload — best-effort. We already grabbed the frame in the
+             * picker; if it's missing (compressor not linked / failed to grab)
+             * re-try once here in case the user picked through a flaky path. */
+            let thumbUri = videoThumbUri;
+            if (!thumbUri) {
+              try {
+                thumbUri = await makeVideoThumbnail(ready.uri);
+              } catch {
+                thumbUri = null;
+              }
+            }
+            if (thumbUri) {
+              try {
+                thumbnailUrl = await storageService.uploadPostMedia(user.id, {
+                  uri: thumbUri,
+                  type: 'image/jpeg',
+                  name: `circle_video_thumb_${Date.now()}.jpg`,
+                });
+              } catch (thumbErr) {
+                if (__DEV__) console.warn('[circle-create] thumbnail upload failed', thumbErr);
+                /* Non-fatal — feed card will fall back to a video placeholder. */
+              }
+            }
+
+            setUploadLabel(null);
+            postKind = 'video';
+          } else {
+            /* ── Image upload pipeline (unchanged) ── */
+            setUploadLabel('Uploading…');
+            mediaUrl = await storageService.uploadPostMedia(user.id, {
+              uri: mediaUri,
+              type: 'image/jpeg',
+              name: `community_${Date.now()}.jpg`,
+            });
+            setUploadLabel(null);
+            postKind = 'image';
+          }
+        } catch (uploadErr: unknown) {
+          setUploadLabel(null);
+          if (__DEV__) console.warn('[circle-create] media upload failed', uploadErr);
+          /* Specific user-facing copy per Section C of the audit — surface the
+           * actionable case to the user instead of the catch-all "check your
+           * connection" toast that the original implementation always shipped. */
+          const msg = uploadErr instanceof Error ? uploadErr.message.toLowerCase() : '';
+          if (msg.includes('signed in') || msg.includes('jwt') || msg.includes('session')) {
+            toast.show('We could not verify your session. Please sign in again.', 'error');
+          } else if (msg.includes('empty') || msg.includes('could not read')) {
+            toast.show('This video file could not be read. Please choose another video.', 'error');
+          } else if (msg.includes('413') || msg.includes('too large') || msg.includes('payload')) {
+            toast.show('This video is too large. Please choose a shorter video.', 'error');
+          } else if (msg.includes('timeout') || msg.includes('timed out')) {
+            toast.show('Upload timed out. Try again.', 'error');
+          } else if (msg.includes('storage upload failed (4')) {
+            toast.show('Media upload is temporarily unavailable. Try again in a moment.', 'error');
+          } else {
+            toast.show('Check your connection and try again.', 'error');
+          }
           return;
         }
       }
@@ -258,13 +488,14 @@ export default function CommunityCreatePostScreen() {
        * memes vs. questions vs. threads without storing a separate column. */
       const tags = [postType];
 
-      const isConfessions = slug === 'confessions';
+      const isConfessions = isConfessionsRoom;
 
       const created = await postsService.create({
         creator_id: user.id,
         type: postKind,
         caption: body.trim(),
         media_url: mediaUrl,
+        thumbnail_url: thumbnailUrl,
         hashtags: tags,
         communities: params.communityId ? [params.communityId] : undefined,
         /* Circle posts stay in the community feed; if Share to My Pulse is
@@ -275,6 +506,10 @@ export default function CommunityCreatePostScreen() {
         privacy_mode: 'public',
         is_anonymous: isConfessions,
         comments_disabled: !settings.allowComments || undefined,
+        /* Circle videos don't run through the creator-media-jobs queue (that's
+         * for stitch/broll on the Feed composer). Setting the column to null
+         * keeps the row in the "ready" state for feed display. */
+        media_processing_status: postKind === 'video' ? null : undefined,
         video_overlay_text:
           (postKind === 'video' || postKind === 'image') && overlayLine.trim()
             ? clampVideoOverlayText(overlayLine)
@@ -297,7 +532,7 @@ export default function CommunityCreatePostScreen() {
       /* My Pulse mirror — only when the user explicitly opted in.
        * Deliberately swallow errors so the post itself isn't lost if the
        * Pulse insert fails (the user can re-pin later from their profile). */
-      if (settings.shareToMyPulse && created?.id) {
+      if (!isConfessionsRoom && settings.shareToMyPulse && created?.id) {
         try {
           await profileUpdatesService.add(user.id, {
             type: 'link_post',
@@ -321,10 +556,15 @@ export default function CommunityCreatePostScreen() {
       await clearDraft(LEGACY_CIRCLE_DRAFT);
       pendingThreadNavRef.current = null;
       setShowSuccess(true);
-    } catch (err: any) {
-      toast.show(err.message ?? 'Failed to post', 'error');
+    } catch (err: unknown) {
+      if (looksLikeRlsPolicyDenial(err)) {
+        toast.show('Join this Circle before posting.', 'error');
+        return;
+      }
+      toast.show(err instanceof Error ? err.message : 'Failed to post', 'error');
     } finally {
       setPosting(false);
+      setUploadLabel(null);
     }
   };
 
@@ -401,6 +641,13 @@ export default function CommunityCreatePostScreen() {
         {/* ===================== POST TYPE CHIPS ===================== */}
         <CirclePostTypeChips active={postType} accent={accent} onSelect={setPostType} />
 
+        {isAnonymousConfessionCircle(slug) ? (
+          <View style={styles.confessionsDisclosure}>
+            <Ionicons name="shield-outline" size={16} color={accent.color} />
+            <Text style={styles.confessionsDisclosureText}>{CONFESSIONS_BETA_DISCLOSURE}</Text>
+          </View>
+        ) : null}
+
         {/* ===================== MAIN COMPOSER ====================== */}
         <AccentComposerFrame
           accentColor={accent.color}
@@ -432,23 +679,59 @@ export default function CommunityCreatePostScreen() {
           <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
         </View>
 
-        {/* ====================== MEDIA TILES ======================= */}
+        {/* ====================== MEDIA TILES =======================
+            Video tile renders the **local poster thumbnail** (not the video
+            URI itself). The legacy `<Image src={videoUri} />` displayed
+            nothing — that was the "no preview" bug. While the thumbnail is
+            being generated we show a spinner; if generation fails (Expo Go
+            without react-native-compressor) we fall back to a dark play-icon
+            placeholder so the user still sees confirmation that their
+            selection succeeded. */}
         {allowsMedia && (
           <View style={styles.mediaTiles}>
             {mediaUri ? (
               <View style={styles.mediaTile}>
-                <Image
-                  source={{ uri: mediaUri }}
-                  style={styles.mediaImg}
-                  contentFit="cover"
-                  {...pulseImageFeedHeroProps}
-                />
+                {mediaKind === 'video' ? (
+                  videoThumbUri ? (
+                    <Image
+                      source={{ uri: videoThumbUri }}
+                      style={styles.mediaImg}
+                      contentFit="cover"
+                      {...pulseImageFeedHeroProps}
+                    />
+                  ) : (
+                    <View style={[StyleSheet.absoluteFillObject, styles.videoThumbFallback]} />
+                  )
+                ) : (
+                  <Image
+                    source={{ uri: mediaUri }}
+                    style={styles.mediaImg}
+                    contentFit="cover"
+                    {...pulseImageFeedHeroProps}
+                  />
+                )}
                 {mediaKind === 'video' && (
                   <View style={styles.playOverlay}>
-                    <Ionicons name="play-circle" size={36} color="#FFFFFFE6" />
+                    {videoThumbLoading ? (
+                      <ActivityIndicator color="#FFFFFFE6" />
+                    ) : (
+                      <Ionicons name="play-circle" size={36} color="#FFFFFFE6" />
+                    )}
                   </View>
                 )}
-                <TouchableOpacity style={styles.removeBtn} onPress={removeMedia}>
+                {mediaKind === 'video' && videoAsset?.duration != null && !videoThumbLoading && (
+                  <View style={styles.durationBadge}>
+                    <Text style={styles.durationBadgeText}>
+                      {Math.max(1, Math.round(videoAsset.duration))}s
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={styles.removeBtn}
+                  onPress={removeMedia}
+                  disabled={posting}
+                  accessibilityLabel="Remove attached media"
+                >
                   <Ionicons name="close" size={16} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
@@ -458,15 +741,24 @@ export default function CommunityCreatePostScreen() {
             <TouchableOpacity
               style={[styles.mediaTile, styles.mediaAddTile]}
               onPress={pickMedia}
+              disabled={posting}
               activeOpacity={0.85}
             >
               <View style={styles.mediaAddIcon}>
-                <Ionicons name="image" size={22} color={colors.dark.textMuted} />
+                <Ionicons
+                  name={postType === 'video' ? 'videocam' : 'image'}
+                  size={22}
+                  color={colors.dark.textMuted}
+                />
                 <View style={styles.mediaAddPlus}>
                   <Ionicons name="add" size={12} color="#FFF" />
                 </View>
               </View>
-              <Text style={styles.mediaAddText}>{mediaKind === 'video' || postType === 'video' ? 'Add Video' : 'Add Photo'}</Text>
+              <Text style={styles.mediaAddText}>
+                {mediaUri
+                  ? mediaKind === 'video' ? 'Replace Video' : 'Replace Photo'
+                  : postType === 'video' ? 'Add Video' : 'Add Photo'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -509,6 +801,7 @@ export default function CommunityCreatePostScreen() {
           <CircleSettingsCard
             settings={settings}
             canPin={profile?.roleAdmin === true}
+            hideShareToMyPulse={isConfessionsRoom}
             onChange={onChangeSettings}
           />
         </View>
@@ -552,7 +845,10 @@ export default function CommunityCreatePostScreen() {
               style={[styles.postBtn, !canPost && { opacity: 0.7 }]}
             >
               {posting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  {uploadLabel ? <Text style={styles.postText}>{uploadLabel}</Text> : null}
+                </>
               ) : (
                 <>
                   <Ionicons name="paper-plane" size={15} color="#FFFFFF" />
@@ -654,11 +950,30 @@ const styles = StyleSheet.create({
   },
   mediaTilePlaceholder: { backgroundColor: 'transparent', borderColor: 'transparent' },
   mediaImg: { width: '100%', height: '100%' },
+  /** Shown when react-native-compressor cannot generate a poster frame (e.g. Expo Go). */
+  videoThumbFallback: {
+    backgroundColor: 'rgba(15, 28, 48, 0.92)',
+  },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  durationBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  durationBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   removeBtn: {
     position: 'absolute',
@@ -737,4 +1052,24 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.button ?? 24,
   },
   postText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 },
+  confessionsDisclosure: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  confessionsDisclosureText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.dark.textSecondary,
+    fontWeight: '500',
+  },
 });

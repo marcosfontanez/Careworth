@@ -18,6 +18,7 @@ import { useFeatureFlags, type FeatureFlags } from '@/lib/featureFlags';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { adsService, subscriptionService, creatorTipsService } from '@/services/monetization';
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
+import { circleModerationService } from '@/services/supabase';
 import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 
 const ADMIN_MOD_LIST_WINDOW = getAdminModerationListWindow();
@@ -145,7 +146,7 @@ export default function AdminPanel() {
       if (tab === 'reports') {
         let query = supabase
           .from('reports')
-          .select('*, reporter:reporter_id(id, display_name, avatar_url)')
+          .select('*, reporter:profiles!reports_reporter_id_fkey(id, display_name, avatar_url)')
           .order('created_at', { ascending: false })
           .limit(100);
         if (reportFilter !== 'all') query = query.eq('status', reportFilter);
@@ -179,6 +180,22 @@ export default function AdminPanel() {
                     .eq('id', r.target_id)
                     .single();
                   target_content = profile;
+                } else if (r.target_type === 'circle_thread') {
+                  const { data: thread } = await supabase
+                    .from('circle_threads')
+                    .select('title, body, author_id, community_id, moderation_status, communities:community_id(name, slug)')
+                    .eq('id', r.target_id)
+                    .maybeSingle();
+                  target_content = thread;
+                } else if (r.target_type === 'circle_reply') {
+                  const { data: reply } = await supabase
+                    .from('circle_replies')
+                    .select(
+                      'body, author_id, moderation_status, thread_id, circle_threads:thread_id(title, community_id, communities:community_id(name, slug))',
+                    )
+                    .eq('id', r.target_id)
+                    .maybeSingle();
+                  target_content = reply;
                 }
               } catch {
                 /* skip enrichment failures */
@@ -207,7 +224,7 @@ export default function AdminPanel() {
       } else if (tab === 'content') {
         let query = supabase
           .from('posts')
-          .select('id, type, caption, media_url, privacy_mode, like_count, comment_count, created_at, author:creator_id(display_name)')
+          .select('id, type, caption, media_url, privacy_mode, like_count, comment_count, created_at, author:profiles!posts_creator_id_fkey(display_name)')
           .order('created_at', { ascending: false })
           .limit(100);
         if (contentSearch.trim()) {
@@ -342,23 +359,73 @@ export default function AdminPanel() {
     void loadData();
   };
 
+  const handleCircleModeration = async (
+    report: Report,
+    action: 'hide' | 'remove' | 'restore' | 'pending_review' | 'approve',
+  ) => {
+    try {
+      if (report.target_type === 'circle_thread') {
+        if (action === 'hide') await circleModerationService.hideThread(report.target_id, report.reason);
+        else if (action === 'remove') await circleModerationService.removeThread(report.target_id, report.reason);
+        else if (action === 'pending_review') await circleModerationService.markThreadPendingReview(report.target_id, report.reason);
+        else await circleModerationService.restoreThread(report.target_id);
+      } else if (report.target_type === 'circle_reply') {
+        if (action === 'hide') await circleModerationService.hideReply(report.target_id, report.reason);
+        else if (action === 'remove') await circleModerationService.removeReply(report.target_id, report.reason);
+        else if (action === 'pending_review') await circleModerationService.markReplyPendingReview(report.target_id, report.reason);
+        else await circleModerationService.restoreReply(report.target_id);
+      } else {
+        toast.show('Unsupported target for circle moderation', 'info');
+        return;
+      }
+      const repUpdate = await supabase
+        .from('reports')
+        .update({
+          status: action === 'restore' || action === 'approve' ? 'reviewed' : 'action_taken',
+          reviewed_by: user?.id ?? null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', report.id);
+      if (repUpdate.error) throw repUpdate.error;
+      toast.show(
+        action === 'restore' || action === 'approve'
+          ? 'Content approved'
+          : action === 'pending_review'
+            ? 'Queued for review'
+            : 'Moderation applied',
+        'success',
+      );
+      setSelectedReport(null);
+      void loadData();
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Moderation failed', 'error');
+    }
+  };
+
   const handleDeleteContent = async (report: Report) => {
-    Alert.alert('Delete Content', 'Permanently delete the reported content?', [
+    Alert.alert('Remove Content', 'Remove this content from the circle? Replies stay for audit unless hard-deleted separately.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           if (report.target_type === 'post') {
-            const del = await supabase.from('posts').delete().eq('id', report.target_id);
-            if (del.error) {
-              toast.show(del.error.message ?? 'Could not delete post', 'error');
+            const hide = await supabase.rpc('admin_post_set_privacy_mode', {
+              p_post_id: report.target_id,
+              p_privacy_mode: 'private',
+            });
+            if (hide.error) {
+              toast.show(rpcToastMessage(hide.error.message ?? 'Could not hide post'), 'error');
               return;
             }
           } else if (report.target_type === 'comment') {
             const del = await supabase.from('comments').delete().eq('id', report.target_id);
             if (del.error) {
-              toast.show(del.error.message ?? 'Could not delete comment', 'error');
+              toast.show(del.error.message ?? 'Could not remove comment', 'error');
               return;
             }
+          } else if (report.target_type === 'circle_thread') {
+            await circleModerationService.removeThread(report.target_id, report.reason);
+          } else if (report.target_type === 'circle_reply') {
+            await circleModerationService.removeReply(report.target_id, report.reason);
           }
           const repUpdate = await supabase.from('reports')
             .update({ status: 'action_taken', reviewed_by: user?.id ?? null, reviewed_at: new Date().toISOString() })
@@ -367,7 +434,7 @@ export default function AdminPanel() {
             toast.show(repUpdate.error.message ?? 'Content deleted but report status not updated', 'error');
             return;
           }
-          toast.show('Content deleted', 'success');
+          toast.show('Content removed', 'success');
           setSelectedReport(null);
           void loadData();
         },
@@ -597,11 +664,47 @@ export default function AdminPanel() {
                       />
                     )}
                     <Text style={styles.previewText} numberOfLines={4}>
-                      {r.target_content.caption ?? r.target_content.content ?? r.target_content.display_name ?? '—'}
+                      {r.target_type === 'circle_thread'
+                        ? `${(r.target_content as { title?: string })?.title ?? 'Discussion'}\n${String((r.target_content as { body?: string })?.body ?? '').slice(0, 280)}`
+                        : r.target_type === 'circle_reply'
+                          ? String((r.target_content as { body?: string })?.body ?? '').slice(0, 280)
+                          : (r.target_content.caption ??
+                            r.target_content.content ??
+                            r.target_content.display_name ??
+                            '—')}
                     </Text>
                   </View>
                 </View>
               )}
+
+              {(r.target_type === 'circle_thread' || r.target_type === 'circle_reply') && r.target_content ? (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Circle</Text>
+                  <Text style={styles.detailValue}>
+                    {r.target_type === 'circle_thread'
+                      ? ((r.target_content as { communities?: { name?: string; slug?: string } }).communities?.name ??
+                        (r.target_content as { communities?: { slug?: string } }).communities?.slug ??
+                        'Unknown circle')
+                      : ((r.target_content as { circle_threads?: { communities?: { name?: string; slug?: string }; title?: string } }).circle_threads?.communities?.name ??
+                        (r.target_content as { circle_threads?: { title?: string } }).circle_threads?.title ??
+                        'Unknown circle')}
+                  </Text>
+                </View>
+              ) : null}
+
+              {(r.target_type === 'circle_thread' || r.target_type === 'circle_reply') ? (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Moderation note</Text>
+                  <Text style={styles.detailValue}>
+                    Queue for review hides content until approved. Hide/Remove are reversible via Restore/Approve.
+                  </Text>
+                  {(r.target_content as { moderation_status?: string } | null)?.moderation_status === 'pending_review' ? (
+                    <Text style={[styles.detailValue, { color: colors.status.warning, marginTop: 6 }]}>
+                      Status: pending review
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
             </ScrollView>
 
             {r.status === 'pending' && (
@@ -617,20 +720,55 @@ export default function AdminPanel() {
                     <Text style={styles.modalBtnText}>Ban reported profile</Text>
                   </TouchableOpacity>
                 ) : null}
-                <TouchableOpacity
-                  style={[styles.modalBtn, { backgroundColor: colors.status.error }]}
-                  onPress={() => handleDeleteContent(r)}
-                >
-                  <Ionicons name="trash-outline" size={16} color={colors.dark.text} />
-                  <Text style={styles.modalBtnText}>Delete Content</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalBtn, { backgroundColor: colors.status.warning }]}
-                  onPress={() => handleReportAction(r, 'action_taken')}
-                >
-                  <Ionicons name="eye-off-outline" size={16} color={colors.dark.text} />
-                  <Text style={styles.modalBtnText}>Hide Content</Text>
-                </TouchableOpacity>
+                {(r.target_type === 'circle_thread' || r.target_type === 'circle_reply') ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.modalBtn, { backgroundColor: colors.dark.cardAlt }]}
+                      onPress={() => void handleCircleModeration(r, 'pending_review')}
+                    >
+                      <Ionicons name="time-outline" size={16} color={colors.dark.text} />
+                      <Text style={styles.modalBtnText}>Queue review</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalBtn, { backgroundColor: colors.status.warning }]}
+                      onPress={() => void handleCircleModeration(r, 'hide')}
+                    >
+                      <Ionicons name="eye-off-outline" size={16} color={colors.dark.text} />
+                      <Text style={styles.modalBtnText}>Hide</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalBtn, { backgroundColor: colors.status.error }]}
+                      onPress={() => void handleCircleModeration(r, 'remove')}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.dark.text} />
+                      <Text style={styles.modalBtnText}>Remove</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalBtn, { backgroundColor: colors.primary.teal }]}
+                      onPress={() => void handleCircleModeration(r, 'approve')}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={16} color={colors.dark.text} />
+                      <Text style={styles.modalBtnText}>Approve</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.modalBtn, { backgroundColor: colors.status.error }]}
+                      onPress={() => handleDeleteContent(r)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.dark.text} />
+                      <Text style={styles.modalBtnText}>Delete Content</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalBtn, { backgroundColor: colors.status.warning }]}
+                      onPress={() => handleReportAction(r, 'action_taken')}
+                    >
+                      <Ionicons name="eye-off-outline" size={16} color={colors.dark.text} />
+                      <Text style={styles.modalBtnText}>Hide Content</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
                 <TouchableOpacity
                   style={[styles.modalBtn, { backgroundColor: colors.neutral.midGray }]}
                   onPress={() => handleReportAction(r, 'dismissed')}
@@ -843,7 +981,13 @@ export default function AdminPanel() {
                     </Text>
                     {item.target_content && (
                       <Text style={styles.cardDetails} numberOfLines={2}>
-                        {item.target_content.caption ?? item.target_content.content ?? item.target_content.display_name}
+                        {item.target_type === 'circle_thread'
+                          ? `${(item.target_content as { title?: string }).title ?? 'Discussion'} — ${String((item.target_content as { body?: string }).body ?? '').slice(0, 120)}`
+                          : (item.target_content.caption ??
+                            item.target_content.content ??
+                            item.target_content.display_name ??
+                            (item.target_content as { title?: string }).title ??
+                            '—')}
                       </Text>
                     )}
                     <Text style={styles.cardReporter}>
@@ -1161,6 +1305,16 @@ export default function AdminPanel() {
                   label="Live hub demo streams (demo-live-* carousel)"
                   flag="liveDiscoveryDemos"
                 />
+                <FlagToggle label="Feed Live injection (Happening Now tray)" flag="liveFeedInjection" />
+                <FlagToggle label="Feed clipping (clip composer)" flag="feedClipping" />
+                <FlagToggle
+                  label="Feed video remix advanced (Duet / Stitch / B-roll)"
+                  flag="feedVideoRemixAdvanced"
+                />
+                <FlagToggle
+                  label="Circle video posting (video chip + upload)"
+                  flag="circleVideoPosting"
+                />
                 <FlagToggle label="Feed creator gifting (rail)" flag="feedCreatorGifting" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />
@@ -1229,6 +1383,7 @@ function getTargetIcon(type: string) {
     case 'post': return 'document-text-outline';
     case 'comment': return 'chatbubble-outline';
     case 'profile': return 'person-outline';
+    case 'circle_thread': return 'chatbubbles-outline';
     default: return 'help-outline';
   }
 }
