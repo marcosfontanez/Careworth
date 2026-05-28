@@ -6,10 +6,6 @@ import { createPublicSupabaseAnonClient } from "@/lib/supabase/public-anon";
 export const POST_SHARE_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isLiveScheduled(status: string | null | undefined): boolean {
-  return (status ?? "live").trim().toLowerCase() === "live";
-}
-
 function clampText(s: string, max: number) {
   const t = s.trim();
   if (t.length <= max) return t;
@@ -83,28 +79,26 @@ export function buildPostShareOg(post: PostSharePublic, siteBase: string): {
 /**
  * Public, no-auth snapshot for share landing + Open Graph. Cached per request so
  * `generateMetadata` and the page share one round-trip.
+ *
+ * Backed by the SECURITY DEFINER RPC `public.get_post_share_public(uuid)` (see
+ * migration 235). We previously read `posts_viewer_safe` directly, but migration
+ * 220's REVOKE SELECT ... FROM anon on `public.posts` made the view unreachable
+ * to the anonymous client we run on the marketing site (caller-side privilege
+ * check on the underlying table). The RPC bypasses that and only returns rows
+ * that are PUBLIC (or alias) and scheduled live; anonymous posts get null
+ * creator fields so we never leak the real author.
  */
 export const loadPostSharePublic = cache(async (id: string): Promise<PostSharePublic | null> => {
-  if (!POST_SHARE_UUID_RE.test(id)) {
-    console.warn("[post-share] uuid regex failed", { id });
-    return null;
-  }
+  if (!POST_SHARE_UUID_RE.test(id)) return null;
   const supabase = createPublicSupabaseAnonClient();
-  if (!supabase) {
-    console.warn("[post-share] anon client missing — NEXT_PUBLIC_SUPABASE_URL / ANON_KEY env var not set at runtime");
-    return null;
-  }
+  if (!supabase) return null;
 
-  const { data: post, error } = await supabase
-    .from("posts_viewer_safe")
-    .select(
-      "caption, thumbnail_url, media_url, type, scheduled_status, is_anonymous, creator_id, like_count, comment_count",
-    )
-    .eq("id", id)
+  const { data, error } = await supabase
+    .rpc("get_post_share_public", { p_id: id })
     .maybeSingle();
 
   if (error) {
-    console.warn("[post-share] posts_viewer_safe query error", {
+    console.warn("[post-share] get_post_share_public rpc error", {
       id,
       code: (error as { code?: string }).code,
       message: (error as { message?: string }).message,
@@ -113,45 +107,28 @@ export const loadPostSharePublic = cache(async (id: string): Promise<PostSharePu
     });
     return null;
   }
-  if (!post) {
-    console.warn("[post-share] posts_viewer_safe returned no row for id", { id });
-    return null;
-  }
-  const row = post as {
+  if (!data) return null;
+
+  const row = data as {
     caption?: string | null;
     thumbnail_url?: string | null;
     media_url?: string | null;
     type?: string | null;
-    scheduled_status?: string | null;
     is_anonymous?: boolean;
-    creator_id?: string;
     like_count?: number | null;
     comment_count?: number | null;
+    creator_display_name?: string | null;
+    creator_username?: string | null;
   };
 
-  if (!isLiveScheduled(row.scheduled_status)) {
-    console.warn("[post-share] scheduled_status not live", {
-      id,
-      scheduled_status: row.scheduled_status,
-    });
-    return null;
-  }
-
+  const isAnonymous = Boolean(row.is_anonymous);
   let creatorLine: string | null = null;
-  if (!row.is_anonymous && row.creator_id) {
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("display_name, username")
-      .eq("id", row.creator_id)
-      .maybeSingle();
-    const p = prof as { display_name?: string | null; username?: string | null } | null;
-    if (p) {
-      const u = (p.username ?? "").trim().replace(/^@/, "");
-      const d = (p.display_name ?? "").trim();
-      if (u) creatorLine = `PulseVerse · @${u}`;
-      else if (d) creatorLine = `PulseVerse · ${d}`;
-    }
-    if (!creatorLine) creatorLine = "PulseVerse";
+  if (!isAnonymous) {
+    const u = (row.creator_username ?? "").trim().replace(/^@/, "");
+    const d = (row.creator_display_name ?? "").trim();
+    if (u) creatorLine = `PulseVerse · @${u}`;
+    else if (d) creatorLine = `PulseVerse · ${d}`;
+    else creatorLine = "PulseVerse";
   }
 
   return {
@@ -159,7 +136,7 @@ export const loadPostSharePublic = cache(async (id: string): Promise<PostSharePu
     thumbnail_url: row.thumbnail_url != null ? String(row.thumbnail_url) : null,
     media_url: row.media_url != null ? String(row.media_url) : null,
     postType: String(row.type ?? "text"),
-    is_anonymous: Boolean(row.is_anonymous),
+    is_anonymous: isAnonymous,
     like_count: Number(row.like_count ?? 0),
     comment_count: Number(row.comment_count ?? 0),
     creatorLine,
