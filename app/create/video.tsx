@@ -21,12 +21,19 @@ import { storageService, resolvePostMediaDownloadUrl, STORAGE_BUCKETS } from '@/
 import { postsService, enqueueCreatorMediaJob, waitForCreatorMediaJob } from '@/services/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
-import { SuccessAnimation } from '@/components/ui/SuccessAnimation';
+import { VideoCirclePicker } from '@/components/create/VideoCirclePicker';
+import { VideoPublishSuccessSheet } from '@/components/create/VideoPublishSuccessSheet';
 import { useToast } from '@/components/ui/Toast';
-import { saveDraft, loadDraft, clearDraft, type DraftData } from '@/lib/drafts';
+import { shareToMyPulseAsClip } from '@/lib/share';
+import { patchPostLinkedCommunityMeta } from '@/lib/postLinkedCommunityCache';
+import { withLinkedCommunityMeta } from '@/lib/postLinkedCommunityMeta';
+import { profileUpdateKeys } from '@/lib/queryKeys';
+import type { Community, Post } from '@/types';
+import { saveDraft, loadDraft, clearDraft, filterPersistableDraftMediaUris, isPersistableDraftMediaUri, type DraftData } from '@/lib/drafts';
 import { subscribeComposerDraftFlush } from '@/lib/draftAppStateFlush';
-import { recordVideo, pickVideoFromGallery, VIDEO_MIN_SECONDS, VIDEO_MAX_SECONDS, type MediaAsset } from '@/lib/media';
+import { recordVideo, pickVideoFromGallery, isMediaUriReadable, ensureMediaWebBlob, VIDEO_MIN_SECONDS, VIDEO_MAX_SECONDS, type MediaAsset } from '@/lib/media';
 import { compressVideoIfTooLarge, VIDEO_UPLOAD_MAX_LONG_EDGE } from '@/lib/videoCompression';
+import { webVideoNeedsReencode } from '@/lib/webVideoCompression';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
@@ -37,11 +44,18 @@ import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
 import { loadBrandKit, saveBrandKit, type BrandKit } from '@/lib/brandKit';
 import type { MoodPreset, MoodPresetId } from '@/lib/moodPresets';
 import { appendHashtag } from '@/lib/hashtagStudio';
+import { parseHashtagsFromText, syncHashtagsToString, HASHTAG_MAX } from '@/lib/hashtags';
+import { HashtagInput } from '@/components/create/HashtagInput';
 import { startNewSeries, type SeriesSelection } from '@/lib/seriesMode';
 import { requestDuetMuxMergedFile } from '@/services/export/duetMuxExportClient';
 import { isVideoExportConfigured } from '@/services/export/videoExportClient';
-import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import type { DuetLayoutMode } from '@/lib/duetLayoutMode';
+import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
+import { PostClipPermissionToggles } from '@/components/create/PostClipPermissionToggles';
+import {
+  clipDefaultsFromProfile,
+  initialPostClipSettings,
+} from '@/lib/postCreatorClipDefaults';
 
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { EducationModeToggle, type EducationCitation } from '@/components/create/EducationModeToggle';
@@ -88,6 +102,7 @@ async function uploadCompressedVideoForStitch(
     uri: ready.uri,
     type: ready.mimeType,
     name: ready.fileName ?? `clip_${Date.now()}.mp4`,
+    webBlob: ready.webBlob,
   });
   return { publicUrl: meta.publicUrl, storagePath: meta.storagePath };
 }
@@ -236,7 +251,7 @@ export default function CreateVideoScreen() {
     isError: stitchSourceError,
   } = usePost(stitchSourcePostIdTrim, { enabled: Boolean(stitchSourcePostIdTrim) });
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const toast = useToast();
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState('');
@@ -249,14 +264,40 @@ export default function CreateVideoScreen() {
   const [soundTitle, setSoundTitle] = useState('');
   const [media, setMedia] = useState<MediaAsset | null>(null);
   const [posting, setPosting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState<{
+    postId: string;
+    pinned: boolean;
+    circle: Community | null;
+    scheduled: boolean;
+  } | null>(null);
+  const [selectedCircle, setSelectedCircle] = useState<Community | null>(null);
+  const [pinToMyPulse, setPinToMyPulse] = useState(false);
   const [compressPct, setCompressPct] = useState<number | null>(null);
   const [privacy, setPrivacy] = useState<'public' | 'followers'>('public');
   const [commentsOn, setCommentsOn] = useState(true);
+  const clipProfileDefaults = useMemo(() => clipDefaultsFromProfile(profile), [profile]);
+  const [allowViewerClips, setAllowViewerClips] = useState(true);
+  const [allowRemix, setAllowRemix] = useState(true);
+  const [allowClipDownloads, setAllowClipDownloads] = useState(false);
+
+  useEffect(() => {
+    const next = initialPostClipSettings(privacy, clipProfileDefaults);
+    setAllowViewerClips(next.allowViewerClips);
+    setAllowRemix(next.allowRemix);
+    setAllowClipDownloads(next.allowClipDownloads);
+  }, [privacy, clipProfileDefaults]);
+
+  const clipPermissionsPayload = useMemo(
+    () => ({
+      allow_viewer_clips: allowViewerClips,
+      allow_remix: allowRemix,
+      allow_clip_downloads: allowClipDownloads,
+    }),
+    [allowViewerClips, allowRemix, allowClipDownloads],
+  );
+
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceLabel, setEvidenceLabel] = useState('');
-  /** Shorts-style headline — prepended to caption on post. */
-  const [shortTitle, setShortTitle] = useState('');
   /** On-video sticker line; sent as `video_overlay_text` and rendered live over the feed video. */
   const [overlayLine, setOverlayLine] = useState('');
   const [filterPreset, setFilterPreset] = useState<FilterPreset>('none');
@@ -327,7 +368,6 @@ export default function CreateVideoScreen() {
       caption.trim() ||
       hashtags.trim() ||
       soundTitle.trim() ||
-      shortTitle.trim() ||
       overlayLine.trim()
     ) {
       return true;
@@ -341,7 +381,6 @@ export default function CreateVideoScreen() {
     caption,
     hashtags,
     soundTitle,
-    shortTitle,
     overlayLine,
     media,
     followUpClips.length,
@@ -371,6 +410,17 @@ export default function CreateVideoScreen() {
 
   const unsavedLeaveRef = useRef(hasUnsavedLeaveRisk);
   unsavedLeaveRef.current = hasUnsavedLeaveRisk;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !media?.uri || media.webBlob?.size) return;
+    let cancelled = false;
+    void ensureMediaWebBlob(media).then((next) => {
+      if (!cancelled && next.webBlob?.size) setMedia(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [media?.uri, media?.webBlob]);
 
   useEffect(() => {
     if (followUpClips.length === 0) setClipQueueVariant(null);
@@ -589,8 +639,8 @@ export default function CreateVideoScreen() {
   }, [media?.uri]);
 
   const phiFindings = useMemo(
-    () => scanForPhi(caption, shortTitle, overlayLine, hashtags, soundTitle),
-    [caption, shortTitle, overlayLine, hashtags, soundTitle],
+    () => scanForPhi(caption, overlayLine, hashtags, soundTitle),
+    [caption, overlayLine, hashtags, soundTitle],
   );
   const phiSev = highestSeverity(phiFindings);
 
@@ -625,9 +675,15 @@ export default function CreateVideoScreen() {
       const draft = await loadDraft('video');
       if (cancelled) return;
       if (draft) {
-        setCaption(draft.caption ?? '');
+        let restoredCaption = draft.caption ?? '';
+        const legacyHeadline = draft.shortTitle?.trim();
+        if (legacyHeadline) {
+          restoredCaption = restoredCaption.trim()
+            ? `${legacyHeadline}\n\n${restoredCaption.trim()}`
+            : legacyHeadline;
+        }
+        setCaption(restoredCaption);
         setHashtags(draft.hashtags ?? '');
-        setShortTitle(draft.shortTitle ?? '');
         setOverlayLine(draft.overlayLine ?? '');
         if (!pending?.soundTitle) setSoundTitle(draft.soundTitle ?? '');
         if (draft.seriesSelection?.seriesId) setSeriesSelection(draft.seriesSelection);
@@ -639,6 +695,25 @@ export default function CreateVideoScreen() {
         }
         if (typeof draft.commentsOnVideo === 'boolean') {
           setCommentsOn(draft.commentsOnVideo);
+        }
+        if (typeof draft.pinToMyPulse === 'boolean') {
+          setPinToMyPulse(draft.pinToMyPulse);
+        }
+        if (draft.selectedCircleSnapshot?.id) {
+          const snap = draft.selectedCircleSnapshot;
+          setSelectedCircle({
+            id: snap.id,
+            name: snap.name,
+            slug: snap.slug,
+            description: '',
+            icon: '',
+            accentColor: '',
+            memberCount: 0,
+            postCount: 0,
+            isJoined: true,
+            categories: [],
+            trendingTopics: [],
+          });
         }
         if (typeof draft.trimStartSec === 'number' && Number.isFinite(draft.trimStartSec)) {
           setTrimStart(draft.trimStartSec);
@@ -658,32 +733,41 @@ export default function CreateVideoScreen() {
           setDuetLayoutMode(draft.videoDuetLayout);
         }
         if (draft.followUpClipUris?.length && !stitchSourcePostIdTrim) {
-          setFollowUpClips(
-            draft.followUpClipUris.map((uri, i) => ({
-              uri,
-              type: 'video' as const,
-              mimeType: 'video/mp4',
-              fileName: `draft_queue_${i}.mp4`,
-            })),
-          );
-          setAdvancedCreatorOpen(true);
+          const queueUris = filterPersistableDraftMediaUris(draft.followUpClipUris) ?? [];
+          if (queueUris.length > 0) {
+            setFollowUpClips(
+              queueUris.map((uri, i) => ({
+                uri,
+                type: 'video' as const,
+                mimeType: 'video/mp4',
+                fileName: `draft_queue_${i}.mp4`,
+              })),
+            );
+            setAdvancedCreatorOpen(true);
+          }
         }
         if (draft.mediaUris?.[0] && !pending && !stitchSourcePostIdTrim) {
-          skipNextTrimResetRef.current = true;
           const u = draft.mediaUris[0];
-          setMedia({
-            uri: u,
-            type: 'video',
-            mimeType: 'video/mp4',
-            fileName: 'draft_clip.mp4',
-          });
-          openedPickerRef.current = true;
+          if (isPersistableDraftMediaUri(u)) {
+            const readable = await isMediaUriReadable(u);
+            if (readable) {
+              skipNextTrimResetRef.current = true;
+              setMedia({
+                uri: u,
+                type: 'video',
+                mimeType: 'video/mp4',
+                fileName: 'draft_clip.mp4',
+              });
+              openedPickerRef.current = true;
+            } else if (__DEV__) {
+              console.warn('[video] draft media URI no longer readable — skipping clip restore');
+            }
+          }
         }
         if (
           (draft.caption ||
             draft.hashtags ||
             draft.soundTitle ||
-            draft.shortTitle ||
             draft.overlayLine ||
             draft.mediaUris?.length ||
             draft.followUpClipUris?.length ||
@@ -716,15 +800,22 @@ export default function CreateVideoScreen() {
       caption,
       hashtags,
       soundTitle,
-      shortTitle,
       overlayLine,
-      mediaUris: media ? [media.uri] : undefined,
-      followUpClipUris: followUpClips.length > 0 ? followUpClips.map((c) => c.uri) : undefined,
+      mediaUris: media && isPersistableDraftMediaUri(media.uri) ? [media.uri] : undefined,
+      followUpClipUris:
+        followUpClips.length > 0
+          ? filterPersistableDraftMediaUris(followUpClips.map((c) => c.uri))
+          : undefined,
       clipQueueVariant: clipQueueVariant ?? undefined,
       seriesSelection: seriesSelection ?? undefined,
       ...(duetPostIdTrim ? { videoDuetLayout: duetLayoutMode } : {}),
       privacyVideo: privacy,
       commentsOnVideo: commentsOn,
+      pinToMyPulse,
+      selectedCircleId: selectedCircle?.id ?? null,
+      selectedCircleSnapshot: selectedCircle
+        ? { id: selectedCircle.id, name: selectedCircle.name, slug: selectedCircle.slug }
+        : undefined,
     };
     if (media?.duration != null) {
       payload.trimStartSec = trimStart;
@@ -738,7 +829,6 @@ export default function CreateVideoScreen() {
     caption,
     hashtags,
     soundTitle,
-    shortTitle,
     overlayLine,
     media,
     followUpClips,
@@ -748,6 +838,8 @@ export default function CreateVideoScreen() {
     duetLayoutMode,
     privacy,
     commentsOn,
+    pinToMyPulse,
+    selectedCircle,
     trimStart,
     trimEnd,
     soundPostIdTrim,
@@ -755,25 +847,25 @@ export default function CreateVideoScreen() {
   ]);
 
   useEffect(() => {
-    if (!draftBootstrapped) return;
+    if (!draftBootstrapped || posting || publishSuccess) return;
     if (!hasComposerDraft) {
       void clearDraft('video');
       return;
     }
     saveDraft('video', buildVideoDraftData());
-  }, [draftBootstrapped, hasComposerDraft, buildVideoDraftData]);
+  }, [draftBootstrapped, hasComposerDraft, buildVideoDraftData, posting, publishSuccess]);
 
   useEffect(() => {
     return subscribeComposerDraftFlush(() => {
-      if (!draftBootstrapped || !hasComposerDraft) return null;
+      if (!draftBootstrapped || !hasComposerDraft || posting || publishSuccess) return null;
       return { ready: true, type: 'video', data: buildVideoDraftData() };
     });
-  }, [draftBootstrapped, hasComposerDraft, buildVideoDraftData]);
+  }, [draftBootstrapped, hasComposerDraft, buildVideoDraftData, posting, publishSuccess]);
 
   useEffect(() => {
     if (!draftBootstrapped) return;
     const sub = navigation.addListener('beforeRemove', (e) => {
-      if (posting || showSuccess) return;
+      if (posting || publishSuccess) return;
       if (!unsavedLeaveRef.current) return;
       e.preventDefault();
       Alert.alert(
@@ -793,7 +885,7 @@ export default function CreateVideoScreen() {
       );
     });
     return sub;
-  }, [navigation, draftBootstrapped, posting, showSuccess]);
+  }, [navigation, draftBootstrapped, posting, publishSuccess]);
 
   const handleUpload = async () => {
     const asset = await pickVideoFromGallery();
@@ -868,6 +960,103 @@ export default function CreateVideoScreen() {
     toast,
   ]);
 
+  const communityCreatePayload = useMemo(
+    () => (selectedCircle?.id ? { communities: [selectedCircle.id] } : {}),
+    [selectedCircle?.id],
+  );
+
+  const clearComposerContent = useCallback(() => {
+    setCaption('');
+    setHashtags('');
+    setSoundTitle('');
+    setMedia(null);
+    setSelectedCircle(null);
+    setPinToMyPulse(false);
+    setCompressPct(null);
+    setPrivacy('public');
+    setCommentsOn(true);
+    setEvidenceUrl('');
+    setEvidenceLabel('');
+    setOverlayLine('');
+    setFilterPreset('none');
+    setPreviewPlaybackRate(1);
+    setShowDraftHint(false);
+    setPhiAck(false);
+    setEducationOn(false);
+    setCitations([]);
+    setSeriesSelection(null);
+    setScheduledAt(null);
+    setMoodId(null);
+    setOriginalAudioOn(false);
+    setOriginalAudioMix(1);
+    setCustomCoverUri(null);
+    setCoverAltUri(null);
+    setThumbStudioOpen(false);
+    setThumbStudioMode('primary');
+    setClipSplitOpen(false);
+    setStitchOpen(false);
+    setStitchVariant('series');
+    setClipQueueVariant(null);
+    setDuetMuxBusy(false);
+    setDuetLayoutMode('strip');
+    setSpeedRamp({ start: 1, mid: 1, end: 1 });
+    setFollowUpClips([]);
+    setTrimStart(0);
+    setTrimEnd(null);
+    setSoundAnchorSec(null);
+    setAdvancedCreatorOpen(false);
+    setBrandKitOpen(false);
+    setAndroidFreezeComposerPreview(false);
+    setComposerPreviewPosterUri(null);
+    soundAnchorInitDoneRef.current = false;
+    openedPickerRef.current = false;
+  }, []);
+
+  const finalizePublish = useCallback(
+    async (created: Post, opts: { scheduled: boolean }) => {
+      const circle = selectedCircle;
+      const enriched = withLinkedCommunityMeta(created, circle);
+      if (circle) {
+        patchPostLinkedCommunityMeta(created.id, { name: circle.name, slug: circle.slug });
+      }
+
+      clearComposerContent();
+      void clearDraft('video');
+      setPublishSuccess({
+        postId: created.id,
+        pinned: pinToMyPulse,
+        circle,
+        scheduled: opts.scheduled,
+      });
+
+      void (async () => {
+        if (pinToMyPulse) {
+          try {
+            await shareToMyPulseAsClip(enriched, {
+              queryClient,
+              circleSlug: circle?.slug,
+            });
+            queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user!.id) });
+          } catch {
+            toast.show('Posted, but My Pulse pin failed — pin from the feed menu.', 'info');
+          }
+        }
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void invalidatePostRelatedQueries(queryClient, { creatorId: user!.id });
+      })();
+    },
+    [selectedCircle, pinToMyPulse, queryClient, toast, user?.id, clearComposerContent],
+  );
+
+  const resetComposerForAnother = useCallback(() => {
+    setPublishSuccess(null);
+    clearComposerContent();
+    void clearDraft('video');
+    if (user?.id) {
+      void loadBrandKit(user.id).then(setBrandKit);
+    }
+  }, [clearComposerContent, user?.id]);
+
   const handlePost = async () => {
     /**
      * `overlayLine` (the "On-video text" sticker) used to be prepended into
@@ -879,10 +1068,7 @@ export default function CreateVideoScreen() {
      * rendered on top of the feed video player (see VideoFeedPost.tsx), so
      * what creators see in the editor matches what viewers see on the feed.
      */
-    let composedCaption = [shortTitle.trim(), caption.trim()]
-      .filter(Boolean)
-      .join('\n\n')
-      .trim();
+    let composedCaption = caption.trim();
 
     if (!composedCaption && !media) {
       toast.show('Add a video or something to say', 'error');
@@ -912,9 +1098,19 @@ export default function CreateVideoScreen() {
       return;
     }
 
+    if (media?.uri) {
+      const readable = await isMediaUriReadable(media.uri, media.webBlob);
+      if (!readable) {
+        toast.show('That video file expired — pick it again from your library.', 'error');
+        setMedia(null);
+        void clearDraft('video');
+        return;
+      }
+    }
+
     setPosting(true);
     try {
-      let tags = hashtags.split(/[\s,]+/).filter((t) => t.startsWith('#')).map((t) => t.slice(1));
+      let tags = parseHashtagsFromText(hashtags);
 
       const citeBlock =
         educationOn && citations.length > 0 ? buildSourcesBlock(citations.slice(0, 5)) : '';
@@ -1082,7 +1278,9 @@ export default function CreateVideoScreen() {
             video_look_id: filterPreset !== 'none' ? filterPreset : undefined,
             video_overlay_text: overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
             comments_disabled: !commentsOn || undefined,
+            ...clipPermissionsPayload,
             media_processing_status: 'queued',
+            ...communityCreatePayload,
             ...soundPayloadStitch,
             ...ownSoundPayloadStitch,
             ...duetPayloadStitch,
@@ -1173,16 +1371,15 @@ export default function CreateVideoScreen() {
           combine_succeeded: stitchCombineSucceeded,
         });
         if (stitchCombineSucceeded) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-        await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
-
-        setFollowUpClips([]);
-        setClipQueueVariant(null);
-        clearDraft('video');
-        if (stitchCombineSucceeded) {
-          setShowSuccess(true);
+          setFollowUpClips([]);
+          setClipQueueVariant(null);
+          setPosting(false);
+          await finalizePublish(createdStitch, { scheduled: false });
         } else {
+          await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
+          setFollowUpClips([]);
+          setClipQueueVariant(null);
+          clearDraft('video');
           router.replace('/(tabs)/feed');
         }
         return;
@@ -1192,7 +1389,10 @@ export default function CreateVideoScreen() {
       if (media) {
         try {
           const longEdge = Math.max(media.width ?? 0, media.height ?? 0);
-          const willCompress = longEdge > VIDEO_UPLOAD_MAX_LONG_EDGE;
+          const willCompress =
+            longEdge > VIDEO_UPLOAD_MAX_LONG_EDGE ||
+            (Platform.OS === 'web' &&
+              webVideoNeedsReencode(media, media.webBlob?.size ?? 0));
           if (willCompress) setCompressPct(0);
           const ready = await compressVideoIfTooLarge(media, (p) => {
             setCompressPct(Math.round(p * 100));
@@ -1202,6 +1402,7 @@ export default function CreateVideoScreen() {
             uri: ready.uri,
             type: ready.mimeType,
             name: ready.fileName,
+            webBlob: ready.webBlob,
           });
         } catch (uploadErr: unknown) {
           setCompressPct(null);
@@ -1210,6 +1411,7 @@ export default function CreateVideoScreen() {
               ? String((uploadErr as { message: string }).message)
               : String(uploadErr);
           toast.show(msg.length > 120 ? `${msg.slice(0, 117)}…` : msg, 'error');
+          return;
         }
       }
 
@@ -1331,6 +1533,8 @@ export default function CreateVideoScreen() {
         video_overlay_text:
           postType === 'video' && overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
         comments_disabled: !commentsOn || undefined,
+        ...clipPermissionsPayload,
+        ...communityCreatePayload,
         ...soundPayload,
         ...ownSoundPayload,
         ...duetPayload,
@@ -1344,11 +1548,8 @@ export default function CreateVideoScreen() {
         return;
       }
       analytics.track('post_created', { type: postType });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
-
-      clearDraft('video');
-      setShowSuccess(true);
+      setPosting(false);
+      await finalizePublish(created, { scheduled: Boolean(scheduleIso) });
     } catch (err: any) {
       toast.show(err.message ?? 'Something went wrong', 'error');
     } finally {
@@ -1364,7 +1565,7 @@ export default function CreateVideoScreen() {
     !durationKnown ||
     (durationSec >= VIDEO_MIN_SECONDS && durationSec <= VIDEO_MAX_SECONDS);
   const canPost =
-    (!!media || shortTitle.trim() || overlayLine.trim() || caption.trim()) && durationValid;
+    (!!media || overlayLine.trim() || caption.trim()) && durationValid;
 
   const formatDuration = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -1379,10 +1580,49 @@ export default function CreateVideoScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <SuccessAnimation
-        visible={showSuccess}
-        message={scheduledAt ? 'Scheduled!' : 'Posted!'}
-        onComplete={() => router.replace('/(tabs)/feed')}
+      <VideoPublishSuccessSheet
+        visible={publishSuccess != null}
+        scheduled={publishSuccess?.scheduled ?? false}
+        pinnedToMyPulse={publishSuccess?.pinned ?? false}
+        circleName={publishSuccess?.circle?.name ?? null}
+        onViewFeed={() => {
+          setPublishSuccess(null);
+          requestAnimationFrame(() => {
+            router.replace('/(tabs)/feed' as any);
+          });
+        }}
+        onViewScheduled={
+          publishSuccess?.scheduled
+            ? () => {
+                setPublishSuccess(null);
+                router.push('/create/scheduled-posts');
+              }
+            : undefined
+        }
+        onViewMyPulse={
+          publishSuccess?.pinned && user?.id
+            ? () => {
+                setPublishSuccess(null);
+                router.replace(`/profile/${user.id}` as any);
+              }
+            : undefined
+        }
+        onOpenCircle={
+          publishSuccess?.circle?.slug
+            ? () => {
+                const slug = publishSuccess.circle!.slug;
+                setPublishSuccess(null);
+                router.replace(`/communities/${slug}` as any);
+              }
+            : undefined
+        }
+        onCreateAnother={resetComposerForAnother}
+        onClose={() => {
+          setPublishSuccess(null);
+          requestAnimationFrame(() => {
+            router.replace('/(tabs)/feed' as any);
+          });
+        }}
       />
 
       <BrandKitEditor
@@ -1731,34 +1971,6 @@ export default function CreateVideoScreen() {
         <View style={styles.fieldGroup}>
           <AccentComposerFrame
             accentColor={colors.primary.teal}
-            hint="Headline (optional)"
-            compact
-            noShadow
-            footer={
-              <AccentCharCount
-                length={shortTitle.length}
-                max={120}
-                accentColor={colors.primary.teal}
-                warnWithin={14}
-                hideWhenEmpty={false}
-              />
-            }
-          >
-            <TextInput
-              style={styles.inputPlain}
-              value={shortTitle}
-              onChangeText={setShortTitle}
-              placeholder="Short title — shows above your caption in the feed"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-              maxLength={120}
-            />
-          </AccentComposerFrame>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <AccentComposerFrame
-            accentColor={colors.primary.teal}
             hint="On-video text (optional)"
             compact
             noShadow
@@ -1834,16 +2046,14 @@ export default function CreateVideoScreen() {
         ) : null}
 
         <View style={styles.fieldGroup}>
-          <AccentComposerFrame accentColor={colors.primary.teal} hint="Hashtags" compact noShadow>
-            <TextInput
-              style={styles.inputPlain}
-              value={hashtags}
-              onChangeText={setHashtags}
-              placeholder="#NurseLife #ICU #NightShift"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-            />
-          </AccentComposerFrame>
+          {/* Hashtag composer (Creator Hub audit issue #8). Same shared
+              input as photo + text composers — 5-cap, suggestions, dedup. */}
+          <HashtagInput
+            value={parseHashtagsFromText(hashtags)}
+            onChange={(next) => setHashtags(syncHashtagsToString(next))}
+            disabled={posting}
+            maxTags={HASHTAG_MAX}
+          />
         </View>
 
         {duetPostIdTrim ? (
@@ -1907,6 +2117,44 @@ export default function CreateVideoScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {media ? (
+          <PostClipPermissionToggles
+            values={{
+              allowViewerClips,
+              allowRemix,
+              allowClipDownloads,
+            }}
+            onChange={(patch) => {
+              if (patch.allowViewerClips !== undefined) setAllowViewerClips(patch.allowViewerClips);
+              if (patch.allowRemix !== undefined) setAllowRemix(patch.allowRemix);
+              if (patch.allowClipDownloads !== undefined) setAllowClipDownloads(patch.allowClipDownloads);
+            }}
+            disabled={posting}
+          />
+        ) : null}
+
+        <VideoCirclePicker
+          selectedCommunityId={selectedCircle?.id ?? null}
+          onSelect={setSelectedCircle}
+          disabled={posting}
+        />
+
+        <TouchableOpacity
+          style={[styles.optionChip, pinToMyPulse && styles.optionChipActive]}
+          activeOpacity={0.7}
+          onPress={() => setPinToMyPulse(!pinToMyPulse)}
+          disabled={posting}
+        >
+          <Ionicons
+            name={pinToMyPulse ? 'pulse' : 'pulse-outline'}
+            size={18}
+            color={pinToMyPulse ? colors.primary.teal : colors.dark.textSecondary}
+          />
+          <Text style={[styles.optionText, pinToMyPulse && styles.optionTextActive]}>
+            Also pin to My Pulse
+          </Text>
+        </TouchableOpacity>
 
         {media ? (
           <View style={styles.combineRow}>

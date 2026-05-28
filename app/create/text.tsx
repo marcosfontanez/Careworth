@@ -18,6 +18,8 @@ import { useToast } from '@/components/ui/Toast';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
+import { parseHashtagsFromText, syncHashtagsToString, HASHTAG_MAX } from '@/lib/hashtags';
+import { HashtagInput } from '@/components/create/HashtagInput';
 
 export default function CreateTextScreen() {
   const router = useRouter();
@@ -58,7 +60,7 @@ export default function CreateTextScreen() {
 
     setPosting(true);
     try {
-      const tags = hashtags.split(/[\s,]+/).filter((t) => t.startsWith('#')).map((t) => t.slice(1));
+      const tags = parseHashtagsFromText(hashtags);
       await postsService.create({
         creator_id: user.id,
         type: 'discussion',
@@ -144,21 +146,13 @@ export default function CreateTextScreen() {
 
         <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
 
-        <AccentComposerFrame
-          accentColor={colors.primary.teal}
-          hint="Hashtags (optional)"
-          compact
-          noShadow
-        >
-          <TextInput
-            style={styles.tagsInput}
-            value={hashtags}
-            onChangeText={setHashtags}
-            placeholder="#Discussion #NurseLife"
-            placeholderTextColor={colors.dark.textMuted}
-            editable={!posting}
-          />
-        </AccentComposerFrame>
+        {/* Hashtag composer (Creator Hub audit issue #8). 5-cap + suggestions. */}
+        <HashtagInput
+          value={parseHashtagsFromText(hashtags)}
+          onChange={(next) => setHashtags(syncHashtagsToString(next))}
+          disabled={posting}
+          maxTags={HASHTAG_MAX}
+        />
 
         <View style={styles.optionsRow}>
           <TouchableOpacity

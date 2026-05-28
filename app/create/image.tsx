@@ -31,6 +31,8 @@ import { loadBrandKit, saveBrandKit, type BrandKit, withAlpha } from '@/lib/bran
 import { tintForUri, type PaletteKey } from '@/lib/colorAnalysis';
 import { MOOD_PRESETS, type MoodPreset, type MoodPresetId } from '@/lib/moodPresets';
 import { appendHashtag } from '@/lib/hashtagStudio';
+import { parseHashtagsFromText, syncHashtagsToString, HASHTAG_MAX } from '@/lib/hashtags';
+import { HashtagInput } from '@/components/create/HashtagInput';
 import type { SeriesSelection } from '@/lib/seriesMode';
 import { PHOTO_FRAMES, type PhotoFrameId } from '@/lib/photoFrames';
 
@@ -74,7 +76,6 @@ export default function CreateImageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
-  const [headline, setHeadline] = useState('');
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState('');
   const [overlayLine, setOverlayLine] = useState('');
@@ -116,8 +117,14 @@ export default function CreateImageScreen() {
       const draft = await loadDraft('image');
       if (cancelled) return;
       if (draft) {
-        setHeadline(draft.headline ?? '');
-        setCaption(draft.caption ?? '');
+        let restoredCaption = draft.caption ?? '';
+        const legacyHeadline = draft.headline?.trim();
+        if (legacyHeadline) {
+          restoredCaption = restoredCaption.trim()
+            ? `${legacyHeadline}\n\n${restoredCaption.trim()}`
+            : legacyHeadline;
+        }
+        setCaption(restoredCaption);
         setHashtags(draft.hashtags ?? '');
         setOverlayLine(draft.overlayLine ?? '');
         if (draft.mediaUris?.length) {
@@ -162,7 +169,7 @@ export default function CreateImageScreen() {
   }, []);
 
   const hasComposerDraft = useMemo(() => {
-    if (caption.trim() || hashtags.trim() || headline.trim() || overlayLine.trim()) return true;
+    if (caption.trim() || hashtags.trim() || overlayLine.trim()) return true;
     if (images.length > 0) return true;
     if (privacy === 'followers') return true;
     if (!commentsOn) return true;
@@ -179,7 +186,6 @@ export default function CreateImageScreen() {
   }, [
     caption,
     hashtags,
-    headline,
     overlayLine,
     images.length,
     privacy,
@@ -203,7 +209,6 @@ export default function CreateImageScreen() {
     const payload: DraftData = {
       caption,
       hashtags,
-      headline,
       overlayLine,
       mediaUris: images.length > 0 ? images.map((m) => m.uri) : undefined,
       seriesSelection: seriesSelection ?? undefined,
@@ -223,7 +228,6 @@ export default function CreateImageScreen() {
   }, [
     caption,
     hashtags,
-    headline,
     overlayLine,
     images,
     seriesSelection,
@@ -282,8 +286,8 @@ export default function CreateImageScreen() {
   }, [navigation, draftBootstrapped, posting, showSuccess]);
 
   const phiFindings = useMemo(
-    () => scanForPhi(caption, headline, overlayLine, hashtags),
-    [caption, headline, overlayLine, hashtags],
+    () => scanForPhi(caption, overlayLine, hashtags),
+    [caption, overlayLine, hashtags],
   );
   const phiSev = highestSeverity(phiFindings);
 
@@ -404,7 +408,7 @@ export default function CreateImageScreen() {
   };
 
   const handlePost = async () => {
-    if (!caption.trim() && images.length === 0 && !headline.trim()) {
+    if (!caption.trim() && images.length === 0) {
       toast.show('Add a photo or caption', 'error');
       return;
     }
@@ -428,15 +432,13 @@ export default function CreateImageScreen() {
 
     setPosting(true);
     try {
-      let tags = hashtags.split(/[\s,]+/).filter((t) => t.startsWith('#')).map((t) => t.slice(1));
+      let tags = parseHashtagsFromText(hashtags);
       let cap = caption.trim();
-      let head = headline.trim();
-      let over = overlayLine.trim();
 
       const citeBlock =
         educationOn && citations.length > 0 ? buildSourcesBlock(citations.slice(0, 5)) : '';
       /** On-photo sticker uses `video_overlay_text` in feed — keep out of caption (WYSIWYG). */
-      let composed = [head, cap].filter(Boolean).join('\n\n');
+      let composed = cap;
       if (beforeAfter && images.length >= 2) {
         composed = [composed, '📸 Before & After (swipe both in the carousel)'].filter(Boolean).join('\n\n');
       }
@@ -479,7 +481,7 @@ export default function CreateImageScreen() {
         type: mediaUrl ? 'image' : 'text',
         caption: composed,
         media_url: mediaUrl,
-        video_overlay_text: over ? over.slice(0, 80) : undefined,
+        video_overlay_text: overlayLine.trim() ? overlayLine.trim().slice(0, 80) : undefined,
         additional_media: additionalUrls.length ? additionalUrls : undefined,
         hashtags: tags.length > 0 ? tags : undefined,
         communities: communityId ? [communityId] : undefined,
@@ -521,7 +523,7 @@ export default function CreateImageScreen() {
     }
   };
 
-  const canPost = caption.trim().length > 0 || images.length > 0 || headline.trim().length > 0;
+  const canPost = caption.trim().length > 0 || images.length > 0;
   const beforeAsset = images[0];
   const afterAsset = images[1];
 
@@ -698,7 +700,6 @@ export default function CreateImageScreen() {
                     <PhotoFrameOverlay
                       frame={index === 0 ? photoFrame : 'none'}
                       caption={caption}
-                      title={headline}
                     />
                     {index === 0 ? <SmartCoverHint /> : null}
                     {images.length > 1 && (
@@ -771,46 +772,17 @@ export default function CreateImageScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Beta-stability cleanup (Creator Hub audit issue #3): the previous
+            "Creator tools" panel surfaced Edit brand kit, Brand tint, Mood
+            presets, Auto color match, Photo frames, and Before/After. Smoke
+            tests called the section "cluttered/jumbled" and the visual polish
+            tools weren't fully wired through to the published post. We removed
+            the polish controls for beta and kept only the publishing controls
+            (PHI safety banner, Education citations, Series, Schedule). The
+            unused state + modal stay in place so they can be re-introduced
+            behind a flag once the polish pipeline is QA'd end-to-end. */}
         <View style={styles.proPanel}>
-          <Text style={styles.proLabel}>Creator tools</Text>
-          <Text style={styles.proTruthHint}>
-            Mood presets apply hashtags/filters you keep; frames & layout guides above stay preview-only for the feed carousel.
-          </Text>
-          <TouchableOpacity style={styles.toolLink} onPress={() => setBrandKitOpen(true)} activeOpacity={0.85}>
-            <Ionicons name="color-wand" size={18} color={colors.primary.teal} />
-            <Text style={styles.toolLinkText}>Edit brand kit (scrubs colors &amp; logo)</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.dark.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.toolLink}
-            onPress={() => setBrandBackdrop(!brandBackdrop)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="color-fill-outline" size={18} color={colors.primary.teal} />
-            <Text style={styles.toolLinkText}>
-              Brand tint behind carousel {brandBackdrop ? '(on)' : '(off)'}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.dark.textMuted} />
-          </TouchableOpacity>
-          <MoodPresetPicker
-            selected={moodId}
-            onSelect={(preset) => {
-              if (!preset) setMoodId(null);
-              else applyMood(preset);
-            }}
-          />
-          <CarouselColorMatch
-            enabled={colorMatchOn}
-            palette={colorPalette}
-            onToggle={setColorMatchOn}
-            onPalette={setColorPalette}
-          />
-          <PhotoFramePicker selected={photoFrame} onSelect={setPhotoFrame} />
-          <BeforeAfterToggle
-            enabled={beforeAfter}
-            onToggle={setBeforeAfter}
-            hasTwoImages={images.length >= 2}
-          />
+          <Text style={styles.proLabel}>Publish settings</Text>
           <View style={{ gap: 10 }}>
             <PHIGuardrailBanner findings={phiFindings} acknowledged={phiAck} onAcknowledge={() => setPhiAck(true)} />
             <EducationModeToggle
@@ -845,34 +817,6 @@ export default function CreateImageScreen() {
               </Text>
             </LinearGradient>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <AccentComposerFrame
-            accentColor={colors.primary.teal}
-            hint="Headline (optional)"
-            compact
-            noShadow
-            footer={
-              <AccentCharCount
-                length={headline.length}
-                max={120}
-                accentColor={colors.primary.teal}
-                warnWithin={14}
-                hideWhenEmpty={false}
-              />
-            }
-          >
-            <TextInput
-              style={styles.inputPlain}
-              value={headline}
-              onChangeText={setHeadline}
-              placeholder="Short punchy line above the caption"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-              maxLength={120}
-            />
-          </AccentComposerFrame>
         </View>
 
         <View style={styles.fieldGroup}>
@@ -918,16 +862,16 @@ export default function CreateImageScreen() {
         </View>
 
         <View style={styles.fieldGroup}>
-          <AccentComposerFrame accentColor={colors.primary.teal} hint="Hashtags" compact noShadow>
-            <TextInput
-              style={styles.inputPlain}
-              value={hashtags}
-              onChangeText={setHashtags}
-              placeholder="#NurseLife #ICU #WorkDay"
-              placeholderTextColor={colors.dark.textMuted}
-              editable={!posting}
-            />
-          </AccentComposerFrame>
+          {/* Hashtag composer (Creator Hub audit issue #8). Caps at 5,
+              suggests tags from `public.search_hashtags` RPC, dedups,
+              normalizes. Derives string[] from the persisted-as-string
+              `hashtags` field so draft persistence + PHI scan are unchanged. */}
+          <HashtagInput
+            value={parseHashtagsFromText(hashtags)}
+            onChange={(next) => setHashtags(syncHashtagsToString(next))}
+            disabled={posting}
+            maxTags={HASHTAG_MAX}
+          />
         </View>
 
         <View style={styles.optionsRow}>
