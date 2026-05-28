@@ -3,17 +3,22 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { copyTextWithFallback } from '@/lib/copyLink';
-import { colors } from '@/theme';
-import { LAUNCH_LINKS } from '@/constants/launch';
-import { sharePost, shareToMyPulseAsClip } from '@/lib/share';
+import { buildPostShareUrl, sharePost, shareToMyPulseAsClip } from '@/lib/share';
 import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
 import { useToast } from '@/components/ui/Toast';
+import { pulseColors, pulseRadius, pulseTypography } from '@/lib/theme/pulseTheme';
 import type { Post } from '@/types';
 import { canRemixVideoPost, pushVideoRemixRoute } from '@/lib/videoRemixNavigation';
+import { canClipFeedPost, canDownloadFeedPost } from '@/lib/feedClipPermissions';
+import { pushFeedClipRoute } from '@/lib/feedClipNavigation';
+import { useFeatureFlags } from '@/lib/featureFlags';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAppStore } from '@/store/useAppStore';
 
 interface Props {
   post: Post | null;
@@ -22,50 +27,129 @@ interface Props {
   onSave: () => void;
   isSaved: boolean;
   onNotInterested?: () => void;
-  onHideCreator?: () => void;
+  onHideCreatorFromFeed?: () => void;
+  onBlockCreator?: () => void;
+  /** When false, omit block action (e.g. viewing own post). */
+  canBlockCreator?: boolean;
 }
 
-function remixActionsForPost(post: Post) {
-  if (!canRemixVideoPost(post)) return [] as const;
+function clipActionForPost(
+  post: Post,
+  viewerId: string | undefined,
+  feedClipping: boolean,
+  viewerFollowsCreator: boolean,
+) {
+  const perm = canClipFeedPost(
+    post,
+    { id: viewerId },
+    { feedClippingEnabled: feedClipping, viewerFollowsCreator },
+  );
+  if (!perm.allowed) return [] as const;
+  const label = post.sourceLiveStreamId ? 'Clip from Live' : 'Clip this video';
   return [
-    { icon: 'musical-notes' as const, label: 'Use sound', key: 'useSound' as const, color: colors.primary.gold },
-    { icon: 'git-branch-outline' as const, label: 'Duet', key: 'duet' as const, color: colors.primary.teal },
-    { icon: 'git-merge-outline' as const, label: 'Stitch', key: 'stitch' as const, color: colors.primary.teal },
-    { icon: 'layers-outline' as const, label: 'B-roll', key: 'stitchBroll' as const, color: colors.primary.gold },
-    { icon: 'film-outline' as const, label: 'Full editor', key: 'composer' as const, color: '#FFF' },
+    { icon: 'cut-outline' as const, label, key: 'clip' as const, color: pulseColors.teal },
   ] as const;
 }
 
-const ACTIONS = (post: Post, isSaved: boolean) => {
-  const download = postHasDownloadableMedia(post)
-    ? [{ icon: 'download-outline' as const, label: 'Download', key: 'download' as const, color: '#FFF' }]
-    : [];
+/**
+ * Beta-launch gating (see feedVideoRemixAdvanced flag):
+ *   - Use sound + Create video → always available when the post is remix-eligible.
+ *     Use sound is fully wired (passes soundPostId so the source audio is
+ *     pre-selected in the composer); Create video opens the canonical blank
+ *     /create/video composer. The label was previously "Full editor", but
+ *     because no source post context is passed through, users incorrectly
+ *     assumed they were editing the selected post.
+ *   - Duet, Stitch, B-roll → require `feedVideoRemixAdvanced` flag because the
+ *     in-camera UX + export pipeline have known gaps (no audio mix on duet
+ *     export, layout cropping on side-by-side, etc.). Hidden by default in
+ *     production release builds.
+ */
+function remixActionsForPost(
+  post: Post,
+  viewerId: string | undefined,
+  feedVideoRemixAdvanced: boolean,
+) {
+  if (!canRemixVideoPost(post, { id: viewerId })) return [] as const;
+  const baseActions = [
+    { icon: 'musical-notes' as const, label: 'Use sound', key: 'useSound' as const, color: pulseColors.gift },
+  ] as const;
+  const advancedActions = feedVideoRemixAdvanced
+    ? ([
+        { icon: 'git-branch-outline' as const, label: 'Duet', key: 'duet' as const, color: pulseColors.teal },
+        { icon: 'git-merge-outline' as const, label: 'Stitch', key: 'stitch' as const, color: pulseColors.teal },
+        { icon: 'layers-outline' as const, label: 'B-roll', key: 'stitchBroll' as const, color: pulseColors.gift },
+      ] as const)
+    : ([] as const);
+  const editorActions = [
+    { icon: 'film-outline' as const, label: 'Create video', key: 'composer' as const, color: pulseColors.text },
+  ] as const;
+  return [...baseActions, ...advancedActions, ...editorActions] as const;
+}
+
+const ACTIONS = (
+  post: Post,
+  isSaved: boolean,
+  canBlockCreator: boolean,
+  viewerId: string | undefined,
+  feedClipping: boolean,
+  viewerFollowsCreator: boolean,
+  feedVideoRemixAdvanced: boolean,
+) => {
+  const download =
+    postHasDownloadableMedia(post) && canDownloadFeedPost(post, { id: viewerId })
+      ? [{ icon: 'download-outline' as const, label: 'Download', key: 'download' as const, color: pulseColors.text }]
+      : [];
+  const safety = [
+    { icon: 'eye-off-outline' as const, label: 'Not interested in this post', key: 'hide' as const, color: pulseColors.textSecondary },
+    { icon: 'person-remove-outline' as const, label: 'Hide creator from Feed', key: 'hideCreator' as const, color: pulseColors.textSecondary },
+    ...(canBlockCreator
+      ? [{ icon: 'ban-outline' as const, label: 'Block creator', key: 'blockCreator' as const, color: pulseColors.danger }]
+      : []),
+    { icon: 'flag-outline' as const, label: 'Report', key: 'report' as const, color: pulseColors.danger },
+  ] as const;
   return [
-    ...remixActionsForPost(post),
-    { icon: isSaved ? ('bookmark' as const) : ('bookmark-outline' as const), label: isSaved ? 'Unsave' : 'Save', key: 'save' as const, color: isSaved ? colors.primary.gold : '#FFF' },
-    // Primary "pin to profile" action — surfaces the clip on the viewer's My Pulse 5.
-    { icon: 'albums-outline' as const, label: 'Pin to My Pulse', key: 'pin' as const, color: colors.primary.teal },
-    { icon: 'paper-plane-outline' as const, label: 'Share', key: 'share' as const, color: '#FFF' },
+    ...clipActionForPost(post, viewerId, feedClipping, viewerFollowsCreator),
+    ...remixActionsForPost(post, viewerId, feedVideoRemixAdvanced),
+    { icon: isSaved ? ('bookmark' as const) : ('bookmark-outline' as const), label: isSaved ? 'Unsave' : 'Save', key: 'save' as const, color: isSaved ? pulseColors.gift : pulseColors.text },
+    { icon: 'albums-outline' as const, label: 'Pin to My Pulse', key: 'pin' as const, color: pulseColors.teal },
+    { icon: 'paper-plane-outline' as const, label: 'Share', key: 'share' as const, color: pulseColors.textSecondary },
     ...download,
-    { icon: 'link-outline' as const, label: 'Copy link', key: 'copy' as const, color: '#FFF' },
-    { icon: 'eye-off-outline' as const, label: 'Not interested', key: 'hide' as const, color: '#FFF' },
-    { icon: 'person-remove-outline' as const, label: 'Hide creator', key: 'hideCreator' as const, color: '#FFF' },
-    { icon: 'flag-outline' as const, label: 'Report', key: 'report' as const, color: colors.status.error },
+    { icon: 'link-outline' as const, label: 'Copy link', key: 'copy' as const, color: pulseColors.textSecondary },
+    ...safety,
   ];
 };
 
 export function LongPressMenu({
-  post, onClose, onReport, onSave, isSaved, onNotInterested, onHideCreator,
+  post, onClose, onReport, onSave, isSaved, onNotInterested, onHideCreatorFromFeed, onBlockCreator, canBlockCreator = true,
 }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast((s) => s.show);
+  const { user } = useAuth();
+  const feedClipping = useFeatureFlags((s) => s.feedClipping);
+  const feedVideoRemixAdvanced = useFeatureFlags((s) => s.feedVideoRemixAdvanced);
+  const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
 
   if (!post) return null;
+
+  const viewerFollowsCreator = followedCreatorIds.has(post.creatorId);
 
   const handleAction = async (key: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     switch (key) {
+      case 'clip': {
+        onClose();
+        const perm = canClipFeedPost(post, user, {
+          feedClippingEnabled: feedClipping,
+          viewerFollowsCreator,
+        });
+        if (!perm.allowed) {
+          toast(perm.message, 'info');
+          break;
+        }
+        pushFeedClipRoute(router, post);
+        break;
+      }
       case 'useSound':
         onClose();
         pushVideoRemixRoute(router, post, 'useSound');
@@ -88,29 +172,28 @@ export function LongPressMenu({
         break;
       case 'save':
         onSave();
-        break;
-      case 'share':
-        sharePost(post.id, post.caption, { anonymous: post.isAnonymous });
         onClose();
         break;
       case 'pin': {
         onClose();
         try {
           const ok = await shareToMyPulseAsClip(post, { queryClient });
-          toast(ok ? 'Pinned to your My Pulse' : 'Sign in to pin to My Pulse', ok ? 'success' : 'info');
+          toast(ok ? 'Pinned to My Pulse' : 'Sign in to pin to My Pulse', ok ? 'success' : 'info');
         } catch {
-          toast('Couldn’t pin — try again', 'error');
+          toast('Could not pin to My Pulse', 'error');
         }
         break;
       }
+      case 'share':
+        onClose();
+        await sharePost(post.id, post.caption ?? '', { anonymous: post.isAnonymous });
+        break;
       case 'download':
         onClose();
         void shareDownloadedPostMedia(post);
         break;
       case 'copy': {
-        const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
-        const url = `${base}/post/${post.id}`;
-        await copyTextWithFallback(url);
+        await copyTextWithFallback(buildPostShareUrl(post.id));
         onClose();
         break;
       }
@@ -119,11 +202,16 @@ export function LongPressMenu({
         onClose();
         break;
       case 'hideCreator':
-        onHideCreator?.();
+        onHideCreatorFromFeed?.();
+        onClose();
+        break;
+      case 'blockCreator':
+        onBlockCreator?.();
         onClose();
         break;
       case 'report':
         onReport();
+        onClose();
         break;
       default:
         onClose();
@@ -133,23 +221,46 @@ export function LongPressMenu({
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <View style={styles.sheet}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <LinearGradient
+            colors={['rgba(15, 28, 48, 0.96)', 'rgba(12, 18, 32, 0.98)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={['rgba(56, 189, 248, 0.12)', 'transparent']}
+            style={styles.topHighlight}
+            pointerEvents="none"
+          />
           <View style={styles.handle} />
           <Text style={styles.postPreview} numberOfLines={2}>
             {post.caption || `${post.type} post by @${post.creator.displayName}`}
           </Text>
           <View style={styles.grid}>
-            {ACTIONS(post, isSaved).map((action) => (
+            {ACTIONS(
+              post,
+              isSaved,
+              canBlockCreator,
+              user?.id,
+              feedClipping,
+              viewerFollowsCreator,
+              feedVideoRemixAdvanced,
+            ).map((action) => (
               <TouchableOpacity
                 key={action.key}
                 style={styles.gridItem}
                 onPress={() => void handleAction(action.key)}
                 activeOpacity={0.7}
               >
-                <View style={styles.iconCircle}>
+                <View style={[styles.iconCircle, action.key === 'report' || action.key === 'blockCreator' ? styles.iconCircleDanger : null]}>
                   <Ionicons name={action.icon as any} size={22} color={action.color} />
                 </View>
-                <Text style={[styles.actionLabel, action.key === 'report' && { color: colors.status.error }]}>
+                <Text
+                  style={[
+                    styles.actionLabel,
+                    (action.key === 'report' || action.key === 'blockCreator') && styles.actionLabelDanger,
+                  ]}
+                  numberOfLines={2}
+                >
                   {action.label}
                 </Text>
               </TouchableOpacity>
@@ -158,7 +269,7 @@ export function LongPressMenu({
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-        </View>
+        </Pressable>
       </Pressable>
     </Modal>
   );
@@ -167,31 +278,40 @@ export function LongPressMenu({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: pulseColors.backdrop,
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: colors.dark.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: pulseRadius.sheet,
+    borderTopRightRadius: pulseRadius.sheet,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: pulseColors.borderAccent,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     paddingTop: 12,
     paddingHorizontal: 20,
+    overflow: 'hidden',
+  },
+  topHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 56,
   },
   handle: {
-    width: 36,
+    width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.dark.textMuted,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     alignSelf: 'center',
     marginBottom: 16,
   },
   postPreview: {
-    color: colors.dark.textSecondary,
-    fontSize: 13,
-    fontWeight: '500',
+    ...pulseTypography.bodySmall,
     marginBottom: 20,
     textAlign: 'center',
+    color: pulseColors.mutedText,
   },
   grid: {
     flexDirection: 'row',
@@ -206,29 +326,39 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.dark.cardAlt,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: pulseColors.glass,
+    borderWidth: 1,
+    borderColor: pulseColors.border,
+  },
+  iconCircleDanger: {
+    backgroundColor: 'rgba(248, 113, 113, 0.1)',
+    borderColor: 'rgba(248, 113, 113, 0.28)',
   },
   actionLabel: {
-    color: colors.dark.text,
-    fontSize: 11,
-    fontWeight: '600',
+    ...pulseTypography.caption,
+    fontWeight: '700',
     textAlign: 'center',
+    color: pulseColors.textSecondary,
+  },
+  actionLabelDanger: {
+    color: pulseColors.danger,
   },
   cancelBtn: {
-    backgroundColor: colors.dark.cardAlt,
-    paddingVertical: 14,
-    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: pulseRadius.button,
+    backgroundColor: pulseColors.glass,
+    borderWidth: 1,
+    borderColor: pulseColors.border,
   },
   cancelText: {
-    color: colors.dark.text,
-    fontSize: 15,
-    fontWeight: '700',
+    ...pulseTypography.cardTitle,
+    fontSize: 14,
+    color: pulseColors.text,
   },
 });

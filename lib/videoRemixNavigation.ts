@@ -1,14 +1,18 @@
 import { Alert, ActionSheetIOS, Platform } from 'react-native';
 import type { Router } from 'expo-router';
 import type { Post } from '@/types';
+import { canRemixPostWithCreatorSettings } from '@/lib/postCreatorPermissions';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 
-/** Matches feed long-press: anonymous posts and non-video / missing media cannot remix. */
+/** Respects creator remix toggle; owner can remix own eligible video. */
 export function canRemixVideoPost(
-  post: Pick<Post, 'type' | 'isAnonymous' | 'mediaUrl' | 'thumbnailUrl'>,
+  post: Pick<
+    Post,
+    'type' | 'isAnonymous' | 'mediaUrl' | 'thumbnailUrl' | 'allowRemix' | 'creatorId'
+  >,
+  viewer?: { id?: string | null } | null,
 ): boolean {
-  if (post.isAnonymous) return false;
-  if (post.type !== 'video') return false;
-  return Boolean(post.mediaUrl?.trim() || post.thumbnailUrl?.trim());
+  return canRemixPostWithCreatorSettings(post, viewer ?? null);
 }
 
 export type VideoRemixRouteKey = 'useSound' | 'duet' | 'stitch' | 'stitchBroll' | 'composer';
@@ -45,21 +49,43 @@ export function pushVideoRemixRoute(router: Pick<Router, 'push'>, post: Post, ke
   }
 }
 
-/** Native sheet / alert — use from post detail and anywhere grid UX isn’t suitable. */
-export function openVideoRemixMenu(post: Post, router: Pick<Router, 'push'>): void {
-  if (!canRemixVideoPost(post)) return;
+/**
+ * Native sheet / alert — use from post detail and anywhere grid UX isn’t suitable.
+ *
+ * Beta-launch gating: Duet / Stitch / B-roll are hidden when the
+ * `feedVideoRemixAdvanced` feature flag is off (default in production release
+ * builds). See `defaultFeedVideoRemixAdvanced` for context. Use sound + Create
+ * video remain because they are fully wired. Note: "Create video" used to be
+ * labeled "Full editor" but was renamed to make it clear the entry opens a
+ * blank composer (no source post is carried through).
+ */
+export function openVideoRemixMenu(
+  post: Post,
+  router: Pick<Router, 'push'>,
+  viewer?: { id?: string | null } | null,
+): void {
+  if (!canRemixVideoPost(post, viewer)) return;
 
   const go = (key: VideoRemixRouteKey) => pushVideoRemixRoute(router, post, key);
+  const advanced = isFeatureEnabled('feedVideoRemixAdvanced');
+
+  const labels: string[] = ['Use sound'];
+  const keys: VideoRemixRouteKey[] = ['useSound'];
+  if (advanced) {
+    labels.push('Duet', 'Stitch', 'B-roll');
+    keys.push('duet', 'stitch', 'stitchBroll');
+  }
+  labels.push('Create video');
+  keys.push('composer');
 
   if (Platform.OS === 'ios') {
     ActionSheetIOS.showActionSheetWithOptions(
       {
-        options: ['Use sound', 'Duet', 'Stitch', 'B-roll', 'Full editor', 'Cancel'],
-        cancelButtonIndex: 5,
+        options: [...labels, 'Cancel'],
+        cancelButtonIndex: labels.length,
         title: 'Remix video',
       },
       (i) => {
-        const keys: VideoRemixRouteKey[] = ['useSound', 'duet', 'stitch', 'stitchBroll', 'composer'];
         const picked = keys[i];
         if (picked) go(picked);
       },
@@ -68,11 +94,7 @@ export function openVideoRemixMenu(post: Post, router: Pick<Router, 'push'>): vo
   }
 
   Alert.alert('Remix video', undefined, [
-    { text: 'Use sound', onPress: () => go('useSound') },
-    { text: 'Duet', onPress: () => go('duet') },
-    { text: 'Stitch', onPress: () => go('stitch') },
-    { text: 'B-roll', onPress: () => go('stitchBroll') },
-    { text: 'Full editor', onPress: () => go('composer') },
-    { text: 'Cancel', style: 'cancel' },
+    ...labels.map((text, idx) => ({ text, onPress: () => go(keys[idx]) })),
+    { text: 'Cancel', style: 'cancel' as const },
   ]);
 }
