@@ -14,6 +14,26 @@ export type IapPurchaseResult =
     }
   | { ok: false; code: string; message: string };
 
+export type StoreProductPreview = {
+  productId: string;
+  title?: string;
+  description?: string;
+  displayPrice?: string;
+};
+
+export type PrefetchStoreProductsResult =
+  | { ok: true; products: StoreProductPreview[]; missingProductIds: string[] }
+  | { ok: false; message: string };
+
+export type IapPurchaseStage =
+  | 'requesting'
+  | 'awaiting_store'
+  | 'validating'
+  | 'fulfilled'
+  | 'cancelled'
+  | 'failed'
+  | 'pending';
+
 export async function initIapConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
   return { ok: false, message: 'Store purchases are only available on the iOS/Android app build.' };
 }
@@ -27,6 +47,7 @@ export function platformPrefix(): PurchasePlatform {
 export async function purchaseSku(_params: {
   sku: string;
   isConsumable?: boolean;
+  onStage?: (stage: IapPurchaseStage) => void;
 }): Promise<IapPurchaseResult> {
   return {
     ok: false,
@@ -43,4 +64,10 @@ export async function restorePurchasesFromStore(): Promise<
 
 export async function getIosReceiptBase64(): Promise<string | null> {
   return null;
+}
+
+export async function prefetchStoreProducts(
+  _skus?: string[],
+): Promise<PrefetchStoreProductsResult> {
+  return { ok: false, message: 'Store product prefetch is only available in the iOS/Android app.' };
 }

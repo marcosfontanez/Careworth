@@ -78,6 +78,7 @@ import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetad
 import { readPurchaseReceiptId, readUserInventoryId } from '@/lib/rewardDelivery/fulfillmentPayload';
 import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 import { supabaseMessage } from '@/utils/supabaseErrors';
+import { useGooglePlayProductPrefetch } from '@/hooks/useGooglePlayProductPrefetch';
 
 /** Shown as native browser tooltip on web when hovering the Diamonds balance pill. */
 const DIAMONDS_PILL_TOOLTIP_WEB =
@@ -125,6 +126,7 @@ export default function PulseShopScreen() {
   useEnsureShopWallets(userId);
 
   const catalogQ = useShopCatalog();
+  useGooglePlayProductPrefetch(catalogQ.data, shopScreenFocused);
   const walletQ = useSparkWallet(userId);
   const diamondQ = useDiamondWallet(userId);
   const sparkBalance = useSparkBalanceNumber(walletQ.data);
@@ -729,8 +731,7 @@ export default function PulseShopScreen() {
                     <Ionicons name="time-outline" size={26} color={colors.dark.textMuted} />
                     <Text style={styles.retiredStateTitle}>Retired archive</Text>
                     <Text style={styles.retiredStateBody}>
-                      Real retired shop drops will appear here later. Leaderboard and earned rewards stay in My
-                      Borders.
+                      Past shop and event borders will appear here once they leave the active shelf.
                     </Text>
                   </View>
                 ) : (
@@ -1088,9 +1089,9 @@ export default function PulseShopScreen() {
         onClose={() => setBuyItem(null)}
         borderName={buyItem?.name ?? ''}
         purchaseMode={buyItem && isFreeShopBorder(buyItem) ? 'free' : 'iap'}
-        onPurchase={async () => {
+        onPurchase={async (opts) => {
           if (!buyItem) return { ok: false as const, code: 'INVALID_INPUT', message: 'Missing item' };
-          return await purchaseService.purchaseBorderForSelf(buyItem);
+          return await purchaseService.purchaseBorderForSelf(buyItem, opts);
         }}
         onSuccess={async (data) => {
           await refreshAfterPurchase();
@@ -1231,10 +1232,10 @@ export default function PulseShopScreen() {
         onPurchase={
           Platform.OS === 'web'
             ? undefined
-            : async () => {
+            : async (opts) => {
                 if (!creditItem) return { ok: false as const, code: 'INVALID_INPUT', message: 'Missing pack' };
                 analytics.track('spark_pack_purchase_started', { shop_item_id: creditItem.id });
-                return await purchaseService.purchaseSparkPack(creditItem);
+                return await purchaseService.purchaseSparkPack(creditItem, opts);
               }
         }
         onSuccess={

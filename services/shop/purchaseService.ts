@@ -3,7 +3,14 @@ import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetad
 import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 import { isFreeShopBorder } from '@/lib/shop/catalogUtils';
 import type { ShopItemRow } from '@/lib/shop/types';
-import { initIapConnection, platformPrefix, purchaseSku, restorePurchasesFromStore, getIosReceiptBase64 } from '@/lib/shop/iap';
+import {
+  initIapConnection,
+  platformPrefix,
+  purchaseSku,
+  restorePurchasesFromStore,
+  getIosReceiptBase64,
+  type IapPurchaseStage,
+} from '@/lib/shop/iap';
 import { Platform } from 'react-native';
 import { shopQueriesService } from '@/services/shop/shopQueries';
 import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
@@ -19,12 +26,26 @@ export type PurchaseOutcome =
   | { ok: true; data: Record<string, unknown> }
   | { ok: false; code: string; message: string; details?: unknown };
 
+/**
+ * Optional progress callback shared by every paid flow. Callers (the Shop
+ * confirmation modals) pass this so they can render the real purchase stage
+ * (`requesting → awaiting_store → validating → fulfilled`) instead of relying
+ * only on the modal-side watchdog timer. The watchdog stays as a safety net
+ * in case the callback is somehow not invoked.
+ */
+export type PurchaseProgressOptions = {
+  onStage?: (stage: IapPurchaseStage) => void;
+};
+
 function mapEdgeError(code: string, message: string): PurchaseOutcome {
   return { ok: false, code, message };
 }
 
 export const purchaseService = {
-  async purchaseSparkPack(item: ShopItemRow): Promise<PurchaseOutcome> {
+  async purchaseSparkPack(item: ShopItemRow, opts?: PurchaseProgressOptions): Promise<PurchaseOutcome> {
+    const emit = (s: IapPurchaseStage) => {
+      try { opts?.onStage?.(s); } catch { /* UI errors never block purchase */ }
+    };
     const platform = platformPrefix();
     const sku =
       platform === 'ios' ? item.store_product_id_ios : item.store_product_id_android;
@@ -35,10 +56,14 @@ export const purchaseService = {
     if (!init.ok) {
       return { ok: false, code: 'IAP_INIT_FAILED', message: init.message };
     }
-    const native = await purchaseSku({ sku: sku.trim(), isConsumable: true });
+    const native = await purchaseSku({ sku: sku.trim(), isConsumable: true, onStage: emit });
     if (!native.ok) {
       return { ok: false, code: native.code, message: native.message };
     }
+
+    /** purchaseSku resolved before we made the server fulfillment call. From
+     * the user's perspective we're still validating until the server returns. */
+    emit('validating');
 
     const body: PulseShopRequest = {
       action: 'fulfill_spark_pack',
@@ -52,6 +77,7 @@ export const purchaseService = {
 
     const res = await invokePulseShopFulfillment(body);
     if (!res.ok) {
+      emit('failed');
       return {
         ok: false,
         code: res.error.code,
@@ -59,10 +85,14 @@ export const purchaseService = {
         details: res.error.details,
       };
     }
+    emit('fulfilled');
     return { ok: true, data: res.data as Record<string, unknown> };
   },
 
-  async purchaseBorderForSelf(item: ShopItemRow): Promise<PurchaseOutcome> {
+  async purchaseBorderForSelf(item: ShopItemRow, opts?: PurchaseProgressOptions): Promise<PurchaseOutcome> {
+    const emit = (s: IapPurchaseStage) => {
+      try { opts?.onStage?.(s); } catch { /* UI errors never block purchase */ }
+    };
     if (isFreeShopBorder(item)) {
       const { data, error } = await rpcEconomyClaimFreeShopBorder(item.id);
       if (error) {
@@ -92,10 +122,12 @@ export const purchaseService = {
     if (!init.ok) {
       return { ok: false, code: 'IAP_INIT_FAILED', message: init.message };
     }
-    const native = await purchaseSku({ sku: sku.trim(), isConsumable: false });
+    const native = await purchaseSku({ sku: sku.trim(), isConsumable: false, onStage: emit });
     if (!native.ok) {
       return { ok: false, code: native.code, message: native.message };
     }
+
+    emit('validating');
 
     const body: PulseShopRequest = {
       action: 'fulfill_border_self',
@@ -109,6 +141,7 @@ export const purchaseService = {
 
     const res = await invokePulseShopFulfillment(body);
     if (!res.ok) {
+      emit('failed');
       return {
         ok: false,
         code: res.error.code,
@@ -116,6 +149,7 @@ export const purchaseService = {
         details: res.error.details,
       };
     }
+    emit('fulfilled');
     return { ok: true, data: res.data as Record<string, unknown> };
   },
 
@@ -123,8 +157,12 @@ export const purchaseService = {
     item: ShopItemRow;
     recipientHandle: string;
     note?: string | null;
+    onStage?: (stage: IapPurchaseStage) => void;
   }): Promise<PurchaseOutcome> {
-    const { item, recipientHandle, note } = params;
+    const { item, recipientHandle, note, onStage } = params;
+    const emit = (s: IapPurchaseStage) => {
+      try { onStage?.(s); } catch { /* UI errors never block purchase */ }
+    };
     const platform = platformPrefix();
     const sku =
       platform === 'ios' ? item.store_product_id_ios : item.store_product_id_android;
@@ -135,10 +173,12 @@ export const purchaseService = {
     if (!init.ok) {
       return { ok: false, code: 'IAP_INIT_FAILED', message: init.message };
     }
-    const native = await purchaseSku({ sku: sku.trim(), isConsumable: false });
+    const native = await purchaseSku({ sku: sku.trim(), isConsumable: false, onStage: emit });
     if (!native.ok) {
       return { ok: false, code: native.code, message: native.message };
     }
+
+    emit('validating');
 
     const body: PulseShopRequest = {
       action: 'fulfill_border_gift',
@@ -156,6 +196,7 @@ export const purchaseService = {
 
     const res = await invokePulseShopFulfillment(body);
     if (!res.ok) {
+      emit('failed');
       return {
         ok: false,
         code: res.error.code,
@@ -163,6 +204,7 @@ export const purchaseService = {
         details: res.error.details,
       };
     }
+    emit('fulfilled');
     return { ok: true, data: res.data as Record<string, unknown> };
   },
 
@@ -182,7 +224,7 @@ export const purchaseService = {
       p_creator_user_id: creatorUserId,
       p_gift_item_id: giftItem.id,
       p_context_type: contextType,
-      p_context_id: contextId,
+      p_context_id: contextId ?? '',
       p_idempotency_key: key,
     });
     if (error) {

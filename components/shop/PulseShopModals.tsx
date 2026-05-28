@@ -21,6 +21,7 @@ import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { ShopItemRow, GiftContext } from '@/lib/shop/types';
 import { buildSparkPackStoreIdsForStaff } from '@/lib/shop/buildSparkPackStoreIdsForStaff';
 import type { PurchaseOutcome } from '@/services/shop/purchaseService';
+import type { IapPurchaseStage } from '@/lib/shop/iap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileByHandle } from '@/hooks/useShopEconomy';
 import { shopErrorHint } from '@/lib/shop/shopErrors';
@@ -42,11 +43,19 @@ function formatGiftContexts(ctx: GiftContext[] | null | undefined): string {
   return parts.join(', ');
 }
 
+/**
+ * Optional progress callback contract — `onPurchase` may accept an `opts`
+ * argument with `onStage`. The modal will route stage transitions to that
+ * callback so the button label reflects the real IAP state. The callback is
+ * optional so any existing inline runner that ignores it still compiles.
+ */
+type PurchaseRunner = (opts?: { onStage?: (stage: IapPurchaseStage) => void }) => Promise<PurchaseOutcome>;
+
 type BuyProps = {
   visible: boolean;
   onClose: () => void;
   borderName: string;
-  onPurchase: () => Promise<PurchaseOutcome>;
+  onPurchase: PurchaseRunner;
   /** Fulfilled purchase payload from Edge/RPC (e.g. `purchase_receipt_id`). */
   onSuccess?: (data: Record<string, unknown>) => void;
   /** 'free' = RPC claim (migration 125); default = App Store / Play Billing */
@@ -64,19 +73,71 @@ export function BorderBuyConfirmModal({
 }: BuyProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /**
+   * Stage label (Creator Hub audit issue #1).
+   * Real stage transitions come from `purchaseService` → `purchaseSku` via the
+   * `onStage` callback. The watchdog timer below is a safety net for the case
+   * where the callback never fires (e.g. native event lag) — it advances the
+   * label so the button never looks frozen after Apple auth.
+   */
+  const [realStage, setRealStage] = useState<IapPurchaseStage | null>(null);
+  const [watchdogStage, setWatchdogStage] = useState<0 | 1 | 2 | 3>(0);
 
   useEffect(() => {
     if (!visible) {
       setBusy(false);
       setErr(null);
+      setRealStage(null);
+      setWatchdogStage(0);
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (!busy) {
+      setWatchdogStage(0);
+      return;
+    }
+    const t1 = setTimeout(() => setWatchdogStage(1), 4_000);
+    const t2 = setTimeout(() => setWatchdogStage(2), 12_000);
+    const t3 = setTimeout(() => setWatchdogStage(3), 30_000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [busy]);
+
+  const realStageLabel: string | null =
+    realStage === 'requesting'
+      ? 'Opening App Store…'
+      : realStage === 'awaiting_store'
+        ? 'Waiting for Apple to confirm payment…'
+        : realStage === 'validating'
+          ? 'Verifying purchase…'
+          : realStage === 'fulfilled'
+            ? 'Almost done…'
+            : realStage === 'pending'
+              ? 'Purchase pending approval…'
+              : null;
+
+  const watchdogStageLabel =
+    watchdogStage === 0
+      ? null
+      : watchdogStage === 1
+        ? 'Connecting to App Store…'
+        : watchdogStage === 2
+          ? 'Verifying purchase…'
+          : 'Still waiting on the store…';
+
+  /** Real stage takes precedence — fall back to watchdog if real stage hasn't arrived. */
+  const stageLabel = realStageLabel ?? watchdogStageLabel;
 
   const run = async () => {
     setErr(null);
     setBusy(true);
+    setRealStage(null);
     try {
-      const r = await onPurchase();
+      const r = await onPurchase({ onStage: (s) => setRealStage(s) });
       if (!r.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setErr(shopErrorHint(r.code) || r.message);
@@ -120,6 +181,9 @@ export function BorderBuyConfirmModal({
                 : 'Borders are purchased directly through your app store. You’ll confirm price and payment on the next step.'}
             </Text>
             {err ? <Text style={styles.errorText}>{err}</Text> : null}
+            {busy && stageLabel ? (
+              <Text style={styles.stageLabel}>{stageLabel}</Text>
+            ) : null}
             <View style={styles.sheetActions}>
               <TouchableOpacity style={styles.secondaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
                 <Text style={styles.secondaryBtnText}>Cancel</Text>
@@ -544,7 +608,7 @@ type CreditPackProps = {
    * `web_info` — web catalog browse: explains mobile IAP + same celebration UX when signed in on app.
    */
   mode?: 'purchase' | 'web_info';
-  onPurchase?: () => Promise<PurchaseOutcome>;
+  onPurchase?: PurchaseRunner;
   /** Fulfilled purchase payload from Edge/RPC (e.g. `purchase_receipt_id`). Not used for `web_info`. */
   onSuccess?: (data: Record<string, unknown>) => void;
   /** When set (e.g. `profiles.role_admin`), show a staff-only link to copy spark-pack IAP IDs from catalog. */
@@ -564,6 +628,8 @@ export function CreditPackConfirmModal({
 }: CreditPackProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [realStage, setRealStage] = useState<IapPurchaseStage | null>(null);
+  const [watchdogStage, setWatchdogStage] = useState<0 | 1 | 2 | 3>(0);
   const toast = useToast((s) => s.show);
 
   const webInfo = mode === 'web_info';
@@ -574,15 +640,58 @@ export function CreditPackConfirmModal({
     if (!visible) {
       setBusy(false);
       setErr(null);
+      setRealStage(null);
+      setWatchdogStage(0);
     }
   }, [visible]);
+
+  /** Watchdog timer mirrors BorderBuyConfirmModal — safety net behind real `onStage` updates. */
+  useEffect(() => {
+    if (!busy) {
+      setWatchdogStage(0);
+      return;
+    }
+    const t1 = setTimeout(() => setWatchdogStage(1), 4_000);
+    const t2 = setTimeout(() => setWatchdogStage(2), 12_000);
+    const t3 = setTimeout(() => setWatchdogStage(3), 30_000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [busy]);
+
+  const realStageLabel: string | null =
+    realStage === 'requesting'
+      ? 'Opening App Store…'
+      : realStage === 'awaiting_store'
+        ? 'Waiting for Apple to confirm payment…'
+        : realStage === 'validating'
+          ? 'Crediting Sparks to your wallet…'
+          : realStage === 'fulfilled'
+            ? 'Almost done…'
+            : realStage === 'pending'
+              ? 'Purchase pending approval…'
+              : null;
+
+  const watchdogStageLabel =
+    watchdogStage === 0
+      ? null
+      : watchdogStage === 1
+        ? 'Connecting to App Store…'
+        : watchdogStage === 2
+          ? 'Verifying purchase…'
+          : 'Still waiting on the store…';
+
+  const stageLabel = realStageLabel ?? watchdogStageLabel;
 
   const run = async () => {
     if (!onPurchase) return;
     setErr(null);
     setBusy(true);
+    setRealStage(null);
     try {
-      const r = await onPurchase();
+      const r = await onPurchase({ onStage: (s) => setRealStage(s) });
       if (!r.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setErr(shopErrorHint(r.code) || r.message);
@@ -629,6 +738,9 @@ export function CreditPackConfirmModal({
             </Text>
           )}
           {err ? <Text style={styles.errorText}>{err}</Text> : null}
+          {busy && stageLabel ? (
+            <Text style={styles.stageLabel}>{stageLabel}</Text>
+          ) : null}
           {showStaffIds ? (
             <TouchableOpacity
               onPress={() => {
@@ -859,6 +971,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.status.error,
+  },
+  stageLabel: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.dark.textSecondary,
+    letterSpacing: 0.1,
   },
   balanceRow: {
     marginTop: 14,
