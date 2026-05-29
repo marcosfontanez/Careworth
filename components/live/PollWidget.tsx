@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { colors } from '@/theme';
+import { PulseChip } from '@/components/ui/pulse';
+import { pulseColors, pulseRadius, pulseSpacing, pulseTypography } from '@/lib/theme/pulseTheme';
 import type { StreamPoll } from '@/types';
 
 interface Props {
@@ -39,13 +40,11 @@ export function PollWidget({ poll, onVote, hasVoted, votedOptionId, compact, vot
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
       <View style={[styles.header, compact && styles.headerCompact]}>
-        <Ionicons name="bar-chart" size={compact ? 14 : 16} color={colors.primary.teal} />
+        <Ionicons name="bar-chart" size={compact ? 14 : 16} color={pulseColors.teal} />
         <Text style={[styles.question, compact && styles.questionCompact]} numberOfLines={2}>
           {poll.question}
         </Text>
-        <View style={styles.timeBadge}>
-          <Text style={styles.timeText}>{timeLeft}</Text>
-        </View>
+        <PulseChip label={timeLeft} tone="muted" />
       </View>
 
       <View style={[styles.options, compact && styles.optionsCompact]}>
@@ -76,7 +75,7 @@ export function PollWidget({ poll, onVote, hasVoted, votedOptionId, compact, vot
                   <Text style={styles.optionPct}>{Math.round(pct)}%</Text>
                 )}
                 {isMyVote && (
-                  <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
+                  <Ionicons name="checkmark-circle" size={14} color={pulseColors.teal} />
                 )}
               </View>
             </TouchableOpacity>
@@ -93,56 +92,50 @@ export function PollWidget({ poll, onVote, hasVoted, votedOptionId, compact, vot
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(11,31,58,0.82)',
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: pulseColors.glass,
+    borderRadius: pulseRadius.lg,
+    padding: pulseSpacing.lg,
     borderWidth: 1,
-    borderColor: colors.dark.border,
+    borderColor: pulseColors.borderStrong,
   },
   containerCompact: {
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: 'rgba(15,28,48,0.92)',
+    padding: pulseSpacing.sm,
+    borderRadius: pulseRadius.md,
+    backgroundColor: pulseColors.glassStrong,
   },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center', gap: pulseSpacing.sm, marginBottom: 10,
   },
-  headerCompact: { marginBottom: 8, gap: 6 },
-  question: { flex: 1, fontSize: 14, fontWeight: '700', color: '#FFF' },
+  headerCompact: { marginBottom: pulseSpacing.sm, gap: 6 },
+  question: { flex: 1, ...pulseTypography.bodySmall, fontWeight: '700', color: pulseColors.text },
   questionCompact: { fontSize: 13, fontWeight: '700' },
-  timeBadge: {
-    backgroundColor: colors.primary.teal + '25',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
-  },
-  timeText: { fontSize: 11, fontWeight: '700', color: colors.primary.teal },
-
   options: { gap: 6 },
   optionsCompact: { gap: 5 },
   option: {
-    borderRadius: 10,
+    borderRadius: pulseRadius.md,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: pulseColors.border,
   },
-  optionCompact: { borderRadius: 10 },
-  optionVoted: { borderColor: colors.primary.teal + '40' },
+  optionCompact: { borderRadius: pulseRadius.md },
+  optionVoted: { borderColor: pulseColors.borderAccent },
   optionFill: {
     position: 'absolute', top: 0, left: 0, bottom: 0,
-    backgroundColor: colors.primary.teal + '20',
-    borderRadius: 10,
+    backgroundColor: 'rgba(25, 211, 197, 0.2)',
+    borderRadius: pulseRadius.md,
   },
   optionContent: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10,
   },
   optionContentCompact: { paddingHorizontal: 12, paddingVertical: 8 },
-  optionText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#FFF' },
+  optionText: { flex: 1, fontSize: 13, fontWeight: '600', color: pulseColors.text },
   optionTextCompact: { fontSize: 12 },
-  optionPct: { fontSize: 13, fontWeight: '800', color: colors.primary.teal },
+  optionPct: { fontSize: 13, fontWeight: '800', color: pulseColors.teal },
 
   totalVotes: {
-    fontSize: 11, color: colors.dark.textMuted, textAlign: 'center', marginTop: 8,
+    fontSize: 11, color: pulseColors.mutedText, textAlign: 'center', marginTop: pulseSpacing.sm,
   },
   totalVotesCompact: { marginTop: 6, fontSize: 10 },
 });

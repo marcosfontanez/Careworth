@@ -97,13 +97,13 @@ Deno.serve(async (req) => {
   const { data: row, error: rowErr } = await admin
     .from("live_streams")
     .select(
-      "id, host_id, status, livekit_room_name, broadcast_started_at, title, video_provider",
+      "id, host_id, status, livekit_room_name, broadcast_started_at, host_last_seen_at, ended_at, title, video_provider",
     )
     .eq("id", streamId)
     .maybeSingle();
 
   if (rowErr || !row) {
-    return json({ error: "Stream not found" }, 404);
+    return json({ error: "Stream not found", code: "not_found" }, 404);
   }
 
   const roomName =
@@ -111,30 +111,59 @@ Deno.serve(async (req) => {
       ? row.livekit_room_name
       : `pv_live_${String(row.id).replace(/-/g, "")}`;
 
+  if (!roomName.trim()) {
+    return json({ error: "Stream unavailable", code: "missing_room" }, 403);
+  }
+
   const isHost = row.host_id === userId;
   const status = String(row.status ?? "");
 
-  if (status === "ended") {
-    return json({ error: "Stream has ended" }, 403);
+  if (status === "ended" || row.ended_at) {
+    return json({ error: "Stream has ended", code: "ended" }, 403);
   }
 
   let role: "host" | "viewer";
   if (isHost) {
     role = "host";
     if (status !== "live" && status !== "scheduled") {
-      return json({ error: "Invalid stream state for host" }, 403);
+      return json({ error: "Invalid stream state for host", code: "invalid_state" }, 403);
     }
   } else {
     role = "viewer";
-    if (status !== "live") {
-      return json({ error: "Stream is not live" }, 403);
-    }
-    if (!row.broadcast_started_at) {
-      return json({ error: "Broadcast has not started yet" }, 403);
+    const { data: joinable, error: joinErr } = await admin.rpc("live_stream_viewer_joinable", {
+      p_stream_id: streamId,
+    });
+    if (joinErr) {
+      console.error("[livekit-token] live_stream_viewer_joinable", joinErr.message);
+      if (status !== "live") {
+        return json({ error: "Stream is not live", code: "not_live" }, 403);
+      }
+      if (!row.broadcast_started_at) {
+        return json({ error: "Broadcast has not started yet", code: "not_broadcasting" }, 403);
+      }
+    } else if (joinable && typeof joinable === "object" && joinable.ok === false) {
+      const reason = String((joinable as { reason?: string }).reason ?? "unavailable");
+      if (reason === "ended") {
+        return json({ error: "Stream has ended", code: "ended" }, 403);
+      }
+      if (reason === "not_broadcasting") {
+        return json({ error: "Broadcast has not started yet", code: "not_broadcasting" }, 403);
+      }
+      if (reason === "host_stale") {
+        return json({ error: "Stream unavailable", code: "host_stale" }, 403);
+      }
+      if (reason === "missing_room") {
+        return json({ error: "Stream unavailable", code: "missing_room" }, 403);
+      }
+      return json({ error: "Stream is not live", code: reason }, 403);
     }
   }
 
-  const participantIdentity = `${role}:${streamId}:${userId}`;
+  const sessionNonce = crypto.randomUUID().slice(0, 8);
+  const participantIdentity =
+    role === "host"
+      ? `host:${streamId}:${userId}`
+      : `viewer:${streamId}:${userId}:${sessionNonce}`;
   const ttlSec = role === "host" ? 60 * 60 : 60 * 30;
 
   const at = new AccessToken(lkKey, lkSecret, {
@@ -164,5 +193,10 @@ Deno.serve(async (req) => {
     streamId,
     videoProvider: row.video_provider ?? "livekit",
     expiresAt: Math.floor(Date.now() / 1000) + ttlSec,
+    grants: {
+      roomJoin: true,
+      canPublish: role === "host",
+      canSubscribe: true,
+    },
   });
 });

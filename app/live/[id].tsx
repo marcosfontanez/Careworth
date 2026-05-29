@@ -7,6 +7,7 @@ import {
   Platform,
   Alert,
   Share,
+  BackHandler,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Redirect } from 'expo-router';
@@ -14,30 +15,43 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import * as Crypto from 'expo-crypto';
 import { useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useStream } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
-import { GiftPicker } from '@/components/live/GiftPicker';
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard';
 import { HostPollCreator } from '@/components/live/HostPollCreator';
-import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
+import { creatorLiveGiftToStreamMessage, giftCatalogById } from '@/lib/gifts';
 import { HostLiveStudio } from '@/components/live/studio/HostLiveStudio';
 import { LiveStage } from '@/components/live/studio/LiveStage';
 import { ViewerLivePlayer } from '@/components/live/viewer/ViewerLivePlayer';
 import { ViewerLiveStateScreen } from '@/components/live/viewer/ViewerLiveStateScreen';
 import {
   streamMessagesService,
-  streamGiftsService,
   streamPollsService,
   streamPinsService,
+  streamQuestionsService,
+  streamClipMarkersService,
   streamsLiveService,
   profilesService,
 } from '@/services/supabase';
+import type { StreamQuestion } from '@/services/supabase/streamQuestions';
+import type { LiveClipMarker } from '@/services/supabase/streamClipMarkers';
+import { CLIP_RECORDING_UNAVAILABLE, friendlyClipMarkerError, formatClipMarkerTime } from '@/lib/live/clipMarkerErrors';
+import { friendlyLiveClipSettingsError } from '@/lib/live/liveClipSettingsErrors';
+import {
+  DEFAULT_CLIP_MARKER_DURATION,
+  normalizeClipMarkerDuration,
+  type ClipMarkerDurationSeconds,
+} from '@/lib/live/clipMarkerDuration';
+import type { StreamHealthSnapshot } from '@/components/live/studio/LiveStreamHealthPanel';
+import { buildStreamHealthSnapshot } from '@/lib/live/streamHealth';
+import { canModifyLivePins, livePinBlockedMessage } from '@/lib/live/livePinGuards';
+import { isLiveSceneMode, type LiveSceneMode } from '@/lib/live/liveSceneMode';
+import { liveCreatorGiftsService } from '@/services/gifts/liveCreatorGifts';
 import { useToast } from '@/components/ui/Toast';
 import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
 import { isSeedStream } from '@/lib/liveSeedStreams';
@@ -46,14 +60,13 @@ import { DemoLiveViewer } from '@/components/live/demo';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
 import { colors, borderRadius, typography } from '@/theme';
-import { useSparkWallet, useSparkBalanceNumber } from '@/hooks/useShopEconomy';
+import { useShopCatalog } from '@/hooks/useShopEconomy';
 import { shopKeys } from '@/lib/shop/queryKeys';
 import { liveHighlightsHref } from '@/lib/navigation/liveRoutes';
 import type {
   StreamMessage,
   StreamPinnedMessage,
   StreamPoll,
-  LiveGift,
   StreamGiftLeaderboard,
 } from '@/types';
 import { videoProvider } from '@/services/live/videoProvider';
@@ -65,12 +78,17 @@ const LiveKitStageLazy = lazy(() =>
 );
 import { analytics } from '@/lib/analytics';
 import { liveEndStreamDebug } from '@/lib/live/liveEndStreamDebug';
+import { startLiveRecording, stopLiveRecording } from '@/services/live/liveRecordings';
+import { isLiveClipEgressEnabled } from '@/lib/live/liveClipEgress';
 import { friendlyLivePollError } from '@/lib/live/liveInteractionDebug';
+import { isStreamActiveForDiscovery } from '@/lib/live/activeLiveStreams';
+import { friendlyLiveKitJoinError } from '@/lib/live/liveKitJoinErrors';
+import { liveKitJoinDebug } from '@/lib/live/liveKitJoinDebug';
 import { pruneStreamFromLiveDiscovery } from '@/lib/live/pruneLiveDiscoveryCache';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { messagesService } from '@/services/supabase/messages';
 import { liveStreamGiftsEnabled } from '@/types/liveHub';
-import { useLiveKitSession } from '@/hooks/useLiveKitSession';
+import { useLiveKitSession, LIVEKIT_TOKEN_REFRESH_BUFFER_SEC } from '@/hooks/useLiveKitSession';
 
 import { getBlockRelationship } from '@/services/supabase/blocks';
 
@@ -120,8 +138,11 @@ function StreamViewerScreenContent() {
   const { data: stream, isLoading } = useStream(streamId);
   const showToast = useToast((s) => s.show);
 
-  const walletQ = useSparkWallet(user?.id);
-  const sparkBalance = useSparkBalanceNumber(walletQ.data);
+  const catalogQ = useShopCatalog();
+  const giftCatalogMap = useMemo(
+    () => giftCatalogById(catalogQ.data ?? []),
+    [catalogQ.data],
+  );
 
   const streamIsLive = stream?.status === 'live';
   const broadcastLive =
@@ -135,12 +156,29 @@ function StreamViewerScreenContent() {
     [user?.id, stream],
   );
 
+  const canModifyPins = canModifyLivePins({
+    isHost,
+    streamIsLive,
+    endedAt: stream?.endedAt,
+  });
+
+  const streamStaleForViewers =
+    !isHost &&
+    !!stream &&
+    stream.status === 'live' &&
+    Boolean(stream.broadcastStartedAt) &&
+    !isStreamActiveForDiscovery(stream);
+
   const liveKitEnabled = videoProvider.id === 'livekit';
 
   /** Host modal visibility + end-stream busy flag. */
   const [hostPollVisible, setHostPollVisible] = useState(false);
   const [endingStream, setEndingStream] = useState(false);
   const endingStreamRef = useRef(false);
+  const endStreamAlertOpenRef = useRef(false);
+  const hostLeaveAlertOpenRef = useRef(false);
+  const hostLeaveConfirmedRef = useRef(false);
+  const navigation = useNavigation();
   useEffect(() => {
     endingStreamRef.current = endingStream;
   }, [endingStream]);
@@ -152,30 +190,64 @@ function StreamViewerScreenContent() {
   const [reminderOn, setReminderOn] = useState(false);
   const [liveChatBlocked, setLiveChatBlocked] = useState(false);
 
-  const allowViewerLiveKit = !isHost && broadcastLive;
+  const allowViewerLiveKit =
+    !isHost && broadcastLive && !streamStaleForViewers && Boolean(stream?.livekitRoomName?.trim());
   const allowHostLiveKit = isHost && stream?.status === 'live';
   const liveKitSessionEnabled =
     liveKitEnabled &&
     !!stream &&
     !!streamId &&
+    !!user?.id &&
     (allowViewerLiveKit || allowHostLiveKit) &&
     !endingStream;
+
+  const [lkRoomError, setLkRoomError] = useState<string | null>(null);
 
   const {
     token: lkToken,
     serverUrl: lkServerUrl,
+    roomName: lkRoomName,
+    participantIdentity: lkParticipantIdentity,
     error: lkError,
     sessionKey: lkSessionKey,
+    expiresAt: lkExpiresAt,
+    remint: remintLiveKit,
   } = useLiveKitSession({
     streamId,
     enabled: liveKitSessionEnabled,
     isHost,
     userId: user?.id,
+    streamStatus: stream?.status ?? null,
+    broadcastStartedAt: stream?.broadcastStartedAt ?? null,
+    endedAt: stream?.endedAt ?? null,
+    hostLastSeenAt: stream?.hostLastSeenAt ?? null,
+    livekitRoomName: stream?.livekitRoomName ?? null,
     onJoined: () => analytics.track('live_stream_joined', { stream_id: streamId }),
     onRefreshFailed: () => {
+      setLkReconnecting(true);
       showToast('Live video reconnecting\u2026', 'info');
     },
   });
+
+  useEffect(() => {
+    if (!lkError) setLkRoomError(null);
+  }, [lkError]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isHost && liveKitSessionEnabled) {
+        setLkRoomError(null);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const tokenStale =
+          lkExpiresAt != null &&
+          lkExpiresAt - LIVEKIT_TOKEN_REFRESH_BUFFER_SEC.viewer <= nowSec;
+        if (!lkToken || lkError || tokenStale) {
+          remintLiveKit();
+        }
+      }
+      return undefined;
+    }, [isHost, liveKitSessionEnabled, remintLiveKit, lkToken, lkError, lkExpiresAt]),
+  );
 
   /* ---------------- Followed set (hydrated from store) ------------------- */
   const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
@@ -185,19 +257,51 @@ function StreamViewerScreenContent() {
   /* ---------------- Messages (real or simulated) ------------------------- */
   const [messages, setMessages] = useState<StreamMessage[]>(DEFAULT_CHAT);
   const [inputText, setInputText] = useState('');
-  const [brbMode, setBrbMode] = useState(false);
+  const [sceneMode, setSceneMode] = useState<LiveSceneMode>('live');
+  const [sceneChanging, setSceneChanging] = useState(false);
+  const [questions, setQuestions] = useState<StreamQuestion[]>([]);
+  const [qnaBackendReady, setQnaBackendReady] = useState(true);
+  const [qnaLoading, setQnaLoading] = useState(false);
+  const [questionSubmitting, setQuestionSubmitting] = useState(false);
+  const [clipMarkers, setClipMarkers] = useState<LiveClipMarker[]>([]);
+  const [clipMarkersLoading, setClipMarkersLoading] = useState(false);
+  const [clipMarkersBackendReady, setClipMarkersBackendReady] = useState(true);
+  const [recordingActive, setRecordingActive] = useState(false);
+  const [markMomentLoading, setMarkMomentLoading] = useState(false);
+  const [clipMomentLoading, setClipMomentLoading] = useState(false);
+  const [reviewingMarkerId, setReviewingMarkerId] = useState<string | null>(null);
+  const [togglingClipSetting, setTogglingClipSetting] = useState<
+    'viewer_clips' | 'require_approval' | 'downloads' | null
+  >(null);
+  const brbMode = sceneMode === 'brb';
+  const pinnedQuestion = useMemo(
+    () => questions.find((q) => q.status === 'pinned') ?? null,
+    [questions],
+  );
+  const [realtimeHealth, setRealtimeHealth] = useState({
+    chat: false,
+    polls: false,
+    pins: false,
+    gifts: false,
+    stream: false,
+    questions: false,
+  });
+  const markRealtime = useCallback((key: keyof typeof realtimeHealth) => {
+    setRealtimeHealth((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  }, []);
   const [flipCameraNonce, setFlipCameraNonce] = useState(0);
-  const [slowModeEnabled, setSlowModeEnabled] = useState(false);
   const [hostMicMuted, setHostMicMuted] = useState(false);
   const [viewerAudioMuted, setViewerAudioMuted] = useState(false);
   const [hostMicPermissionDenied, setHostMicPermissionDenied] = useState(false);
   const [hostAudioPublished, setHostAudioPublished] = useState<boolean | null>(null);
+  const [hostCameraGranted, setHostCameraGranted] = useState<boolean | null>(null);
+  const [lkRoomConnected, setLkRoomConnected] = useState(false);
+  const [lkReconnecting, setLkReconnecting] = useState(false);
+  const [lastLocalHeartbeatAt, setLastLocalHeartbeatAt] = useState<string | null>(null);
+  const [healthRefreshing, setHealthRefreshing] = useState(false);
 
   /* ---------------- Gifts / Sparks / leaderboard -------------------------- */
-  const [showGiftPicker, setShowGiftPicker] = useState(false);
-  const [sparkGiftOpen, setSparkGiftOpen] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [giftSending, setGiftSending] = useState(false);
   const [chatSending, setChatSending] = useState(false);
   const [pollVoting, setPollVoting] = useState(false);
   const [leaderboard, setLeaderboard] = useState<StreamGiftLeaderboard[]>([]);
@@ -230,14 +334,16 @@ function StreamViewerScreenContent() {
     return () => {
       cancelled = true;
       clearInterval(iv);
+      void streamsLiveService.leaveAttendance(streamId);
     };
   }, [streamId, user?.id, broadcastLive, isHost, queryClient]);
 
   /** Host liveness ping — stale streams drop out of Happening Now after crash/disconnect. */
   useEffect(() => {
     if (!streamId || !isHost || !broadcastLive || endingStream) return;
-    const tick = () => {
-      void streamsLiveService.touchHostHeartbeat(streamId);
+    const tick = async () => {
+      const ok = await streamsLiveService.touchHostHeartbeat(streamId);
+      if (ok) setLastLocalHeartbeatAt(new Date().toISOString());
     };
     void tick();
     const iv = setInterval(tick, 30_000);
@@ -255,8 +361,18 @@ function StreamViewerScreenContent() {
 
   /** Realtime stream row updates — ended state + broadcast_started_at without polling. */
   useEffect(() => {
+    if (stream?.sceneMode && isLiveSceneMode(stream.sceneMode)) {
+      setSceneMode(stream.sceneMode);
+    }
+  }, [stream?.sceneMode]);
+
+  useEffect(() => {
     if (!streamId) return;
     return streamsLiveService.subscribeStatus(streamId, (row) => {
+      markRealtime('stream');
+      if (row.scene_mode && isLiveSceneMode(row.scene_mode)) {
+        setSceneMode(row.scene_mode);
+      }
       if (row.status === 'ended' || row.ended_at) {
         pruneStreamFromLiveDiscovery(queryClient, streamId);
       }
@@ -301,6 +417,7 @@ function StreamViewerScreenContent() {
     })();
 
     const unsubscribe = streamMessagesService.subscribe(streamId, (msg) => {
+      markRealtime('chat');
       setMessages((prev) => {
         // Ignore dupes — sender optimistically appends, then realtime echoes it.
         if (prev.some((m) => m.id === msg.id)) return prev;
@@ -320,62 +437,56 @@ function StreamViewerScreenContent() {
   }, [streamId]);
 
   /* ==========================================================================
-   *  REAL — gift firehose + DB-backed leaderboard hydrate.
+   *  REAL — shop creator gift firehose + DB-backed leaderboard hydrate.
    * ==========================================================================*/
   useEffect(() => {
     if (!streamId) return;
 
     let cancelled = false;
-    void streamGiftsService.fetchLeaderboard(streamId).then((rows) => {
+    void liveCreatorGiftsService.fetchLeaderboard(streamId).then((rows) => {
       if (!cancelled && rows.length > 0) setLeaderboard(rows);
     });
 
-    const unsubscribe = streamGiftsService.subscribe(streamId, (event) => {
+    const unsubscribe = liveCreatorGiftsService.subscribe(streamId, (event) => {
+      markRealtime('gifts');
       try {
-        if (!event?.id || !event?.gift) return;
-        const giftMsg: StreamMessage = {
-          id: `gift-${event.id}`,
-          streamId: event.streamId,
-          userId: event.senderId,
-          displayName: event.senderName,
-          content: '',
-          isHost: false,
-          isModerator: false,
-          createdAt: event.createdAt,
-          messageType: 'gift',
-          giftData: event,
-        };
+        if (!event?.id) return;
+        const shopItem = giftCatalogMap.get(event.giftItemId) ?? null;
+        const giftMsg = creatorLiveGiftToStreamMessage(
+          shopItem ? { ...event, shopItem } : event,
+          shopItem,
+        );
         setMessages((prev) => [...prev.slice(-199), giftMsg]);
 
-        const sparksAdded = (Number(event.gift.sparkCost) || 0) * (Number(event.quantity) || 1);
         setLeaderboard((prev) => {
-        const existing = prev.find((l) => l.userId === event.senderId);
-        const next = existing
-          ? prev.map((l) =>
-              l.userId === event.senderId
-                ? {
-                    ...l,
-                    totalSparks: l.totalSparks + sparksAdded,
-                    giftCount: l.giftCount + event.quantity,
-                  }
-                : l,
-            )
-          : [
-              ...prev,
-              {
-                userId: event.senderId,
-                displayName: event.senderName,
-                totalSparks: sparksAdded,
-                giftCount: event.quantity,
-                rank: prev.length + 1,
-              },
-            ];
-        return next
-          .sort((a, b) => b.totalSparks - a.totalSparks)
-          .map((l, i) => ({ ...l, rank: i + 1 }));
+          const existing = prev.find((l) => l.userId === event.senderId);
+          const next = existing
+            ? prev.map((l) =>
+                l.userId === event.senderId
+                  ? {
+                      ...l,
+                      totalSparks: l.totalSparks + event.sparksSpent,
+                      giftCount: l.giftCount + 1,
+                    }
+                  : l,
+              )
+            : [
+                ...prev,
+                {
+                  userId: event.senderId,
+                  displayName: event.senderName,
+                  avatarUrl: event.senderAvatar,
+                  totalSparks: event.sparksSpent,
+                  giftCount: 1,
+                  rank: prev.length + 1,
+                },
+              ];
+          return next
+            .sort((a, b) => b.totalSparks - a.totalSparks)
+            .map((l, i) => ({ ...l, rank: i + 1 }));
         });
       } catch (err) {
-        if (__DEV__) console.warn('[live] gift realtime', err);
+        if (__DEV__) console.warn('[live] creator gift realtime', err);
       }
     });
 
@@ -383,7 +494,7 @@ function StreamViewerScreenContent() {
       cancelled = true;
       unsubscribe();
     };
-  }, [streamId]);
+  }, [streamId, giftCatalogMap]);
 
   /* ==========================================================================
    *  REAL — load active poll + subscribe to vote / lifecycle updates.
@@ -410,6 +521,7 @@ function StreamViewerScreenContent() {
     })();
 
     const unsubscribe = streamPollsService.subscribe(streamId, (poll) => {
+      markRealtime('polls');
       setActivePoll(poll);
       if (!poll) {
         setHasVotedPoll(false);
@@ -436,6 +548,7 @@ function StreamViewerScreenContent() {
     })();
 
     const unsubscribe = streamPinsService.subscribe(streamId, (pin) => {
+      markRealtime('pins');
       setPinnedMessage(pin);
     });
 
@@ -444,6 +557,95 @@ function StreamViewerScreenContent() {
       unsubscribe();
     };
   }, [streamId]);
+
+  /* ==========================================================================
+   *  REAL — Q&A queue (migration 202). Graceful no-op if table missing.
+   * ==========================================================================*/
+  useEffect(() => {
+    if (!streamId) return;
+    let cancelled = false;
+
+    const refresh = async () => {
+      setQnaLoading(true);
+      try {
+        const ready = await streamQuestionsService.isBackendReady();
+        if (!cancelled) setQnaBackendReady(ready);
+        if (!ready) {
+          if (!cancelled) setQuestions([]);
+          return;
+        }
+        const rows = isHost
+          ? await streamQuestionsService.listForHost(streamId)
+          : await streamQuestionsService.listForStream(streamId);
+        if (!cancelled) setQuestions(rows);
+      } catch {
+        if (!cancelled) {
+          setQnaBackendReady(false);
+          setQuestions([]);
+        }
+      } finally {
+        if (!cancelled) setQnaLoading(false);
+      }
+    };
+
+    void refresh();
+    const unsubscribe = streamQuestionsService.subscribe(streamId, () => {
+      markRealtime('questions');
+      void refresh();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [streamId, isHost]);
+
+  /* ==========================================================================
+   *  REAL — clip markers (migration 206). Host list + active recording probe.
+   * ==========================================================================*/
+  useEffect(() => {
+    if (!streamId || !isHost) return;
+    let cancelled = false;
+
+    const refreshRecording = async () => {
+      const active = await streamClipMarkersService.hasActiveRecording(streamId);
+      if (!cancelled) setRecordingActive(active);
+    };
+
+    const refreshMarkers = async () => {
+      setClipMarkersLoading(true);
+      try {
+        const ready = await streamClipMarkersService.isBackendReady();
+        if (!cancelled) setClipMarkersBackendReady(ready);
+        if (!ready) {
+          if (!cancelled) setClipMarkers([]);
+          return;
+        }
+        const rows = await streamClipMarkersService.listForHost(streamId);
+        if (!cancelled) setClipMarkers(rows);
+      } catch {
+        if (!cancelled) {
+          setClipMarkersBackendReady(false);
+          setClipMarkers([]);
+        }
+      } finally {
+        if (!cancelled) setClipMarkersLoading(false);
+      }
+    };
+
+    void refreshRecording();
+    void refreshMarkers();
+    const recordingIv = setInterval(() => void refreshRecording(), 30_000);
+    const unsubscribe = streamClipMarkersService.subscribe(streamId, () => {
+      void refreshMarkers();
+    });
+
+    return () => {
+      cancelled = true;
+      clearInterval(recordingIv);
+      unsubscribe();
+    };
+  }, [streamId, isHost, broadcastLive]);
 
   useEffect(() => {
     if (stream?.status !== 'scheduled') return;
@@ -460,19 +662,440 @@ function StreamViewerScreenContent() {
    *  Handlers
    * ==========================================================================*/
   const handleLiveKitConnected = useCallback(async () => {
+    setLkRoomConnected(true);
+    setLkReconnecting(false);
+    if (!isHost || !streamId) return;
+    liveKitJoinDebug.connected({
+      streamId,
+      roomName: lkRoomName ?? stream?.livekitRoomName ?? null,
+      userId: user?.id ?? null,
+      role: 'host',
+    });
+  }, [isHost, streamId, lkRoomName, stream?.livekitRoomName, user?.id]);
+
+  const handleRefreshHealth = useCallback(async () => {
+    if (healthRefreshing || !streamId) return;
+    setHealthRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+      if (isHost && broadcastLive) {
+        const ok = await streamsLiveService.touchHostHeartbeat(streamId);
+        if (ok) setLastLocalHeartbeatAt(new Date().toISOString());
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[live.handleRefreshHealth]', err);
+    } finally {
+      setHealthRefreshing(false);
+    }
+  }, [healthRefreshing, streamId, queryClient, isHost, broadcastLive]);
+
+  const handleHostBroadcastReady = useCallback(async () => {
     if (!isHost || !streamId) return;
     try {
       const ok = await streamsLiveService.markBroadcastStarted(streamId);
+      liveKitJoinDebug.broadcastMarked({ streamId, ok });
       if (ok) {
+        if (isLiveClipEgressEnabled()) {
+          void startLiveRecording(streamId);
+        }
         analytics.track('live_stream_started', { stream_id: streamId });
         await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
         await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
         await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+      } else if (__DEV__) {
+        console.warn('[live.handleHostBroadcastReady] markBroadcastStarted returned false');
       }
     } catch (err) {
-      if (__DEV__) console.warn('[live.handleLiveKitConnected]', err);
+      if (__DEV__) console.warn('[live.handleHostBroadcastReady]', err);
     }
   }, [isHost, streamId, queryClient]);
+
+  const handleSceneModeChange = useCallback(
+    async (mode: LiveSceneMode) => {
+      if (sceneChanging) return;
+      if (mode === 'poll' && !activePoll?.isActive) {
+        showToast('Launch a poll first to use Poll Mode.', 'info');
+        return;
+      }
+      const prev = sceneMode;
+      setSceneMode(mode);
+      if (!isHost || !streamId) return;
+      setSceneChanging(true);
+      try {
+        const ok = await streamsLiveService.setSceneMode(streamId, mode);
+        if (!ok) {
+          setSceneMode(prev);
+          showToast(
+            mode === 'poll'
+              ? 'Poll Mode requires migration 203 (and 202). Scene saved locally only.'
+              : 'Scene saved locally only — run migrations 202–203 to sync viewers.',
+            'info',
+          );
+        }
+      } catch (err) {
+        setSceneMode(prev);
+        if (__DEV__) console.warn('[live.handleSceneModeChange]', err);
+        showToast('Could not update scene.', 'error');
+      } finally {
+        setSceneChanging(false);
+      }
+    },
+    [isHost, sceneMode, sceneChanging, activePoll?.isActive, showToast, streamId],
+  );
+
+  useEffect(() => {
+    if (!isHost || sceneMode !== 'poll') return;
+    if (!activePoll?.isActive) {
+      void handleSceneModeChange('live');
+    }
+  }, [isHost, sceneMode, activePoll?.isActive, handleSceneModeChange]);
+
+  const handleSubmitQuestion = useCallback(
+    async (question: string): Promise<boolean> => {
+      if (!user?.id || !streamId || questionSubmitting) return false;
+      if (stream?.status !== 'live' || stream?.endedAt) {
+        showToast('This stream has ended.', 'info');
+        return false;
+      }
+      if (!broadcastLive) {
+        showToast('Questions open when the host is live.', 'info');
+        return false;
+      }
+      if (!qnaBackendReady) {
+        showToast('Q&A requires migration 202.', 'info');
+        return false;
+      }
+      setQuestionSubmitting(true);
+      try {
+        const row = await streamQuestionsService.submit({
+          streamId,
+          userId: user.id,
+          authorName: profile?.displayName ?? user.email?.split('@')[0] ?? 'Viewer',
+          question,
+        });
+        if (row) {
+          setQuestions((prev) => [row, ...prev].slice(0, 50));
+          return true;
+        }
+        showToast('Could not submit question. Try again.', 'error');
+        return false;
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleSubmitQuestion]', err);
+        showToast('Could not submit question. Try again.', 'error');
+        return false;
+      } finally {
+        setQuestionSubmitting(false);
+      }
+    },
+    [
+      user?.id,
+      user?.email,
+      profile?.displayName,
+      streamId,
+      stream?.status,
+      stream?.endedAt,
+      broadcastLive,
+      questionSubmitting,
+      qnaBackendReady,
+      showToast,
+    ],
+  );
+
+  const handleMarkMoment = useCallback(async () => {
+    if (!streamId || markMomentLoading) return;
+    if (stream?.status !== 'live' || stream?.endedAt) {
+      showToast('This stream has ended.', 'info');
+      return;
+    }
+    if (!broadcastLive) {
+      showToast('Go live before marking moments.', 'info');
+      return;
+    }
+    if (!clipMarkersBackendReady) {
+      showToast('Clip markers require migration 206.', 'info');
+      return;
+    }
+    if (!isLiveClipEgressEnabled()) {
+      showToast('Live clip recording is not enabled for this build.', 'info');
+      return;
+    }
+    setMarkMomentLoading(true);
+    try {
+      const result = await streamClipMarkersService.createMarker(
+        streamId,
+        'host',
+        DEFAULT_CLIP_MARKER_DURATION,
+      );
+      if (result.ok && result.marker) {
+        const rows = await streamClipMarkersService.listForHost(streamId);
+        setClipMarkers(rows);
+        showToast(
+          `Moment marked at ${formatClipMarkerTime(result.marker.markerTimeSeconds)} (${formatClipMarkerTime(result.marker.startSeconds)}–${formatClipMarkerTime(result.marker.endSeconds)})`,
+          'success',
+        );
+        return;
+      }
+      showToast(friendlyClipMarkerError(result.code), 'error');
+    } catch (err) {
+      if (__DEV__) console.warn('[live.handleMarkMoment]', err);
+      showToast('Could not mark moment. Try again.', 'error');
+    } finally {
+      setMarkMomentLoading(false);
+    }
+  }, [
+    streamId,
+    markMomentLoading,
+    stream?.status,
+    stream?.endedAt,
+    broadcastLive,
+    clipMarkersBackendReady,
+    showToast,
+  ]);
+
+  const handleClipMoment = useCallback(async (duration?: ClipMarkerDurationSeconds): Promise<boolean> => {
+    if (!user?.id || !streamId || clipMomentLoading) return false;
+    if (stream?.status !== 'live' || stream?.endedAt) {
+      showToast('This stream has ended.', 'info');
+      return false;
+    }
+    if (!broadcastLive) {
+      showToast('Clip moments open when the host is live.', 'info');
+      return false;
+    }
+    if (!stream?.viewerClipsAllowed) {
+      showToast('The host has not enabled viewer clips for this stream.', 'info');
+      return false;
+    }
+    if (!clipMarkersBackendReady) {
+      showToast('Clip markers require migration 206.', 'info');
+      return false;
+    }
+
+    const clipDuration = normalizeClipMarkerDuration(duration);
+    if (__DEV__) {
+      console.log('[live.handleClipMoment] saving marker', { streamId, clipDuration });
+    }
+
+    setClipMomentLoading(true);
+    try {
+      const result = await streamClipMarkersService.createMarker(streamId, 'viewer', clipDuration);
+      if (result.ok) {
+        const windowLabel =
+          result.marker != null
+            ? `${formatClipMarkerTime(result.marker.startSeconds)}–${formatClipMarkerTime(result.marker.endSeconds)}`
+            : null;
+        const pendingNote = stream?.requireHostApproval !== false
+          ? 'The host will review it before Clip Studio processing.'
+          : 'It is queued for the host in Clip Studio — nothing publishes automatically.';
+        showToast(
+          windowLabel
+            ? `Clip marker saved (${windowLabel}). ${pendingNote}`
+            : `Clip marker saved. ${pendingNote}`,
+          'success',
+        );
+        return true;
+      }
+      if (result.code === 'recording_not_active') {
+        showToast(CLIP_RECORDING_UNAVAILABLE, 'info');
+        return false;
+      }
+      showToast(friendlyClipMarkerError(result.code), 'error');
+      return false;
+    } catch (err) {
+      if (__DEV__) console.warn('[live.handleClipMoment]', err);
+      showToast('Could not submit clip moment. Try again.', 'error');
+      return false;
+    } finally {
+      setClipMomentLoading(false);
+    }
+  }, [
+    user?.id,
+    streamId,
+    clipMomentLoading,
+    stream?.status,
+    stream?.endedAt,
+    stream?.viewerClipsAllowed,
+    stream?.requireHostApproval,
+    broadcastLive,
+    clipMarkersBackendReady,
+    showToast,
+  ]);
+
+  const handleReviewMarker = useCallback(
+    async (markerId: string, decision: 'approved' | 'rejected') => {
+      if (reviewingMarkerId) return;
+      setReviewingMarkerId(markerId);
+      try {
+        const result = await streamClipMarkersService.reviewMarker(markerId, decision);
+        if (result.ok) {
+          showToast(
+            decision === 'approved' ? 'Submission approved.' : 'Submission rejected.',
+            'success',
+          );
+        } else {
+          showToast('Could not update submission.', 'error');
+        }
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleReviewMarker]', err);
+        showToast('Could not update submission.', 'error');
+      } finally {
+        setReviewingMarkerId(null);
+      }
+    },
+    [reviewingMarkerId, showToast],
+  );
+
+  const handleUpdateClipSettings = useCallback(
+    async (
+      patch: {
+        viewerClipsAllowed?: boolean;
+        requireHostApproval?: boolean;
+        allowClipDownloads?: boolean;
+      },
+      settingKey: 'viewer_clips' | 'require_approval' | 'downloads',
+    ) => {
+      if (!streamId || togglingClipSetting) return;
+
+      if (patch.viewerClipsAllowed !== undefined) {
+        if (stream?.status !== 'live' || stream?.endedAt) {
+          showToast('Viewer clips can only be changed during a live stream.', 'info');
+          return;
+        }
+      }
+
+      if (
+        patch.requireHostApproval !== undefined ||
+        patch.allowClipDownloads !== undefined
+      ) {
+        if (stream?.status !== 'live' && stream?.status !== 'ended') {
+          showToast('Clip settings cannot be changed for this stream right now.', 'info');
+          return;
+        }
+      }
+
+      setTogglingClipSetting(settingKey);
+      try {
+        const result = await streamsLiveService.updateClipSettings(streamId, patch);
+        if (!result.ok) {
+          showToast(friendlyLiveClipSettingsError(result.code), 'error');
+          return;
+        }
+
+        queryClient.setQueryData(['stream', streamId], (old: typeof stream) =>
+          old
+            ? {
+                ...old,
+                viewerClipsAllowed: result.viewerClipsAllowed ?? old.viewerClipsAllowed,
+                requireHostApproval: result.requireHostApproval ?? old.requireHostApproval,
+                allowClipDownloads: result.allowClipDownloads ?? old.allowClipDownloads,
+              }
+            : old,
+        );
+
+        if (patch.viewerClipsAllowed !== undefined) {
+          showToast(
+            patch.viewerClipsAllowed ? 'Viewers can submit clip moments.' : 'Viewer clip moments off.',
+            'success',
+          );
+        } else if (patch.requireHostApproval !== undefined) {
+          showToast(
+            patch.requireHostApproval
+              ? 'Viewer clips require your approval.'
+              : 'Viewer clips skip approval — you still publish manually.',
+            'success',
+          );
+        } else if (patch.allowClipDownloads !== undefined) {
+          showToast(
+            patch.allowClipDownloads ? 'Non-host downloads enabled.' : 'Non-host downloads disabled.',
+            'success',
+          );
+        }
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleUpdateClipSettings]', err);
+        showToast(friendlyLiveClipSettingsError('unknown'), 'error');
+      } finally {
+        setTogglingClipSetting(null);
+      }
+    },
+    [streamId, togglingClipSetting, queryClient, showToast, stream],
+  );
+
+  const handleToggleViewerClips = useCallback(
+    (allowed: boolean) => void handleUpdateClipSettings({ viewerClipsAllowed: allowed }, 'viewer_clips'),
+    [handleUpdateClipSettings],
+  );
+
+  const handleToggleRequireHostApproval = useCallback(
+    (required: boolean) =>
+      void handleUpdateClipSettings({ requireHostApproval: required }, 'require_approval'),
+    [handleUpdateClipSettings],
+  );
+
+  const handleToggleAllowClipDownloads = useCallback(
+    (allowed: boolean) => void handleUpdateClipSettings({ allowClipDownloads: allowed }, 'downloads'),
+    [handleUpdateClipSettings],
+  );
+
+  const handlePinQuestion = useCallback(
+    async (questionId: string) => {
+      if (!streamId) return;
+      if (!canModifyPins) {
+        showToast(livePinBlockedMessage(), 'info');
+        return;
+      }
+      try {
+        const ok = await streamQuestionsService.pinQuestion(streamId, questionId);
+        showToast(ok ? 'Question pinned' : 'Could not pin question.', ok ? 'success' : 'error');
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handlePinQuestion]', err);
+        showToast('Could not pin question.', 'error');
+      }
+    },
+    [streamId, canModifyPins, showToast],
+  );
+
+  const handleUnpinQuestion = useCallback(
+    async (questionId: string) => {
+      if (!streamId) return;
+      if (!canModifyPins) {
+        showToast(livePinBlockedMessage(), 'info');
+        return;
+      }
+      try {
+        const ok = await streamQuestionsService.unpinQuestion(streamId, questionId);
+        showToast(ok ? 'Question unpinned' : 'Could not unpin question.', ok ? 'success' : 'error');
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleUnpinQuestion]', err);
+        showToast('Could not unpin question.', 'error');
+      }
+    },
+    [streamId, canModifyPins, showToast],
+  );
+
+  const handleMarkQuestionAnswered = useCallback(
+    async (questionId: string) => {
+      try {
+        const ok = await streamQuestionsService.markAnswered(questionId);
+        showToast(ok ? 'Question marked answered' : 'Could not update question.', ok ? 'success' : 'error');
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleMarkQuestionAnswered]', err);
+        showToast('Could not update question.', 'error');
+      }
+    },
+    [showToast],
+  );
+
+  const handleDismissQuestion = useCallback(
+    async (questionId: string) => {
+      try {
+        const ok = await streamQuestionsService.dismiss(questionId);
+        if (!ok) showToast('Could not dismiss question.', 'error');
+      } catch (err) {
+        if (__DEV__) console.warn('[live.handleDismissQuestion]', err);
+      }
+    },
+    [showToast],
+  );
 
   const promoteScheduledNow = useCallback(async () => {
     setPromoting(true);
@@ -514,6 +1137,11 @@ function StreamViewerScreenContent() {
 
     if (!broadcastLive && !isHost) {
       showToast('Chat opens once the host is broadcasting.', 'info');
+      return;
+    }
+
+    if (!streamIsLive || stream?.endedAt) {
+      showToast('This live stream has ended.', 'info');
       return;
     }
 
@@ -579,57 +1207,15 @@ function StreamViewerScreenContent() {
     liveChatBlocked,
     broadcastLive,
     isHost,
+    streamIsLive,
+    stream?.endedAt,
     showToast,
   ]);
 
-  const handleSendGift = useCallback(
-    async (gift: LiveGift, quantity: number) => {
-      if (!user?.id) {
-        showToast('Sign in to send gifts.', 'info');
-        return;
-      }
-      if (!broadcastLive) {
-        showToast('Gifts unlock once the host is broadcasting.', 'info');
-        return;
-      }
-      if (giftSending) return;
-
-      setGiftSending(true);
-
-      try {
-        const result = await streamGiftsService.send({
-          streamId,
-          gift,
-          quantity,
-          idempotencyKey: Crypto.randomUUID(),
-        });
-        if (!result.ok) {
-          showToast(result.friendly, 'error');
-          return;
-        }
-        try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch {
-          /* optional */
-        }
-        await queryClient.invalidateQueries({ queryKey: shopKeys.sparkWallet(user.id) });
-        analytics.track('live_gift_sent', {
-          stream_id: streamId,
-          gift_id: gift.id,
-          quantity,
-        });
-      } catch (err: unknown) {
-        if (__DEV__) console.warn('[live.handleSendGift]', err);
-        showToast('Couldn\u2019t send gift. Try again.', 'error');
-      } finally {
-        setTimeout(() => {
-          setGiftSending(false);
-          setShowGiftPicker(false);
-        }, 400);
-      }
-    },
-    [streamId, user?.id, broadcastLive, giftSending, showToast, queryClient],
-  );
+  const handleGiftSent = useCallback(() => {
+    analytics.track('live_gift_sent', { stream_id: streamId, surface: 'creator_gift_tray' });
+    void queryClient.invalidateQueries({ queryKey: shopKeys.sparkWallet(user?.id) });
+  }, [queryClient, streamId, user?.id]);
 
   const followInFlightRef = useRef(false);
 
@@ -670,6 +1256,11 @@ function StreamViewerScreenContent() {
 
       if (!broadcastLive && !isHost) {
         showToast('Polls unlock once the host is broadcasting.', 'info');
+        return;
+      }
+
+      if (!streamIsLive || stream?.endedAt) {
+        showToast('This live stream has ended.', 'info');
         return;
       }
 
@@ -725,11 +1316,15 @@ function StreamViewerScreenContent() {
         setPollVoting(false);
       }
     },
-    [activePoll, user?.id, hasVotedPoll, votedOptionId, broadcastLive, isHost, pollVoting, showToast],
+    [activePoll, user?.id, hasVotedPoll, votedOptionId, broadcastLive, isHost, pollVoting, streamIsLive, stream?.endedAt, showToast],
   );
 
   const handleUnpin = useCallback(async () => {
     if (!pinnedMessage) return;
+    if (!canModifyPins) {
+      showToast(livePinBlockedMessage(), 'info');
+      return;
+    }
 
     // Optimistic hide.
     const previous = pinnedMessage;
@@ -741,7 +1336,7 @@ function StreamViewerScreenContent() {
       setPinnedMessage(previous);
       showToast('Couldn\u2019t unpin. Try again.', 'error');
     }
-  }, [pinnedMessage, showToast]);
+  }, [pinnedMessage, canModifyPins, showToast]);
 
   /* ────────────────────── Host controls ────────────────────── */
 
@@ -801,10 +1396,14 @@ function StreamViewerScreenContent() {
     }
   }, [isHost, activePoll, showToast]);
 
-  /** Host-only: pin a chat message after long-press. */
+  /** Host-only: pin a chat message (replaces any previous chat pin). */
   const pinChatMessage = useCallback(
     async (msg: StreamMessage) => {
       if (!isHost || !user?.id) return;
+      if (!canModifyPins) {
+        showToast(livePinBlockedMessage(), 'info');
+        return;
+      }
 
       const optimisticPin: StreamPinnedMessage = {
         id: `local-pin-${Date.now()}`,
@@ -826,9 +1425,27 @@ function StreamViewerScreenContent() {
       if (!persisted) {
         setPinnedMessage(previous);
         showToast('Couldn\u2019t pin. Try again.', 'error');
+      } else {
+        setPinnedMessage(persisted);
+        showToast('Message pinned', 'success');
       }
     },
-    [isHost, user?.id, profile?.displayName, pinnedMessage, streamId, showToast],
+    [isHost, user?.id, profile?.displayName, pinnedMessage, streamId, canModifyPins, showToast],
+  );
+
+  /** Host-only: pin/unpin from chat row action. */
+  const togglePinChatMessage = useCallback(
+    (msg: StreamMessage) => {
+      if (!msg.content.trim() || msg.messageType !== 'chat') return;
+      const isPinnedRow =
+        pinnedMessage && pinnedMessage.content.trim() === msg.content.trim();
+      if (isPinnedRow) {
+        void handleUnpin();
+      } else {
+        void pinChatMessage(msg);
+      }
+    },
+    [pinnedMessage, handleUnpin, pinChatMessage],
   );
 
   /** Long-press chat row — host can pin/report; viewers can report others' messages. */
@@ -842,11 +1459,28 @@ function StreamViewerScreenContent() {
       const canReport = !isOwn && !!user?.id;
 
       if (isHost) {
+        const isPinnedRow =
+          pinnedMessage && pinnedMessage.content.trim() === msg.content.trim();
         Alert.alert(
           'Message actions',
           `"${msg.content.slice(0, 80)}${msg.content.length > 80 ? '\u2026' : ''}"`,
           [
             { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Remove',
+              style: 'destructive',
+              onPress: () => {
+                void (async () => {
+                  const ok = await streamMessagesService.softDelete(msg.id);
+                  if (ok) {
+                    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+                    showToast('Message removed for everyone.', 'success');
+                  } else {
+                    showToast('Could not remove message.', 'error');
+                  }
+                })();
+              },
+            },
             ...(canReport
               ? [
                   {
@@ -858,12 +1492,19 @@ function StreamViewerScreenContent() {
                   },
                 ]
               : []),
-            {
-              text: 'Pin',
-              onPress: () => {
-                void pinChatMessage(msg);
-              },
-            },
+            isPinnedRow
+              ? {
+                  text: 'Unpin',
+                  onPress: () => {
+                    void handleUnpin();
+                  },
+                }
+              : {
+                  text: 'Pin',
+                  onPress: () => {
+                    void pinChatMessage(msg);
+                  },
+                },
           ],
         );
         return;
@@ -874,62 +1515,159 @@ function StreamViewerScreenContent() {
         setReportMessageOpen(true);
       }
     },
-    [isHost, user?.id, pinChatMessage],
+    [isHost, user?.id, pinChatMessage, pinnedMessage, handleUnpin, showToast],
   );
+
+  /** Host-only: persist ended status, refresh discovery, route to post-stream summary. */
+  const performEndStream = useCallback(async (): Promise<boolean> => {
+    if (!isHost || endingStream) return false;
+    liveEndStreamDebug.endRequested(streamId);
+    endingStreamRef.current = true;
+    setEndingStream(true);
+
+    try {
+      await stopLiveRecording(streamId);
+      const result = await streamsLiveService.endStream(streamId);
+      if (!result.ok) {
+        liveEndStreamDebug.endFailed(streamId, result.reason);
+        endingStreamRef.current = false;
+        setEndingStream(false);
+        showToast('Couldn\u2019t end stream. Try again.', 'error');
+        return false;
+      }
+
+      liveEndStreamDebug.supabaseUpdated(streamId, result.reason);
+      const endedAt = new Date().toISOString();
+      queryClient.setQueryData(['stream', streamId], (old: typeof stream) =>
+        old ? { ...old, status: 'ended' as const, endedAt, viewerCount: 0 } : old,
+      );
+      pruneStreamFromLiveDiscovery(queryClient, streamId);
+      await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+      await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
+      await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
+      await queryClient.refetchQueries({ queryKey: ['liveHub'] });
+      liveEndStreamDebug.happeningNowRefreshed(streamId);
+
+      analytics.track('live_stream_ended', { stream_id: streamId });
+      showToast('Stream ended. Great work.', 'success');
+      router.replace(liveHighlightsHref(streamId));
+      return true;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'unknown';
+      liveEndStreamDebug.endFailed(streamId, reason);
+      endingStreamRef.current = false;
+      setEndingStream(false);
+      showToast('Something went wrong. Try again.', 'error');
+      return false;
+    }
+  }, [isHost, endingStream, streamId, router, showToast, queryClient, stream]);
 
   /** Host-only: end the stream and return to the Live tab. */
   const handleEndStream = useCallback(() => {
-    if (!isHost || endingStream) return;
+    if (!isHost || endingStream || endStreamAlertOpenRef.current) return;
+    endStreamAlertOpenRef.current = true;
 
     Alert.alert(
       'End stream?',
       'Viewers will be notified the stream has ended.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            endStreamAlertOpenRef.current = false;
+          },
+        },
         {
           text: 'End Stream',
           style: 'destructive',
           onPress: async () => {
-            liveEndStreamDebug.endRequested(streamId);
-            setEndingStream(true);
-
-            try {
-              const result = await streamsLiveService.endStream(streamId);
-              if (!result.ok) {
-                liveEndStreamDebug.endFailed(streamId, result.reason);
-                setEndingStream(false);
-                showToast('Couldn\u2019t end stream. Try again.', 'error');
-                return;
-              }
-
-              liveEndStreamDebug.supabaseUpdated(streamId, result.reason);
-              const endedAt = new Date().toISOString();
-              queryClient.setQueryData(['stream', streamId], (old: typeof stream) =>
-                old
-                  ? { ...old, status: 'ended' as const, endedAt, viewerCount: 0 }
-                  : old,
-              );
-              pruneStreamFromLiveDiscovery(queryClient, streamId);
-              await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
-              await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
-              await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
-              await queryClient.refetchQueries({ queryKey: ['liveHub'] });
-              liveEndStreamDebug.happeningNowRefreshed(streamId);
-
-              analytics.track('live_stream_ended', { stream_id: streamId });
-              showToast('Stream ended. Great work.', 'success');
-              router.replace('/(tabs)/live');
-            } catch (err) {
-              const reason = err instanceof Error ? err.message : 'unknown';
-              liveEndStreamDebug.endFailed(streamId, reason);
-              setEndingStream(false);
-              showToast('Something went wrong. Try again.', 'error');
-            }
+            endStreamAlertOpenRef.current = false;
+            await performEndStream();
           },
         },
       ],
     );
-  }, [isHost, endingStream, streamId, router, showToast, queryClient, stream]);
+  }, [isHost, endingStream, performEndStream]);
+
+  /**
+   * Host back / leave while broadcasting — strongly prompt to end so we don't leave ghost lives.
+   * `onLeave` runs after the host confirms leaving without ending (stream stays live until heartbeat timeout).
+   */
+  const promptHostLeaveWhileLive = useCallback(
+    (onLeave: () => void) => {
+      if (!isHost || !broadcastLive || endingStream) {
+        onLeave();
+        return;
+      }
+      if (hostLeaveAlertOpenRef.current) return;
+      hostLeaveAlertOpenRef.current = true;
+
+      Alert.alert(
+        'Leave live stream?',
+        'Your broadcast is still live. End it for everyone, or leave and it stays on until you reconnect or drop offline (~2 min).',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              hostLeaveAlertOpenRef.current = false;
+            },
+          },
+          {
+            text: 'Leave (keep live)',
+            onPress: () => {
+              hostLeaveAlertOpenRef.current = false;
+              hostLeaveConfirmedRef.current = true;
+              onLeave();
+            },
+          },
+          {
+            text: 'End stream',
+            style: 'destructive',
+            onPress: async () => {
+              hostLeaveAlertOpenRef.current = false;
+              await performEndStream();
+            },
+          },
+        ],
+      );
+    },
+    [isHost, broadcastLive, endingStream, performEndStream],
+  );
+
+  const handleHostBack = useCallback(() => {
+    promptHostLeaveWhileLive(() => router.back());
+  }, [promptHostLeaveWhileLive, router]);
+
+  useEffect(() => {
+    if (!isHost || !broadcastLive || endingStream) return;
+    const sub = navigation.addListener('beforeRemove', (e) => {
+      if (hostLeaveConfirmedRef.current || endingStreamRef.current) return;
+      e.preventDefault();
+      promptHostLeaveWhileLive(() => {
+        hostLeaveConfirmedRef.current = true;
+        navigation.dispatch(e.data.action);
+      });
+    });
+    return sub;
+  }, [isHost, broadcastLive, endingStream, navigation, promptHostLeaveWhileLive]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isHost || !broadcastLive || endingStream) return undefined;
+      const onHardwareBack = () => {
+        if (hostLeaveConfirmedRef.current || endingStreamRef.current) return false;
+        promptHostLeaveWhileLive(() => {
+          hostLeaveConfirmedRef.current = true;
+          router.back();
+        });
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+      return () => sub.remove();
+    }, [isHost, broadcastLive, endingStream, promptHostLeaveWhileLive, router]),
+  );
 
   const handleShareLive = useCallback(async () => {
     if (!stream) return;
@@ -956,49 +1694,97 @@ function StreamViewerScreenContent() {
     router.push(liveHighlightsHref(streamId));
   }, [router, streamId]);
 
-  const openLiveOverflowMenu = useCallback(() => {
+  const handleBlockHost = useCallback(() => {
     if (!user?.id || !stream || isHost) return;
-    Alert.alert('Live options', undefined, [
-      {
-        text: 'Report stream',
-        onPress: () => setReportOpen(true),
-      },
-      {
-        text: 'Block host',
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(
-            `Block ${stream.host.displayName}?`,
-            'They won\u2019t be able to message you.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Block',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    await messagesService.blockUserAndOptionalDeleteConversation(user.id, stream.host.id);
-                    showToast('Host blocked.', 'success');
-                    router.back();
-                  } catch {
-                    showToast('Couldn\u2019t block user.', 'error');
-                  }
-                },
-              },
-            ],
-          );
+    Alert.alert(
+      `Block ${stream.host.displayName}?`,
+      'They won\u2019t be able to message you.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await messagesService.blockUserAndOptionalDeleteConversation(user.id, stream.host.id);
+              showToast('Host blocked.', 'success');
+              router.back();
+            } catch {
+              showToast('Couldn\u2019t block user.', 'error');
+            }
+          },
         },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+      ],
+    );
   }, [user?.id, stream, isHost, showToast, router]);
+
+  const healthSnapshot: StreamHealthSnapshot = useMemo(
+    () =>
+      buildStreamHealthSnapshot({
+        liveKitEnabled,
+        liveKitRoomConnected: lkRoomConnected,
+        liveKitReconnecting: lkReconnecting,
+        liveKitSessionActive: liveKitSessionEnabled && Boolean(lkToken),
+        liveKitError: lkError ?? lkRoomError,
+        micMuted: hostMicMuted,
+        micPublished: hostAudioPublished,
+        micPermissionDenied: hostMicPermissionDenied,
+        cameraPermissionGranted: hostCameraGranted,
+        cameraPublishing:
+          lkRoomConnected &&
+          (sceneMode === 'live' || sceneMode === 'qna' || sceneMode === 'poll') &&
+          hostCameraGranted !== false,
+        sceneMode,
+        viewerCount,
+        streamStatus: stream?.status ?? 'unknown',
+        broadcastLive,
+        endingStream,
+        hostLastSeenAt: stream?.hostLastSeenAt ?? null,
+        lastLocalHeartbeatAt,
+        realtimeChannels: {
+          chat: realtimeHealth.chat,
+          polls: realtimeHealth.polls,
+          pins: realtimeHealth.pins,
+          gifts: realtimeHealth.gifts,
+          stream: realtimeHealth.stream,
+          questions: qnaBackendReady ? realtimeHealth.questions : undefined,
+        },
+        qnaBackendReady,
+      }),
+    [
+      liveKitEnabled,
+      lkRoomConnected,
+      lkReconnecting,
+      liveKitSessionEnabled,
+      lkToken,
+      lkError,
+      lkRoomError,
+      hostMicMuted,
+      hostAudioPublished,
+      hostMicPermissionDenied,
+      hostCameraGranted,
+      sceneMode,
+      viewerCount,
+      stream?.status,
+      stream?.hostLastSeenAt,
+      broadcastLive,
+      endingStream,
+      lastLocalHeartbeatAt,
+      realtimeHealth,
+      qnaBackendReady,
+    ],
+  );
 
   if (isLoading || !stream) return <LoadingState />;
 
   const posterUri = (stream.thumbnailUrl ?? '').trim() || (stream.host.avatarUrl ?? '').trim();
   const giftsEnabled = liveStreamGiftsEnabled(stream.tags);
   const showLiveKitLayer =
-    liveKitEnabled && !!lkToken && !!lkServerUrl && stream.status === 'live';
+    liveKitEnabled &&
+    !!lkToken &&
+    !!lkServerUrl &&
+    stream.status === 'live' &&
+    !lkRoomError;
 
   if (stream.status === 'ended') {
     return (
@@ -1006,6 +1792,20 @@ function StreamViewerScreenContent() {
         <ViewerLiveStateScreen
           title="This live has ended"
           message={stream.title}
+          icon="radio-outline"
+          tone="muted"
+          onBack={() => router.back()}
+        />
+      </View>
+    );
+  }
+
+  if (streamStaleForViewers) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ViewerLiveStateScreen
+          title="This live has ended"
+          message="The host disconnected. Check Happening Now for other streams."
           icon="radio-outline"
           tone="muted"
           onBack={() => router.back()}
@@ -1039,7 +1839,7 @@ function StreamViewerScreenContent() {
             setReminderOn(next);
             analytics.track('reminder_clicked', { stream_id: stream.id, enabled: next });
             showToast(
-              next ? 'Reminder saved. Push at go-live is not wired yet.' : 'Reminder removed.',
+              next ? 'Reminder saved — we\u2019ll notify you when they go live.' : 'Reminder removed.',
               'success',
             );
           }}
@@ -1060,16 +1860,27 @@ function StreamViewerScreenContent() {
               token={lkToken!}
               role={isHost ? 'host' : 'viewer'}
               style={styles.streamBg}
+              streamId={streamId}
+              roomName={lkRoomName ?? stream.livekitRoomName}
+              participantIdentity={lkParticipantIdentity ?? undefined}
+              sceneMode={sceneMode}
               brbMode={isHost && brbMode}
               micMuted={hostMicMuted}
               viewerAudioMuted={viewerAudioMuted}
+              pollQuestion={activePoll?.isActive ? activePoll.question : null}
               flipCameraNonce={isHost ? flipCameraNonce : undefined}
-              onResumeFromBrb={isHost ? () => setBrbMode(false) : undefined}
+              onResumeFromBrb={isHost ? () => void handleSceneModeChange('live') : undefined}
               onConnected={handleLiveKitConnected}
+              onBroadcastReady={handleHostBroadcastReady}
               onDisconnected={() => {
+                setLkRoomConnected(false);
                 if (endingStreamRef.current) {
                   liveEndStreamDebug.liveKitDisconnected(streamId);
                 }
+              }}
+              onAvPermissionsResolved={({ micGranted, cameraGranted }) => {
+                setHostCameraGranted(cameraGranted);
+                if (!micGranted) setHostMicPermissionDenied(true);
               }}
               onMicPermissionDenied={() => {
                 setHostMicPermissionDenied(true);
@@ -1082,28 +1893,44 @@ function StreamViewerScreenContent() {
                 }
               }}
               onError={(err) => {
-                if (!isHost) return;
-                Alert.alert(
-                  'Broadcast error',
-                  `${err.message}\n\nYou can end this session and try again.`,
-                  [
-                    { text: 'Dismiss', style: 'cancel' },
-                    {
-                      text: 'End session',
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          await streamsLiveService.abortUnbroadcastStream(streamId);
-                          await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
-                          router.replace('/(tabs)/live');
-                        } catch (err) {
-                          if (__DEV__) console.warn('[live.liveKit.onError.endSession]', err);
-                          showToast('Couldn\u2019t end session. Try again.', 'error');
-                        }
+                const friendly = friendlyLiveKitJoinError(err);
+                liveKitJoinDebug.connectionError({
+                  streamId,
+                  roomName: lkRoomName ?? stream.livekitRoomName ?? null,
+                  userId: user?.id ?? null,
+                  participantIdentity: lkParticipantIdentity ?? null,
+                  role: isHost ? 'host' : 'viewer',
+                  streamStatus: stream.status,
+                  broadcastStartedAt: stream.broadcastStartedAt ?? null,
+                  endedAt: stream.endedAt ?? null,
+                  hostLastSeenAt: stream.hostLastSeenAt ?? null,
+                  errorMessage: err.message,
+                });
+                if (isHost) {
+                  Alert.alert(
+                    'Broadcast error',
+                    `${friendly}\n\nYou can end this session and try again.`,
+                    [
+                      { text: 'Dismiss', style: 'cancel' },
+                      {
+                        text: 'End session',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await streamsLiveService.abortUnbroadcastStream(streamId);
+                            await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
+                            router.replace('/(tabs)/live');
+                          } catch (abortErr) {
+                            if (__DEV__) console.warn('[live.liveKit.onError.endSession]', abortErr);
+                            showToast('Couldn\u2019t end session. Try again.', 'error');
+                          }
+                        },
                       },
-                    },
-                  ],
-                );
+                    ],
+                  );
+                  return;
+                }
+                setLkRoomError(friendly);
               }}
             />
           </Suspense>
@@ -1195,29 +2022,54 @@ function StreamViewerScreenContent() {
             preparingBroadcast={preparingBroadcast}
             streamIsLive={streamIsLive}
             recordingEnabled={stream.recordingEnabled}
+            viewerClipsAllowed={stream.viewerClipsAllowed}
+            requireHostApproval={stream.requireHostApproval}
+            allowClipDownloads={stream.allowClipDownloads}
+            onToggleViewerClips={handleToggleViewerClips}
+            onToggleRequireHostApproval={handleToggleRequireHostApproval}
+            onToggleAllowClipDownloads={handleToggleAllowClipDownloads}
+            togglingClipSetting={togglingClipSetting}
+            recordingActive={recordingActive}
+            onMarkMoment={isLiveClipEgressEnabled() ? handleMarkMoment : undefined}
+            markMomentLoading={markMomentLoading}
+            onOpenClipStudio={isLiveClipEgressEnabled() ? openLiveHighlights : undefined}
+            onReviewMarker={handleReviewMarker}
+            reviewingMarkerId={reviewingMarkerId}
+            clipMarkers={clipMarkers}
+            clipMarkersLoading={clipMarkersLoading}
+            clipMarkersBackendReady={clipMarkersBackendReady}
             giftsEnabled={giftsEnabled}
-            brbMode={brbMode}
-            onToggleBrb={() => setBrbMode((v) => !v)}
+            sceneMode={sceneMode}
+            onSceneModeChange={handleSceneModeChange}
+            sceneChanging={sceneChanging}
             hostMicMuted={hostMicMuted}
             onToggleMic={() => setHostMicMuted((v) => !v)}
             endingStream={endingStream}
             onEndStream={handleEndStream}
             onShare={handleShareLive}
             onFlipCamera={handleFlipCamera}
-            onBack={() => router.back()}
+            onBack={handleHostBack}
             bottomInset={0}
-            preview={
-              posterUri ? (
-                <Image
-                  source={{ uri: posterUri }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  {...pulseImageFeedHeroProps}
-                />
-              ) : (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#020617' }]} />
-              )
+            previewMode={
+              preparingBroadcast
+                ? 'connecting'
+                : showLiveKitLayer &&
+                    (sceneMode === 'live' || sceneMode === 'qna' || sceneMode === 'poll')
+                  ? 'live'
+                  : 'fallback'
             }
+            activePoll={activePoll}
+            questions={questions}
+            pinnedQuestion={pinnedQuestion}
+            qnaBackendReady={qnaBackendReady}
+            qnaLoading={qnaLoading}
+            onPinQuestion={handlePinQuestion}
+            onUnpinQuestion={handleUnpinQuestion}
+            onMarkQuestionAnswered={handleMarkQuestionAnswered}
+            onDismissQuestion={handleDismissQuestion}
+            healthSnapshot={healthSnapshot}
+            healthRefreshing={healthRefreshing}
+            onRefreshHealth={handleRefreshHealth}
             messages={messages}
             pinned={pinnedMessage}
             currentUserId={user?.id}
@@ -1225,8 +2077,8 @@ function StreamViewerScreenContent() {
             onChangeInput={setInputText}
             onSendMessage={sendMessage}
             onUnpin={handleUnpin}
+            onPinMessage={togglePinChatMessage}
             onMessageLongPress={handleChatMessageLongPress}
-            activePoll={activePoll}
             hasVotedPoll={hasVotedPoll}
             votedOptionId={votedOptionId}
             onPollVote={handlePollVote}
@@ -1237,18 +2089,12 @@ function StreamViewerScreenContent() {
             chatSending={chatSending}
             pollVoting={pollVoting}
             showToast={showToast}
-            slowModeEnabled={slowModeEnabled}
-            onToggleSlowMode={() => {
-              setSlowModeEnabled((v) => {
-                const next = !v;
-                showToast(next ? 'Slow mode on (stub).' : 'Slow mode off (stub).', 'info');
-                return next;
-              });
-            }}
           />
         ) : (
           <ViewerLivePlayer
             host={stream.host}
+            streamId={streamId}
+            streamTitle={stream.title}
             viewerUserId={user?.id}
             isFollowing={isFollowing}
             onToggleFollow={handleToggleFollow}
@@ -1260,15 +2106,18 @@ function StreamViewerScreenContent() {
             onToggleAudio={() => setViewerAudioMuted((v) => !v)}
             onBack={() => router.back()}
             onShare={handleShareLive}
-            onMore={openLiveOverflowMenu}
-            onOpenGifts={() => {
-              analytics.track('live_gift_opened', { stream_id: streamId, surface: 'sticker_picker' });
-              setShowGiftPicker(true);
-            }}
-            onOpenLeaderboard={() => setShowLeaderboard(true)}
-            showLeaderboard={leaderboard.length > 0}
+            onReportStream={() => setReportOpen(true)}
+            onBlockHost={handleBlockHost}
             messages={messages}
             pinned={pinnedMessage}
+            pinnedQuestion={pinnedQuestion}
+            questions={questions}
+            qnaBackendReady={qnaBackendReady}
+            onSubmitQuestion={handleSubmitQuestion}
+            questionSubmitting={questionSubmitting}
+            onGiftSent={handleGiftSent}
+            onOpenLeaderboard={() => setShowLeaderboard(true)}
+            showLeaderboard={leaderboard.length > 0}
             inputText={inputText}
             onChangeInput={setInputText}
             onSendMessage={sendMessage}
@@ -1283,37 +2132,19 @@ function StreamViewerScreenContent() {
             pollUnavailable={!activePoll?.isActive}
             audioUnavailable={Boolean(lkError && broadcastLive)}
             streamConnecting={preparingBroadcast || (!broadcastLive && streamIsLive)}
-            streamVideoError={broadcastLive && !showLiveKitLayer && lkError ? lkError : null}
+            streamVideoError={
+              lkRoomError ??
+              (broadcastLive && !showLiveKitLayer && lkError ? lkError : null)
+            }
             showToast={showToast}
             welcomeMessage={DEFAULT_CHAT[0]?.content}
+            viewerClipsAllowed={Boolean(stream.viewerClipsAllowed)}
+            clipMarkersBackendReady={clipMarkersBackendReady}
+            onSaveClipMoment={handleClipMoment}
+            clipMomentLoading={clipMomentLoading}
           />
         )}
       </View>
-
-      {stream && user?.id && !isHost && giftsEnabled ? (
-        <SendCreatorGiftTray
-          visible={sparkGiftOpen}
-          onClose={() => setSparkGiftOpen(false)}
-          creatorUserId={stream.host.id}
-          creatorDisplayName={stream.host.displayName}
-          creatorHandle={stream.host.username ?? null}
-          creatorAvatarUrl={stream.host.avatarUrl ?? null}
-          contextType="live"
-          contextId={stream.id}
-        />
-      ) : null}
-
-      <GiftPicker
-        visible={showGiftPicker}
-        sparkBalance={sparkBalance}
-        onSendGift={handleSendGift}
-        onClose={() => setShowGiftPicker(false)}
-        onBuySparks={() => {
-          setShowGiftPicker(false);
-          router.push({ pathname: '/pulse-shop', params: { tab: 'sparks' } });
-        }}
-        sending={giftSending}
-      />
 
       <GiftLeaderboard
         visible={showLeaderboard}

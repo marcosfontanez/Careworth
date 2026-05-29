@@ -58,6 +58,7 @@ import { PVSearchBarTrigger } from '@/components/pv/PVSearchBar';
 import type { Post, ProfileUpdate, UserProfile } from '@/types';
 import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
 import { canVisitorSeeProfilePosts } from '@/utils/mypagePosts';
+import type { ProfileContentBlockState } from '@/utils/mypagePosts';
 import { MyPulseGlassPanel } from '@/components/mypage/MyPulseGlassPanel';
 
 /**
@@ -97,6 +98,9 @@ export type MyPageContentProps = {
   creatorPostNotificationsBusy?: boolean;
   /** Visitor: open Pulse Shop creator gifts (Sparks) for this profile. */
   onOpenCreatorGifts?: () => void;
+  /** When false, content surfaces (My Pulse, Media Hub, vibe, pulse history) are locked for visitors. */
+  profileContentVisible?: boolean;
+  blockRelationship?: ProfileContentBlockState;
 };
 
 export function MyPageContent({
@@ -115,6 +119,8 @@ export function MyPageContent({
   onToggleCreatorPostNotifications,
   creatorPostNotificationsBusy = false,
   onOpenCreatorGifts,
+  profileContentVisible,
+  blockRelationship = 'none',
 }: MyPageContentProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -127,11 +133,17 @@ export function MyPageContent({
     router.push('/notifications');
   }, [router]);
 
+  const visitorContentVisible =
+    profileContentVisible ??
+    canVisitorSeeProfilePosts(user, isOwner, { blockRelationship });
+
   const postsVisibleOnProfile = useMemo(() => {
     const posts = userPosts ?? [];
-    if (!canVisitorSeeProfilePosts(user, isOwner)) return [];
+    if (!visitorContentVisible) return [];
     return posts.filter((p) => !postHasDemoCatalogMedia(p));
-  }, [userPosts, user, isOwner]);
+  }, [userPosts, visitorContentVisible]);
+
+  const pulseUpdatesForVisitor = visitorContentVisible ? profileUpdates : [];
 
   /**
    * Pins can link to ANY post — my own or someone else's. Collect the ids
@@ -145,13 +157,13 @@ export function MyPageContent({
   const foreignLinkedIds = useMemo(() => {
     const mine = new Set((userPosts ?? []).map((p) => p.id));
     const out: string[] = [];
-    for (const u of profileUpdates) {
+    for (const u of pulseUpdatesForVisitor) {
       const id = u.linkedPostId?.trim();
       if (!id || mine.has(id)) continue;
       out.push(id);
     }
     return out;
-  }, [profileUpdates, userPosts]);
+  }, [pulseUpdatesForVisitor, userPosts]);
 
   const linkedPostsMap = useLinkedPostsMap(foreignLinkedIds);
 
@@ -480,8 +492,9 @@ export function MyPageContent({
               following={user.followingCount ?? 0}
               initialScore={user.pulseScoreCurrent ?? null}
               initialTier={user.pulseTier ?? null}
-              initialHistoryOpen={initialOpenPulseHistory}
+              initialHistoryOpen={visitorContentVisible && initialOpenPulseHistory}
               highlightShareTier={highlightShareTier}
+              pulseHistoryEnabled={visitorContentVisible}
               onPressFollowers={() =>
                 router.push(`/followers?userId=${user.id}&tab=followers`)
               }
@@ -551,7 +564,7 @@ export function MyPageContent({
             { paddingHorizontal: layout.screenPaddingWide, gap: spacing.lg },
           ]}
         >
-          {!(isOwner && user.hidePulseMusicPlayerOnMyPage) ? (
+          {visitorContentVisible && !(isOwner && user.hidePulseMusicPlayerOnMyPage) ? (
             <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
               <FeaturedSoundCard
                 user={user}
@@ -565,13 +578,21 @@ export function MyPageContent({
                 }
               />
             </MyPulseGlassPanel>
+          ) : !isOwner && !visitorContentVisible ? (
+            <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+              <ProfileContentLockedNotice
+                title="Current Vibe is private"
+                body="This creator keeps their profile music private."
+              />
+            </MyPulseGlassPanel>
           ) : null}
 
           <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
             <MyPulseSection
-              updates={profileUpdates}
+              updates={pulseUpdatesForVisitor}
               userId={user.id}
               readOnly={!isOwner}
+              contentLocked={!isOwner && !visitorContentVisible}
               resolveLinkedPost={resolveLinkedPost}
             />
           </MyPulseGlassPanel>
@@ -580,8 +601,9 @@ export function MyPageContent({
             <MediaHubSection
               userId={user.id}
               userPosts={postsVisibleOnProfile}
-              profileUpdates={profileUpdates}
+              profileUpdates={pulseUpdatesForVisitor}
               isOwner={isOwner}
+              contentLocked={!isOwner && !visitorContentVisible}
             />
           </MyPulseGlassPanel>
         </View>
@@ -589,6 +611,47 @@ export function MyPageContent({
     </PVPageBackground>
   );
 }
+
+function ProfileContentLockedNotice({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={profileLockedStyles.wrap}>
+      <View style={profileLockedStyles.iconWrap}>
+        <Ionicons name="lock-closed-outline" size={20} color={colors.primary.teal} />
+      </View>
+      <Text style={profileLockedStyles.title}>{title}</Text>
+      <Text style={profileLockedStyles.body}>{body}</Text>
+    </View>
+  );
+}
+
+const profileLockedStyles = StyleSheet.create({
+  wrap: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(20,184,166,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  title: {
+    ...typography.subtitle,
+    color: colors.dark.text,
+    textAlign: 'center',
+  },
+  body: {
+    ...typography.caption,
+    color: colors.dark.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+});
 
 function BannerChrome({
   topInset,

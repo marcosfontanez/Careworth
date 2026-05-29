@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
@@ -26,9 +27,10 @@ import { postsService } from '@/services/supabase';
 import { userService } from '@/services/user';
 import { withPulseVerseCta } from '@/lib/share';
 import { postKeys, profileUpdateKeys, userKeys } from '@/lib/queryKeys';
-import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
+import { navigateToCircleRoom, navigateToCircleThread } from '@/lib/communityCache';
 import { liveStreamHref } from '@/lib/navigation/liveRoutes';
 import { hrefPost } from '@/lib/communityRoutes';
+import { pushPostViewer } from '@/lib/postViewerRoute';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { colors, borderRadius, typography, spacing, iconSize, layout } from '@/theme';
@@ -83,7 +85,7 @@ export default function MyPulseDetailScreen() {
    * heart button reflects the signed-in user's state on first render
    * instead of flashing outlined → filled.
    */
-  const { data: update, isLoading, isSuccess } = useQuery({
+  const { data: update, isLoading } = useQuery({
     queryKey: profileUpdateKeys.detailForViewer(id!, viewerId),
     queryFn: () => profileUpdatesService.getById(id!, viewerId),
     enabled: !!id,
@@ -98,7 +100,7 @@ export default function MyPulseDetailScreen() {
   const { data: comments = [] } = useQuery({
     queryKey: profileUpdateKeys.comments(id!),
     queryFn: () => profileUpdatesService.listComments(id!),
-    enabled: !!id,
+    enabled: !!id && !!update,
   });
 
   /**
@@ -127,11 +129,7 @@ export default function MyPulseDetailScreen() {
   });
 
   // Redirect when the row doesn't exist (e.g. deleted since pin). Never bare `router.back()` — deep links may have no history.
-  useEffect(() => {
-    if (!isSuccess || !id || update) return;
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/my-pulse');
-  }, [isSuccess, id, update, router]);
+  // Privacy-blocked rows also resolve to null; we show an unavailable screen instead of redirecting.
 
   const isOwner = !!viewerId && !!update && update.userId === viewerId;
   const displayType = update ? getMyPulseDisplayType(update) : 'thought';
@@ -453,25 +451,36 @@ export default function MyPulseDetailScreen() {
   const openSource = useCallback(() => {
     if (!update) return;
     if (update.linkedPostId) {
-      /**
-       * Post detail (`/post/[id]`) keeps a bounded media preview up top and the
-       * real comments thread + composer below — the surface users expect when
-       * they want to discuss the source clip. The fullscreen `/feed/[id]`
-       * shell is for passive scrolling, not “jump in and comment.”
-       */
-      router.push(
-        hrefPost(update.linkedPostId, update.linkedCircleSlug?.trim() || undefined) as any,
-      );
+      const circleSlug = update.linkedCircleSlug?.trim() || undefined;
+      if (linkedPost) {
+        router.push(hrefPost(linkedPost, circleSlug) as any);
+        return;
+      }
+      void pushPostViewer(router, update.linkedPostId, {
+        viewerId: authUser?.id ?? null,
+        circle: circleSlug,
+      });
       return;
     }
     if (update.linkedThreadId && update.linkedCircleSlug) {
-      prefetchCircleRoomBySlug(queryClient, update.linkedCircleSlug.trim(), authUser?.id ?? null);
-      router.push(`/communities/${update.linkedCircleSlug}/thread/${update.linkedThreadId}` as any);
+      void navigateToCircleThread(
+        router,
+        queryClient,
+        update.linkedCircleSlug.trim(),
+        update.linkedThreadId,
+        authUser?.id ?? null,
+        'myPulse:linkedThread',
+      );
       return;
     }
     if (update.linkedCircleSlug) {
-      prefetchCircleRoomBySlug(queryClient, update.linkedCircleSlug.trim(), authUser?.id ?? null);
-      router.push(`/communities/${update.linkedCircleSlug}` as any);
+      void navigateToCircleRoom(
+        router,
+        queryClient,
+        { slug: update.linkedCircleSlug.trim() },
+        authUser?.id ?? null,
+        { source: 'myPulse:linkedCircle' },
+      );
       return;
     }
     if (update.linkedLiveId && liveStreaming) {
@@ -481,7 +490,7 @@ export default function MyPulseDetailScreen() {
     if (update.linkedUrl?.trim()) {
       openWebUrlSafely(update.linkedUrl.trim());
     }
-  }, [router, update, liveStreaming, authUser?.id, queryClient]);
+  }, [router, update, linkedPost, liveStreaming, authUser?.id, queryClient]);
 
   const sourceButtonLabel = useMemo(() => {
     if (!update) return null;
@@ -510,7 +519,13 @@ export default function MyPulseDetailScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
         <Header onBack={() => router.back()} />
-        <Text style={styles.muted}>Update not found.</Text>
+        <View style={styles.centered}>
+          <Ionicons name="lock-closed-outline" size={28} color={colors.primary.teal} />
+          <Text style={styles.unavailableTitle}>Update unavailable</Text>
+          <Text style={styles.muted}>
+            This My Pulse update is private or no longer available.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -552,9 +567,7 @@ export default function MyPulseDetailScreen() {
           <View style={styles.inner}>
             {/* Author row */}
             <Pressable
-              onPress={() =>
-                author?.id && router.push(`/profile/${author.id}` as any)
-              }
+              onPress={() => openPulsePage(router, author?.id)}
               style={styles.authorRow}
             >
               {author?.avatarUrl ? (
@@ -717,9 +730,7 @@ export default function MyPulseDetailScreen() {
             onEdit={async (content) => {
               await editCommentMut.mutateAsync({ commentId: item.id, content });
             }}
-            onPressAuthor={() =>
-              router.push(`/profile/${item.authorId}` as any)
-            }
+            onPressAuthor={() => openPulsePage(router, item.authorId)}
           />
         )}
       />
@@ -1313,7 +1324,14 @@ const styles = StyleSheet.create({
   /** Same as feed comments: bounded height inside KeyboardAvoidingView on iOS. */
   listFlex: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  muted: { fontSize: 15, color: colors.dark.textMuted, textAlign: 'center', marginTop: 40 },
+  muted: { fontSize: 15, color: colors.dark.textMuted, textAlign: 'center', marginTop: 8, paddingHorizontal: 24 },
+  unavailableTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.dark.text,
+    textAlign: 'center',
+    marginTop: 12,
+  },
 
   topBar: {
     flexDirection: 'row',

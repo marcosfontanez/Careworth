@@ -19,10 +19,10 @@ export function JoinButton({ joined, onToggle, compact }: Props) {
       {joined ? (
         <View style={styles.joinedInner}>
           <Ionicons name="checkmark-circle" size={16} color={pulseverse.electricSoft} />
-          <Text style={styles.txtJoined}>Joined</Text>
+          <Text style={styles.txtJoined}>Saved</Text>
         </View>
       ) : (
-        <Text style={styles.txtJoin}>Join</Text>
+        <Text style={styles.txtJoin}>Join for updates and posting</Text>
       )}
     </TouchableOpacity>
   );

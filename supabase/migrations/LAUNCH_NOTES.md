@@ -21,6 +21,16 @@ Apply with `npm run db:push` after `npm run db:link` (see **docs/LAUNCH_RUNBOOK.
 | 192 | economy RLS helper execute | restore `_economy_is_admin()` EXECUTE for shop/wallet RLS (fixes migration 177 gap) |
 | 193 | phase3 closed beta expansion | economy gift push mirror + lock `_economy_user_notify` |
 | 196 | is_valid_username execute | restore EXECUTE for profiles CHECK (Current Vibe / profile song saves) |
+| 200–209 | live join, recordings, clips, markers | LiveKit room + Clip Studio pipeline |
+| 210 | feed_clip_source | Feed-native clip lineage (`source_post_id`, trim window) |
+| 211 | feed_rpcs_exclude_failed_processing | Hide `media_processing_status=failed` from feed RPCs |
+
+## Live + Feed clips (200–211)
+
+- **200–209** — Live join hardening, recordings egress, clip markers, Clip Studio settings.
+- **210** — Feed clip composer attribution columns on `posts`. Required before feed-native clips persist lineage.
+- **211** — Feed RPCs exclude failed media processing posts (aligns with client `postAppearsInMainFeeds`).
+- **Worker:** run `node scripts/creator-media-worker.mjs` (ffmpeg) so trim jobs for feed + Live clips complete.
 
 ## Phase 3 (193) — economy gift push
 

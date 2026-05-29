@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,6 +56,72 @@ function deriveCircleThreadTitle(raw: string): string {
   if (!t) return 'Discussion';
   const first = (t.split('\n')[0] ?? t).trim();
   return first.length > 200 ? `${first.slice(0, 197)}…` : first;
+}
+
+/**
+ * Live video preview tile for the Circle composer.
+ *
+ * Why this exists: the old composer rendered only a static poster thumbnail
+ * (or, in Expo Go where `react-native-compressor` isn't linked, an empty
+ * dark box with a play icon). Users reported "no preview / can't see the
+ * video." This component plays the selected file inline via `expo-video`
+ * so the user sees their actual footage, looping and muted, before posting.
+ *
+ * The `posterUri` (if available) is used as the player poster so a frame
+ * paints immediately while the video buffers — eliminates the empty-tile
+ * flash that triggered the original bug report.
+ */
+function CircleVideoPreviewTile({
+  uri,
+  posterUri,
+  thumbLoading,
+}: {
+  uri: string;
+  posterUri: string | null;
+  thumbLoading: boolean;
+}) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.volume = 0;
+    p.play();
+  });
+
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const sub = player.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay') setReady(true);
+      if (status === 'idle' || status === 'loading') setReady(false);
+    });
+    return () => sub.remove();
+  }, [player]);
+
+  return (
+    <>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+        nativeControls={false}
+        {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
+      />
+      {/* Poster fades out once the video frame paints; on iOS expo-video
+          paints the first frame fast, so this is mostly a buffering bridge. */}
+      {!ready && posterUri ? (
+        <Image
+          source={{ uri: posterUri }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          {...pulseImageFeedHeroProps}
+        />
+      ) : null}
+      {!ready && !posterUri && thumbLoading ? (
+        <View style={[StyleSheet.absoluteFillObject, styles.videoThumbFallback]}>
+          <ActivityIndicator color="#FFFFFFE6" />
+        </View>
+      ) : null}
+    </>
+  );
 }
 
 export default function CommunityCreatePostScreen() {
@@ -680,28 +747,23 @@ export default function CommunityCreatePostScreen() {
         </View>
 
         {/* ====================== MEDIA TILES =======================
-            Video tile renders the **local poster thumbnail** (not the video
-            URI itself). The legacy `<Image src={videoUri} />` displayed
-            nothing — that was the "no preview" bug. While the thumbnail is
-            being generated we show a spinner; if generation fails (Expo Go
-            without react-native-compressor) we fall back to a dark play-icon
-            placeholder so the user still sees confirmation that their
-            selection succeeded. */}
+            Video tile renders a **live `expo-video` preview** (looping,
+            muted) so the user sees their actual footage before posting.
+            Older versions rendered only a static poster — and on Expo Go
+            (where `react-native-compressor` isn't linked) no poster was
+            generated at all, producing the empty-tile "no preview" bug.
+            The thumbnail still gets generated separately and uploaded as
+            `posts.thumbnail_url` so the feed card has a poster. */}
         {allowsMedia && (
           <View style={styles.mediaTiles}>
             {mediaUri ? (
               <View style={styles.mediaTile}>
                 {mediaKind === 'video' ? (
-                  videoThumbUri ? (
-                    <Image
-                      source={{ uri: videoThumbUri }}
-                      style={styles.mediaImg}
-                      contentFit="cover"
-                      {...pulseImageFeedHeroProps}
-                    />
-                  ) : (
-                    <View style={[StyleSheet.absoluteFillObject, styles.videoThumbFallback]} />
-                  )
+                  <CircleVideoPreviewTile
+                    uri={mediaUri}
+                    posterUri={videoThumbUri}
+                    thumbLoading={videoThumbLoading}
+                  />
                 ) : (
                   <Image
                     source={{ uri: mediaUri }}
@@ -710,16 +772,7 @@ export default function CommunityCreatePostScreen() {
                     {...pulseImageFeedHeroProps}
                   />
                 )}
-                {mediaKind === 'video' && (
-                  <View style={styles.playOverlay}>
-                    {videoThumbLoading ? (
-                      <ActivityIndicator color="#FFFFFFE6" />
-                    ) : (
-                      <Ionicons name="play-circle" size={36} color="#FFFFFFE6" />
-                    )}
-                  </View>
-                )}
-                {mediaKind === 'video' && videoAsset?.duration != null && !videoThumbLoading && (
+                {mediaKind === 'video' && videoAsset?.duration != null && (
                   <View style={styles.durationBadge}>
                     <Text style={styles.durationBadgeText}>
                       {Math.max(1, Math.round(videoAsset.duration))}s
@@ -953,12 +1006,8 @@ const styles = StyleSheet.create({
   /** Shown when react-native-compressor cannot generate a poster frame (e.g. Expo Go). */
   videoThumbFallback: {
     backgroundColor: 'rgba(15, 28, 48, 0.92)',
-  },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   durationBadge: {
     position: 'absolute',

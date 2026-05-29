@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
 import { messagesService } from '@/services/supabase/messages';
 import { getBlockRelationship } from '@/services/supabase/blocks';
+import { canVisitorSeeProfileContent } from '@/utils/mypagePosts';
 import { profilesService } from '@/services/supabase';
 import { queryClient } from '@/lib/queryClient';
 import { userKeys } from '@/lib/queryKeys';
@@ -30,7 +31,7 @@ export default function ProfileByIdScreen() {
     tierUp?: string;
   }>();
   const router = useRouter();
-  const { user: authUser } = useAuth();
+  const { user: authUser, profile } = useAuth();
   const followedIds = useAppStore((s) => s.followedCreatorIds);
   const setCreatorFollowed = useAppStore((s) => s.setCreatorFollowed);
   const toast = useToast();
@@ -45,8 +46,22 @@ export default function ProfileByIdScreen() {
     staleTime: 30_000,
   });
   const { data: user, isLoading, isError, refetch } = useUser(profileUserId);
-  const { data: posts } = useUserPosts(profileUserId);
-  const { data: profileUpdates = [] } = useProfileUpdates(profileUserId);
+
+  const awaitingBlockCheck = Boolean(
+    authUser?.id && profileUserId && authUser.id !== profileUserId && blockLoading,
+  );
+
+  const canSeeProfileContent =
+    user != null && !awaitingBlockCheck
+      ? canVisitorSeeProfileContent(user, false, {
+          blockRelationship: authUser?.id ? blockRelationship : 'none',
+          viewerIsStaff: Boolean(authUser?.id && profile?.roleAdmin),
+        })
+      : false;
+
+  const contentQueryUserId = canSeeProfileContent ? profileUserId : '';
+  const { data: posts } = useUserPosts(contentQueryUserId);
+  const { data: profileUpdates = [] } = useProfileUpdates(contentQueryUserId || undefined);
   const { data: creatorPostNotifyOn = false, isLoading: creatorPostNotifyLoading } =
     useCreatorPostNotifications(profileUserId || undefined, authUser?.id);
 
@@ -179,12 +194,16 @@ export default function ProfileByIdScreen() {
     <>
       <MyPageContent
         user={user}
-        profileUpdates={blockRelationship === 'viewer_blocked' ? [] : profileUpdates}
-        userPosts={blockRelationship === 'viewer_blocked' ? [] : posts}
+        profileUpdates={profileUpdates}
+        userPosts={posts}
         isOwner={false}
+        profileContentVisible={canSeeProfileContent}
+        blockRelationship={blockRelationship}
         isFollowing={isFollowing}
         onToggleFollow={handleToggleFollow}
-        onMessage={blockRelationship === 'viewer_blocked' ? undefined : handleMessage}
+        onMessage={
+          canSeeProfileContent && blockRelationship === 'none' ? handleMessage : undefined
+        }
         onBlock={handleBlock}
         onReport={authUser ? () => setReportOpen(true) : undefined}
         initialOpenPulseHistory={openPulseHistory === '1'}
@@ -197,7 +216,7 @@ export default function ProfileByIdScreen() {
           creatorPostNotifyMutation.isPending || creatorPostNotifyLoading
         }
         onOpenCreatorGifts={
-          authUser?.id && blockRelationship !== 'viewer_blocked'
+          authUser?.id && canSeeProfileContent && blockRelationship === 'none'
             ? () => setCreatorGiftOpen(true)
             : undefined
         }

@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, spacing, typography, shadows } from '@/theme';
+import { PulseChip } from '@/components/ui/pulse';
+import { pulseColors, pulseGradients, pulseRadius } from '@/lib/theme/pulseTheme';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import { LiveHeroPlaceholder } from '@/components/live/LiveHeroPlaceholder';
 import { LivePill } from './LivePill';
@@ -24,7 +26,10 @@ type Props = {
   variant?: 'hero' | 'compact';
 };
 
-const HERO_HEIGHTS = { hero: 448, compact: 340 } as const;
+export const FEATURED_LIVE_HERO_HEIGHT = 448;
+export const FEATURED_LIVE_COMPACT_HEIGHT = 340;
+
+const HERO_HEIGHTS = { hero: FEATURED_LIVE_HERO_HEIGHT, compact: FEATURED_LIVE_COMPACT_HEIGHT } as const;
 
 function safeTitle(stream: LiveStream): string {
   const t = stream.title?.trim();
@@ -59,11 +64,13 @@ export function FeaturedLiveCard({
   shopBadge,
   variant = 'hero',
 }: Props) {
+  const [thumbFailed, setThumbFailed] = useState(false);
   const cardH = HERO_HEIGHTS[variant];
   const title = safeTitle(stream);
   const hostName = safeHostName(stream);
   const avatarUri = safeAvatarUri(stream);
   const thumbnailUri = stream.thumbnailUrl?.trim() || '';
+  const showThumbnail = Boolean(thumbnailUri) && !thumbFailed;
   const description =
     stream.description?.trim() ||
     subtitle?.trim() ||
@@ -96,103 +103,103 @@ export function FeaturedLiveCard({
       accessibilityRole="button"
       accessibilityLabel={`Join live stream: ${title}`}
     >
-      <View style={styles.media}>
-        {thumbnailUri ? (
-          <Image
-            source={{ uri: thumbnailUri }}
+      <View style={styles.inner} collapsable={false}>
+        <View style={styles.media} pointerEvents="none">
+          {showThumbnail ? (
+            <Image
+              source={{ uri: thumbnailUri }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={180}
+              onError={() => setThumbFailed(true)}
+              {...pulseImageFeedHeroProps}
+            />
+          ) : (
+            <LiveHeroPlaceholder />
+          )}
+          <LinearGradient
+            colors={['rgba(7, 17, 31, 0.05)', 'rgba(7, 17, 31, 0.35)', 'rgba(7, 17, 31, 0.98)']}
+            locations={[0, 0.42, 1]}
             style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={180}
-            {...pulseImageFeedHeroProps}
           />
-        ) : (
-          <LiveHeroPlaceholder />
-        )}
-        <LinearGradient
-          colors={['rgba(6,14,26,0.05)', 'rgba(6,14,26,0.35)', 'rgba(6,14,26,0.98)']}
-          locations={[0, 0.42, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <LinearGradient
-          colors={['rgba(56,189,248,0.12)', 'transparent', 'rgba(236,72,153,0.1)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.accentVeil}
-          pointerEvents="none"
-        />
-      </View>
-
-      <View style={styles.topRow}>
-        <View style={styles.topLeftStack}>
-          <LivePill />
-          {shopBadge ? (
-            <View style={styles.shopBadge}>
-              <Ionicons name="bag-handle" size={12} color={colors.primary.gold} />
-              <Text style={styles.shopBadgeTxt} numberOfLines={1}>
-                {shopBadge}
-              </Text>
-            </View>
-          ) : null}
+          <LinearGradient
+            colors={[...pulseGradients.premium]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.accentVeil}
+          />
         </View>
-        <LiveViewerBadge count={Number.isFinite(stream.viewerCount) ? stream.viewerCount : 0} />
-      </View>
 
-      <View style={styles.bottom}>
-        {tagChips.length > 0 ? (
-          <View style={styles.tagRow}>
-            {tagChips.map((tag) => (
-              <View key={tag} style={styles.tagChip}>
-                <Text style={styles.tagChipTxt} numberOfLines={1}>
-                  {tag}
+        <View style={styles.topRow}>
+          <View style={styles.topLeftStack}>
+            <LivePill />
+            {shopBadge ? (
+              <View style={styles.shopBadge}>
+                <Ionicons name="bag-handle" size={12} color={colors.primary.gold} />
+                <Text style={styles.shopBadgeTxt} numberOfLines={1}>
+                  {shopBadge}
                 </Text>
               </View>
-            ))}
+            ) : null}
           </View>
-        ) : categoryLabel ? (
-          <View style={styles.categoryPill}>
-            <Text style={styles.categoryPillTxt}>{categoryLabel}</Text>
-          </View>
-        ) : null}
-
-        <Text style={styles.title} numberOfLines={2}>
-          {title}
-        </Text>
-
-        {description ? (
-          <Text style={styles.description} numberOfLines={2}>
-            {description}
-          </Text>
-        ) : null}
-
-        <View style={styles.identityRow}>
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatar} {...pulseImageListThumbProps} />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Text style={styles.avatarInitials}>{hostInitials(stream)}</Text>
-            </View>
-          )}
-          <View style={styles.identityText}>
-            <Text style={styles.name} numberOfLines={1}>
-              {hostName}
-            </Text>
-            <Text style={styles.context} numberOfLines={1}>
-              {ctxLine}
-            </Text>
-          </View>
+          <LiveViewerBadge count={Number.isFinite(stream.viewerCount) ? stream.viewerCount : 0} />
         </View>
 
-        <LinearGradient
-          colors={[colors.primary.teal, '#6366F1']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.ctaGradient}
-        >
-          <Text style={styles.ctaText}>Join Live</Text>
-          <View style={styles.ctaIconWrap}>
-            <Ionicons name="play" size={12} color="#0B1220" />
+        <View style={styles.bottom}>
+          {tagChips.length > 0 ? (
+            <View style={styles.tagRow}>
+              {tagChips.map((tag, index) => (
+                <View key={`${tag}-${index}`} style={styles.tagChip}>
+                  <Text style={styles.tagChipTxt} numberOfLines={1}>
+                    {tag}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : categoryLabel ? (
+            <PulseChip label={categoryLabel} tone="premium" style={styles.categoryChip} />
+          ) : null}
+
+          <Text style={styles.title} numberOfLines={2}>
+            {title}
+          </Text>
+
+          {description ? (
+            <Text style={styles.description} numberOfLines={2}>
+              {description}
+            </Text>
+          ) : null}
+
+          <View style={styles.identityRow}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatar} {...pulseImageListThumbProps} />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarInitials}>{hostInitials(stream)}</Text>
+              </View>
+            )}
+            <View style={styles.identityText}>
+              <Text style={styles.name} numberOfLines={1}>
+                {hostName}
+              </Text>
+              <Text style={styles.context} numberOfLines={1}>
+                {ctxLine}
+              </Text>
+            </View>
           </View>
-        </LinearGradient>
+
+          <LinearGradient
+            colors={[...pulseGradients.primaryCta]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.ctaGradient}
+          >
+            <Text style={styles.ctaText}>Join Live</Text>
+            <View style={styles.ctaIconWrap}>
+              <Ionicons name="play" size={12} color={pulseColors.onAccent} />
+            </View>
+          </LinearGradient>
+        </View>
       </View>
     </Pressable>
   );
@@ -200,11 +207,11 @@ export function FeaturedLiveCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: borderRadius['3xl'] - 4,
+    borderRadius: pulseRadius['3xl'],
     overflow: 'hidden',
-    backgroundColor: colors.dark.cardAlt,
+    backgroundColor: pulseColors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.28)',
+    borderColor: pulseColors.borderStrong,
     ...Platform.select({
       ios: {
         ...shadows.lifted,
@@ -216,22 +223,24 @@ const styles = StyleSheet.create({
       default: {},
     })!,
   },
+  inner: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
   media: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0C1628',
+    backgroundColor: pulseColors.background,
   },
   accentVeil: {
     ...StyleSheet.absoluteFillObject,
   },
   pressed: { opacity: 0.96, transform: [{ scale: 0.992 }] },
   topRow: {
-    position: 'absolute',
-    top: spacing.md,
-    left: spacing.md,
-    right: spacing.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
     zIndex: 2,
   },
   topLeftStack: {
@@ -263,10 +272,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   bottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     padding: spacing.lg,
     zIndex: 2,
   },
@@ -292,28 +297,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  categoryPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: borderRadius.sm,
-    backgroundColor: 'rgba(56,189,248,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.45)',
-    marginBottom: spacing.sm,
-  },
-  categoryPillTxt: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#A5F3FC',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
+  categoryChip: { marginBottom: spacing.sm },
   title: {
     ...typography.h1,
     fontSize: 26,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: pulseColors.text,
     letterSpacing: -0.5,
     lineHeight: 30,
   },
@@ -389,7 +378,7 @@ const styles = StyleSheet.create({
     ...typography.button,
     fontSize: 14,
     fontWeight: '800',
-    color: '#0B1220',
+    color: pulseColors.onAccent,
     letterSpacing: 0.2,
   },
   ctaIconWrap: {

@@ -70,12 +70,15 @@ export type NotificationType =
   | 'mention'
   | 'community_invite'
   | 'circle_new_post'
+  | 'circle_post_digest'
   | 'creator_new_post'
   | 'job_alert'
   | 'badge_earned'
   | 'tier_up'
   | 'diamonds_earned'
-  | 'gift_sent';
+  | 'gift_sent'
+  | 'live_go_live'
+  | 'live_stream_live';
 
 export type ContentInterest =
   | 'humor'
@@ -398,6 +401,10 @@ export interface UserProfile {
    * Visitors still see the player.
    */
   hidePulseMusicPlayerOnMyPage?: boolean;
+  /** Default clip permission for new public video uploads (migration 212). */
+  defaultAllowViewerClips?: boolean;
+  defaultAllowRemix?: boolean;
+  defaultAllowClipDownloads?: boolean;
   isFollowed?: boolean;
   isFriend?: boolean;
   customization?: ProfileCustomization;
@@ -468,8 +475,19 @@ export interface Post {
   evidenceLabel?: string;
   /** day | night | weekend — shift-aware ranking hint */
   shiftContext?: string;
+  /** When set, post video was clipped from this live stream (Clip Studio publish). */
+  sourceLiveStreamId?: string;
+  /** When set, post is a feed clip trimmed from another post (migration 210). */
+  sourcePostId?: string;
+  /** Original creator preserved when source post is deleted (migration 213). */
+  sourceCreatorId?: string;
+  clipStartSeconds?: number;
+  clipEndSeconds?: number;
   hashtags: string[];
   communities: string[];
+  /** Denormalized Circle label for feed chip — set at compose or cache patch time. */
+  linkedCommunityName?: string;
+  linkedCommunitySlug?: string;
   isAnonymous: boolean;
   privacyMode: PrivacyMode;
   likeCount: number;
@@ -478,6 +496,10 @@ export interface Post {
   commentCount: number;
   /** When true, new comments are blocked (see posts.comments_disabled). */
   commentsDisabled?: boolean;
+  /** Creator clip controls (migration 212). */
+  allowViewerClips?: boolean;
+  allowRemix?: boolean;
+  allowClipDownloads?: boolean;
   shareCount: number;
   viewCount: number;
   saveCount: number;
@@ -519,6 +541,13 @@ export interface Post {
    * video. Not baked into the underlying MP4 — pure runtime overlay.
    */
   videoOverlayText?: string;
+  /**
+   * Optional JSON style for the on-video sticker text (font, size, color,
+   * normalized x/y position). Migration 237. When NULL or omitted, the feed
+   * renderer uses `DEFAULT_OVERLAY_STYLE` from `lib/videoOverlayStyle.ts` —
+   * preserves legacy centered/lower-third rendering.
+   */
+  videoOverlayStyle?: import('@/lib/videoOverlayStyle').VideoOverlayStyle | null;
   /**
    * When stitch/export is running for concat jobs: queued | running | failed.
    * Null/undefined = ready for main feeds (migration 159).
@@ -568,6 +597,8 @@ export type Circle = Community;
 
 export type CircleThreadKind = 'question' | 'story' | 'advice' | 'meme' | 'media';
 
+export type CircleModerationStatus = 'active' | 'hidden' | 'removed' | 'pending_review';
+
 export interface CircleThread {
   id: string;
   circleId: string;
@@ -587,6 +618,7 @@ export interface CircleThread {
   replyCount: number;
   reactionCount: number;
   shareCount?: number;
+  moderationStatus?: CircleModerationStatus;
 }
 
 export interface CircleReply {
@@ -597,6 +629,9 @@ export interface CircleReply {
   body: string;
   createdAt: string;
   reactionCount?: number;
+  moderationStatus?: CircleModerationStatus;
+  /** True when body is replaced by a moderation tombstone for the viewer. */
+  isModerationRemoved?: boolean;
 }
 
 /** Circles tab "Your conversations": thread discussions or comments on circle wall posts. */
@@ -752,7 +787,16 @@ export interface LiveStream {
   broadcastStartedAt?: string | null;
   /** Host liveness ping while broadcasting; stale rows drop out of Happening Now. */
   hostLastSeenAt?: string | null;
+  /** Server-side egress recording flag (migration 176). */
   recordingEnabled?: boolean;
+  /** Viewers may submit clip markers when true (migration 206). */
+  viewerClipsAllowed?: boolean;
+  /** Viewer markers start pending when true (migration 209). */
+  requireHostApproval?: boolean;
+  /** Non-host users may download ready clips when true (migration 209). */
+  allowClipDownloads?: boolean;
+  /** Host scene overlay synced to viewers (`live`, `brb`, `starting_soon`, `ending_soon`, `qna`). */
+  sceneMode?: import('@/lib/live/liveSceneMode').LiveSceneMode;
 }
 
 export type StreamMessageType = 'chat' | 'gift' | 'system' | 'poll' | 'raid' | 'pinned';
@@ -797,6 +841,11 @@ export interface LiveGiftEvent {
   quantity: number;
   comboCount: number;
   createdAt: string;
+  /** Current shop creator gift slug (live/post/profile). */
+  creatorGiftSlug?: string;
+  creatorGiftItemId?: string;
+  /** Resolved shop row for orb art / animations. */
+  shopItem?: import('@/lib/shop/types').ShopItemRow;
 }
 
 export interface StreamGiftLeaderboard {

@@ -15,6 +15,13 @@ import {
 
 const PROFILE_UPDATE_COMMENT_SELECT = `id, update_id, author_id, parent_id, content, media_url, created_at, edited_at, profiles(${PROFILE_SELECT_MY_PULSE_COMMENT_AUTHOR})`;
 
+function isProfileSurfaceAccessDenied(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  if (code === '42501' || code === 'PGRST301') return true;
+  const msg = String((error as { message?: string })?.message ?? '').toLowerCase();
+  return msg.includes('row-level security') || msg.includes('permission denied');
+}
+
 function rowToProfileUpdateComment(row: any): ProfileUpdateComment {
   const p = row.profiles;
   const s = p ? profileRowToCreatorSummary(p) : null;
@@ -134,7 +141,10 @@ export const profileUpdatesDb = {
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
+    if (error) {
+      if (isProfileSurfaceAccessDenied(error)) return [];
+      throw error;
+    }
     const rows = data ?? [];
     const likedSet = await fetchLikedSet(
       viewerId ?? null,
@@ -168,7 +178,11 @@ export const profileUpdatesDb = {
 
   async getById(id: string, viewerId?: string | null): Promise<ProfileUpdate | null> {
     const { data, error } = await supabase.from('profile_updates').select('*').eq('id', id).maybeSingle();
-    if (error || !data) return null;
+    if (error) {
+      if (isProfileSurfaceAccessDenied(error)) return null;
+      return null;
+    }
+    if (!data) return null;
     const likedSet = await fetchLikedSet(viewerId ?? null, [data.id]);
     return rowToProfileUpdate(data, likedSet.has(data.id));
   },
@@ -203,7 +217,10 @@ export const profileUpdatesDb = {
       .eq('update_id', updateId)
       .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      if (isProfileSurfaceAccessDenied(error)) return [];
+      throw error;
+    }
     return (data ?? []).map(rowToProfileUpdateComment);
   },
 
@@ -408,16 +425,42 @@ export const profileUpdatesDb = {
     );
   },
 
-  async eligibleCircleDiscussions(_userId: string): Promise<EligibleCircleDiscussion[]> {
+  async eligibleCircleDiscussions(userId: string): Promise<EligibleCircleDiscussion[]> {
+    const uid = (userId ?? '').trim();
+    if (!uid) return [];
+
+    const { data: memberships, error: memErr } = await supabase
+      .from('community_members')
+      .select('community_id')
+      .eq('user_id', uid);
+    if (memErr) throw memErr;
+
+    const communityIds = [...new Set((memberships ?? []).map((m) => String((m as { community_id: string }).community_id)).filter(Boolean))];
+    if (communityIds.length === 0) return [];
+
     const { data, error } = await supabase
-      .from('circle_threads')
-      .select('id, title, reply_count, updated_at, created_at, communities(name, slug)')
+      .from('circle_threads_viewer_safe')
+      .select('id, title, reply_count, updated_at, created_at, community_id')
+      .in('community_id', communityIds)
+      .eq('moderation_status', 'active')
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
       .limit(24);
 
     if (error) throw error;
-    return (data ?? []).map((row: any) => {
-      const c = row.communities;
+    const rows = data ?? [];
+    if (rows.length === 0) return [];
+
+    const { data: communities, error: commErr } = await supabase
+      .from('communities')
+      .select('id, slug, name')
+      .in('id', communityIds);
+    if (commErr) throw commErr;
+
+    const commById = new Map((communities ?? []).map((c: { id: string; slug: string; name: string }) => [c.id, c]));
+
+    return rows.map((row: any) => {
+      const c = commById.get(row.community_id);
       return {
         id: row.id,
         circleSlug: c?.slug ?? '',

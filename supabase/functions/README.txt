@@ -79,6 +79,28 @@ LiveKit access tokens (Edge Function: livekit-token)
 
 ---
 
+LiveKit egress recording (Edge Function: livekit-egress)
+
+1) Apply migration `205_live_recordings.sql` (table + private `live-recordings` bucket).
+
+2) Create Supabase Storage S3 access keys (Project Settings → Storage → S3 Access Keys).
+
+3) Set secrets:
+   npx supabase secrets set LIVEKIT_URL=wss://YOUR_PROJECT.livekit.cloud
+   npx supabase secrets set LIVEKIT_API_KEY=xxxxxxxx
+   npx supabase secrets set LIVEKIT_API_SECRET=xxxxxxxx
+   npx supabase secrets set SUPABASE_S3_ACCESS_KEY_ID=xxxxxxxx
+   npx supabase secrets set SUPABASE_S3_SECRET_ACCESS_KEY=xxxxxxxx
+   Optional: LIVE_RECORDINGS_BUCKET=live-recordings, SUPABASE_S3_ENDPOINT, SUPABASE_S3_REGION=us-east-1
+
+4) Deploy (JWT verification ON — default):
+   npx supabase functions deploy livekit-egress
+
+5) App: host broadcast ready → `startLiveRecording(streamId)`; end stream → `stopLiveRecording(streamId)` — see `services/live/liveRecordings.ts`.
+   Failures are non-fatal; live continues if egress or storage is misconfigured.
+
+---
+
 Account deletion (Edge Function: delete-account)
 
 1) Deploy (JWT verification ON — default):
@@ -90,4 +112,15 @@ Account deletion (Edge Function: delete-account)
    Purchase/wallet audit rows may retain per schema ON DELETE rules — verify before marketing hard-delete.
 
 4) Add `pulseverse://auth/reset-password` to Supabase Auth redirect URLs for native password reset.
+
+---
+
+Circle notification fan-out (migration 220 — legacy drain only)
+
+Migration 221 digest supersedes new large-circle per-post fan-out. The queue table remains
+for rows enqueued before 221; migration 222 schedules pg_cron to drain them when available:
+
+  select public.process_circle_post_notification_fanout(10);
+
+Or invoke the same RPC from a small Edge Function cron. Jobs are not exposed to mobile clients.
 

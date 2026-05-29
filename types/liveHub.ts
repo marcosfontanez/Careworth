@@ -82,6 +82,8 @@ export interface LiveScheduledEvent {
 
 export interface LiveHubHomePayload {
   tab: LiveHubCategoryTab;
+  /** All active broadcasts for Happening Now (tab-independent). */
+  happeningNow: LiveHubStream[];
   featured: LiveHubStream[];
   trending: LiveHubStream[];
   shopLiveDeals: LiveHubStream[];

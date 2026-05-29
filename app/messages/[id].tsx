@@ -4,6 +4,7 @@ import {
   Platform, ActivityIndicator, Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, iconSize, layout, spacing, touchTarget, typography } from '@/theme';
@@ -269,7 +270,7 @@ export default function ChatScreen() {
           activeOpacity={effectivePeerId ? 0.7 : 1}
           disabled={!effectivePeerId}
           onPress={() => {
-            if (effectivePeerId) router.push(`/profile/${effectivePeerId}` as any);
+            openPulsePage(router, effectivePeerId);
           }}
           accessibilityRole={effectivePeerId ? 'button' : 'header'}
           accessibilityLabel={effectivePeerId ? `Open ${headerTitle} profile` : undefined}

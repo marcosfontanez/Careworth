@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useQuery } from '@tanstack/react-query';
 import {
   gradients,
@@ -440,7 +441,7 @@ function PodiumStand({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const go = () => router.push(`/profile/${userId}` as any);
+  const go = () => openPulsePage(router, userId);
   const name = displayName || username || 'Creator';
   const frameTier = prizeFrameTierForMonthlyRank(rank);
   const ringTier = frameTier ?? 'gold';

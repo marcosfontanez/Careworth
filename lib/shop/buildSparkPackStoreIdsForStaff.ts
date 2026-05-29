@@ -20,9 +20,12 @@ export function buildSparkPackStoreIdsForStaff(packs: ShopItemRow[]): string {
     const android = p.store_product_id_android?.trim() || '(missing in catalog)';
     lines.push(`${amt.toLocaleString()} Sparks — ${p.name}`);
     lines.push(`  iOS:     ${ios}`);
-    lines.push(`  Android: ${android}`);
+    lines.push(`  Android: ${android} (Play: Consumable)`);
     lines.push('');
   }
+
+  lines.push('Google Play launch SKUs — see lib/shop/googlePlayProducts.ts');
+  lines.push('Border SKUs on Play are One-time (non-consumable).');
 
   lines.push('iOS bundle ID: com.pulseverse.app');
   lines.push('Confirm Paid Apps agreements are active in both consoles.');

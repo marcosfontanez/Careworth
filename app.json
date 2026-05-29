@@ -20,10 +20,10 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "PulseVerse needs camera access to record videos and take photos for your posts.",
+        "NSCameraUsageDescription": "PulseVerse uses your camera so you can host live video streams.",
         "NSPhotoLibraryUsageDescription": "PulseVerse needs photo library access to share images and videos.",
         "NSPhotoLibraryAddUsageDescription": "PulseVerse saves videos and photos you download to your library.",
-        "NSMicrophoneUsageDescription": "PulseVerse needs microphone access for live streams and videos with audio.",
+        "NSMicrophoneUsageDescription": "PulseVerse uses your microphone so viewers can hear you during live streams.",
         "NSFaceIDUsageDescription": "PulseVerse uses Face ID for secure authentication.",
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -41,6 +41,7 @@
       "package": "com.pulseverse.app",
       "versionCode": 1,
       "permissions": [
+        "com.android.vending.BILLING",
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -119,8 +120,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PulseVerse needs camera access to record videos and take photos.",
-          "microphonePermission": "PulseVerse needs microphone access to record videos with audio.",
+          "cameraPermission": "PulseVerse uses your camera so you can host live video streams.",
+          "microphonePermission": "PulseVerse uses your microphone so viewers can hear you during live streams.",
           "recordAudioAndroid": true
         }
       ],
@@ -133,7 +134,8 @@
           "organization": "",
           "project": ""
         }
-      ]
+      ],
+      "react-native-iap"
     ],
     "extra": {
       "router": {},

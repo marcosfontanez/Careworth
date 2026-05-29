@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -25,7 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePersistedCommunityJoinToggle } from '@/hooks/usePersistedCommunityJoinToggle';
 import { useAuth } from '@/contexts/AuthContext';
-import { prefetchCircleRoom } from '@/lib/communityCache';
+import { navigateToCircleRoom } from '@/lib/communityCache';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { avatarThumb } from '@/lib/storage';
 import type { UserProfile, Community, SoundLibraryRow, ViralSoundRow } from '@/types';
@@ -364,7 +365,7 @@ export default function SearchScreen() {
               return (
                 <TouchableOpacity
                   style={styles.creatorRow}
-                  onPress={() => router.push(`/profile/${user.id}`)}
+                  onPress={() => openPulsePage(router, user.id)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.creatorAvatarCell}>
@@ -374,7 +375,7 @@ export default function SearchScreen() {
                       pulseAvatarFrame={user.pulseAvatarFrame}
                       ownerDisplayName={user.displayName}
                       ringColor={colors.dark.border}
-                      onPress={() => router.push(`/profile/${user.id}`)}
+                      onPress={() => openPulsePage(router, user.id)}
                     />
                   </View>
                   <View style={styles.creatorBody}>
@@ -415,11 +416,12 @@ export default function SearchScreen() {
                   <CommunityCard
                     community={{ ...community, isJoined: joinedIds.has(community.id) }}
                     onPress={() => {
-                      prefetchCircleRoom(queryClient, {
-                        ...community,
-                        isJoined: joinedIds.has(community.id),
-                      }, user?.id ?? null);
-                      router.push(`/communities/${community.slug}`);
+                      navigateToCircleRoom(
+                        router,
+                        queryClient,
+                        { ...community, isJoined: joinedIds.has(community.id) },
+                        user?.id ?? null,
+                      );
                     }}
                     onJoin={() => void persistToggleJoin(community.id)}
                   />

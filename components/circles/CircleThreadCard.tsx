@@ -7,7 +7,7 @@ import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
 import { ShareToMyPulseButton } from './ShareToMyPulseButton';
-import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { pulseImageCircleWallProps } from '@/lib/pulseImage';
 
@@ -31,6 +31,7 @@ type Props = {
   isAnonymousRoom?: boolean;
   /** Reply count grew since user last opened thread (local). */
   hasNewActivity?: boolean;
+  onReport?: () => void;
 };
 
 export function CircleThreadCard({
@@ -42,6 +43,7 @@ export function CircleThreadCard({
   showShareToMyPulse = true,
   isAnonymousRoom: isAnonymousRoomProp,
   hasNewActivity,
+  onReport,
 }: Props) {
   const isAnonymousRoom = isAnonymousRoomProp ?? isAnonymousConfessionCircle(thread.circleSlug);
 
@@ -61,7 +63,7 @@ export function CircleThreadCard({
   );
 
   const displayName = isAnonymousRoom
-    ? anonymousDisplayName(thread.authorId, thread.id)
+    ? (author.displayName || 'Anonymous')
     : author.displayName;
 
   const showShare = showShareToMyPulse && !isAnonymousRoom;
@@ -153,17 +155,24 @@ export function CircleThreadCard({
 
         <View style={styles.footer}>
           <View style={styles.stats}>
+            {(thread.reactionCount ?? 0) > 0 ? (
+              <View style={styles.stat}>
+                <Ionicons name="heart-outline" size={15} color={colors.dark.textMuted} />
+                <Text style={styles.statText}>{formatCount(thread.reactionCount)}</Text>
+              </View>
+            ) : null}
             <View style={styles.stat}>
               <Ionicons name="chatbubble-ellipses-outline" size={15} color={colors.dark.textMuted} />
               <Text style={styles.statText}>{formatCount(thread.replyCount)}</Text>
             </View>
-            <View style={styles.stat}>
-              <Ionicons name="heart-outline" size={15} color={colors.dark.textMuted} />
-              <Text style={styles.statText}>{formatCount(thread.reactionCount)}</Text>
-            </View>
           </View>
           {showShare ? (
             <ShareToMyPulseButton layout="compact" circleSlug={thread.circleSlug} thread={thread} />
+          ) : null}
+          {onReport ? (
+            <TouchableOpacity onPress={onReport} hitSlop={8}>
+              <Ionicons name="flag-outline" size={16} color={colors.dark.textMuted} />
+            </TouchableOpacity>
           ) : null}
         </View>
       </TouchableOpacity>

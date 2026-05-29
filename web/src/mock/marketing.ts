@@ -334,10 +334,10 @@ export const liveTopicBrowse = [
 export const liveWhyGoLive = [
   { title: "Clinician trust", body: "Labels, verification, and rooms built for licensed audiences." },
   { title: "Discovery-first", body: "Featured, top, rising, and topic browse — built for what’s live right now." },
-  { title: "Interactive Q&A", body: "Queues and moderation that keep fast clinical chat respectful." },
-  { title: "Creator-led", body: "Hosts educate and entertain with tools for citations, disclaimers, and context." },
-  { title: "Co-hosts", body: "Bring moderators and guests without friction." },
-  { title: "Safety workflows", body: "Live incidents route to trained reviewers with clinical context." },
+  { title: "Interactive Q&A", body: "Question queues and host moderation keep fast clinical chat respectful." },
+  { title: "RSVP alerts", body: "Tap Remind Me on upcoming streams — get a push when the host goes live." },
+  { title: "Creator-led", body: "Polls, gifts, pinned chat, and scene modes for teaching with context." },
+  { title: "Clip highlights", body: "When recording is enabled, hosts can mark moments and publish clips to Feed." },
 ] as const;
 
 /** Pulse Page marketing — five capability cards */

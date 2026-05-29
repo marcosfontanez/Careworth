@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { isReactNativeCompressorLinked } from '@/lib/compressorAvailability';
 import type { MediaAsset } from '@/lib/media';
+import { compressVideoWeb, webVideoNeedsReencode, WEB_UPLOAD_SAFE_MAX_BYTES } from '@/lib/webVideoCompression';
 
 /**
  * Hard cap for both upload and re-encode. Any video whose long edge is
@@ -58,30 +59,57 @@ function longEdge(asset: MediaAsset): number {
 
 export type CompressProgress = (fraction: number) => void;
 
+async function sourceByteSize(asset: MediaAsset): Promise<number> {
+  if (asset.webBlob?.size) return asset.webBlob.size;
+  if (Platform.OS === 'web' && asset.uri.startsWith('blob:')) {
+    try {
+      const res = await fetch(asset.uri, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+      const len = res.headers.get('content-range')?.match(/\/(\d+)$/);
+      if (len?.[1]) return Number(len[1]);
+    } catch {
+      /* fall through */
+    }
+  }
+  return 0;
+}
+
 /**
  * Re-encodes a user-supplied video down to <=720p H.264 + AAC if it exceeds
  * our cap. Smaller / already-compliant clips are returned unchanged so we
  * don't waste device CPU on a no-op pass.
  *
- * Reasoning: phone cameras default to 1080p ~17 Mbps or 4K ~50 Mbps. Both
- * are wildly oversized for a vertical short-form clip rendered in a
- * single FlatList cell on a 6-inch screen. Capping at 720p / 1.8 Mbps:
- *   - cuts upload time roughly in half on cellular,
- *   - shrinks Supabase Storage egress (our largest scaling cost) ~50%,
- *   - keeps the FFmpeg export worker fast (re-encoding 720p source for
- *     the share-card slate is ~3× faster than 1080p).
+ * On **web**, uses MediaRecorder re-encode (no native compressor) so uploads
+ * stay under Supabase Storage's 50 MiB object limit.
  */
 export async function compressVideoIfTooLarge(
   asset: MediaAsset,
   onProgress?: CompressProgress,
 ): Promise<MediaAsset> {
   if (asset.type !== 'video') return asset;
-  const edge = longEdge(asset);
-  if (edge > 0 && edge <= MAX_LONG_EDGE) {
-    return asset; // already <=1080p — nothing to do
-  }
 
   const mod = loadCompressor();
+  const bytes = await sourceByteSize(asset);
+
+  if (Platform.OS === 'web' && (!mod || webVideoNeedsReencode(asset, bytes))) {
+    return compressVideoWeb(asset, {
+      maxLongEdge: MAX_LONG_EDGE,
+      videoBitsPerSecond: TARGET_BITRATE_BPS,
+      onProgress,
+      sourceBlob: asset.webBlob,
+    });
+  }
+
+  if (bytes > WEB_UPLOAD_SAFE_MAX_BYTES && !mod) {
+    throw new Error(
+      'Video file is too large for web upload (50 MB max). Use the mobile app or a shorter clip.',
+    );
+  }
+
+  const edge = longEdge(asset);
+  if (edge > 0 && edge <= MAX_LONG_EDGE) {
+    return asset;
+  }
+
   if (!mod) {
     if (__DEV__) {
       console.warn(

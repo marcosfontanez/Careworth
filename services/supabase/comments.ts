@@ -3,6 +3,7 @@ import { COMMENT_MAX_LENGTH } from '@/constants';
 import { normalizePostReactionKind } from '@/lib/postReactions';
 import type { PostReactionKind } from '@/types';
 import { PROFILE_SELECT_CREATOR_WITH_FRAME } from '@/services/supabase/profileRowMapper';
+import { hydrateReplyRowsWithAuthors } from '@/lib/postgrestViewerSafeEmbeds';
 
 export interface SupabaseComment {
   id: string;
@@ -54,23 +55,30 @@ export interface SupabaseComment {
   };
 }
 
+/** Read path masks comment author_id on anonymous parent posts (migration 217). */
+function fromCommentsViewerSafe() {
+  return supabase.from('comments_viewer_safe');
+}
+
 export const commentsService = {
   async getByPostId(postId: string): Promise<SupabaseComment[]> {
-    const { data, error } = await supabase
-      .from('comments')
+    const { data, error } = await fromCommentsViewerSafe()
       .select(
         `
         id, post_id, parent_id, author_id, content, like_count, created_at, deleted_at, edited_at,
         media_url,
-        reaction_heart_count, reaction_haha_count, reaction_wow_count, reaction_sad_count, reaction_angry_count,
-        author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
+        reaction_heart_count, reaction_haha_count, reaction_wow_count, reaction_sad_count, reaction_angry_count
       `,
       )
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return (data ?? []) as unknown as SupabaseComment[];
+    const hydrated = await hydrateReplyRowsWithAuthors(data ?? []);
+    return hydrated.map((row) => ({
+      ...row,
+      author: row.author,
+    })) as unknown as SupabaseComment[];
   },
 
   async create(postId: string, content: string, parentId?: string, mediaUrl?: string | null) {
@@ -172,7 +180,7 @@ export const commentsService = {
         id, post_id, parent_id, author_id, content, like_count, created_at, deleted_at, edited_at,
         media_url,
         reaction_heart_count, reaction_haha_count, reaction_wow_count, reaction_sad_count, reaction_angry_count,
-        author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
+        author:profiles!comments_author_id_fkey(${PROFILE_SELECT_CREATOR_WITH_FRAME})
       `,
       )
       .single();

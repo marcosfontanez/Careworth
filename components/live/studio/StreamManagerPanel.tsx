@@ -1,23 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LiveBrbOverlay } from '@/components/live/LiveBrbOverlay';
 import { LiveChatPanel } from '@/components/live/studio/LiveChatPanel';
 import { LiveGiftPanel } from '@/components/live/studio/LiveGiftPanel';
+import { LiveManagerTabs } from '@/components/live/studio/LiveManagerTabs';
+import { LivePreviewCard, type LivePreviewMode } from '@/components/live/studio/LivePreviewCard';
+import { LiveSettingsPanel } from '@/components/live/studio/LiveSettingsPanel';
+import { LiveStatusChips } from '@/components/live/studio/LiveStatusChips';
+import { LiveStudioHeader } from '@/components/live/studio/LiveStudioHeader';
 import { LiveModPanel } from '@/components/live/studio/LiveModPanel';
 import { LivePollPanel } from '@/components/live/studio/LivePollPanel';
-import { LiveSettingsPanel } from '@/components/live/studio/LiveSettingsPanel';
-import { QuickActionsGrid, type QuickAction } from '@/components/live/studio/QuickActionsGrid';
-import { colors, borderRadius, typography } from '@/theme';
+import { QuickActionGrid, type QuickAction } from '@/components/live/studio/QuickActionGrid';
+import { StreamManagerPanelShell } from '@/components/live/studio/StreamManagerPanelShell';
+import { LiveQnaHostPanel } from '@/components/live/studio/LiveQnaHostPanel';
+import { LiveClipMarkersHostPanel } from '@/components/live/studio/LiveClipMarkersHostPanel';
+import { LiveSceneControls } from '@/components/live/studio/LiveSceneControls';
+import { LiveStreamHealthPanel, type StreamHealthSnapshot } from '@/components/live/studio/LiveStreamHealthPanel';
+import { liveStudioTheme } from '@/lib/live/studio/liveStudioTheme';
+import type { LiveSceneMode } from '@/lib/live/liveSceneMode';
+import type { StreamQuestion } from '@/services/supabase/streamQuestions';
+import type { LiveClipMarker } from '@/services/supabase/streamClipMarkers';
 import type { StreamMessage, StreamPinnedMessage, StreamPoll } from '@/types';
 
 export type StreamManagerTab =
@@ -25,17 +30,11 @@ export type StreamManagerTab =
   | 'actions'
   | 'polls'
   | 'gifts'
+  | 'qna'
+  | 'markers'
   | 'mod'
+  | 'health'
   | 'settings';
-
-const TABS: { id: StreamManagerTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'chat', label: 'Chat', icon: 'chatbubbles-outline' },
-  { id: 'actions', label: 'Quick', icon: 'flash-outline' },
-  { id: 'polls', label: 'Polls', icon: 'stats-chart-outline' },
-  { id: 'gifts', label: 'Gifts', icon: 'gift-outline' },
-  { id: 'mod', label: 'Mod', icon: 'shield-checkmark-outline' },
-  { id: 'settings', label: 'Settings', icon: 'settings-outline' },
-];
 
 type Props = {
   visible: boolean;
@@ -45,10 +44,14 @@ type Props = {
   viewerCountLabel: string;
   micMuted: boolean;
   brbMode: boolean;
+  sceneMode: LiveSceneMode;
+  onSceneModeChange: (mode: LiveSceneMode) => void;
+  sceneChanging?: boolean;
+  onResumeBrb?: () => void;
+  previewMode?: LivePreviewMode;
+  preview?: React.ReactNode;
   giftsEnabled: boolean;
   recordingEnabled?: boolean;
-  slowModeEnabled: boolean;
-  preview?: React.ReactNode;
   messages: StreamMessage[];
   pinned: StreamPinnedMessage | null;
   currentUserId?: string;
@@ -56,6 +59,7 @@ type Props = {
   onChangeInput: (text: string) => void;
   onSendMessage: () => void;
   onUnpin: () => void;
+  onPinMessage?: (msg: StreamMessage) => void;
   onMessageLongPress: (msg: StreamMessage) => void;
   activePoll: StreamPoll | null;
   hasVotedPoll: boolean;
@@ -68,6 +72,51 @@ type Props = {
   chatSending?: boolean;
   pollVoting?: boolean;
   initialTab?: StreamManagerTab;
+  questions?: StreamQuestion[];
+  pinnedQuestion?: StreamQuestion | null;
+  qnaBackendReady?: boolean;
+  qnaLoading?: boolean;
+  onPinQuestion?: (questionId: string) => void;
+  onUnpinQuestion?: (questionId: string) => void;
+  onMarkQuestionAnswered?: (questionId: string) => void;
+  onDismissQuestion?: (questionId: string) => void;
+  clipMarkers?: LiveClipMarker[];
+  clipMarkersLoading?: boolean;
+  clipMarkersBackendReady?: boolean;
+  recordingActive?: boolean;
+  onMarkMoment?: () => void;
+  markMomentLoading?: boolean;
+  onOpenClipStudio?: () => void;
+  onReviewMarker?: (markerId: string, decision: 'approved' | 'rejected') => void;
+  reviewingMarkerId?: string | null;
+  viewerClipsAllowed?: boolean;
+  requireHostApproval?: boolean;
+  allowClipDownloads?: boolean;
+  streamIsLive?: boolean;
+  onToggleViewerClips?: (allowed: boolean) => void;
+  onToggleRequireHostApproval?: (required: boolean) => void;
+  onToggleAllowClipDownloads?: (allowed: boolean) => void;
+  togglingClipSetting?: 'viewer_clips' | 'require_approval' | 'downloads' | null;
+  hasActivePoll?: boolean;
+  pollQuestion?: string | null;
+  healthSnapshot?: StreamHealthSnapshot;
+  healthRefreshing?: boolean;
+  onRefreshHealth?: () => void;
+};
+
+const TAB_META: Record<
+  StreamManagerTab,
+  { title: string; subtitle?: string; icon?: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap }
+> = {
+  chat: { title: 'Live chat', subtitle: 'Pin, reply, and moderate in real time', icon: 'chatbubbles-outline' },
+  actions: { title: 'Quick actions', subtitle: 'Host controls at a glance', icon: 'flash-outline' },
+  polls: { title: 'Polls', subtitle: 'Engage viewers with live votes', icon: 'stats-chart-outline' },
+  gifts: { title: 'Creator gifts', subtitle: 'Sparks gifts and leaderboard', icon: 'gift-outline' },
+  qna: { title: 'Q&A queue', subtitle: 'Pin and answer viewer questions', icon: 'help-circle-outline' },
+  markers: { title: 'Clips', subtitle: 'Mark moments and review viewer submissions', icon: 'cut-outline' },
+  mod: { title: 'Moderation', subtitle: 'Safety and chat pacing', icon: 'shield-checkmark-outline' },
+  health: { title: 'Stream health', subtitle: 'LiveKit, mic, and realtime status', icon: 'pulse-outline' },
+  settings: { title: 'Stream settings', subtitle: 'Scenes, title, and broadcast', icon: 'settings-outline' },
 };
 
 /** Full-screen Live Studio dashboard — preview, status, and tabbed panels. */
@@ -79,10 +128,14 @@ export function StreamManagerPanel({
   viewerCountLabel,
   micMuted,
   brbMode,
+  sceneMode,
+  onSceneModeChange,
+  sceneChanging = false,
+  onResumeBrb,
+  previewMode = 'fallback',
+  preview,
   giftsEnabled,
   recordingEnabled,
-  slowModeEnabled,
-  preview,
   messages,
   pinned,
   currentUserId,
@@ -90,6 +143,7 @@ export function StreamManagerPanel({
   onChangeInput,
   onSendMessage,
   onUnpin,
+  onPinMessage,
   onMessageLongPress,
   activePoll,
   hasVotedPoll,
@@ -102,127 +156,179 @@ export function StreamManagerPanel({
   chatSending = false,
   pollVoting = false,
   initialTab = 'chat',
+  questions = [],
+  pinnedQuestion,
+  qnaBackendReady = true,
+  qnaLoading = false,
+  onPinQuestion,
+  onUnpinQuestion,
+  onMarkQuestionAnswered,
+  onDismissQuestion,
+  clipMarkers = [],
+  clipMarkersLoading = false,
+  clipMarkersBackendReady = true,
+  recordingActive = false,
+  onMarkMoment,
+  markMomentLoading = false,
+  onOpenClipStudio,
+  onReviewMarker,
+  reviewingMarkerId = null,
+  viewerClipsAllowed = false,
+  requireHostApproval = true,
+  allowClipDownloads = false,
+  streamIsLive = false,
+  onToggleViewerClips,
+  onToggleRequireHostApproval,
+  onToggleAllowClipDownloads,
+  togglingClipSetting = null,
+  hasActivePoll = false,
+  pollQuestion,
+  healthSnapshot,
+  healthRefreshing = false,
+  onRefreshHealth,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [tab, setTab] = useState<StreamManagerTab>(initialTab);
 
   useEffect(() => {
     if (visible) setTab(initialTab);
   }, [visible, initialTab]);
 
+  const meta = TAB_META[tab];
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 8 }]}>
-        <LinearGradient
-          colors={['#060E1A', '#0A1220', '#0C1628']}
-          style={StyleSheet.absoluteFill}
-        />
+        <LinearGradient colors={[...liveStudioTheme.screenGradient]} style={StyleSheet.absoluteFill} />
 
-        <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.backBtn} accessibilityLabel="Back to camera">
-            <Ionicons name="chevron-down" size={22} color="#FFF" />
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Live Studio</Text>
-            <Text style={styles.headerSub} numberOfLines={1}>
-              {streamTitle}
-            </Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </View>
+        <LiveStudioHeader streamTitle={streamTitle} onClose={onClose} />
 
         <View style={styles.mainColumn}>
           <View style={styles.topSection}>
-            <View style={styles.previewWrap}>
-              {brbMode ? (
-                <View style={styles.previewBrb}>
-                  <LiveBrbOverlay compact onResume={onClose} showResume={false} />
-                </View>
-              ) : preview ? (
-                preview
-              ) : (
-                <View style={styles.previewFallback}>
-                  <Ionicons name="videocam-outline" size={28} color={colors.primary.teal} />
-                  <Text style={styles.previewFallbackTxt}>Live preview</Text>
-                </View>
-              )}
-              <View style={styles.liveTag}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveTagTxt}>LIVE</Text>
-              </View>
-            </View>
+            <LivePreviewCard
+              brbMode={brbMode}
+              sceneMode={sceneMode}
+              previewMode={previewMode}
+              pollQuestion={pollQuestion}
+              onResumeBrb={onResumeBrb}
+            >
+              {preview}
+            </LivePreviewCard>
 
-            <View style={styles.statusBar}>
-              <StatusChip icon="time-outline" label={sessionTimer || '0:00'} />
-              <StatusChip icon="eye-outline" label={viewerCountLabel} />
-              <StatusChip
-                icon={micMuted ? 'mic-off-outline' : 'mic-outline'}
-                label={micMuted ? 'Mic off' : 'Mic on'}
-                active={!micMuted}
-              />
-              <StatusChip
-                icon="pause-circle-outline"
-                label={brbMode ? 'BRB' : 'Live'}
-                active={brbMode}
-                accent={brbMode ? 'purple' : 'default'}
-              />
-            </View>
+            <LiveStatusChips
+              sessionTimer={sessionTimer}
+              viewerCountLabel={viewerCountLabel}
+              micMuted={micMuted}
+              sceneMode={sceneMode}
+            />
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow}>
-              {TABS.map((t) => {
-                const on = tab === t.id;
-                return (
-                  <Pressable
-                    key={t.id}
-                    onPress={() => setTab(t.id)}
-                    style={[styles.tab, on && styles.tabOn]}
-                  >
-                    <Ionicons name={t.icon} size={14} color={on ? '#0F172A' : colors.dark.textSecondary} />
-                    <Text style={[styles.tabTxt, on && styles.tabTxtOn]}>{t.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <LiveManagerTabs activeTab={tab} onTabChange={setTab} />
           </View>
 
-          <View style={styles.panel}>
-            {tab === 'chat' ? (
-              <LiveChatPanel
-                messages={messages}
-                pinned={pinned}
-                currentUserId={currentUserId}
-                inputText={inputText}
-                onChangeInput={onChangeInput}
-                onSend={onSendMessage}
-                onUnpin={onUnpin}
-                onMessageLongPress={onMessageLongPress}
-                onLaunchPoll={onCreatePoll}
-                chatBlocked={chatBlocked}
-                chatSending={chatSending}
-                fillAvailable
-              />
-            ) : null}
-            {tab !== 'chat' ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.panelScroll}>
-                {tab === 'actions' ? <QuickActionsGrid actions={quickActions} /> : null}
-                {tab === 'polls' ? (
-                  <LivePollPanel
-                    poll={activePoll}
-                    hasVoted={hasVotedPoll}
-                    votedOptionId={votedOptionId}
-                    onVote={onPollVote}
-                    onCreatePoll={onCreatePoll}
-                    onEndPoll={onEndPoll}
-                    pollVoting={pollVoting}
-                  />
-                ) : null}
-                {tab === 'gifts' ? <LiveGiftPanel giftsEnabled={giftsEnabled} /> : null}
-                {tab === 'mod' ? <LiveModPanel slowModeEnabled={slowModeEnabled} /> : null}
-                {tab === 'settings' ? (
-                  <LiveSettingsPanel streamTitle={streamTitle} recordingEnabled={recordingEnabled} />
-                ) : null}
-              </ScrollView>
-            ) : null}
+          <View style={styles.panelArea}>
+            <StreamManagerPanelShell
+              title={meta.title}
+              subtitle={meta.subtitle}
+              icon={meta.icon}
+              fill={tab === 'chat'}
+            >
+              {tab === 'chat' ? (
+                <LiveChatPanel
+                  messages={messages}
+                  pinned={pinned}
+                  currentUserId={currentUserId}
+                  inputText={inputText}
+                  onChangeInput={onChangeInput}
+                  onSend={onSendMessage}
+                  onUnpin={onUnpin}
+                  onPinMessage={onPinMessage}
+                  onMessageLongPress={onMessageLongPress}
+                  onPressUser={(msg) => {
+                    onClose();
+                    openPulsePage(router, msg.userId);
+                  }}
+                  onLaunchPoll={onCreatePoll}
+                  chatBlocked={chatBlocked}
+                  chatSending={chatSending}
+                  fillAvailable
+                />
+              ) : null}
+
+              {tab !== 'chat' ? (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.panelScroll}>
+                  {tab === 'actions' ? <QuickActionGrid actions={quickActions} /> : null}
+                  {tab === 'polls' ? (
+                    <LivePollPanel
+                      poll={activePoll}
+                      hasVoted={hasVotedPoll}
+                      votedOptionId={votedOptionId}
+                      onVote={onPollVote}
+                      onCreatePoll={onCreatePoll}
+                      onEndPoll={onEndPoll}
+                      pollVoting={pollVoting}
+                    />
+                  ) : null}
+                  {tab === 'gifts' ? <LiveGiftPanel giftsEnabled={giftsEnabled} /> : null}
+                  {tab === 'qna' ? (
+                    <LiveQnaHostPanel
+                      questions={questions}
+                      pinnedQuestion={pinnedQuestion ?? null}
+                      loading={qnaLoading}
+                      backendReady={qnaBackendReady}
+                      onPin={(id) => onPinQuestion?.(id)}
+                      onUnpin={(id) => onUnpinQuestion?.(id)}
+                      onMarkAnswered={(id) => onMarkQuestionAnswered?.(id)}
+                      onDismiss={(id) => onDismissQuestion?.(id)}
+                    />
+                  ) : null}
+                  {tab === 'markers' ? (
+                    <LiveClipMarkersHostPanel
+                      markers={clipMarkers}
+                      loading={clipMarkersLoading}
+                      backendReady={clipMarkersBackendReady}
+                      recordingActive={recordingActive}
+                      onMarkMoment={onMarkMoment}
+                      markMomentLoading={markMomentLoading}
+                      onOpenClipStudio={onOpenClipStudio}
+                      onReviewMarker={onReviewMarker}
+                      reviewingMarkerId={reviewingMarkerId}
+                    />
+                  ) : null}
+                  {tab === 'mod' ? <LiveModPanel /> : null}
+                  {tab === 'health' && healthSnapshot ? (
+                    <LiveStreamHealthPanel
+                      snapshot={healthSnapshot}
+                      onRefresh={onRefreshHealth}
+                      refreshing={healthRefreshing}
+                    />
+                  ) : null}
+                  {tab === 'settings' ? (
+                    <>
+                      <LiveSceneControls
+                        activeMode={sceneMode}
+                        onSelect={onSceneModeChange}
+                        loading={sceneChanging}
+                        disabled={sceneChanging}
+                        hasActivePoll={hasActivePoll}
+                      />
+                      <LiveSettingsPanel
+                        streamTitle={streamTitle}
+                        recordingEnabled={recordingEnabled}
+                        streamIsLive={streamIsLive}
+                        viewerClipsAllowed={viewerClipsAllowed}
+                        requireHostApproval={requireHostApproval}
+                        allowClipDownloads={allowClipDownloads}
+                        onToggleViewerClips={onToggleViewerClips}
+                        onToggleRequireHostApproval={onToggleRequireHostApproval}
+                        onToggleAllowClipDownloads={onToggleAllowClipDownloads}
+                        togglingSetting={togglingClipSetting}
+                      />
+                    </>
+                  ) : null}
+                </ScrollView>
+              ) : null}
+            </StreamManagerPanelShell>
           </View>
         </View>
       </View>
@@ -230,128 +336,13 @@ export function StreamManagerPanel({
   );
 }
 
-function StatusChip({
-  icon,
-  label,
-  active,
-  accent = 'default',
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active?: boolean;
-  accent?: 'default' | 'purple';
-}) {
-  return (
-    <View
-      style={[
-        styles.chip,
-        active && accent === 'purple' && styles.chipPurple,
-        active && accent !== 'purple' && styles.chipActive,
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={13}
-        color={active ? (accent === 'purple' ? '#C4B5FD' : colors.primary.teal) : colors.dark.textSecondary}
-      />
-      <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15,28,48,0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerSpacer: { width: 40 },
-  headerTitle: { ...typography.h3, fontSize: 17, fontWeight: '800', color: colors.neutral.white },
-  headerSub: { ...typography.caption, color: colors.dark.textMuted, marginTop: 2, maxWidth: '90%' },
   mainColumn: { flex: 1, paddingHorizontal: 14, paddingBottom: 8 },
   topSection: { flexShrink: 0 },
+  panelArea: { flex: 1, minHeight: 0 },
   panelScroll: { paddingBottom: 16 },
-  previewWrap: {
-    height: 148,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.28)',
-    marginBottom: 12,
-  },
-  previewBrb: { flex: 1 },
-  previewFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(12,18,32,0.92)',
-  },
-  previewFallbackTxt: { ...typography.caption, color: colors.dark.textMuted, fontWeight: '700' },
-  liveTag: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.status.error,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' },
-  liveTagTxt: { fontSize: 10, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 },
-  statusBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 14,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(12,18,32,0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  chipActive: { borderColor: 'rgba(56,189,248,0.35)' },
-  chipPurple: { borderColor: 'rgba(167,139,250,0.45)', backgroundColor: 'rgba(46,16,101,0.55)' },
-  chipTxt: { ...typography.caption, fontSize: 11, fontWeight: '700', color: colors.dark.textSecondary },
-  chipTxtActive: { color: colors.neutral.white },
-  tabRow: { gap: 8, paddingBottom: 12 },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(15,28,48,0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  tabOn: { backgroundColor: colors.primary.teal, borderColor: 'rgba(255,255,255,0.22)' },
-  tabTxt: { ...typography.caption, fontSize: 11, fontWeight: '700', color: colors.dark.textSecondary },
-  tabTxtOn: { color: '#0F172A' },
-  panel: { flex: 1, minHeight: 0 },
 });
+
+/** @deprecated import from QuickActionGrid */
+export type { QuickAction } from '@/components/live/studio/QuickActionGrid';

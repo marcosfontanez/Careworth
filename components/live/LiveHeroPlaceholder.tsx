@@ -10,6 +10,7 @@ type Props = {
 
 /**
  * Branded hero fill when a live stream has no thumbnail — navy base, teal/purple glow, pulse waves.
+ * Metadata (title, host, CTA) is rendered by {@link FeaturedLiveCard} above this layer.
  */
 export function LiveHeroPlaceholder({ label = 'LIVE NOW' }: Props) {
   const pulse = useRef(new Animated.Value(0)).current;
@@ -78,7 +79,10 @@ export function LiveHeroPlaceholder({ label = 'LIVE NOW' }: Props) {
 
       <Animated.View style={[styles.waveRow, { transform: [{ translateX: waveShift }] }]}>
         {[0, 1, 2, 3, 4].map((i) => (
-          <View key={i} style={[styles.waveBar, { height: 18 + (i % 3) * 10, opacity: 0.25 + (i % 2) * 0.15 }]} />
+          <View
+            key={i}
+            style={[styles.waveBar, { height: 18 + (i % 3) * 10, opacity: 0.25 + (i % 2) * 0.15 }]}
+          />
         ))}
       </Animated.View>
     </View>
@@ -105,6 +109,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingBottom: 48,
   },
   ringOuter: {
     position: 'absolute',

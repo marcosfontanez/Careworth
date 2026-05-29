@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Alert, Platform } from 'react-native';
 
 /** Minimum clip length for short-form posts (picker + composer gate when duration is known). */
@@ -20,6 +21,32 @@ export interface MediaAsset {
   width?: number;
   height?: number;
   duration?: number;
+  /** Web-only: keep bytes in memory — `blob:` URIs are revoked after navigation. */
+  webBlob?: Blob;
+}
+
+/** Best-effort — stale blob / cache-evicted files return false before upload/post. */
+export async function isMediaUriReadable(
+  uri: string,
+  webBlob?: Blob,
+): Promise<boolean> {
+  if (webBlob) return webBlob.size > 0;
+  const u = uri.trim();
+  if (!u) return false;
+  if (Platform.OS === 'web') {
+    try {
+      const res = await fetch(u, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+      return res.ok || res.status === 206;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const info = await FileSystem.getInfoAsync(u);
+    return Boolean(info.exists);
+  } catch {
+    return true;
+  }
 }
 
 async function ensurePermission(type: 'camera' | 'library'): Promise<boolean> {
@@ -74,11 +101,54 @@ const IOS_VIDEO_EXPORT_FOR_TRIM: Pick<
     ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1920x1080 }
     : {};
 
+function extFromPickerAsset(
+  asset: ImagePicker.ImagePickerAsset,
+  isVideo: boolean,
+): string {
+  const mime = asset.mimeType?.toLowerCase() ?? '';
+  if (mime.includes('quicktime')) return 'mov';
+  if (mime.includes('webm')) return 'webm';
+  if (mime.includes('mp4') || mime.includes('m4v')) return 'mp4';
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('webp')) return 'webp';
+  const uri = asset.uri;
+  if (uri.startsWith('blob:') || uri.startsWith('data:')) {
+    return isVideo ? 'mp4' : 'jpg';
+  }
+  const ext = uri.split('.').pop()?.toLowerCase().split('?')[0];
+  if (ext && /^[a-z0-9]{2,5}$/i.test(ext)) return ext;
+  return isVideo ? 'mp4' : 'jpg';
+}
+
+async function materializeWebBlob(uri: string): Promise<Blob | undefined> {
+  if (Platform.OS !== 'web' || !uri.startsWith('blob:')) return undefined;
+  try {
+    const res = await fetch(uri);
+    if (!res.ok) return undefined;
+    const blob = await res.blob();
+    return blob.size > 0 ? blob : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function finalizeMediaAsset(asset: MediaAsset): Promise<MediaAsset> {
+  if (Platform.OS !== 'web' || asset.webBlob?.size) return asset;
+  const webBlob = await materializeWebBlob(asset.uri);
+  return webBlob ? { ...asset, webBlob } : asset;
+}
+
+export async function ensureMediaWebBlob(asset: MediaAsset): Promise<MediaAsset> {
+  return finalizeMediaAsset(asset);
+}
+
 function assetFromResult(result: ImagePicker.ImagePickerResult): MediaAsset | null {
   if (result.canceled || !result.assets?.[0]) return null;
   const asset = result.assets[0];
   const isVideo = asset.type === 'video';
-  const ext = asset.uri.split('.').pop()?.toLowerCase().split('?')[0] ?? (isVideo ? 'mp4' : 'jpg');
+  const ext = extFromPickerAsset(asset, isVideo);
+  const pickerMime = asset.mimeType?.trim();
 
   const durationSec =
     isVideo ? normalizePickerVideoDurationSeconds(asset.duration) : undefined;
@@ -86,7 +156,9 @@ function assetFromResult(result: ImagePicker.ImagePickerResult): MediaAsset | nu
   return {
     uri: asset.uri,
     type: isVideo ? 'video' : 'image',
-    mimeType: isVideo ? mimeForVideoExt(ext) : `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+    mimeType:
+      pickerMime ||
+      (isVideo ? mimeForVideoExt(ext) : `image/${ext === 'jpg' ? 'jpeg' : ext}`),
     fileName: `${Date.now()}.${ext}`,
     width: asset.width,
     height: asset.height,
@@ -228,7 +300,7 @@ export async function pickVideoFromGallery(): Promise<MediaAsset | null> {
       return null;
     }
   }
-  return asset;
+  return asset ? finalizeMediaAsset(asset) : null;
 }
 
 export async function recordVideo(): Promise<MediaAsset | null> {
@@ -260,5 +332,5 @@ export async function recordVideo(): Promise<MediaAsset | null> {
       return null;
     }
   }
-  return asset;
+  return asset ? finalizeMediaAsset(asset) : null;
 }

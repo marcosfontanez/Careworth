@@ -7,6 +7,9 @@ import Constants from 'expo-constants';
 import { parseAndNavigate } from './deepLink';
 import { queryClient } from './queryClient';
 import { commentKeys, postKeys } from './queryKeys';
+import { pushPostViewer } from './postViewerRoute';
+import { navigateToCircleThread } from './communityCache';
+import { liveStreamHref } from './navigation/liveRoutes';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -132,6 +135,7 @@ export async function initPushNotifications(userId: string) {
 
   const cleanup = addNotificationListeners({
     onTapped: (response) => {
+      void (async () => {
       const data = response.notification.request.content.data as
         | {
             postId?: string;
@@ -139,10 +143,15 @@ export async function initPushNotifications(userId: string) {
             profileId?: string;
             circleSlug?: string;
             threadId?: string;
+            streamId?: string;
+            liveStreamId?: string;
             url?: string;
           }
         | undefined;
-      if (data?.postId) {
+      const liveId = data?.streamId?.trim() || data?.liveStreamId?.trim();
+      if (liveId) {
+        router.push(liveStreamHref(liveId));
+      } else if (data?.postId) {
         /**
          * Invalidate the comments + post caches BEFORE navigating so the
          * thread the user is about to land on always refetches. Without
@@ -152,9 +161,27 @@ export async function initPushNotifications(userId: string) {
          */
         queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(data.postId) });
         queryClient.invalidateQueries({ queryKey: postKeys.byId(data.postId) });
-        router.push(`/post/${data.postId}`);
+        void pushPostViewer(router, data.postId);
       } else if (data?.circleSlug && data?.threadId) {
-        router.push(`/communities/${data.circleSlug}/thread/${data.threadId}` as any);
+        void navigateToCircleThread(
+          router,
+          queryClient,
+          data.circleSlug,
+          data.threadId,
+          null,
+          'pushNotification:thread',
+        );
+      } else if (data?.circleSlug && !data?.postId) {
+        const { communityService } = await import('@/services');
+        const community = await communityService.getBySlug(data.circleSlug);
+        if (community) {
+          const { navigateToCircleRoom } = await import('@/lib/communityCache');
+          void navigateToCircleRoom(router, queryClient, community, null, {
+            source: 'pushNotification:circleDigest',
+          });
+        } else {
+          router.push('/(tabs)/circles');
+        }
       } else if (typeof data?.url === 'string' && parseAndNavigate(data.url)) {
         return;
       } else if (data?.chatId) {
@@ -164,6 +191,7 @@ export async function initPushNotifications(userId: string) {
       } else {
         router.push('/notifications');
       }
+      })();
     },
   });
 

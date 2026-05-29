@@ -164,7 +164,7 @@ export function CircleRoomHeader({
               color={isJoined ? colors.onVideo.primary : accent.color}
             />
             <Text style={[styles.joinText, { color: isJoined ? colors.onVideo.primary : accent.color }]}>
-              {isJoined ? 'Joined' : 'Join'}
+              {isJoined ? 'Saved' : 'Join for updates and posting'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

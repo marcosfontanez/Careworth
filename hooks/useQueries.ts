@@ -11,8 +11,8 @@ import {
 } from '@/services';
 import { useAuth } from '@/contexts/AuthContext';
 import { streaksService } from '@/services/social/streaks';
-import type { FeedType, Post } from '@/types';
-import { postsService, profilesService } from '@/services/supabase';
+import type { FeedType, Post, CircleThread } from '@/types';
+import { postsService, profilesService, circleModerationService } from '@/services/supabase';
 import {
   circleContentKeys,
   commentKeys,
@@ -24,6 +24,21 @@ import {
   userKeys,
 } from '@/lib/queryKeys';
 import { normalizeCommunitySlug } from '@/lib/communitySlug';
+import {
+  COMMUNITY_WALL_PAGE_SIZE,
+  communityWallNextPageParam,
+  flattenCommunityWallPages,
+} from '@/lib/communityWallPostsCache';
+import {
+  COMMUNITY_THREADS_PAGE_SIZE,
+  communityThreadsNextPageParam,
+  flattenCommunityThreadPages,
+} from '@/lib/communityThreadsCache';
+import {
+  COMMUNITY_REPLY_PAGE_SIZE,
+  communityRepliesNextPageParam,
+  flattenCommunityReplyPages,
+} from '@/lib/communityRepliesCache';
 
 export { useLiveStreams, useStream } from '@/hooks/useLiveQueries';
 
@@ -39,13 +54,27 @@ function linkedPostResolvableForViewer(post: Post, viewerId: string | null): boo
   return viewerId != null && viewerId === post.creatorId;
 }
 
+/** React Query cache may hold a plain object instead of Map — normalize before `.get`. */
+function normalizePostBatchMap(data: unknown): Map<string, Post> {
+  if (data instanceof Map) return data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const m = new Map<string, Post>();
+    for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
+      if (val && typeof val === 'object' && 'id' in val) m.set(key, val as Post);
+    }
+    return m;
+  }
+  return new Map();
+}
+
 /** Bump when feed queryFn shape changes so dev clients don’t keep a stale Fast Refresh closure. */
-const FEED_QUERY_KEY_VERSION = 3;
+const FEED_QUERY_KEY_VERSION = 4;
 
 export function useFeed(type: FeedType, userId?: string) {
   return useQuery({
     queryKey: ['feed', FEED_QUERY_KEY_VERSION, type, userId ?? null],
     queryFn: () => feedService.getFeed(type, userId),
+    enabled: !!userId,
     /** Avoid re-running ranked merge on every tab focus/mount; pull-to-refresh still refetches. */
     staleTime: 60_000,
     gcTime: 1000 * 60 * 30,
@@ -68,6 +97,7 @@ export function useLikedPostIds(userId?: string) {
 export function useFeedInfinite(type: FeedType, userId?: string) {
   return useInfiniteQuery({
     queryKey: feedKeys.infinitePage(type, userId),
+    enabled: !!userId,
     initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
     queryFn: async ({ pageParam }) => {
       if (!pageParam) {
@@ -199,7 +229,7 @@ export function useLinkedPostsMap(ids: readonly (string | null | undefined)[]): 
     [ids],
   );
 
-  const { data: batchMap } = useQuery({
+  const { data: batchMapRaw } = useQuery({
     queryKey: postKeys.linkedBatch(viewerId, idsKey),
     queryFn: async () => {
       const idList = idsKey.length === 0 ? [] : idsKey.split(',');
@@ -211,8 +241,11 @@ export function useLinkedPostsMap(ids: readonly (string | null | undefined)[]): 
     refetchOnMount: false,
   });
 
+  const batchMap = useMemo(() => normalizePostBatchMap(batchMapRaw), [batchMapRaw]);
+
   useEffect(() => {
-    if (!batchMap || idsKey.length === 0) return;
+    if (batchMap.size === 0 && !batchMapRaw) return;
+    if (idsKey.length === 0) return;
     const idList = idsKey.split(',');
     for (const id of idList) {
       const post = batchMap.get(id);
@@ -222,14 +255,14 @@ export function useLinkedPostsMap(ids: readonly (string | null | undefined)[]): 
         queryClient.setQueryData(postKeys.detail(id, viewerId), null);
       }
     }
-  }, [batchMap, idsKey, queryClient, viewerId]);
+  }, [batchMap, batchMapRaw, idsKey, queryClient, viewerId]);
 
   return useMemo(() => {
     const m = new Map<string, Post>();
     if (idsKey.length === 0) return m;
     const idList = idsKey.split(',');
     for (const id of idList) {
-      const fromBatch = batchMap?.get(id);
+      const fromBatch = batchMap.get(id);
       if (fromBatch && linkedPostResolvableForViewer(fromBatch, viewerId)) {
         m.set(id, fromBatch);
         continue;
@@ -247,37 +280,38 @@ export function useCommunityPosts(communityId: string) {
   const { user } = useAuth();
   const viewerId = user?.id ?? null;
   const enabled = !!communityId?.trim();
-  const q = useQuery({
+  const q = useInfiniteQuery({
     queryKey: circleContentKeys.communityPosts(communityId, viewerId),
-    queryFn: () => postsService.getByCommunity(communityId, viewerId),
-    /**
-     * Load as soon as the room id is known. Gating on auth used to leave the query
-     * `disabled` while `getSession` ran — in RQ v5 that stays `pending` with no data,
-     * so the circle wall showed “Loading posts…” until a later focus refetch.
-     * `getByCommunity` accepts null `viewerId`; when the session appears, the key
-     * changes and we refetch with the signed-in viewer.
-     */
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      postsService.getByCommunity(communityId, viewerId, {
+        limit: COMMUNITY_WALL_PAGE_SIZE,
+        cursor: pageParam ?? null,
+      }),
+    getNextPageParam: (lastPage) => communityWallNextPageParam(lastPage),
     enabled,
-    /**
-     * When `user` hydrates after the first fetch, the key gains `viewerId` — keep
-     * the prior page visible until the viewer-scoped fetch finishes.
-     */
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) => {
+      const prevCommunityId = previousQuery?.queryKey[2];
+      if (prevCommunityId === communityId) return previousData;
+      return undefined;
+    },
     staleTime: 45_000,
     gcTime: 1000 * 60 * 20,
-    refetchOnMount: true,
+    /** Prefetch fills cache before navigation — remount refetch caused stuck `fetching` on first open. */
+    refetchOnMount: false,
     retry: 2,
   });
 
-  /**
-   * TanStack Query v5: disabled queries stay `status === 'pending'`, which made
-   * `isPending && !data` look like “still loading” forever for `communityId === ''`.
-   * Only treat as wall loading when the query is enabled and actively fetching.
-   */
-  const isWallInitialLoading =
-    enabled && q.status === 'pending' && q.fetchStatus === 'fetching';
+  const allPosts = useMemo(() => flattenCommunityWallPages(q.data), [q.data]);
 
-  return { ...q, isWallInitialLoading };
+  const hasWallCache = q.data !== undefined;
+  const isWallInitialLoading = enabled && !hasWallCache && !q.isError && (q.isFetching || q.isPending);
+
+  return {
+    ...q,
+    data: allPosts,
+    isWallInitialLoading,
+  };
 }
 
 /** Viewer’s selected reaction emoji per post in a circle wall (batch over current list). */
@@ -342,19 +376,25 @@ export function useCommunities() {
 
 export function useCommunity(slug: string) {
   const key = normalizeCommunitySlug(slug);
-  return useQuery({
+  const enabled = key.length > 0;
+  const q = useQuery({
     queryKey: ['community', key],
     queryFn: () => communityService.getBySlug(key),
-    enabled: key.length > 0,
+    enabled,
     staleTime: 60_000,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: true,
+    refetchOnMount: false,
     /**
      * Do **not** keep previous circle data while the slug changes — it leaves
      * `community.id` stale so `useCommunityPosts` keeps querying the wrong wall
      * until focus/refetch (felt like “blank room until I leave and come back”).
      */
   });
+
+  /** True only while the slug query is actively fetching and has no row yet. */
+  const isCommunityInitialLoading = enabled && !q.data && q.fetchStatus === 'fetching';
+
+  return { ...q, isCommunityInitialLoading };
 }
 
 export function useFeaturedCommunities() {
@@ -389,29 +429,48 @@ export function useCirclesHome() {
  * second `getBySlug` inside `listBySlug` in parallel with `useCommunity`.
  */
 export function useCircleThreads(slug: string | undefined, communityId: string | undefined) {
+  const { user } = useAuth();
   const s = normalizeCommunitySlug(slug ?? '');
   const cid = (communityId ?? '').trim();
   const enabled = !!s && !!cid;
-  const q = useQuery({
-    queryKey: circleContentKeys.threadsForRoom(s || '__disabled__', cid || '__pending__'),
-    queryFn: () => circleContentService.getThreadsByCommunityId(cid),
+  const q = useInfiniteQuery({
+    queryKey: [...circleContentKeys.threadsForRoom(s || '__disabled__', cid || '__pending__'), 'inf'] as const,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      circleContentService.getThreadsByCommunityId(cid, {
+        limit: COMMUNITY_THREADS_PAGE_SIZE,
+        cursor: pageParam ?? null,
+        viewerId: user?.id ?? null,
+      }),
+    getNextPageParam: (lastPage) => communityThreadsNextPageParam(lastPage),
     enabled,
     staleTime: 45_000,
     gcTime: 1000 * 60 * 15,
-    refetchOnMount: true,
-    placeholderData: (previousData) => previousData,
+    refetchOnMount: false,
+    placeholderData: (previousData, previousQuery) => {
+      const prevKey = previousQuery?.queryKey;
+      const prevCommunityId = prevKey?.[3];
+      if (prevCommunityId === cid) return previousData;
+      return undefined;
+    },
   });
 
-  const isThreadsInitialLoading =
-    enabled && q.status === 'pending' && q.fetchStatus === 'fetching';
+  const allThreads = useMemo(() => flattenCommunityThreadPages(q.data), [q.data]);
+  const hasThreadsCache = q.data !== undefined;
+  const isThreadsInitialLoading = enabled && !hasThreadsCache && !q.isError && (q.isFetching || q.isPending);
 
-  return { ...q, isThreadsInitialLoading };
+  return {
+    ...q,
+    data: allThreads,
+    isThreadsInitialLoading,
+  };
 }
 
 export function useCircleThread(threadId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
     queryKey: circleContentKeys.thread(threadId ?? '__disabled__'),
-    queryFn: () => circleContentService.getThreadById(threadId!),
+    queryFn: () => circleContentService.getThreadById(threadId!, user?.id ?? null),
     enabled: !!threadId,
     staleTime: 30_000,
     gcTime: 1000 * 60 * 15,
@@ -419,12 +478,29 @@ export function useCircleThread(threadId: string | undefined) {
   });
 }
 
-export function useCircleThreadReplies(threadId: string | undefined) {
-  return useQuery({
-    queryKey: circleContentKeys.replies(threadId ?? '__disabled__'),
-    queryFn: () => circleContentService.getRepliesForThread(threadId!),
+export function useCircleThreadReplies(threadId: string | undefined, thread?: CircleThread | null) {
+  const { user } = useAuth();
+  const q = useInfiniteQuery({
+    queryKey: [...circleContentKeys.replies(threadId ?? '__disabled__'), 'inf'] as const,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      circleContentService.getRepliesForThread(threadId!, {
+        limit: COMMUNITY_REPLY_PAGE_SIZE,
+        cursor: pageParam ?? null,
+        viewerId: user?.id ?? null,
+        thread: thread ?? undefined,
+      }),
+    getNextPageParam: (lastPage) => communityRepliesNextPageParam(lastPage),
     enabled: !!threadId,
+    staleTime: 30_000,
   });
+
+  const allReplies = useMemo(() => flattenCommunityReplyPages(q.data) ?? [], [q.data]);
+
+  return {
+    ...q,
+    data: allReplies,
+  };
 }
 
 export function useUser(id: string) {
@@ -441,6 +517,25 @@ export function useUser(id: string) {
 }
 
 /** Opt-in: notify viewer when `creatorId` publishes a new live post (see `creator_post_subscribers`). */
+export function useCanModerateCircle(communityId: string | undefined) {
+  const cid = (communityId ?? '').trim();
+  return useQuery({
+    queryKey: ['canModerateCircle', cid] as const,
+    queryFn: () => circleModerationService.canModerateCircle(cid),
+    enabled: !!cid,
+    staleTime: 60_000,
+  });
+}
+
+export function useCircleThreadReaction(threadId: string | undefined, userId: string | undefined) {
+  return useQuery({
+    queryKey: ['circleThreadReaction', threadId ?? '', userId ?? ''] as const,
+    queryFn: () => circleContentService.getThreadReactionForUser(threadId!, userId ?? null),
+    enabled: !!threadId && !!userId,
+    staleTime: 15_000,
+  });
+}
+
 export function useCreatorPostNotifications(
   creatorId: string | undefined,
   viewerId: string | undefined,

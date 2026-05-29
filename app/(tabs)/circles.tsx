@@ -41,11 +41,14 @@ import {
   clearRecentCircleSearches,
   getRecentCircleSearches,
 } from '@/lib/circleExperience';
-import { hrefCommunity, hrefCommunityThread, hrefCommunityWallPost, hrefPost } from '@/lib/communityRoutes';
-import { prefetchCircleRoom, prefetchCircleRoomBySlug } from '@/lib/communityCache';
+import { hrefPost } from '@/lib/communityRoutes';
+import { pushPostViewer } from '@/lib/postViewerRoute';
+import { navigateToCircleRoom, navigateToCircleThread, navigateToCircleWallPost } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { addSearchQuery } from '@/lib/searchHistory';
 import { FEATURED_CIRCLE_SLUGS_ORDER } from '@/constants/circleDiscovery';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
+import { circleRoomDiag } from '@/lib/circleRoomDiag';
 import { formatCount, timeAgo } from '@/utils/format';
 import type { Community } from '@/types';
 
@@ -210,8 +213,14 @@ export default function CirclesScreen() {
 
   const openCommunity = useCallback(
     (c: Community) => {
-      prefetchCircleRoom(queryClient, c, user?.id ?? null);
-      router.push(hrefCommunity(c.slug));
+      circleRoomDiag('circlesTab:openCommunity', {
+        slug: normalizeCommunitySlug(c.slug),
+        id: c.id,
+        name: c.name,
+      });
+      void navigateToCircleRoom(router, queryClient, c, user?.id ?? null, {
+        source: 'circlesTab:card',
+      });
     },
     [queryClient, router, user?.id],
   );
@@ -528,10 +537,24 @@ export default function CirclesScreen() {
                           onPress={() => {
                             if (item.kind === 'thread') {
                               if (item.thread.circleSlug) {
-                                router.push(hrefCommunityThread(item.thread.circleSlug, item.thread.id));
+                                void navigateToCircleThread(
+                                  router,
+                                  queryClient,
+                                  item.thread.circleSlug,
+                                  item.thread.id,
+                                  user?.id ?? null,
+                                  'circlesTab:recentThread',
+                                );
                               }
                             } else {
-                              router.push(hrefCommunityWallPost(item.communitySlug, item.postId));
+                              void navigateToCircleWallPost(
+                                router,
+                                queryClient,
+                                item.communitySlug,
+                                item.postId,
+                                user?.id ?? null,
+                                'circlesTab:recentPost',
+                              );
                             }
                           }}
                         />
@@ -612,10 +635,29 @@ export default function CirclesScreen() {
                         preview={t.preview}
                         accentColor={pulseverse.electric}
                         onPress={() => {
-                          prefetchCircleRoomBySlug(queryClient, t.circleSlug, user?.id ?? null);
-                          if (t.postId) router.push(hrefPost(t.postId, t.circleSlug));
-                          else if (t.threadId) router.push(hrefCommunityThread(t.circleSlug, t.threadId));
-                          else router.push(hrefCommunity(t.circleSlug));
+                          if (t.postId) {
+                            void pushPostViewer(router, t.postId, {
+                              viewerId: user?.id ?? null,
+                              circle: t.circleSlug,
+                            });
+                          } else if (t.threadId) {
+                            void navigateToCircleThread(
+                              router,
+                              queryClient,
+                              t.circleSlug,
+                              t.threadId,
+                              user?.id ?? null,
+                              'circlesTab:trendingThread',
+                            );
+                          } else {
+                            void navigateToCircleRoom(
+                              router,
+                              queryClient,
+                              { slug: t.circleSlug },
+                              user?.id ?? null,
+                              { source: 'circlesTab:trendingCircle' },
+                            );
+                          }
                         }}
                       />
                     );

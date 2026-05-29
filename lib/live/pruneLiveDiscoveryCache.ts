@@ -11,6 +11,7 @@ function stripId<T extends { id: string }>(list: T[], streamId: string): T[] {
 function safeHubLists(old: LiveHubHomePayload): LiveHubHomePayload {
   return {
     ...old,
+    happeningNow: Array.isArray(old.happeningNow) ? old.happeningNow : [],
     featured: Array.isArray(old.featured) ? old.featured : [],
     trending: Array.isArray(old.trending) ? old.trending : [],
     shopLiveDeals: Array.isArray(old.shopLiveDeals) ? old.shopLiveDeals : [],
@@ -26,6 +27,7 @@ export function pruneStreamFromLiveDiscovery(queryClient: QueryClient, streamId:
     const safe = safeHubLists(old);
     return {
       ...safe,
+      happeningNow: stripId(safe.happeningNow, streamId),
       featured: stripId(safe.featured, streamId),
       trending: stripId(safe.trending, streamId),
       shopLiveDeals: stripId(safe.shopLiveDeals, streamId),

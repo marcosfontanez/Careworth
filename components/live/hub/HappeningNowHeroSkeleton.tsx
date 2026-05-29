@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Dimensions, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { borderRadius, colors, layout, spacing } from '@/theme';
+import { borderRadius, layout, spacing } from '@/theme';
+import { pulseColors, pulseRadius } from '@/lib/theme/pulseTheme';
 
 const CARD_W = Dimensions.get('window').width - layout.screenPadding * 2;
 const HERO_H = 448;
@@ -26,7 +27,7 @@ export function HappeningNowHeroSkeleton() {
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(56,189,248,0.08)', 'rgba(236,72,153,0.06)', 'rgba(12,18,32,0.9)']}
+        colors={['rgba(25, 211, 197, 0.08)', 'rgba(255, 79, 216, 0.06)', pulseColors.glassStrong]}
         style={styles.card}
       >
         <Shimmer style={styles.pill} />
@@ -60,8 +61,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius['3xl'] - 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.18)',
-    backgroundColor: colors.dark.cardAlt,
+    borderColor: pulseColors.borderStrong,
+    backgroundColor: pulseColors.surface,
   },
   shimmer: {
     backgroundColor: 'rgba(248,250,252,0.12)',

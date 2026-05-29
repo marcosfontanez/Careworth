@@ -8,6 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -232,7 +233,7 @@ export default function FollowersScreen() {
             return (
               <TouchableOpacity
                 style={styles.row}
-                onPress={() => router.push(`/profile/${item.id}`)}
+                onPress={() => openPulsePage(router, item.id)}
                 activeOpacity={0.7}
               >
                 <FollowListMedia

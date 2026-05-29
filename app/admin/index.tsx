@@ -1320,6 +1320,7 @@ export default function AdminPanel() {
                 <FlagToggle label="Creator Hub: Feed discussion tile" flag="creatorHubFeedDiscussion" />
                 <FlagToggle label="Recorder: filters & effects rail" flag="recorderEffects" />
                 <FlagToggle label="Feed creator gifting (rail)" flag="feedCreatorGifting" />
+                <FlagToggle label="Feed compact action rail (tap to expand)" flag="feedCompactActionRail" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />
                 <FlagToggle label="Creator Tips" flag="creatorTips" />

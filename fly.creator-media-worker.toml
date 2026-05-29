@@ -1,0 +1,43 @@
+# PulseVerse creator media worker — always-on job poller (ffmpeg)
+#
+# Prerequisites:
+#   - Supabase migrations 184+ (186 retry), 207+ for trim jobs
+#   - flyctl installed, logged in
+#
+# One-time:
+#   fly apps create pulseverse-creator-media
+#   fly secrets set SUPABASE_URL=https://YOUR_PROJECT.supabase.co SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+#
+# Deploy from repo root:
+#   fly deploy -c fly.creator-media-worker.toml
+#
+# Logs:
+#   fly logs -a pulseverse-creator-media
+
+app = 'pulseverse-creator-media'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile.creator-media-worker'
+
+[env]
+  PORT = '8080'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '20s'
+  method = 'GET'
+  path = '/health'
+
+# ffmpeg trim/stitch: 512MB is tight for long 1080p; 1GB shared CPU is safer.
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'

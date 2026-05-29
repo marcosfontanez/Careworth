@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +23,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { sharePostMenu } from '@/lib/share';
 import { canRemixVideoPost, openVideoRemixMenu } from '@/lib/videoRemixNavigation';
+import { canClipFeedPost } from '@/lib/feedClipPermissions';
+import { pushFeedClipRoute } from '@/lib/feedClipNavigation';
+import { useFeatureFlags } from '@/lib/featureFlags';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { postKeys, commentKeys, likedPostKeys, profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import { looksLikeRlsPolicyDenial, postsService } from '@/services/supabase/posts';
@@ -42,6 +46,9 @@ import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 import { scrollComposerExtraPadding } from '@/lib/keyboardAware';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
+import { PostClipSettingsSheet } from '@/components/posts/PostClipSettingsSheet';
+import { FeedClipAttributionRow } from '@/components/feed/FeedClipAttributionChip';
+import { useFeedClipAttribution } from '@/hooks/useFeedClipAttribution';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
 import { formatCount, timeAgo } from '@/utils/format';
@@ -193,12 +200,16 @@ export default function PostDetailScreen() {
     id: string | string[];
     circle?: string | string[];
     focusComments?: string | string[];
+    openGift?: string | string[];
   }>();
   const id = asParamString(raw.id);
   const circle = asParamString(raw.circle);
   const focusComments = asParamString(raw.focusComments);
+  const openGift = asParamString(raw.openGift);
   const shouldFocusComments =
     focusComments != null && ['1', 'true', 'yes'].includes(focusComments.toLowerCase());
+  const shouldOpenGift =
+    openGift != null && ['1', 'true', 'yes'].includes(openGift.toLowerCase());
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -208,11 +219,21 @@ export default function PostDetailScreen() {
   const { user: authUser } = useAuth();
 
   const { data: post, isPending, refetch } = usePost(id ?? '', { enabled: !!id });
+  const clipAttribution = useFeedClipAttribution(post);
   const { data: comments = [] } = useComments(id ?? '');
   const { data: likedIdsArr = [] } = useLikedPostIds(authUser?.id);
 
   const savedPostIds = useAppStore((s) => s.savedPostIds);
   const toggleSavePost = useAppStore((s) => s.toggleSavePost);
+  const feedClipping = useFeatureFlags((s) => s.feedClipping);
+  const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
+  const canClipPost = useMemo(() => {
+    if (!authUser || !post) return false;
+    return canClipFeedPost(post, authUser, {
+      feedClippingEnabled: feedClipping,
+      viewerFollowsCreator: followedCreatorIds.has(post.creatorId),
+    }).allowed;
+  }, [authUser, post, feedClipping, followedCreatorIds]);
 
   /**
    * Owned by the screen so the inline comment composer can ask us to scroll
@@ -236,6 +257,13 @@ export default function PostDetailScreen() {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, Platform.OS === 'ios' ? 250 : 180);
   }, []);
+
+  const scrollToComments = useCallback(() => {
+    if (post?.commentsDisabled) {
+      toast.show('Comments are off — you can still read the thread.', 'info');
+    }
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [post?.commentsDisabled, toast]);
 
   const [imageAspect, setImageAspect] = useState<number | null>(null);
 
@@ -376,7 +404,25 @@ export default function PostDetailScreen() {
    * still show the last-typed draft instead of the current caption.
    */
   const [editCaptionOpen, setEditCaptionOpen] = useState(false);
+  const [clipSettingsOpen, setClipSettingsOpen] = useState(false);
+  const [clipSettingsDraft, setClipSettingsDraft] = useState({
+    allowViewerClips: true,
+    allowRemix: true,
+    allowClipDownloads: false,
+  });
+  const [clipSettingsSaving, setClipSettingsSaving] = useState(false);
   const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
+  const [reportPostOpen, setReportPostOpen] = useState(false);
+  const giftAutoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!shouldOpenGift || giftAutoOpenedRef.current) return;
+    if (!authUser?.id || !post) return;
+    if (postShouldMaskIdentity(post, circle)) return;
+    if (authUser.id === post.creatorId) return;
+    giftAutoOpenedRef.current = true;
+    setCreatorGiftOpen(true);
+  }, [shouldOpenGift, authUser?.id, post, circle]);
 
   /**
    * Save handler passed into the modal. We optimistically patch the
@@ -446,6 +492,36 @@ export default function PostDetailScreen() {
     }
   }, [authUser, post, queryClient, toast]);
 
+  const openClipSettings = useCallback(() => {
+    if (!post) return;
+    setClipSettingsDraft({
+      allowViewerClips: post.allowViewerClips !== false,
+      allowRemix: post.allowRemix !== false,
+      allowClipDownloads: post.allowClipDownloads === true,
+    });
+    setClipSettingsOpen(true);
+  }, [post]);
+
+  const saveClipSettings = useCallback(async () => {
+    if (!authUser?.id || !post) return;
+    setClipSettingsSaving(true);
+    try {
+      const updated = await postsService.updateOwnPost(post.id, authUser.id, {
+        allowViewerClips: clipSettingsDraft.allowViewerClips,
+        allowRemix: clipSettingsDraft.allowRemix,
+        allowClipDownloads: clipSettingsDraft.allowClipDownloads,
+      });
+      queryClient.setQueryData(postKeys.detail(post.id, authUser.id), updated);
+      await invalidatePostRelatedQueries(queryClient, { creatorId: authUser.id });
+      setClipSettingsOpen(false);
+      toast.show('Clip settings saved', 'success');
+    } catch {
+      toast.show('Could not save clip settings', 'error');
+    } finally {
+      setClipSettingsSaving(false);
+    }
+  }, [authUser, post, clipSettingsDraft, queryClient, toast]);
+
   /**
    * Opens the owner's action menu (Edit + Delete + Cancel). We swap the
    * always-visible trash icon for a single ellipsis so the header
@@ -457,6 +533,9 @@ export default function PostDetailScreen() {
     if (!post) return;
     Alert.alert('Your post', undefined, [
       { text: 'Edit caption', onPress: () => setEditCaptionOpen(true) },
+      ...(post.type === 'video'
+        ? [{ text: 'Clip & reuse settings', onPress: openClipSettings }]
+        : []),
       {
         text: post.commentsDisabled ? 'Turn comments on' : 'Turn comments off',
         onPress: promptToggleComments,
@@ -464,7 +543,7 @@ export default function PostDetailScreen() {
       { text: 'Delete post', style: 'destructive', onPress: handleDelete },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [handleDelete, promptToggleComments, post]);
+  }, [handleDelete, openClipSettings, promptToggleComments, post]);
 
   if (!id) {
     return (
@@ -554,6 +633,17 @@ export default function PostDetailScreen() {
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.dark.text} />
               </TouchableOpacity>
             )}
+            {!isOwnPost && authUser ? (
+              <TouchableOpacity
+                onPress={() => setReportPostOpen(true)}
+                activeOpacity={0.7}
+                hitSlop={10}
+                style={styles.iconBtn}
+                accessibilityLabel="Report post"
+              >
+                <Ionicons name="flag-outline" size={18} color={colors.dark.text} />
+              </TouchableOpacity>
+            ) : null}
             {!isOwnPost && authUser && !maskIdentity ? (
               <TouchableOpacity
                 onPress={() => setCreatorGiftOpen(true)}
@@ -625,7 +715,7 @@ export default function PostDetailScreen() {
           ) : (
             <TouchableOpacity
               style={styles.authorRow}
-              onPress={() => router.push(`/profile/${post.creatorId}`)}
+              onPress={() => openPulsePage(router, post.creatorId)}
               activeOpacity={0.7}
             >
               <AvatarDisplay
@@ -699,6 +789,10 @@ export default function PostDetailScreen() {
             </TouchableOpacity>
           ) : null}
 
+          {(clipAttribution.creatorChip || clipAttribution.liveChip) ? (
+            <FeedClipAttributionRow attribution={clipAttribution} variant="detail" style={styles.clipAttributionRow} />
+          ) : null}
+
           {/* Caption body */}
           {captionBody ? (
             <CaptionWithMentions
@@ -719,23 +813,18 @@ export default function PostDetailScreen() {
             </View>
           )}
 
-          {/* Stat row — comments opens full thread route (parity with feed / Saved). */}
+          {/* Stat row — scrolls to inline comments (thread lives on this screen). */}
           <View style={styles.statsRow}>
             <Text style={styles.statText}>{formatCount(post.likeCount)} likes</Text>
             <View style={styles.statDot} />
             <TouchableOpacity
-              onPress={() => {
-                if (post.commentsDisabled) {
-                  toast.show('Comments are off — you can still read the thread.', 'info');
-                }
-                router.push(`/comments/${post.id}` as never);
-              }}
+              onPress={scrollToComments}
               hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
               accessibilityRole="button"
               accessibilityLabel={
                 post.commentsDisabled
                   ? 'View comments. New comments are turned off.'
-                  : 'Open comments'
+                  : 'View comments'
               }
             >
               <Text style={styles.statText}>{formatCount(post.commentCount)} comments</Text>
@@ -762,12 +851,20 @@ export default function PostDetailScreen() {
                 onPress={() => setCreatorGiftOpen(true)}
               />
             ) : null}
-            {authUser && !maskIdentity && canRemixVideoPost(post) ? (
+            {authUser && !maskIdentity && canRemixVideoPost(post, authUser) ? (
               <ActionButton
                 icon="sparkles-outline"
                 label="Remix"
                 tint={colors.primary.teal}
-                onPress={() => openVideoRemixMenu(post, router)}
+                onPress={() => openVideoRemixMenu(post, router, authUser)}
+              />
+            ) : null}
+            {authUser && !maskIdentity && canClipPost ? (
+              <ActionButton
+                icon="cut-outline"
+                label={post.sourceLiveStreamId ? 'Clip Live' : 'Clip'}
+                tint={colors.primary.teal}
+                onPress={() => pushFeedClipRoute(router, post)}
               />
             ) : null}
             {!openedFromCircle ? (
@@ -861,6 +958,16 @@ export default function PostDetailScreen() {
           onClose={() => setEditCaptionOpen(false)}
         />
       ) : null}
+      {isOwnPost && post.type === 'video' ? (
+        <PostClipSettingsSheet
+          visible={clipSettingsOpen}
+          values={clipSettingsDraft}
+          saving={clipSettingsSaving}
+          onChange={(patch) => setClipSettingsDraft((prev) => ({ ...prev, ...patch }))}
+          onSave={() => void saveClipSettings()}
+          onClose={() => setClipSettingsOpen(false)}
+        />
+      ) : null}
       {!isOwnPost && authUser && !maskIdentity ? (
         <SendCreatorGiftTray
           visible={creatorGiftOpen}
@@ -871,6 +978,14 @@ export default function PostDetailScreen() {
           creatorAvatarUrl={post.creator.avatarUrl}
           contextType="post"
           contextId={post.id}
+        />
+      ) : null}
+      {!isOwnPost && authUser ? (
+        <ReportModal
+          visible={reportPostOpen}
+          onClose={() => setReportPostOpen(false)}
+          targetType="post"
+          targetId={post.id}
         />
       ) : null}
     </KeyboardAwareRoot>
@@ -1420,7 +1535,7 @@ function CommentNode({
           ringColor={colors.dark.border}
           pulseAvatarFrame={comment.author.pulseAvatarFrame}
           ownerDisplayName={displayName}
-          onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+          onPress={() => openPulsePage(router, comment.author.id)}
         />
       ) : (
         <BorderedAvatar
@@ -1436,7 +1551,7 @@ function CommentNode({
         <View style={styles.commentNameRow}>
           {!maskAuthors && !isDeleted && comment.author.id ? (
             <TouchableOpacity
-              onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+              onPress={() => openPulsePage(router, comment.author.id)}
               activeOpacity={0.7}
               style={styles.commentNameHit}
               hitSlop={{ top: 4, bottom: 4 }}
@@ -1743,6 +1858,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.dark.text,
     lineHeight: 20,
+    marginTop: 8,
+  },
+  clipAttributionRow: {
     marginTop: 8,
   },
 

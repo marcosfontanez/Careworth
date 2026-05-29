@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, borderRadius } from '@/theme';
+import { pulseColors, pulseRadius } from '@/lib/theme/pulseTheme';
 
 type Size = 'sm' | 'md';
 
@@ -33,8 +33,8 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.status.live,
-    borderRadius: borderRadius.sm - 2,
+    backgroundColor: pulseColors.live,
+    borderRadius: pulseRadius.sm,
   },
   pillMd: {
     gap: 5,
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.dark.text,
+    backgroundColor: pulseColors.text,
   },
   dotSm: {
     width: 5,
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 10,
     fontWeight: '900',
-    color: colors.dark.text,
+    color: pulseColors.text,
     letterSpacing: 0.6,
   },
   textSm: {

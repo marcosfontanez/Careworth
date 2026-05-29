@@ -25,13 +25,29 @@ function RoleBadgeInline({ role }: { role?: Role }) {
   );
 }
 
+function messageMatchesPin(message: StreamMessage, pinned: StreamPinnedMessage | null): boolean {
+  if (!pinned || message.messageType !== 'chat') return false;
+  return message.content.trim() === pinned.content.trim();
+}
+
 interface ChatMessageProps {
   message: StreamMessage;
   onLongPress?: (message: StreamMessage) => void;
+  onPinPress?: (message: StreamMessage) => void;
+  /** Tap the author name → open their Pulse Page. Omitted = name not tappable. */
+  onPressUser?: (message: StreamMessage) => void;
+  isPinnedRow?: boolean;
   variant?: 'default' | 'overlay';
 }
 
-function ChatMessage({ message, onLongPress, variant = 'default' }: ChatMessageProps) {
+function ChatMessage({
+  message,
+  onLongPress,
+  onPinPress,
+  onPressUser,
+  isPinnedRow = false,
+  variant = 'default',
+}: ChatMessageProps) {
   const overlay = variant === 'overlay';
   const isGift = message.messageType === 'gift';
   const isSystem = message.messageType === 'system';
@@ -56,12 +72,16 @@ function ChatMessage({ message, onLongPress, variant = 'default' }: ChatMessageP
 
   if (isGift && message.giftData) {
     const gift = message.giftData.gift;
-    const emoji = gift?.emoji?.trim() || FALLBACK_GIFT_EMOJI;
-    const giftName = gift?.name?.trim() || 'Gift';
+    const giftName =
+      message.giftData.shopItem?.name?.trim() ||
+      gift?.name?.trim() ||
+      message.giftData.creatorGiftSlug?.replace(/-/g, ' ') ||
+      'Gift';
     const giftColor = gift?.color ?? colors.status.premium;
+    const label = message.giftData.creatorGiftSlug ? '✨' : gift?.emoji?.trim() || FALLBACK_GIFT_EMOJI;
     return (
       <View style={[styles.msgRow, overlay ? styles.msgRowOverlay : styles.giftMsg]}>
-        <Text style={styles.giftEmoji}>{emoji}</Text>
+        <Text style={styles.giftEmoji}>{label}</Text>
         <Text style={[styles.msgContent, overlay && styles.msgContentOverlay]} numberOfLines={2}>
           <Text style={[styles.msgName, overlay && styles.msgNameOverlay, { color: colors.status.premium }]}>
             {message.displayName}
@@ -77,10 +97,14 @@ function ChatMessage({ message, onLongPress, variant = 'default' }: ChatMessageP
 
   return (
     <TouchableOpacity
-      activeOpacity={onLongPress ? 0.8 : 1}
+      activeOpacity={onLongPress || onPinPress ? 0.8 : 1}
       onLongPress={onLongPress ? () => onLongPress(message) : undefined}
       delayLongPress={350}
-      style={[styles.msgRow, overlay && styles.msgRowOverlay]}
+      style={[
+        styles.msgRow,
+        overlay && styles.msgRowOverlay,
+        isPinnedRow && styles.msgRowPinned,
+      ]}
     >
       {!overlay && message.isHost && (
         <View style={styles.hostBadge}>
@@ -99,13 +123,33 @@ function ChatMessage({ message, onLongPress, variant = 'default' }: ChatMessageP
       )}
       {!overlay ? <RoleBadgeInline role={message.role} /> : null}
       <Text style={[styles.msgContent, overlay && styles.msgContentOverlay]} numberOfLines={overlay ? 2 : undefined}>
-        <Text style={[styles.msgName, overlay && styles.msgNameOverlay, { color: roleColor(message.role) }]}>
+        <Text
+          style={[styles.msgName, overlay && styles.msgNameOverlay, { color: roleColor(message.role) }]}
+          onPress={onPressUser ? () => onPressUser(message) : undefined}
+          suppressHighlighting={!onPressUser}
+          accessibilityRole={onPressUser ? 'button' : undefined}
+          accessibilityLabel={onPressUser ? `Open ${message.displayName}'s Pulse Page` : undefined}
+        >
           {message.displayName}
           {message.isHost && overlay ? ' ·' : ''}
         </Text>
         {overlay ? ' ' : '  '}
         {message.content}
       </Text>
+      {!overlay && onPinPress ? (
+        <TouchableOpacity
+          onPress={() => onPinPress(message)}
+          hitSlop={8}
+          style={styles.pinBtn}
+          accessibilityLabel={isPinnedRow ? 'Unpin message' : 'Pin message'}
+        >
+          <Ionicons
+            name={isPinnedRow ? 'pin' : 'pin-outline'}
+            size={16}
+            color={isPinnedRow ? colors.primary.teal : colors.dark.textMuted}
+          />
+        </TouchableOpacity>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -122,7 +166,12 @@ export function PinnedMessageBar({ pinned, onUnpin, isHost }: PinnedBarProps) {
   return (
     <View style={styles.pinnedBar}>
       <Ionicons name="pin" size={14} color={colors.primary.teal} />
-      <Text style={styles.pinnedText} numberOfLines={2}>{pinned.content}</Text>
+      <View style={styles.pinnedBarText}>
+        <Text style={styles.pinnedLabel}>Pinned</Text>
+        <Text style={styles.pinnedText} numberOfLines={2}>
+          {pinned.content}
+        </Text>
+      </View>
       {isHost && onUnpin && (
         <TouchableOpacity onPress={onUnpin} hitSlop={8}>
           <Ionicons name="close-circle" size={16} color={colors.dark.textMuted} />
@@ -139,8 +188,12 @@ type LiveChatProps = {
   /** Signed-in viewer/host — used to hide report on own messages. */
   currentUserId?: string;
   onUnpin?: () => void;
+  /** Host-only: tap pin icon on a chat row. */
+  onPinMessage?: (message: StreamMessage) => void;
   /** Long-press on a chat row — host gets pin/report; viewers get report. */
   onMessageLongPress?: (message: StreamMessage) => void;
+  /** Tap a chat author name → open their Pulse Page (self → My Pulse). */
+  onPressUser?: (message: StreamMessage) => void;
   /** Compact translucent overlay styling for immersive viewer player. */
   variant?: 'default' | 'overlay';
   maxOverlayMessages?: number;
@@ -167,7 +220,9 @@ export function LiveChatList({
   isHost,
   currentUserId,
   onUnpin,
+  onPinMessage,
   onMessageLongPress,
+  onPressUser,
   variant = 'default',
   maxOverlayMessages = 6,
   embedded = false,
@@ -188,10 +243,19 @@ export function LiveChatList({
       key={item.id}
       message={item}
       variant={variant}
+      isPinnedRow={!overlay && isHost && messageMatchesPin(item, pinned)}
+      onPinPress={
+        !overlay && isHost && onPinMessage && item.messageType === 'chat' && item.content.trim()
+          ? () => onPinMessage(item)
+          : undefined
+      }
       onLongPress={
         onMessageLongPress && canLongPressChatMessage(item, isHost, currentUserId)
           ? () => onMessageLongPress(item)
           : undefined
+      }
+      onPressUser={
+        onPressUser && item.messageType === 'chat' && item.userId ? onPressUser : undefined
       }
     />
   );
@@ -300,7 +364,23 @@ const styles = StyleSheet.create({
     borderRadius: 10, marginBottom: 8, marginHorizontal: 2,
     borderWidth: 1, borderColor: colors.primary.teal + '22',
   },
-  pinnedText: { flex: 1, fontSize: 12, color: '#E8EEF8', fontWeight: '600', lineHeight: 17 },
+  pinnedText: { fontSize: 12, color: '#E8EEF8', fontWeight: '600', lineHeight: 17 },
+  pinnedBarText: { flex: 1, gap: 2 },
+  pinnedLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.primary.teal,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  msgRowPinned: {
+    borderColor: 'rgba(34,211,238,0.35)',
+    backgroundColor: 'rgba(20,184,166,0.1)',
+  },
+  pinBtn: {
+    alignSelf: 'center',
+    padding: 4,
+  },
 
   chatContainerOverlay: { flexGrow: 0 },
   chatListOverlay: { flexGrow: 0, maxHeight: 132 },

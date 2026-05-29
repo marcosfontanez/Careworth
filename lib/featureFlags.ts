@@ -70,6 +70,15 @@ export interface FeatureFlags {
    * `EXPO_PUBLIC_FEED_CREATOR_GIFTING=1`. Staff can also toggle from **Admin → Feature flags**.
    */
   feedCreatorGifting: boolean;
+  /**
+   * Compact/expandable right-side Feed action rail. When **on**, the feed opens
+   * with a minimal rail (creator avatar + chevron) that expands into the full
+   * action column on tap, freeing up video real estate. When **off**, the
+   * classic always-expanded rail renders (legacy behavior, safe kill switch).
+   * Defaults **on** everywhere; override with `EXPO_PUBLIC_FEED_COMPACT_RAIL=0`
+   * or the Admin → Feature flags toggle.
+   */
+  feedCompactActionRail: boolean;
   sponsoredPosts: boolean;
   pulseversePro: boolean;
   creatorTips: boolean;
@@ -211,6 +220,18 @@ export function defaultFeedCreatorGifting(): boolean {
   return typeof __DEV__ !== 'undefined' && __DEV__;
 }
 
+/**
+ * Compact Feed action rail defaults **on** (the new premium behavior). Provides
+ * a kill switch via `EXPO_PUBLIC_FEED_COMPACT_RAIL=0` or admin toggle so we can
+ * instantly revert to the classic full rail if a layout regression appears.
+ */
+export function defaultFeedCompactActionRail(): boolean {
+  const raw = process.env.EXPO_PUBLIC_FEED_COMPACT_RAIL?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return true;
+}
+
 const DEFAULT_FLAGS: FeatureFlags = {
   liveStreaming: defaultLiveStreaming(),
   liveDiscoveryDemos: defaultLiveDiscoveryDemos(),
@@ -223,6 +244,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   creatorHubFeedDiscussion: defaultCreatorHubFeedDiscussion(),
   recorderEffects: defaultRecorderEffects(),
   feedCreatorGifting: defaultFeedCreatorGifting(),
+  feedCompactActionRail: defaultFeedCompactActionRail(),
   sponsoredPosts: false,
   pulseversePro: false,
   creatorTips: false,

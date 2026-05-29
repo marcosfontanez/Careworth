@@ -18,8 +18,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { communitiesService } from '@/services/supabase';
 import { communityKeys } from '@/lib/queryKeys';
 import { colors, layout, spacing, typography } from '@/theme';
-import { hrefCommunity } from '@/lib/communityRoutes';
-import { prefetchCircleRoom } from '@/lib/communityCache';
+import { navigateToCircleRoom } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Community } from '@/types';
 import { getCirclesDirectoryListWindow } from '@/lib/feedVideoListWindow';
@@ -52,8 +51,7 @@ export default function CirclesDirectoryScreen() {
 
   const openCommunity = useCallback(
     (c: Community) => {
-      prefetchCircleRoom(queryClient, c, user?.id ?? null);
-      router.push(hrefCommunity(c.slug));
+      navigateToCircleRoom(router, queryClient, c, user?.id ?? null);
     },
     [queryClient, router, user?.id],
   );

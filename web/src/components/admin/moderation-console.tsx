@@ -66,7 +66,16 @@ const severityDisplay: Record<Severity, string> = {
   low: "Low",
 };
 
-type ModerationApiAction = "dismiss" | "uphold" | "review" | "warn" | "remove" | "suspend";
+type ModerationApiAction =
+  | "dismiss"
+  | "uphold"
+  | "review"
+  | "warn"
+  | "remove"
+  | "suspend"
+  | "circle_moderate";
+
+type CircleModerationAction = "hide" | "remove" | "restore" | "pending_review";
 
 export function ModerationConsole({
   reports,
@@ -109,7 +118,7 @@ export function ModerationConsole({
   async function postModeration(
     action: ModerationApiAction,
     reportId: string,
-    opts?: { banReason?: string },
+    opts?: { banReason?: string; circleAction?: CircleModerationAction },
   ): Promise<{ ok: boolean; error?: string }> {
     const res = await fetch("/api/admin/moderation", {
       method: "POST",
@@ -120,6 +129,7 @@ export function ModerationConsole({
         reportId,
         note: moderationNote.trim() || undefined,
         banReason: opts?.banReason,
+        circleAction: opts?.circleAction,
       }),
     });
     let data: { ok?: boolean; error?: string } = {};
@@ -137,7 +147,7 @@ export function ModerationConsole({
   async function runAction(
     label: string,
     action: ModerationApiAction,
-    opts?: { banReason?: string },
+    opts?: { banReason?: string; circleAction?: CircleModerationAction },
   ) {
     setActionError(null);
     setActionSuccess(null);
@@ -171,6 +181,8 @@ export function ModerationConsole({
       </div>
     );
   }
+
+  const isCircleReport = selected.type === "circle_thread" || selected.type === "circle_reply";
 
   return (
     <div className="grid gap-4 lg:grid-cols-5 lg:items-start">
@@ -331,17 +343,46 @@ export function ModerationConsole({
               className="border-white/20"
               disabled={isActionPending}
               onClick={() => {
-                if (
-                  !window.confirm(
-                    "Remove this reported item from the database? (post, comment, or end live stream — cannot undo.)",
-                  )
-                )
-                  return;
-                runAction("Content removed", "remove");
+                const msg = isCircleReport
+                  ? "Remove this circle thread/reply from public view?"
+                  : "Hide this reported item from public view? (Posts become private; comments are soft-deleted.)";
+                if (!window.confirm(msg)) return;
+                runAction("Content hidden", "remove");
               }}
             >
-              Remove content
+              {isCircleReport ? "Remove content" : "Hide content"}
             </Button>
+            {isCircleReport ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-amber-500/35 text-amber-100"
+                  disabled={isActionPending}
+                  onClick={() => runAction("Content hidden", "circle_moderate", { circleAction: "hide" })}
+                >
+                  Hide (moderators)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-violet-500/35 text-violet-100"
+                  disabled={isActionPending}
+                  onClick={() => runAction("Queued for review", "circle_moderate", { circleAction: "pending_review" })}
+                >
+                  Pending review
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-emerald-500/35 text-emerald-100"
+                  disabled={isActionPending}
+                  onClick={() => runAction("Content restored", "circle_moderate", { circleAction: "restore" })}
+                >
+                  Restore / approve
+                </Button>
+              </>
+            ) : null}
             <Button
               type="button"
               variant="outline"

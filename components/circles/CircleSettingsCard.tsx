@@ -16,6 +16,8 @@ type Props = {
    *  so the card doesn't show a permanently disabled control — cleaner
    *  than greying out a row most users will never use. */
   canPin?: boolean;
+  /** Anonymous / confessions rooms — hide Share to My Pulse until privacy model is final. */
+  hideShareToMyPulse?: boolean;
   onChange: (next: Partial<CirclePostSettings>) => void;
 };
 
@@ -37,53 +39,53 @@ type Props = {
 export function CircleSettingsCard({
   settings,
   canPin = false,
+  hideShareToMyPulse = false,
   onChange,
 }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.section}>POST SETTINGS</Text>
 
-      {/* Featured Share to My Pulse row — promoted card with a teal halo
-          when active, so the connection to the user's profile reads as
-          intentional and important rather than a buried toggle. */}
-      <View
-        style={[
-          styles.featureRow,
-          settings.shareToMyPulse && styles.featureRowActive,
-        ]}
-      >
-        <View style={styles.row}>
-          <View style={[styles.iconWrap, { backgroundColor: `${colors.primary.teal}22` }]}>
-            <Ionicons name="pulse" size={18} color={colors.primary.teal} />
-          </View>
-          <View style={styles.textWrap}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title}>Share to My Pulse</Text>
+      {!hideShareToMyPulse ? (
+        <View
+          style={[
+            styles.featureRow,
+            settings.shareToMyPulse && styles.featureRowActive,
+          ]}
+        >
+          <View style={styles.row}>
+            <View style={[styles.iconWrap, { backgroundColor: `${colors.primary.teal}22` }]}>
+              <Ionicons name="pulse" size={18} color={colors.primary.teal} />
+            </View>
+            <View style={styles.textWrap}>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>Share to My Pulse</Text>
+                {settings.shareToMyPulse ? (
+                  <View style={styles.activeBadge}>
+                    <Text style={styles.activeBadgeText}>ON</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.subtitle}>
+                Expand your post beyond the circle
+              </Text>
               {settings.shareToMyPulse ? (
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>ON</Text>
-                </View>
+                <Text style={styles.activeHint}>
+                  Visitors to your Pulse Page will see a link back to this thread.
+                </Text>
               ) : null}
             </View>
-            <Text style={styles.subtitle}>
-              Expand your post beyond the circle
-            </Text>
-            {settings.shareToMyPulse ? (
-              <Text style={styles.activeHint}>
-                Visitors to your Pulse Page will see a link back to this thread.
-              </Text>
-            ) : null}
-          </View>
-          <View style={styles.right}>
-            <Switch
-              value={settings.shareToMyPulse}
-              onValueChange={(v) => onChange({ shareToMyPulse: v })}
-              trackColor={{ false: colors.dark.border, true: colors.primary.teal }}
-              thumbColor="#FFFFFF"
-            />
+            <View style={styles.right}>
+              <Switch
+                value={settings.shareToMyPulse}
+                onValueChange={(v) => onChange({ shareToMyPulse: v })}
+                trackColor={{ false: colors.dark.border, true: colors.primary.teal }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
           </View>
         </View>
-      </View>
+      ) : null}
 
       <SettingRow
         iconBg={`${colors.primary.royal}22`}

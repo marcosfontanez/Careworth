@@ -15,8 +15,8 @@ export function useLiveHubHome(tab: LiveHubCategoryTab) {
   return useQuery({
     queryKey: liveHubQueryKey(tab, viewerId),
     queryFn: () => fetchLiveHubHome(tab, viewerId),
-    staleTime: 5_000,
-    refetchInterval: 30_000,
+    staleTime: 8_000,
+    refetchInterval: 15_000,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,

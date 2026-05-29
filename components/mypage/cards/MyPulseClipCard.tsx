@@ -11,6 +11,7 @@ import { MyPulseCardShell } from './MyPulseCardShell';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { RecentMediaThumb, FeedGradeTintOverlay, feedGradeTintFromPost } from '@/components/mypage/RecentMediaThumb';
 import { postStaticImagePreviewUri } from '@/utils/postPreviewMedia';
+import { getFeedClipCompactBadgeLabel } from '@/lib/feedClipAttribution';
 
 interface Props {
   update: ProfileUpdate;
@@ -93,6 +94,8 @@ export function MyPulseClipCard({
     linkedPost?.type === 'video' ||
     (u.type === 'link_post' && linkedPost == null);
 
+  const clipBadgeLabel = linkedPost ? getFeedClipCompactBadgeLabel(linkedPost) : null;
+
   const metaBlock = (
     <View
       style={[
@@ -103,6 +106,12 @@ export function MyPulseClipCard({
       <Text style={styles.title} numberOfLines={3}>
         {headline}
       </Text>
+
+      {clipBadgeLabel ? (
+        <Text style={styles.clipAttribution} numberOfLines={1}>
+          {clipBadgeLabel}
+        </Text>
+      ) : null}
 
       {likes > 0 || comments > 0 ? (
         <View style={styles.engageRow}>
@@ -375,6 +384,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.dark.text,
     letterSpacing: -0.1,
+  },
+  clipAttribution: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    color: CLIP_ACCENT,
   },
   engageRow: {
     marginTop: 10,

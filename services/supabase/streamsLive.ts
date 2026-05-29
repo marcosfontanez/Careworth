@@ -1,4 +1,5 @@
 import { filterActiveLiveStreams } from '@/lib/live/activeLiveStreams';
+import { isLiveSceneMode, type LiveSceneMode } from '@/lib/live/liveSceneMode';
 import { supabase } from '@/lib/supabase';
 import type { CreatorSummary, LiveStream, StreamCategory } from '@/types';
 import {
@@ -33,7 +34,26 @@ function rowToStream(row: any): LiveStream {
     broadcastStartedAt: row.broadcast_started_at ?? undefined,
     hostLastSeenAt: row.host_last_seen_at ?? undefined,
     recordingEnabled: Boolean(row.recording_enabled),
+    viewerClipsAllowed: Boolean(row.viewer_clips_allowed),
+    requireHostApproval: row.require_host_approval !== false,
+    allowClipDownloads: Boolean(row.allow_clip_downloads),
+    sceneMode: isLiveSceneMode(row.scene_mode) ? row.scene_mode : 'live',
   };
+}
+
+export type LiveClipSettingsPatch = {
+  viewerClipsAllowed?: boolean;
+  requireHostApproval?: boolean;
+  allowClipDownloads?: boolean;
+};
+
+export type UpdateClipSettingsResult =
+  | { ok: true; viewerClipsAllowed?: boolean; requireHostApproval?: boolean; allowClipDownloads?: boolean }
+  | { ok: false; code: string };
+
+function isMissingClipSettingsRpc(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes('update_live_stream_clip_settings') && (m.includes('does not exist') || m.includes('schema cache'));
 }
 
 export type EndStreamResult =
@@ -199,16 +219,28 @@ export const streamsLiveService = {
   /** Host: first successful LiveKit publish — makes the stream discoverable as live. */
   async markBroadcastStarted(streamId: string): Promise<boolean> {
     if (!streamId) return false;
-    const now = new Date().toISOString();
-    const { error } = await (supabase.from('live_streams') as any)
-      .update({ broadcast_started_at: now, host_last_seen_at: now })
-      .eq('id', streamId)
-      .eq('status', 'live');
+    const { data, error } = await (supabase.rpc as any)('live_mark_broadcast_started', {
+      p_stream_id: streamId,
+    });
     if (error) {
+      if (isMissingRpcError(error.message)) {
+        const now = new Date().toISOString();
+        const { data: row, error: upErr } = await (supabase.from('live_streams') as any)
+          .update({ broadcast_started_at: now, host_last_seen_at: now })
+          .eq('id', streamId)
+          .eq('status', 'live')
+          .select('id')
+          .maybeSingle();
+        if (upErr) {
+          if (__DEV__) console.warn('[streamsLive.markBroadcastStarted.fallback]', upErr.message);
+          return false;
+        }
+        return Boolean(row?.id);
+      }
       if (__DEV__) console.warn('[streamsLive.markBroadcastStarted]', error.message);
       return false;
     }
-    return true;
+    return data === true;
   },
 
   /**
@@ -261,6 +293,20 @@ export const streamsLiveService = {
     });
     if (error) {
       if (__DEV__) console.warn('[streamsLive.touchAttendance]', error.message);
+      return null;
+    }
+    return typeof data === 'number' ? data : Number(data);
+  },
+
+  /** Viewer leave — decrements viewer_count when the room unmounts. */
+  async leaveAttendance(streamId: string): Promise<number | null> {
+    if (!streamId) return null;
+    const { data, error } = await (supabase.rpc as any)('live_leave_stream_attendance', {
+      p_stream_id: streamId,
+    });
+    if (error) {
+      if (isMissingRpcError(error.message)) return null;
+      if (__DEV__) console.warn('[streamsLive.leaveAttendance]', error.message);
       return null;
     }
     return typeof data === 'number' ? data : Number(data);
@@ -382,13 +428,102 @@ export const streamsLiveService = {
     return result;
   },
 
+  /** Host updates clip settings via RPC (migration 209). */
+  async updateClipSettings(
+    streamId: string,
+    patch: LiveClipSettingsPatch,
+  ): Promise<UpdateClipSettingsResult> {
+    if (!streamId) return { ok: false, code: 'invalid_stream' };
+
+    const args: Record<string, unknown> = { p_stream_id: streamId };
+    if (patch.viewerClipsAllowed !== undefined) {
+      args.p_viewer_clips_allowed = patch.viewerClipsAllowed;
+    }
+    if (patch.requireHostApproval !== undefined) {
+      args.p_require_host_approval = patch.requireHostApproval;
+    }
+    if (patch.allowClipDownloads !== undefined) {
+      args.p_allow_clip_downloads = patch.allowClipDownloads;
+    }
+
+    if (Object.keys(args).length === 1) {
+      return { ok: false, code: 'no_changes' };
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as (name: string, args: object) => ReturnType<typeof supabase.rpc>)(
+        'update_live_stream_clip_settings',
+        args,
+      );
+
+      if (error) {
+        const code = isMissingClipSettingsRpc(error.message) ? 'migration_required' : 'rpc_failed';
+        if (__DEV__) console.warn('[streamsLive.updateClipSettings]', error.message);
+        return { ok: false, code };
+      }
+
+      const row = data as {
+        ok?: boolean;
+        code?: string;
+        viewer_clips_allowed?: boolean;
+        require_host_approval?: boolean;
+        allow_clip_downloads?: boolean;
+      } | null;
+
+      if (!row?.ok) {
+        return { ok: false, code: row?.code ?? 'unknown' };
+      }
+
+      return {
+        ok: true,
+        viewerClipsAllowed: row.viewer_clips_allowed,
+        requireHostApproval: row.require_host_approval,
+        allowClipDownloads: row.allow_clip_downloads,
+      };
+    } catch (err) {
+      if (__DEV__) console.warn('[streamsLive.updateClipSettings]', err);
+      return { ok: false, code: 'unknown' };
+    }
+  },
+
+  /** @deprecated Prefer updateClipSettings */
+  async setViewerClipsAllowed(streamId: string, allowed: boolean): Promise<boolean> {
+    const result = await this.updateClipSettings(streamId, { viewerClipsAllowed: allowed });
+    return result.ok;
+  },
+
+  /** Host updates scene overlay — viewers sync via realtime + query invalidation. */
+  async setSceneMode(streamId: string, sceneMode: LiveSceneMode): Promise<boolean> {
+    if (!streamId) return false;
+    try {
+      const { error } = await (supabase.from('live_streams') as any)
+        .update({ scene_mode: sceneMode })
+        .eq('id', streamId)
+        .eq('status', 'live');
+
+      if (error) {
+        if (__DEV__) console.warn('[streamsLive.setSceneMode]', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (__DEV__) console.warn('[streamsLive.setSceneMode]', err);
+      return false;
+    }
+  },
+
   /**
-   * Subscribe to `live_streams` UPDATE events (status, broadcast_started_at, ended_at).
+   * Subscribe to `live_streams` UPDATE events (status, broadcast_started_at, ended_at, scene_mode).
    * Used for near-instant ended-state propagation without polling.
    */
   subscribeStatus(
     streamId: string,
-    onUpdate: (row: { status?: string; broadcast_started_at?: string | null; ended_at?: string | null }) => void,
+    onUpdate: (row: {
+      status?: string;
+      broadcast_started_at?: string | null;
+      ended_at?: string | null;
+      scene_mode?: LiveSceneMode;
+    }) => void,
   ): () => void {
     if (!streamId) return () => {};
 
@@ -414,6 +549,7 @@ export const streamsLiveService = {
               row.ended_at === null || typeof row.ended_at === 'string'
                 ? (row.ended_at as string | null)
                 : undefined,
+            scene_mode: isLiveSceneMode(row.scene_mode) ? row.scene_mode : undefined,
           });
         },
       )

@@ -48,6 +48,9 @@ function rowToProfile(row: any): UserProfile {
       ? (row.identity_tags as string[]).map((s) => String(s).trim()).filter(Boolean)
       : undefined,
     hidePulseMusicPlayerOnMyPage: Boolean(row.hide_pulse_music_player_on_my_page),
+    defaultAllowViewerClips: row.default_allow_viewer_clips !== false,
+    defaultAllowRemix: row.default_allow_remix !== false,
+    defaultAllowClipDownloads: row.default_allow_clip_downloads === true,
     /**
      * Denormalized Pulse Score v2 columns (see migration 059). Falls
      * back to `'murmur'` / 0 for rows written before the trigger
@@ -121,6 +124,9 @@ export const profilesService = {
     profile_song_artwork_url: string | null;
     identity_tags?: string[] | null;
     hide_pulse_music_player_on_my_page?: boolean;
+    default_allow_viewer_clips?: boolean;
+    default_allow_remix?: boolean;
+    default_allow_clip_downloads?: boolean;
     terms_and_privacy_accepted_at?: string | null;
   }>) {
     const qb = supabase.from('profiles') as any;

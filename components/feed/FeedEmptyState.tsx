@@ -1,38 +1,65 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '@/theme';
+import { View, StyleSheet } from 'react-native';
+import { PulseEmptyState } from '@/components/ui/pulse/PulseEmptyState';
+import { pulseColors } from '@/lib/theme/pulseTheme';
+import type { FeedType } from '@/types';
 
 type Props = {
   height: number;
+  tab: FeedType;
+  onExplore?: () => void;
 };
 
-/** Full-viewport empty state over black video canvas — typography aligned with PulseVerse dark UI */
-export function FeedEmptyState({ height }: Props) {
+const COPY: Partial<
+  Record<
+    FeedType,
+    { icon: React.ComponentProps<typeof PulseEmptyState>['icon']; title: string; message: string; cta?: string }
+  >
+> = {
+  forYou: {
+    icon: 'pulse-outline',
+    title: 'Your Pulse is warming up',
+    message: 'Follow creators, join Circles, or post your first video.',
+    cta: 'Explore',
+  },
+  following: {
+    icon: 'people-outline',
+    title: 'Build your Feed',
+    message: 'Follow healthcare creators to see their latest clips here.',
+    cta: 'Find creators',
+  },
+  topToday: {
+    icon: 'trending-up-outline',
+    title: 'No trending videos yet',
+    message: 'Be the first to start today\u2019s Pulse.',
+  },
+};
+
+/** Full-viewport empty state over the feed video canvas — tab-aware PulseVerse copy. */
+export function FeedEmptyState({ height, tab, onExplore }: Props) {
+  const copy = COPY[tab] ?? COPY.forYou!;
+
   return (
     <View style={[styles.wrap, { height }]}>
-      <Ionicons name="newspaper-outline" size={48} color={colors.feed.emptyIcon} />
-      <Text style={styles.title}>No posts yet</Text>
-      <Text style={styles.sub}>Be the first to share something.</Text>
+      <PulseEmptyState
+        icon={copy.icon}
+        title={copy.title}
+        message={copy.message}
+        actionLabel={copy.cta && onExplore ? copy.cta : undefined}
+        onAction={copy.cta && onExplore ? onExplore : undefined}
+        style={styles.inner}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
+    backgroundColor: pulseColors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
   },
-  title: {
-    ...typography.h3,
-    color: colors.dark.text,
-    textAlign: 'center',
-  },
-  sub: {
-    ...typography.bodySmall,
-    color: colors.feed.emptySubtext,
-    textAlign: 'center',
+  inner: {
+    paddingVertical: 0,
   },
 });

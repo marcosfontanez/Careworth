@@ -21,7 +21,10 @@ type Props = {
   onChangeInput: (text: string) => void;
   onSend: () => void;
   onUnpin: () => void;
+  onPinMessage?: (msg: StreamMessage) => void;
   onMessageLongPress: (msg: StreamMessage) => void;
+  /** Tap a chat author name → open their Pulse Page. */
+  onPressUser?: (msg: StreamMessage) => void;
   onLaunchPoll?: () => void;
   chatBlocked?: boolean;
   chatSending?: boolean;
@@ -38,7 +41,9 @@ export function LiveChatPanel({
   onChangeInput,
   onSend,
   onUnpin,
+  onPinMessage,
   onMessageLongPress,
+  onPressUser,
   onLaunchPoll,
   chatBlocked = false,
   chatSending = false,
@@ -56,7 +61,9 @@ export function LiveChatPanel({
           isHost
           currentUserId={currentUserId}
           onUnpin={onUnpin}
+          onPinMessage={onPinMessage}
           onMessageLongPress={onMessageLongPress}
+          onPressUser={onPressUser}
           embedded={fillAvailable || listHeight < 320}
         />
       </View>

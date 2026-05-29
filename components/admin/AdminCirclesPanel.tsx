@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { colors } from '@/theme';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { communitiesService } from '@/services/supabase';
+import { circleModerationService } from '@/services/supabase/circleModeration';
 import { adminCirclesService, normalizeCommunitySlug } from '@/services/adminCircles';
 import { communityKeys } from '@/lib/queryKeys';
 import type { Community } from '@/types';
@@ -49,6 +50,9 @@ export function AdminCirclesPanel() {
   const [recentPosts, setRecentPosts] = useState<{ id: string; caption: string | null }[]>([]);
   const [pinsLoading, setPinsLoading] = useState(false);
   const [postIdInput, setPostIdInput] = useState('');
+  const [moderators, setModerators] = useState<Awaited<ReturnType<typeof circleModerationService.listModerators>>>([]);
+  const [modUserIdInput, setModUserIdInput] = useState('');
+  const [modsLoading, setModsLoading] = useState(false);
 
   const loadCommunities = useCallback(async () => {
     const list = await communitiesService.getAll();
@@ -85,16 +89,19 @@ export function AdminCirclesPanel() {
     if (!selectedCommunityId) {
       setPins([]);
       setRecentPosts([]);
+      setModerators([]);
       return;
     }
     setPinsLoading(true);
     try {
-      const [pinRows, posts] = await Promise.all([
+      const [pinRows, posts, mods] = await Promise.all([
         adminCirclesService.listPins(selectedCommunityId),
         adminCirclesService.listRecentPostIds(selectedCommunityId),
+        circleModerationService.listModerators(selectedCommunityId),
       ]);
       setPins(pinRows);
       setRecentPosts(posts);
+      setModerators(mods);
     } catch (e: any) {
       toast.show(e?.message ?? 'Failed to load pins', 'error');
     } finally {
@@ -111,6 +118,40 @@ export function AdminCirclesPanel() {
     queryClient.invalidateQueries({ queryKey: communityKeys.circlesHome() });
     queryClient.invalidateQueries({ queryKey: communityKeys.circlesDirectoryAlpha() });
   }, [queryClient]);
+
+  const addModerator = async () => {
+    if (!selectedCommunityId) return;
+    const uid = modUserIdInput.trim();
+    if (!uid) {
+      toast.show('Enter a user profile UUID', 'info');
+      return;
+    }
+    setModsLoading(true);
+    try {
+      await circleModerationService.addModerator(selectedCommunityId, uid);
+      setModUserIdInput('');
+      await loadPinsForSelection();
+      toast.show('Moderator added', 'success');
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Could not add moderator', 'error');
+    } finally {
+      setModsLoading(false);
+    }
+  };
+
+  const removeModerator = async (userId: string) => {
+    if (!selectedCommunityId) return;
+    setModsLoading(true);
+    try {
+      await circleModerationService.removeModerator(selectedCommunityId, userId);
+      await loadPinsForSelection();
+      toast.show('Moderator removed', 'success');
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Could not remove moderator', 'error');
+    } finally {
+      setModsLoading(false);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -400,6 +441,49 @@ export function AdminCirclesPanel() {
               </View>
             ))
           )}
+
+          <Text style={styles.subheading}>Circle moderators</Text>
+          <Text style={styles.hint}>
+            Global admins only. Moderators can hide/remove threads and replies in this Circle.
+          </Text>
+          {moderators.length === 0 ? (
+            <Text style={styles.empty}>No moderators assigned.</Text>
+          ) : (
+            moderators.map((m) => (
+              <View key={m.id} style={styles.postRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.postCaption} numberOfLines={1}>
+                    {m.profile?.displayName ?? 'Member'}
+                  </Text>
+                  <Text style={styles.postMeta} numberOfLines={1}>
+                    {m.userId} · {m.role}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.smallBtn}
+                  onPress={() => void removeModerator(m.userId)}
+                  disabled={modsLoading}
+                >
+                  <Text style={styles.smallBtnText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+          <View style={styles.row}>
+            <AccentComposerFrame accentColor={colors.primary.teal} hint="User profile UUID" compact noShadow style={{ flex: 1 }}>
+              <TextInput
+                style={styles.inputPlain}
+                placeholder="User profile UUID"
+                placeholderTextColor={colors.neutral.midGray}
+                value={modUserIdInput}
+                onChangeText={setModUserIdInput}
+                autoCapitalize="none"
+              />
+            </AccentComposerFrame>
+            <TouchableOpacity style={styles.smallPrimary} onPress={() => void addModerator()} disabled={modsLoading}>
+              <Text style={styles.smallPrimaryText}>Add</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.subheading}>Pin by post ID</Text>
           <View style={styles.row}>

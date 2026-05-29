@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,7 @@ import { PulseScorePill } from '@/components/mypage/PulseScorePill';
 import type { Post } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
+import { FeedClipAttributionBadge } from '@/components/feed/FeedClipAttributionBadge';
 import { avatarThumb } from '@/lib/storage';
 import { usePulseScorePillModel } from '@/hooks/usePulseScorePillModel';
 import { userKeys } from '@/lib/queryKeys';
@@ -236,7 +238,7 @@ export default function CreatorVideosGridScreen() {
           ) : (
             <>
               <TouchableOpacity
-                onPress={() => router.push(`/profile/${creatorId}` as any)}
+                onPress={() => openPulsePage(router, creatorId)}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${profile?.displayName?.trim() ?? 'profile'} on My Pulse`}
@@ -349,6 +351,7 @@ export default function CreatorVideosGridScreen() {
                   style={styles.thumb}
                   preferStaticAndroidVideoTile={Platform.OS === 'android'}
                 />
+                <FeedClipAttributionBadge post={p} />
                 <LinearGradient
                   colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.9)']}
                   style={styles.thumbGrad}

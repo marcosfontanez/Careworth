@@ -4,7 +4,6 @@ import {
   Flame,
   MessageSquare,
   Radio,
-  ScreenShare,
   Users,
   Video,
 } from "lucide-react";
@@ -44,7 +43,7 @@ export function FeatureLiveLanding() {
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
               Discover what&apos;s live right now — Featured Live, Top Live Now, Rising Lives, and browse by topic — with
-              HD video, respectful chat, and moderation built for licensed healthcare audiences.
+              HD video, respectful chat, Q&amp;A, and RSVP push alerts when hosts you follow go live.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
@@ -61,8 +60,8 @@ export function FeatureLiveLanding() {
               {[
                 { icon: Video, label: "HD video & audio" },
                 { icon: MessageSquare, label: "Live chat & Q&A" },
-                { icon: ScreenShare, label: "Screen share" },
-                { icon: Users, label: "Guest co-hosts" },
+                { icon: Radio, label: "RSVP go-live alerts" },
+                { icon: Users, label: "Real-time viewer count" },
               ].map(({ icon: Icon, label }) => (
                 <span key={label} className="flex items-center gap-2">
                   <Icon className="h-4 w-4 text-primary" />
@@ -232,11 +231,10 @@ export function FeatureLiveLanding() {
 
         <div className="mt-14 flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-white/10 bg-white/3 px-6 py-8 sm:gap-10">
           {[
-            { bold: "25K+", sub: "Live sessions hosted" },
-            { bold: "3.7M+", sub: "Live views" },
-            { bold: "850K+", sub: "Healthcare professionals" },
-            { bold: "190+", sub: "Countries reached" },
-            { bold: "96%", sub: "Would recommend Live" },
+            { bold: "Live now", sub: "Featured, Top Live, Rising, and topic browse in the app" },
+            { bold: "Remind Me", sub: "Push + in-app alert when a scheduled host goes live" },
+            { bold: "Host tools", sub: "Polls, Q&A, gifts, pin/remove chat, and stream health" },
+            { bold: "Clip highlights", sub: "When recording is enabled — mark moments and publish clips" },
           ].map((x) => (
             <div key={x.sub} className="text-center">
               <p className="text-lg font-bold text-foreground sm:text-xl">{x.bold}</p>

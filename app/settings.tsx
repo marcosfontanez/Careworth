@@ -282,6 +282,75 @@ export default function SettingsScreen() {
           />
         </View>
 
+        <Text style={styles.sectionTitle}>Creator defaults</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="cut-outline"
+            label="Allow clips on new public videos"
+            subtitle="Let others create short clips from your public videos with attribution."
+            right={
+              <Switch
+                value={profile?.defaultAllowViewerClips !== false}
+                onValueChange={async (on) => {
+                  if (!user) return;
+                  try {
+                    await profilesService.update(user.id, { default_allow_viewer_clips: on });
+                    await refreshProfile();
+                    toast.show(on ? 'Clips allowed by default' : 'Clips off by default', 'success');
+                  } catch (err: any) {
+                    toast.show(err?.message ?? 'Could not update setting', 'error');
+                  }
+                }}
+                trackColor={{ true: colors.primary.teal }}
+              />
+            }
+          />
+          <View style={styles.divider} />
+          <SettingRow
+            icon="sparkles-outline"
+            label="Allow remix on new public videos"
+            subtitle="Let others duet, stitch, or use sound from your public videos."
+            right={
+              <Switch
+                value={profile?.defaultAllowRemix !== false}
+                onValueChange={async (on) => {
+                  if (!user) return;
+                  try {
+                    await profilesService.update(user.id, { default_allow_remix: on });
+                    await refreshProfile();
+                    toast.show(on ? 'Remix allowed by default' : 'Remix off by default', 'success');
+                  } catch (err: any) {
+                    toast.show(err?.message ?? 'Could not update setting', 'error');
+                  }
+                }}
+                trackColor={{ true: colors.primary.teal }}
+              />
+            }
+          />
+          <View style={styles.divider} />
+          <SettingRow
+            icon="download-outline"
+            label="Allow downloads on new public videos"
+            subtitle="Let others save your public videos outside PulseVerse."
+            right={
+              <Switch
+                value={profile?.defaultAllowClipDownloads === true}
+                onValueChange={async (on) => {
+                  if (!user) return;
+                  try {
+                    await profilesService.update(user.id, { default_allow_clip_downloads: on });
+                    await refreshProfile();
+                    toast.show(on ? 'Downloads allowed by default' : 'Downloads off by default', 'success');
+                  } catch (err: any) {
+                    toast.show(err?.message ?? 'Could not update setting', 'error');
+                  }
+                }}
+                trackColor={{ true: colors.primary.teal }}
+              />
+            }
+          />
+        </View>
+
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.card}>
           <SettingRow

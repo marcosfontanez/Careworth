@@ -1,0 +1,34 @@
+---
+description: Retiring Pulse Shop borders — archive in Retired tab, block new purchases
+alwaysApply: true
+---
+
+# Border retirement (Pulse Shop)
+
+When a border leaves the active shelf, **do not delete** `shop_items` rows. Retire them so:
+
+1. **No new acquisition** — not purchasable, giftable, or free-claimable.
+2. **Retired tab browse** — still visible in Pulse Shop → Borders → **Retired** so users can see past drops they missed.
+
+## Required DB flags (migration)
+
+On retire, set on `shop_items`:
+
+- `is_active = false`, `is_retired = true`, `availability_status = 'retired'`
+- `is_shop_item = false`, `is_giftable = false`
+- `metadata.retired_catalog_visible = true` (**required** for Retired tab)
+- If it was free-in-shop: `metadata.free_in_shop = false`
+- Clear store SKUs when delisting IAP: `store_product_id_ios/android = null`
+
+See **`supabase/BORDER_CATALOG.md`** § *Retiring shop borders* for the SQL template.
+
+## Do not use for
+
+Leaderboard / earned-only borders (`is_earned_only`, `leaderboard_reward`) — never add `retired_catalog_visible`; they were not shop drops.
+
+## App behavior (already wired)
+
+- Active catalog: `shopQueriesService.getActiveCatalog()` — `is_active = true` only
+- Retired tab: `getRetiredBorders()` — `metadata.retired_catalog_visible = true`
+- UI lock: `resolveBorderPrimaryCta` → `locked` / reason `retired` (no buy/claim)
+- Owners: inventory + equip unchanged; card shows **Owned**

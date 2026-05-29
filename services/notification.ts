@@ -2,6 +2,10 @@ import type { NotificationItem, CreatorSummary } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { getMutedCommunityIds } from '@/lib/circleExperience';
 import {
+  finalizeNotificationsForViewer,
+  anonymousNotificationActor,
+} from '@/lib/notificationPrivacy';
+import {
   profileRowToCreatorSummary,
   unknownCreatorSummary,
   PROFILE_SELECT_CREATOR_WITH_FRAME,
@@ -10,7 +14,9 @@ import {
 function rowToNotification(row: any): NotificationItem {
   const actor: CreatorSummary = row.actor_profile
     ? profileRowToCreatorSummary(row.actor_profile)
-    : unknownCreatorSummary(row.actor_id ?? '');
+    : row.actor_id
+      ? unknownCreatorSummary(row.actor_id)
+      : anonymousNotificationActor();
 
   return {
     id: row.id,
@@ -38,12 +44,21 @@ async function resolveViewerId(explicit?: string | null): Promise<string | null>
   return user?.id ?? null;
 }
 
+async function resolveConfessionsCommunityId(): Promise<string | null> {
+  const { data } = await supabase.from('communities').select('id').eq('slug', 'confessions').maybeSingle();
+  return data?.id ?? null;
+}
+
 export const notificationService = {
   /**
    * Pass `viewerId` from `useAuth().user.id` to skip an extra `getUser()` round-trip.
    */
   async getAll(viewerId?: string | null): Promise<NotificationItem[]> {
-    const [uid, muted] = await Promise.all([resolveViewerId(viewerId), getMutedCommunityIds()]);
+    const [uid, muted, confessionsCommunityId] = await Promise.all([
+      resolveViewerId(viewerId),
+      getMutedCommunityIds(),
+      resolveConfessionsCommunityId(),
+    ]);
     if (!uid) return [];
 
     const { data, error } = await supabase
@@ -56,7 +71,10 @@ export const notificationService = {
       .limit(50);
 
     if (error || !data) return [];
-    return data.map(rowToNotification).filter((n) => notificationPassesLocalMute(n, muted));
+    return finalizeNotificationsForViewer(data.map(rowToNotification), {
+      confessionsCommunityId,
+      viewerId: uid,
+    }).filter((n) => notificationPassesLocalMute(n, muted));
   },
 
   async getUnreadCount(viewerId?: string | null): Promise<number> {

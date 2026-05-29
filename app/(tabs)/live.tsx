@@ -31,6 +31,7 @@ import type { LiveHubCategoryTab, LiveHubStream } from '@/types/liveHub';
 import {
   HubCircleLiveCard,
   HubShopLiveCard,
+  HubTrendingCard,
   HubUpcomingSessionCard,
   LiveHubCategoryBar,
   StartLivePromoCard,
@@ -40,7 +41,7 @@ import { LiveHubHeader } from '@/components/live/hub/LiveHubHeader';
 import { heroCategoryLabel } from '@/components/live/hub/liveHubHeroCategory';
 import { LiveHubSkeleton } from '@/components/live/hub/LiveHubSkeleton';
 import { HappeningNowEmptyState } from '@/components/live/hub/HappeningNowEmptyState';
-import { filterActiveLiveStreams } from '@/lib/live/activeLiveStreams';
+import { filterActiveLiveStreams, useLiveDiscoveryStaleTick } from '@/lib/live/activeLiveStreams';
 import { useLiveHubRealtimeRefresh } from '@/hooks/useLiveHubRealtimeRefresh';
 import { useToast } from '@/components/ui/Toast';
 import type { LiveStream } from '@/types';
@@ -103,18 +104,37 @@ function LiveHubScreen() {
   const hubScrollRef = useRef<ScrollView>(null);
   const shopDealsSectionY = useRef(0);
   const upcomingSectionY = useRef(0);
+  const trendingSectionY = useRef(0);
   const pendingScrollToSection = useRef<LiveHubSection | null>(null);
   const featuredSectionY = useRef(0);
   const [headerCompact, setHeaderCompact] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [tab, setTab] = useState<LiveHubCategoryTab>('for-you');
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useLiveHubHome(tab);
 
   useLiveHubRealtimeRefresh(!isLoading && !isError);
 
+  const staleTick = useLiveDiscoveryStaleTick();
+
   const happeningNow = useMemo(
-    () => filterActiveLiveStreams(data?.featured ?? []),
-    [data?.featured],
+    () => filterActiveLiveStreams(data?.happeningNow ?? []),
+    [data?.happeningNow, staleTick],
+  );
+
+  const trendingLive = useMemo(
+    () => filterActiveLiveStreams(data?.trending ?? []),
+    [data?.trending, staleTick],
+  );
+
+  const shopLiveDeals = useMemo(
+    () => filterActiveLiveStreams(data?.shopLiveDeals ?? []),
+    [data?.shopLiveDeals, staleTick],
+  );
+
+  const circleLives = useMemo(
+    () => filterActiveLiveStreams(data?.circleLives ?? []),
+    [data?.circleLives, staleTick],
   );
 
   useFocusEffect(
@@ -150,6 +170,8 @@ function LiveHubScreen() {
       const inset = sectionForTimeout === 'featured' ? spacing.sm : spacing.md;
       if (sectionForTimeout === 'featured' || sectionForTimeout === 'discover') {
         y = featuredSectionY.current;
+      } else if (sectionForTimeout === 'trending') {
+        y = trendingSectionY.current;
       } else if (sectionForTimeout === 'shop') {
         y = shopDealsSectionY.current;
       } else if (sectionForTimeout === 'upcoming') {
@@ -185,7 +207,10 @@ function LiveHubScreen() {
     return hub.promoTag?.trim() || 'Live Deal';
   }, []);
 
-  const upcomingPreview = useMemo(() => (data?.upcoming ?? []).slice(0, 12), [data?.upcoming]);
+  const upcomingPreview = useMemo(() => {
+    const list = data?.upcoming ?? [];
+    return showAllUpcoming ? list : list.slice(0, 12);
+  }, [data?.upcoming, showAllUpcoming]);
 
   const emptyFollowing = tab === 'following' && (data?.allFiltered.length ?? 0) === 0;
 
@@ -195,6 +220,28 @@ function LiveHubScreen() {
       animated: true,
     });
   }, []);
+
+  const scrollToHubSection = useCallback(
+    (section: LiveHubSection) => {
+      pendingScrollToSection.current = section;
+      const inset = section === 'featured' ? spacing.sm : spacing.md;
+      let y = 0;
+      if (section === 'featured' || section === 'discover') {
+        y = featuredSectionY.current;
+      } else if (section === 'trending') {
+        y = trendingSectionY.current;
+      } else if (section === 'shop') {
+        y = shopDealsSectionY.current;
+      } else if (section === 'upcoming') {
+        y = upcomingSectionY.current;
+      }
+      if (y > 0) {
+        pendingScrollToSection.current = null;
+        scrollToSectionY(y, inset);
+      }
+    },
+    [scrollToSectionY],
+  );
 
   const tryConsumePendingScrollForSection = useCallback(
     (sec: LiveHubSection, layoutY: number) => {
@@ -220,12 +267,14 @@ function LiveHubScreen() {
     setHeaderCompact(y > 48);
   }, []);
 
-  const viewAllHint = useCallback(
-    (msg: string) => {
-      showToast(msg, 'info');
-    },
-    [showToast],
-  );
+  const viewAllTrending = useCallback(() => {
+    scrollToHubSection('trending');
+  }, [scrollToHubSection]);
+
+  const viewAllUpcoming = useCallback(() => {
+    setShowAllUpcoming(true);
+    scrollToHubSection('upcoming');
+  }, [scrollToHubSection]);
 
   return (
     <SafeAreaView style={styles.safeRoot} edges={['top']}>
@@ -292,8 +341,8 @@ function LiveHubScreen() {
                 leading={<Ionicons name="radio" size={16} color={colors.status.live} />}
                 style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
                 rightSlot={
-                  happeningNow.length > 0 ? (
-                    <Pressable onPress={() => viewAllHint('Switch tabs above to explore more live rooms.')} hitSlop={8}>
+                  happeningNow.length > 0 && trendingLive.length > 0 ? (
+                    <Pressable onPress={viewAllTrending} hitSlop={8}>
                       <Text style={styles.viewAllLink}>View all</Text>
                     </Pressable>
                   ) : null
@@ -317,8 +366,38 @@ function LiveHubScreen() {
               ) : null}
             </View>
 
+            {trendingLive.length > 0 ? (
+              <View
+                style={styles.section}
+                collapsable={false}
+                onLayout={(e) => {
+                  const y = e.nativeEvent.layout.y;
+                  trendingSectionY.current = y;
+                  tryConsumePendingScrollForSection('trending', y);
+                }}
+              >
+                <PVSectionHeader
+                  kicker="Discover"
+                  title="More Live Rooms"
+                  subtitle="Browse other broadcasts happening right now."
+                  leading={<Ionicons name="flame-outline" size={16} color={colors.primary.teal} />}
+                  style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
+                />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.hubHorizScroll}
+                  contentContainerStyle={styles.hubHorizScrollContent}
+                >
+                  {trendingLive.map((s) => (
+                    <HubTrendingCard key={s.id} stream={s} onPress={() => openStream(s)} />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
             {/* 2. Shop Live */}
-            {data.shopLiveDeals.length > 0 ? (
+            {shopLiveDeals.length > 0 ? (
               <View
                 style={styles.section}
                 collapsable={false}
@@ -342,7 +421,7 @@ function LiveHubScreen() {
                   style={styles.hubHorizScroll}
                   contentContainerStyle={styles.hubHorizScrollContent}
                 >
-                  {data.shopLiveDeals.map((s) => (
+                  {shopLiveDeals.map((s) => (
                     <HubShopLiveCard key={s.id} stream={s} onPress={() => openStream(s)} />
                   ))}
                 </ScrollView>
@@ -350,7 +429,7 @@ function LiveHubScreen() {
             ) : null}
 
             {/* 3. From Your Circles */}
-            {data.circleLives.length > 0 ? (
+            {circleLives.length > 0 ? (
               <View style={styles.section}>
                 <PVSectionHeader
                   kicker="Circles"
@@ -370,7 +449,7 @@ function LiveHubScreen() {
                   style={styles.hubHorizScroll}
                   contentContainerStyle={styles.hubHorizScrollContent}
                 >
-                  {data.circleLives.map((s) => (
+                  {circleLives.map((s) => (
                     <HubCircleLiveCard key={s.id} stream={s} onPress={() => openStream(s)} />
                   ))}
                 </ScrollView>
@@ -395,8 +474,8 @@ function LiveHubScreen() {
                   leading={<Ionicons name="calendar" size={16} color={pulseverse.electric} />}
                   style={[styles.pvSectionPad, styles.pvHeaderBreathing]}
                   rightSlot={
-                    (data?.upcoming?.length ?? 0) > upcomingPreview.length ? (
-                      <Pressable onPress={() => viewAllHint('Full schedule view — coming soon.')} hitSlop={8}>
+                    !showAllUpcoming && (data?.upcoming?.length ?? 0) > upcomingPreview.length ? (
+                      <Pressable onPress={viewAllUpcoming} hitSlop={8}>
                         <Text style={styles.viewAllLink}>View all sessions</Text>
                       </Pressable>
                     ) : null
@@ -409,10 +488,11 @@ function LiveHubScreen() {
                   contentContainerStyle={styles.hubHorizScrollContentUpcoming}
                 >
                   {upcomingPreview.map((ev) => (
-                    <Pressable key={ev.id} onPress={() => router.push(liveStreamHref(ev.id))}>
-                      <HubUpcomingSessionCard
-                        ev={ev}
-                        onRsvp={async () => {
+                    <HubUpcomingSessionCard
+                      key={ev.id}
+                      ev={ev}
+                      onOpenSession={() => router.push(liveStreamHref(ev.id))}
+                      onRsvp={async () => {
                           if (!user?.id) {
                             showToast('Sign in to save reminders.', 'info');
                             return;
@@ -427,7 +507,7 @@ function LiveHubScreen() {
                             await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
                             showToast(
                               next
-                                ? 'Reminder saved. Push at go-live is not wired yet — watch Upcoming on Live.'
+                                ? 'Reminder saved — we\u2019ll notify you when they go live.'
                                 : 'Reminder removed.',
                               'success',
                             );
@@ -436,7 +516,6 @@ function LiveHubScreen() {
                           }
                         }}
                       />
-                    </Pressable>
                   ))}
                 </ScrollView>
               </View>

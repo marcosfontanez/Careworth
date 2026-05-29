@@ -12,6 +12,7 @@ import { colors, layout, spacing, typography } from '@/theme';
 import type { Post } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { getHashtagPostRowListWindow } from '@/lib/feedVideoListWindow';
+import { resolvePostViewerHref } from '@/lib/postViewerRoute';
 
 const HASHTAG_LIST_WINDOW = getHashtagPostRowListWindow();
 
@@ -39,7 +40,7 @@ export default function HashtagPostsScreen() {
       <TouchableOpacity
         style={styles.row}
         activeOpacity={0.85}
-        onPress={() => router.push(`/post/${item.id}`)}
+        onPress={() => router.push(resolvePostViewerHref(item))}
       >
         {thumb ? (
           <Image

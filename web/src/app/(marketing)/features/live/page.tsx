@@ -12,7 +12,7 @@ export default function LiveFeaturePage() {
       <FeatureLiveLanding />
       <CtaSection
         title="Your knowledge can change lives."
-        description="Discover and host Live with Featured, Top Live Now, Rising Lives, and topic browse — plus moderation that respects how clinicians teach."
+        description="Discover and host Live with Featured, Top Live Now, Rising Lives, and topic browse — plus RSVP go-live alerts and host moderation tools that respect how clinicians teach."
         primaryHref="/download"
         primaryLabel="Go Live now"
         secondaryHref="/contact"

@@ -15,7 +15,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useQueryClient } from '@tanstack/react-query';
+import { pushPostViewer } from '@/lib/postViewerRoute';
 import { colors, borderRadius, spacing, pulseverse, gradients } from '@/theme';
 import type {
   BorderRewardMetadata,
@@ -608,7 +610,7 @@ export function RewardRevealModal({ visible, delivery, onDismiss, onAcknowledge 
                           activeOpacity={0.88}
                           onPress={() => {
                             trackRevealCta('view_post');
-                            router.push(`/post/${postCtxId}` as any);
+                            void pushPostViewer(router, postCtxId);
                             void closeModal('acknowledged');
                           }}
                           style={styles.secondaryBtn}
@@ -621,7 +623,7 @@ export function RewardRevealModal({ visible, delivery, onDismiss, onAcknowledge 
                           activeOpacity={0.88}
                           onPress={() => {
                             trackRevealCta('view_profile');
-                            router.push(`/profile/${profileCtxId}` as any);
+                            openPulsePage(router, profileCtxId);
                             void closeModal('acknowledged');
                           }}
                           style={styles.secondaryBtn}

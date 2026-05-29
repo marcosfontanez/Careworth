@@ -7,6 +7,7 @@ node_modules/
 .eas-inspect-out/
 .expo/
 dist/
+dist-verify/
 dist-web-test/
 dist-web-test2/
 web-build/

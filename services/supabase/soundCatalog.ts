@@ -30,8 +30,8 @@ export const soundCatalogService = {
   }): Promise<string> {
     const { data, error } = await supabase.rpc('admin_upsert_sound_catalog', {
       p_post_id: params.postId.trim(),
-      p_artist: params.artist?.trim() || null,
-      p_keywords: params.keywords?.trim() || null,
+      p_artist: params.artist?.trim() || undefined,
+      p_keywords: params.keywords?.trim() || undefined,
       p_sort_boost: params.sortBoost ?? 1000,
       p_is_active: params.isActive ?? true,
     });

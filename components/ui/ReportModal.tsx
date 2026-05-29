@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Modal,
   TextInput,
@@ -31,15 +31,30 @@ const REASONS = [
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  targetType: 'post' | 'comment' | 'profile' | 'circle_thread' | 'live_stream' | 'stream_message';
+  targetType: 'post' | 'comment' | 'profile' | 'circle_thread' | 'circle_reply' | 'live_stream' | 'stream_message';
   targetId: string;
 }
 
+function targetLabel(
+  targetType: ReportModalProps['targetType'],
+): string {
+  switch (targetType) {
+    case 'circle_thread':
+      return 'discussion';
+    case 'circle_reply':
+      return 'reply';
+    case 'live_stream':
+      return 'live stream';
+    case 'stream_message':
+      return 'chat message';
+    default:
+      return targetType;
+  }
+}
+
 /**
- * Report flow — previously a white sheet in an otherwise dark app. Now
- * matches the rest of the product's bottom-sheet language (dark card
- * surface, `typography` tokens, `borderRadius.sheet`, shared Button
- * primitive for the submit CTA). Behaviour and copy unchanged.
+ * Report flow — bottom sheet with a pinned submit bar so reason picks and
+ * the CTA stay reachable over full-screen feed video.
  */
 export function ReportModal({ visible, onClose, targetType, targetId }: ReportModalProps) {
   const insets = useSafeAreaInsets();
@@ -48,6 +63,14 @@ export function ReportModal({ visible, onClose, targetType, targetId }: ReportMo
   const [reason, setReason] = useState<string | null>(null);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setReason(null);
+      setDetails('');
+      setSubmitting(false);
+    }
+  }, [visible]);
 
   const handleSubmit = async () => {
     if (!reason || !user) return;
@@ -62,8 +85,6 @@ export function ReportModal({ visible, onClose, targetType, targetId }: ReportMo
       });
       if (error) throw error;
       Alert.alert('Report submitted', 'Thank you. Our team will review this content.');
-      setReason(null);
-      setDetails('');
       onClose();
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Failed to submit report.');
@@ -72,118 +93,148 @@ export function ReportModal({ visible, onClose, targetType, targetId }: ReportMo
     }
   };
 
-  const sheetPadBottom = Math.max(insets.bottom, spacing['3xl']);
+  const sheetMaxHeight = Math.round(windowHeight * 0.78);
+  const footerPadBottom = Math.max(insets.bottom, spacing.md);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.keyboardRoot}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        enabled
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+    >
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss report form"
       >
-        <ScrollView
-          style={styles.scrollFill}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          contentContainerStyle={styles.scrollContent}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardWrap}
+          pointerEvents="box-none"
         >
-          <View
-            style={[
-              styles.sheet,
-              { paddingBottom: sheetPadBottom, maxHeight: Math.round(windowHeight * 0.92) },
-            ]}
+          <Pressable
+            style={[styles.sheet, { maxHeight: sheetMaxHeight }]}
+            onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.handle} />
+
             <View style={styles.header}>
-              <Text style={styles.title}>
-                Report{' '}
-                {targetType === 'circle_thread' ? 'discussion' : targetType}
-              </Text>
-              <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={10}>
+              <Text style={styles.title}>Report {targetLabel(targetType)}</Text>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Close report form"
+                style={styles.closeBtn}
+              >
                 <Ionicons name="close" size={22} color={colors.dark.textMuted} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <Text style={styles.subtitle}>Why are you reporting this?</Text>
 
-            {REASONS.map((r) => {
-              const active = reason === r.key;
-              return (
-                <TouchableOpacity
-                  key={r.key}
-                  style={[styles.reasonRow, active && styles.reasonActive]}
-                  onPress={() => setReason(r.key)}
-                  activeOpacity={0.75}
+            <ScrollView
+              style={styles.scrollBody}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="always"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {REASONS.map((r) => {
+                const active = reason === r.key;
+                return (
+                  <Pressable
+                    key={r.key}
+                    style={({ pressed }) => [
+                      styles.reasonRow,
+                      active ? styles.reasonActive : styles.reasonIdle,
+                      pressed ? styles.reasonPressed : null,
+                    ]}
+                    onPress={() => setReason(r.key)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={r.label}
+                  >
+                    <View style={[styles.reasonIconWrap, active && styles.reasonIconWrapActive]}>
+                      <Ionicons
+                        name={r.icon as any}
+                        size={20}
+                        color={active ? colors.primary.teal : colors.dark.textMuted}
+                      />
+                    </View>
+                    <Text style={[styles.reasonText, active && styles.reasonTextActive]}>
+                      {r.label}
+                    </Text>
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={22}
+                      color={active ? colors.primary.teal : colors.dark.textMuted}
+                    />
+                  </Pressable>
+                );
+              })}
+
+              {reason ? (
+                <AccentComposerFrame
+                  accentColor={colors.primary.teal}
+                  hint="Additional context (optional)"
+                  compact
+                  noShadow
+                  style={styles.detailsFrame}
                 >
-                  <Ionicons
-                    name={r.icon as any}
-                    size={20}
-                    color={active ? colors.primary.teal : colors.dark.textMuted}
+                  <TextInput
+                    style={[
+                      styles.detailsInput,
+                      Platform.OS === 'android' ? { textAlignVertical: 'top' as const } : null,
+                    ]}
+                    placeholder="What should we know?"
+                    placeholderTextColor={colors.dark.textMuted}
+                    value={details}
+                    onChangeText={setDetails}
+                    multiline
+                    numberOfLines={4}
+                    scrollEnabled
                   />
-                  <Text style={[styles.reasonText, active && styles.reasonTextActive]}>
-                    {r.label}
-                  </Text>
-                  {active && (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.primary.teal} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+                </AccentComposerFrame>
+              ) : null}
+            </ScrollView>
 
-            {reason ? (
-              <AccentComposerFrame
-                accentColor={colors.primary.teal}
-                hint="Additional context (optional)"
-                compact
-                noShadow
-                style={{ marginTop: spacing.sm }}
-              >
-                <TextInput
-                  style={[
-                    styles.detailsInput,
-                    Platform.OS === 'android' ? { textAlignVertical: 'top' as const } : null,
-                  ]}
-                  placeholder="What should we know?"
-                  placeholderTextColor={colors.dark.textMuted}
-                  value={details}
-                  onChangeText={setDetails}
-                  multiline
-                  numberOfLines={4}
-                  scrollEnabled
-                />
-              </AccentComposerFrame>
-            ) : null}
-
-            <Button
-              label="Submit Report"
-              variant="destructive"
-              size="lg"
-              fullWidth
-              disabled={!reason}
-              loading={submitting}
-              onPress={handleSubmit}
-              style={styles.submit}
-            />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <View style={[styles.footer, { paddingBottom: footerPadBottom }]}>
+              {!reason ? (
+                <Text style={styles.footerHint}>Select a reason to continue</Text>
+              ) : null}
+              <Button
+                label="Submit Report"
+                variant="destructive"
+                size="lg"
+                fullWidth
+                disabled={!reason}
+                loading={submitting}
+                onPress={handleSubmit}
+              />
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
     </Modal>
   );
 }
 
+const REASON_MIN_HEIGHT = 52;
+
 const styles = StyleSheet.create({
-  keyboardRoot: {
+  backdrop: {
     flex: 1,
     backgroundColor: colors.overlay.dark,
     justifyContent: 'flex-end',
   },
-  scrollFill: {
+  keyboardWrap: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -191,18 +242,18 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius.sheet,
     borderTopRightRadius: borderRadius.sheet,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
     ...shadows.sheet,
   },
   handle: {
     alignSelf: 'center',
-    width: 36,
+    width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.dark.border,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -210,25 +261,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  title: { ...typography.h3, color: colors.dark.text },
+  closeBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { ...typography.h3, color: colors.dark.text, flex: 1 },
   subtitle: {
     ...typography.bodySmall,
     color: colors.dark.textMuted,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  scrollBody: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
   },
   reasonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.md - 2,
+    minHeight: REASON_MIN_HEIGHT,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.xs,
+  },
+  reasonIdle: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   reasonActive: {
     backgroundColor: colors.primary.teal + '1A',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.primary.teal + '66',
+    borderWidth: 1,
+    borderColor: colors.primary.teal + '88',
+  },
+  reasonPressed: {
+    opacity: 0.88,
+  },
+  reasonIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  reasonIconWrapActive: {
+    backgroundColor: colors.primary.teal + '22',
   },
   reasonText: {
     flex: 1,
@@ -236,14 +320,25 @@ const styles = StyleSheet.create({
     color: colors.dark.text,
   },
   reasonTextActive: { fontWeight: '700', color: colors.primary.teal },
+  detailsFrame: {
+    marginTop: spacing.xs,
+  },
   detailsInput: {
     ...typography.body,
     color: colors.dark.text,
-    minHeight: 100,
-    maxHeight: 160,
+    minHeight: 96,
+    maxHeight: 140,
     paddingVertical: 4,
   },
-  submit: {
-    marginTop: spacing.lg,
+  footer: {
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.dark.border,
+    gap: spacing.sm,
+  },
+  footerHint: {
+    ...typography.caption,
+    color: colors.dark.textMuted,
+    textAlign: 'center',
   },
 });

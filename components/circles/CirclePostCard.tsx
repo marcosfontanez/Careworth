@@ -23,6 +23,8 @@ import type { Post, PostReactionKind } from '@/types';
 import { pulseImageCircleWallProps } from '@/lib/pulseImage';
 import { emptyPostReactionCounts } from '@/lib/postReactions';
 import { ReactionChainWithPicker } from '@/components/reactions/ReactionChainWithPicker';
+import { FeedClipAttributionRow } from '@/components/feed/FeedClipAttributionChip';
+import { useFeedClipAttribution } from '@/hooks/useFeedClipAttribution';
 
 type Props = {
   post: Post;
@@ -37,9 +39,13 @@ type Props = {
   /** Tap again on the active emoji clears the reaction (handled in parent). */
   onPickReaction: (kind: PostReactionKind) => void;
   onShare: () => void;
-  /** When set with `isOwner`, the ⋯ menu opens owner actions (edit / delete) from the parent. */
   isOwner?: boolean;
+  /** Owner ⋯ menu (edit / delete). */
   onOwnerMenu?: () => void;
+  /** Non-owner ⋯ menu (report). */
+  onGuestMenu?: () => void;
+  /** Opens post detail with gift tray (circle room shortcut). */
+  onGift?: () => void;
   /** Brief ring when user deep-links onto this card (e.g. from a My Pulse pin). */
   jumpHighlight?: boolean;
 };
@@ -61,6 +67,8 @@ export const CirclePostCard = React.memo(function CirclePostCard({
   onShare,
   isOwner = false,
   onOwnerMenu,
+  onGuestMenu,
+  onGift,
   jumpHighlight = false,
 }: Props) {
   const { width: winW, height: winH } = useWindowDimensions();
@@ -97,6 +105,7 @@ export const CirclePostCard = React.memo(function CirclePostCard({
   const bodyLine = isTitled ? caption.split('\n\n').slice(1).join('\n\n').trim() : caption;
   const canDownloadMedia = postHasDownloadableMedia(post);
   const counts = post.reactionCounts ?? emptyPostReactionCounts();
+  const clipAttribution = useFeedClipAttribution(post);
 
   const onDownloadPress = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -162,17 +171,25 @@ export const CirclePostCard = React.memo(function CirclePostCard({
               </Text>
             </View>
           </View>
-          {isOwner && onOwnerMenu ? (
+          {(isOwner && onOwnerMenu) || (!isOwner && onGuestMenu) ? (
             <TouchableOpacity
               hitSlop={8}
               style={styles.moreBtn}
-              onPress={onOwnerMenu}
-              accessibilityLabel="Post options"
+              onPress={isOwner ? onOwnerMenu : onGuestMenu}
+              accessibilityLabel={isOwner ? 'Post options' : 'Report post'}
             >
               <Ionicons name="ellipsis-horizontal" size={18} color={colors.dark.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
+
+        {(clipAttribution.creatorChip || clipAttribution.liveChip) ? (
+          <FeedClipAttributionRow
+            attribution={clipAttribution}
+            variant="inline"
+            style={styles.clipAttributionRow}
+          />
+        ) : null}
 
         {(isTitled || bodyLine) && (
           <View style={styles.body}>
@@ -277,6 +294,14 @@ export const CirclePostCard = React.memo(function CirclePostCard({
             tint={colors.dark.textMuted}
             onPress={onDownloadPress}
             accessibilityLabel={post.type === 'video' ? 'Download video' : 'Download photo'}
+          />
+        ) : null}
+        {onGift ? (
+          <ActionButton
+            icon="gift-outline"
+            tint={colors.primary.teal}
+            onPress={onGift}
+            accessibilityLabel="Send creator gift"
           />
         ) : null}
         <ActionButton
@@ -384,6 +409,7 @@ const styles = StyleSheet.create({
   moreBtn: { padding: 4 },
 
   body: { marginTop: 5, gap: 2 },
+  clipAttributionRow: { marginTop: 6, marginBottom: 2 },
   title: { fontSize: 14.5, fontWeight: '800', color: colors.dark.text, lineHeight: 19 },
   caption: { fontSize: 13, color: colors.dark.textSecondary, lineHeight: 18 },
 

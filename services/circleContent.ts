@@ -142,7 +142,21 @@ async function rankCommunitiesByPopularity(): Promise<Community[]> {
   const all = await communitiesService.getAll().catch(() => [] as Community[]);
   if (all.length === 0) return [];
   const merged = await mergeCommunityCardStats(all);
-  merged.sort((a, b) => popularityScore(b) - popularityScore(a));
+  // Admin-curated pins come first: any circle with a non-null `featured_order`
+  // sorts ahead of the popularity-ranked rest (lower order = earlier). This is
+  // how the "App Suggestions" circle stays pinned to the front of the strip
+  // without faking inflated member/post counts. Circles without a pin fall
+  // back to the pure popularity score.
+  merged.sort((a, b) => {
+    const ao = a.featuredOrder;
+    const bo = b.featuredOrder;
+    const aPinned = ao != null;
+    const bPinned = bo != null;
+    if (aPinned && bPinned) return ao - bo;
+    if (aPinned) return -1;
+    if (bPinned) return 1;
+    return popularityScore(b) - popularityScore(a);
+  });
   return merged;
 }
 
@@ -291,8 +305,11 @@ export const circleContentService = {
     }
   },
 
-  async getThreadsByCommunityId(communityId: string): Promise<CircleThread[]> {
-    return circleThreadsDb.listByCommunityId(communityId);
+  async getThreadsByCommunityId(
+    communityId: string,
+    opts?: { limit?: number; cursor?: string | null; viewerId?: string | null },
+  ): Promise<CircleThread[]> {
+    return circleThreadsDb.listByCommunityId(communityId, opts);
   },
 
   /** Questions / discussions tab — inserts into `circle_threads` (not circle wall posts). */
@@ -308,22 +325,38 @@ export const circleContentService = {
     return circleThreadsDb.createThread(params);
   },
 
-  async getThreadsByCircleSlug(slug: string): Promise<CircleThread[]> {
-    return circleThreadsDb.listBySlug(slug);
+  async getThreadsByCircleSlug(slug: string, viewerId?: string | null): Promise<CircleThread[]> {
+    return circleThreadsDb.listBySlug(slug, viewerId);
   },
 
   /** Use `null` when missing — TanStack Query must not settle `undefined` from `queryFn`. */
-  async getThreadById(id: string): Promise<CircleThread | null> {
-    const t = await circleThreadsDb.getById(id);
+  async getThreadById(id: string, viewerId?: string | null): Promise<CircleThread | null> {
+    const t = await circleThreadsDb.getById(id, viewerId);
     return t ?? null;
   },
 
-  async getRepliesForThread(threadId: string) {
-    return circleThreadsDb.listReplies(threadId);
+  async getRepliesForThread(
+    threadId: string,
+    opts?: {
+      limit?: number;
+      cursor?: string | null;
+      viewerId?: string | null;
+      thread?: CircleThread | null;
+    },
+  ) {
+    return circleThreadsDb.listReplies(threadId, opts);
   },
 
   async addReply(threadId: string, body: string) {
     return circleThreadsDb.addReply(threadId, body);
+  },
+
+  async getThreadReactionForUser(threadId: string, userId: string | null): Promise<boolean> {
+    return circleThreadsDb.getThreadReactionForUser(threadId, userId);
+  },
+
+  async toggleThreadReaction(threadId: string): Promise<{ reacted: boolean }> {
+    return circleThreadsDb.toggleThreadReaction(threadId);
   },
 
   async searchCirclesAndTopics(query: string): Promise<Community[]> {

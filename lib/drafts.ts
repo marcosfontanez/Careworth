@@ -27,6 +27,9 @@ export interface DraftData {
   soundAnchorSec?: number;
   privacyVideo?: 'public' | 'followers';
   commentsOnVideo?: boolean;
+  selectedCircleId?: string | null;
+  pinToMyPulse?: boolean;
+  selectedCircleSnapshot?: { id: string; name: string; slug: string };
   /** Photo composer (`saveDraft('image', …)`) — kept separate from video fields. */
   privacyPhoto?: 'public' | 'followers';
   commentsOnPhoto?: boolean;
@@ -73,6 +76,23 @@ export async function clearDraft(type: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(`${DRAFT_PREFIX}${type}`);
   } catch {}
+}
+
+/**
+ * Browser blob URLs die on reload/navigation — never persist them as drafts.
+ * Native `file://` clips may also go stale but are still worth restoring when present.
+ */
+export function isPersistableDraftMediaUri(uri: string | undefined | null): boolean {
+  const u = uri?.trim();
+  if (!u) return false;
+  if (u.startsWith('blob:')) return false;
+  return true;
+}
+
+export function filterPersistableDraftMediaUris(uris?: string[]): string[] | undefined {
+  if (!uris?.length) return undefined;
+  const out = uris.filter(isPersistableDraftMediaUri);
+  return out.length ? out : undefined;
 }
 
 /** True when saved draft payload has meaningful creator content (hub badges / resume affordances). */

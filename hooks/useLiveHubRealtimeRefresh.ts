@@ -7,6 +7,7 @@ import type { LiveHubHomePayload } from '@/types/liveHub';
 function safeHubPayload(old: LiveHubHomePayload): LiveHubHomePayload {
   return {
     ...old,
+    happeningNow: Array.isArray(old.happeningNow) ? old.happeningNow : [],
     featured: Array.isArray(old.featured) ? old.featured : [],
     trending: Array.isArray(old.trending) ? old.trending : [],
     shopLiveDeals: Array.isArray(old.shopLiveDeals) ? old.shopLiveDeals : [],
@@ -46,6 +47,7 @@ export function useLiveHubRealtimeRefresh(enabled = true) {
                   list.filter((s) => s.id !== streamId);
                 return {
                   ...safe,
+                  happeningNow: drop(safe.happeningNow),
                   featured: drop(safe.featured),
                   trending: drop(safe.trending),
                   shopLiveDeals: drop(safe.shopLiveDeals),
@@ -60,6 +62,7 @@ export function useLiveHubRealtimeRefresh(enabled = true) {
               const safe = safeHubPayload(old);
               return {
                 ...safe,
+                happeningNow: filterActiveLiveStreams(safe.happeningNow),
                 featured: filterActiveLiveStreams(safe.featured),
                 trending: filterActiveLiveStreams(safe.trending),
                 shopLiveDeals: filterActiveLiveStreams(safe.shopLiveDeals),

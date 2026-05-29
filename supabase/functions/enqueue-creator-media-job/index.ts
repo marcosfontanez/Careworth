@@ -82,6 +82,28 @@ Deno.serve(async (req) => {
       return json({ error: "broll requires input.cutawayPaths as string[]" }, 400);
     }
   }
+  if (kind === "trim") {
+    if (typeof input.storagePathIn !== "string" || !input.storagePathIn.trim()) {
+      return json({ error: "trim requires input.storagePathIn string" }, 400);
+    }
+    const start = Number(input.trimStartSec);
+    const end = Number(input.trimEndSec);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return json({ error: "trim requires valid trimStartSec and trimEndSec" }, 400);
+    }
+    const liveClipId =
+      typeof input.target_live_clip_id === "string" ? input.target_live_clip_id.trim() : "";
+    const postId = typeof input.target_post_id === "string" ? input.target_post_id.trim() : "";
+    if (!liveClipId && !postId) {
+      return json({ error: "trim requires target_live_clip_id or target_post_id UUID" }, 400);
+    }
+    if (liveClipId && !TARGET_POST_UUID.test(liveClipId)) {
+      return json({ error: "trim target_live_clip_id must be UUID" }, 400);
+    }
+    if (postId && !TARGET_POST_UUID.test(postId)) {
+      return json({ error: "trim target_post_id must be UUID" }, 400);
+    }
+  }
 
   const { data: row, error } = await supabase
     .from("creator_media_jobs")

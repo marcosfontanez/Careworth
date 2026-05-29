@@ -1,7 +1,6 @@
 /**
  * Demo / founder-preview live viewer for `demo-live-*` stream IDs.
- * Uses mock chat + hub metadata; gifts reuse {@link SendCreatorGiftTray} /
- * {@link GiftPicker} (real billing may reject unknown stream IDs — OK for demo).
+ * Uses mock chat + hub metadata; gifts reuse {@link GiftPicker} from `@/lib/gifts`.
  *
  * Clips: navigates to `/live/highlights` (placeholder screen). Full encoder + CDN TBD.
  *
@@ -31,8 +30,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
-import { GiftPicker } from '@/components/live/GiftPicker';
-import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
+import { GiftPicker } from '@/lib/gifts';
 import { LiveChatList } from '@/components/live/LiveChat';
 import { colors, pulseverse } from '@/theme';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
@@ -41,7 +39,6 @@ import { liveHighlightsHref } from '@/lib/navigation/liveRoutes';
 import { getLiveHubStreamById } from '@/services/live/liveHubService';
 import { getDemoComments, getDemoQuestions } from '@/services/live/mockLiveHubData';
 import { liveShopService } from '@/services/live/liveShopService';
-import { useSparkWallet, useSparkBalanceNumber } from '@/hooks/useShopEconomy';
 import type { LiveProduct } from '@/types/liveHub';
 import type { StreamMessage } from '@/types';
 import { DemoLearnTabs, DemoLearnPanel, type LearnSeg } from '@/components/live/demo/demoViewerLearn';
@@ -66,8 +63,6 @@ export function DemoLiveViewer({ streamId }: { streamId: string }) {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const showToast = useToast((s) => s.show);
-  const walletQ = useSparkWallet(user?.id);
-  const sparkBalance = useSparkBalanceNumber(walletQ.data);
 
   const q = useQuery({
     queryKey: ['liveHubStream', streamId],
@@ -108,8 +103,7 @@ export function DemoLiveViewer({ streamId }: { streamId: string }) {
   const [inputText, setInputText] = useState('');
   const [learnSeg, setLearnSeg] = useState<LearnSeg>('chat');
   const [productTrayOpen, setProductTrayOpen] = useState(false);
-  const [sparkGiftOpen, setSparkGiftOpen] = useState(false);
-  const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [giftPickerOpen, setGiftPickerOpen] = useState(false);
 
   const questions = useMemo(() => getDemoQuestions(streamId), [streamId]);
   const [qVotes, setQVotes] = useState<Record<string, number>>({});
@@ -284,7 +278,7 @@ export function DemoLiveViewer({ streamId }: { streamId: string }) {
                 showToast('Sign in to send gifts', 'error');
                 return;
               }
-              setSparkGiftOpen(true);
+              setGiftPickerOpen(true);
             }}
           >
             <Ionicons name="gift-outline" size={24} color={colors.primary.gold} />
@@ -324,22 +318,10 @@ export function DemoLiveViewer({ streamId }: { streamId: string }) {
                       showToast('Sign in to send gifts', 'error');
                       return;
                     }
-                    setSparkGiftOpen(true);
+                    setGiftPickerOpen(true);
                   }}
                 >
                   <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.giftBtn}
-                  onPress={() => {
-                    if (!user?.id) {
-                      showToast('Sign in to send gifts', 'error');
-                      return;
-                    }
-                    setShowGiftPicker(true);
-                  }}
-                >
-                  <Ionicons name="flash" size={18} color={colors.status.premium} />
                 </TouchableOpacity>
               </View>
               <AccentComposerFrame accentColor={colors.primary.teal} compact noShadow style={{ flex: 1 }}>
@@ -359,18 +341,8 @@ export function DemoLiveViewer({ streamId }: { streamId: string }) {
       </View>
 
       <GiftPicker
-        visible={showGiftPicker}
-        sparkBalance={sparkBalance}
-        onClose={() => setShowGiftPicker(false)}
-        onSendGift={(_gift, _quantity) => {
-          showToast('Sticker gifts require a live_streams row (demo uses mock id).', 'info');
-          setShowGiftPicker(false);
-        }}
-      />
-
-      <SendCreatorGiftTray
-        visible={sparkGiftOpen}
-        onClose={() => setSparkGiftOpen(false)}
+        visible={giftPickerOpen}
+        onClose={() => setGiftPickerOpen(false)}
         creatorUserId={stream.host.id}
         creatorDisplayName={stream.host.displayName}
         creatorAvatarUrl={stream.host.avatarUrl}

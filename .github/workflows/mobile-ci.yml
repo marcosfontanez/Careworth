@@ -66,5 +66,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm run test
+
+      - name: DB types freshness
+        run: npm run db:types:check
+
       - name: ESLint
         run: npm run lint

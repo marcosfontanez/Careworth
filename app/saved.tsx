@@ -1,10 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Dimensions, Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
+import { FeedClipAttributionBadge } from '@/components/feed/FeedClipAttributionBadge';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -18,6 +19,9 @@ import { formatCount } from '@/utils/format';
 import type { Post } from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { savedPostKeys } from '@/lib/queryKeys';
+import { resolvePostViewerHref } from '@/lib/postViewerRoute';
+import { FeedCommentsSheet } from '@/components/feed/FeedCommentsSheet';
+import { useFeedCommentsSheet } from '@/hooks/useFeedCommentsSheet';
 import { getSavedPostsGridListWindow } from '@/lib/feedVideoListWindow';
 
 const SAVED_GRID_WINDOW = getSavedPostsGridListWindow();
@@ -33,6 +37,9 @@ export default function SavedScreen() {
   const { user } = useAuth();
   const toggleSavePost = useAppStore((s) => s.toggleSavePost);
   const queryClient = useQueryClient();
+  const { commentsPost, commentsOpen, openComments, closeComments } = useFeedCommentsSheet();
+  const [commentsUiEpoch, setCommentsUiEpoch] = useState(0);
+  const bumpSavedGridUi = useCallback(() => setCommentsUiEpoch((e) => e + 1), []);
 
   /**
    * Backed by react-query so the same `['savedPosts', user.id]` invalidation
@@ -108,6 +115,7 @@ export default function SavedScreen() {
       ) : (
         <FlatList
           data={savedPosts}
+          extraData={commentsUiEpoch}
           keyExtractor={(item) => item.id}
           numColumns={3}
           initialNumToRender={SAVED_GRID_WINDOW.initialNumToRender}
@@ -118,12 +126,7 @@ export default function SavedScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.gridItem}
-              onPress={() => {
-                if (item.commentsDisabled) {
-                  toast.show('Comments are off — you can still read the thread.', 'info');
-                }
-                router.push(`/comments/${item.id}`);
-              }}
+              onPress={() => router.push(resolvePostViewerHref(item))}
               activeOpacity={0.8}
             >
               <RecentMediaThumb
@@ -131,12 +134,26 @@ export default function SavedScreen() {
                 style={styles.gridImage}
                 preferStaticAndroidVideoTile={Platform.OS === 'android'}
               />
+              <FeedClipAttributionBadge post={item} />
               <View style={styles.gridOverlay}>
                 <View style={styles.gridStatRow}>
                   <Ionicons name="heart" size={10} color={colors.status.error} />
                   <Text style={styles.gridStat}>{formatCount(item.likeCount)}</Text>
                 </View>
               </View>
+              <TouchableOpacity
+                style={styles.commentBtn}
+                onPress={() => {
+                  if (item.commentsDisabled) {
+                    toast.show('Comments are off — you can still read the thread.', 'info');
+                  }
+                  openComments(item);
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Open comments"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={13} color="#FFF" />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.unsaveBtn}
                 onPress={() => handleUnsavePost(item.id)}
@@ -150,6 +167,13 @@ export default function SavedScreen() {
           columnWrapperStyle={{ gap: GRID_GAP }}
         />
       )}
+
+      <FeedCommentsSheet
+        visible={commentsOpen}
+        post={commentsPost}
+        onClose={closeComments}
+        onCommentAdded={bumpSavedGridUi}
+      />
     </View>
   );
 }
@@ -180,6 +204,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xs,
     right: spacing.xs,
+    backgroundColor: colors.glass.sm,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentBtn: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
     backgroundColor: colors.glass.sm,
     width: 24,
     height: 24,

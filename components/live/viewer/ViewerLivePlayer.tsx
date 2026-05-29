@@ -1,21 +1,38 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { LiveBottomSheet } from '@/components/live/LiveBottomSheet';
+import { LiveChatPanel } from '@/components/live/studio/LiveChatPanel';
 import { PollWidget } from '@/components/live/PollWidget';
-import { ViewerChatRail } from '@/components/live/viewer/ViewerChatRail';
-import { ViewerGiftBurst } from '@/components/live/viewer/ViewerGiftBurst';
-import { ViewerHostChip } from '@/components/live/viewer/ViewerHostChip';
+import { LiveGiftDrawer, type LiveGiftSentPayload } from '@/components/live/viewer/LiveGiftDrawer';
+import { LiveGiftOverlay } from '@/components/gifts/LiveGiftOverlay';
+import { LiveGiftSentBanner } from '@/components/live/viewer/LiveGiftSentBanner';
+import { LivePinnedOverlay } from '@/components/live/viewer/LivePinnedOverlay';
+import { LiveQnaViewerPanel } from '@/components/live/viewer/LiveQnaViewerPanel';
+import { PulseTapButton } from '@/components/live/viewer/PulseTapButton';
+import { PulseTapOverlay } from '@/components/live/viewer/PulseTapOverlay';
+import { ViewerClipMomentSheet, type ViewerClipDurationChoice } from '@/components/live/viewer/ViewerClipMomentSheet';
+import { ViewerLiveBottomBar } from '@/components/live/viewer/ViewerLiveBottomBar';
 import { ViewerLiveHud } from '@/components/live/viewer/ViewerLiveHud';
-import { ViewerPollPill } from '@/components/live/viewer/ViewerPollPill';
-import { ViewerSideActions } from '@/components/live/viewer/ViewerSideActions';
-import { ViewerWelcomeNotice } from '@/components/live/viewer/ViewerWelcomeNotice';
-import { colors, typography } from '@/theme';
-import type { CreatorSummary, LiveGift, StreamMessage, StreamPinnedMessage, StreamPoll } from '@/types';
+import { ViewerStreamInfoPanel } from '@/components/live/viewer/ViewerStreamInfoPanel';
+import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
+import { usePulseTapReaction } from '@/hooks/usePulseTapReaction';
+import { pulseColors, pulseRadius, pulseSpacing, pulseTypography } from '@/lib/theme/pulseTheme';
+import type { CreatorSummary, StreamMessage, StreamPinnedMessage, StreamPoll } from '@/types';
+import type { ShopItemRow } from '@/lib/shop/types';
+import type { StreamQuestion } from '@/services/supabase/streamQuestions';
 
-type GiftBurst = { gift: LiveGift; senderName: string; quantity: number } | null;
+type GiftOverlayPayload = {
+  giftSlug: string;
+  giftName: string;
+  shopItem: ShopItemRow | null;
+  senderName: string;
+} | null;
 
 type Props = {
   host: CreatorSummary;
+  streamId: string;
+  streamTitle?: string;
   viewerUserId?: string;
   isFollowing: boolean;
   onToggleFollow: () => void;
@@ -27,13 +44,11 @@ type Props = {
   onToggleAudio: () => void;
   onBack: () => void;
   onShare: () => void;
-  onMore: () => void;
-  onOpenGifts: () => void;
-  onOpenSparkGift?: () => void;
-  onOpenLeaderboard?: () => void;
-  showLeaderboard?: boolean;
+  onReportStream?: () => void;
+  onBlockHost?: () => void;
   messages: StreamMessage[];
   pinned: StreamPinnedMessage | null;
+  pinnedQuestion?: StreamQuestion | null;
   inputText: string;
   onChangeInput: (text: string) => void;
   onSendMessage: () => void;
@@ -51,11 +66,24 @@ type Props = {
   streamVideoError?: string | null;
   showToast: (msg: string, type: 'success' | 'error' | 'info') => void;
   welcomeMessage?: string;
+  questions?: StreamQuestion[];
+  qnaBackendReady?: boolean;
+  onSubmitQuestion?: (question: string) => Promise<boolean>;
+  questionSubmitting?: boolean;
+  onGiftSent?: (payload?: LiveGiftSentPayload) => void;
+  onOpenLeaderboard?: () => void;
+  showLeaderboard?: boolean;
+  viewerClipsAllowed?: boolean;
+  clipMarkersBackendReady?: boolean;
+  onSaveClipMoment?: (duration: ViewerClipDurationChoice) => Promise<boolean>;
+  clipMomentLoading?: boolean;
 };
 
-/** Immersive viewer live player — video-first with tucked-away interactions. */
+/** Immersive viewer live player — video-first with sheet-based interactions. */
 export function ViewerLivePlayer({
   host,
+  streamId,
+  streamTitle,
   viewerUserId,
   isFollowing,
   onToggleFollow,
@@ -67,12 +95,11 @@ export function ViewerLivePlayer({
   onToggleAudio,
   onBack,
   onShare,
-  onMore,
-  onOpenGifts,
-  onOpenLeaderboard,
-  showLeaderboard,
+  onReportStream,
+  onBlockHost,
   messages,
   pinned,
+  pinnedQuestion,
   inputText,
   onChangeInput,
   onSendMessage,
@@ -90,75 +117,178 @@ export function ViewerLivePlayer({
   streamVideoError,
   showToast,
   welcomeMessage = 'Welcome! Be kind and follow community guidelines.',
+  questions = [],
+  qnaBackendReady = true,
+  onSubmitQuestion,
+  questionSubmitting = false,
+  onGiftSent,
+  onOpenLeaderboard,
+  showLeaderboard,
+  viewerClipsAllowed = false,
+  clipMarkersBackendReady = true,
+  onSaveClipMoment,
+  clipMomentLoading = false,
 }: Props) {
+  const [chatSheetOpen, setChatSheetOpen] = useState(false);
+  const [giftSheetOpen, setGiftSheetOpen] = useState(false);
   const [pollSheetOpen, setPollSheetOpen] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [giftBurst, setGiftBurst] = useState<GiftBurst>(null);
-  const lastGiftIdRef = React.useRef<string | null>(null);
+  const [qnaSheetOpen, setQnaSheetOpen] = useState(false);
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  const [clipSheetOpen, setClipSheetOpen] = useState(false);
+  const [giftOverlay, setGiftOverlay] = useState<GiftOverlayPayload>(null);
+  const [giftSentBanner, setGiftSentBanner] = useState<string | null>(null);
+  const [pinDismissed, setPinDismissed] = useState(false);
+  const lastGiftIdRef = useRef<string | null>(null);
+  const actionLockRef = useRef(false);
+  const { bursts, comboFlash, triggerPulse, dismissBurst } = usePulseTapReaction();
+  const router = useRouter();
+
+  const anySheetOpen =
+    chatSheetOpen ||
+    giftSheetOpen ||
+    pollSheetOpen ||
+    qnaSheetOpen ||
+    moreSheetOpen ||
+    clipSheetOpen;
+  const pulseDisabled = !streamIsLive || !broadcastLive || anySheetOpen;
 
   const liveLabel = streamConnecting ? 'CONNECTING' : streamIsLive ? 'LIVE' : 'OFFLINE';
   const canFollow = Boolean(viewerUserId && viewerUserId !== host.id);
   const chatUnavailable = !broadcastLive || Boolean(chatBlocked);
+  const hasActivePoll = Boolean(activePoll?.isActive && !pollUnavailable);
+  const showPinned = Boolean((pinned || pinnedQuestion) && !pinDismissed);
+
+  useEffect(() => {
+    setPinDismissed(false);
+  }, [pinned?.id, pinnedQuestion?.id]);
 
   useEffect(() => {
     try {
-      const latestGift = [...messages].reverse().find((m) => m.messageType === 'gift' && m.giftData?.gift);
-      if (!latestGift?.giftData?.gift || latestGift.id === lastGiftIdRef.current) return;
+      const latestGift = [...messages].reverse().find((m) => m.messageType === 'gift' && m.giftData);
+      if (!latestGift?.giftData || latestGift.id === lastGiftIdRef.current) return;
       lastGiftIdRef.current = latestGift.id;
-      setGiftBurst({
-        gift: latestGift.giftData.gift,
+
+      const slug = latestGift.giftData.creatorGiftSlug ?? latestGift.giftData.shopItem?.slug ?? 'pulse';
+      const name = latestGift.giftData.gift?.name ?? latestGift.giftData.shopItem?.name ?? 'Gift';
+
+      setGiftOverlay({
+        giftSlug: slug,
+        giftName: name,
+        shopItem: latestGift.giftData.shopItem ?? null,
         senderName: latestGift.displayName,
-        quantity: latestGift.giftData.quantity ?? 1,
       });
     } catch (err) {
-      if (__DEV__) console.warn('[ViewerLivePlayer.giftBurst]', err);
+      if (__DEV__) console.warn('[ViewerLivePlayer.giftOverlay]', err);
     }
   }, [messages]);
 
-  const handleGiftPress = useCallback(() => {
-    if (!viewerUserId) {
-      showToast('Sign in to send gifts', 'info');
-      return;
+  const withActionLock = useCallback((fn: () => void) => {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    try {
+      fn();
+    } finally {
+      setTimeout(() => {
+        actionLockRef.current = false;
+      }, 350);
     }
-    if (!broadcastLive) {
-      showToast('Gifts unlock once the host is broadcasting.', 'info');
-      return;
-    }
-    onOpenGifts();
-  }, [viewerUserId, broadcastLive, onOpenGifts, showToast]);
+  }, []);
 
-  const handlePollOpen = useCallback(() => {
-    if (pollUnavailable) {
-      showToast('Poll unavailable right now.', 'error');
-      return;
-    }
-    if (!activePoll) {
-      showToast('No active poll.', 'info');
-      return;
-    }
-    if (!broadcastLive) {
-      showToast('Polls unlock once the host is broadcasting.', 'info');
-      return;
-    }
-    setPollSheetOpen(true);
-  }, [activePoll, broadcastLive, pollUnavailable, showToast]);
+  const handleGiftOpen = useCallback(() => {
+    withActionLock(() => {
+      if (!viewerUserId) {
+        showToast('Sign in to send gifts', 'info');
+        return;
+      }
+      if (!streamIsLive) {
+        showToast('This live stream has ended.', 'info');
+        return;
+      }
+      if (!broadcastLive) {
+        showToast('Gifts unlock once the host is broadcasting.', 'info');
+        return;
+      }
+      if (!giftsEnabled) {
+        showToast('Gifts are not enabled for this stream.', 'info');
+        return;
+      }
+      setGiftSheetOpen(true);
+    });
+  }, [viewerUserId, streamIsLive, broadcastLive, giftsEnabled, showToast, withActionLock]);
 
-  const handleInfoPress = useCallback(() => {
-    Alert.alert('Community guidelines', welcomeMessage, [{ text: 'Got it', style: 'default' }]);
-  }, [welcomeMessage]);
+  const handlePollQna = useCallback(() => {
+    withActionLock(() => {
+      if (hasActivePoll && broadcastLive) {
+        setPollSheetOpen(true);
+        return;
+      }
+      setQnaSheetOpen(true);
+    });
+  }, [hasActivePoll, broadcastLive, withActionLock]);
+
+  const handleSubmitQuestion = useCallback(
+    async (question: string) => {
+      if (!onSubmitQuestion) return;
+      try {
+        const ok = await onSubmitQuestion(question);
+        if (ok) showToast('Question submitted', 'success');
+        else showToast('Could not submit question.', 'error');
+      } catch {
+        showToast('Could not submit question.', 'error');
+      }
+    },
+    [onSubmitQuestion, showToast],
+  );
+
+  const handleSendMessage = useCallback(() => {
+    if (chatSending || chatUnavailable) return;
+    try {
+      onSendMessage();
+    } catch (err) {
+      if (__DEV__) console.warn('[ViewerLivePlayer.sendMessage]', err);
+      showToast('Could not send message.', 'error');
+    }
+  }, [chatSending, chatUnavailable, onSendMessage, showToast]);
 
   const statusBanner = useMemo(() => {
-    if (streamVideoError) {
-      return streamVideoError;
-    }
+    if (streamVideoError) return streamVideoError;
     if (audioUnavailable && !viewerAudioMuted) {
       return 'Audio may be unavailable — tap the speaker to retry.';
     }
-    if (streamConnecting) {
-      return 'Host is connecting…';
-    }
+    if (streamConnecting) return 'Host is connecting…';
     return null;
   }, [audioUnavailable, viewerAudioMuted, streamConnecting, streamVideoError]);
+
+  const handlePulseTap = useCallback(() => {
+    try {
+      triggerPulse();
+    } catch (err) {
+      if (__DEV__) console.warn('[ViewerLivePlayer.pulseTap]', err);
+    }
+  }, [triggerPulse]);
+
+  const closeSheets = useCallback(() => {
+    setChatSheetOpen(false);
+    setGiftSheetOpen(false);
+    setPollSheetOpen(false);
+    setQnaSheetOpen(false);
+    setMoreSheetOpen(false);
+    setClipSheetOpen(false);
+  }, []);
+
+  const handleSaveClipMoment = useCallback(
+    async (duration: ViewerClipDurationChoice) => {
+      if (!onSaveClipMoment) return;
+      try {
+        const ok = await onSaveClipMoment(duration);
+        if (ok) setClipSheetOpen(false);
+      } catch (err) {
+        if (__DEV__) console.warn('[ViewerLivePlayer.saveClipMoment]', err);
+        showToast('Could not submit clip moment. Try again.', 'error');
+      }
+    },
+    [onSaveClipMoment, showToast],
+  );
 
   return (
     <View style={styles.root} pointerEvents="box-none">
@@ -167,24 +297,18 @@ export function ViewerLivePlayer({
         viewerCount={viewerCount}
         audioMuted={viewerAudioMuted}
         onBack={onBack}
-        onShare={onShare}
         onToggleAudio={onToggleAudio}
-        onMore={onMore}
-        showMore={Boolean(viewerUserId)}
       />
 
-      <ViewerHostChip
-        host={host}
-        isFollowing={isFollowing}
-        canFollow={canFollow}
-        onToggleFollow={onToggleFollow}
-      />
-
-      <ViewerWelcomeNotice
-        visible={showWelcome}
-        message={welcomeMessage}
-        onDismiss={() => setShowWelcome(false)}
-      />
+      {showPinned ? (
+        <LivePinnedOverlay
+          pinned={pinned}
+          pinnedQuestion={pinnedQuestion}
+          onDismiss={() => setPinDismissed(true)}
+          onPressChat={() => setChatSheetOpen(true)}
+          onPressQuestion={() => setQnaSheetOpen(true)}
+        />
+      ) : null}
 
       {statusBanner ? (
         <View style={styles.statusBanner}>
@@ -194,46 +318,97 @@ export function ViewerLivePlayer({
 
       <View style={styles.flexSpacer} pointerEvents="none" />
 
-      <View style={styles.bottomRow}>
-        <View style={styles.chatCol}>
-          {activePoll ? <ViewerPollPill onPress={handlePollOpen} /> : null}
-          <ViewerChatRail
-            messages={messages}
-            pinned={pinned}
-            currentUserId={viewerUserId}
-            inputText={inputText}
-            onChangeInput={onChangeInput}
-            onSend={onSendMessage}
-            onMessageLongPress={onMessageLongPress}
-            chatBlocked={chatBlocked}
-            chatSending={chatSending}
-            chatUnavailable={!broadcastLive}
-            placeholder={broadcastLive ? 'Say something…' : 'Chat opens when live…'}
-          />
-        </View>
-      </View>
+      <PulseTapOverlay bursts={bursts} onBurstDone={dismissBurst} />
 
-      <ViewerSideActions
+      <ViewerLiveBottomBar
+        inputText={inputText}
+        onChangeInput={onChangeInput}
+        onSend={handleSendMessage}
+        onOpenChatSheet={() => setChatSheetOpen(true)}
+        onOpenGifts={handleGiftOpen}
+        onPollQna={handlePollQna}
+        onOpenMore={() => setMoreSheetOpen(true)}
+        onOpenClipSheet={() => setClipSheetOpen(true)}
+        clipSaving={clipMomentLoading}
         giftsEnabled={giftsEnabled}
-        onGiftPress={handleGiftPress}
-        onInfoPress={handleInfoPress}
-        onLeaderboardPress={onOpenLeaderboard}
-        showLeaderboard={showLeaderboard}
+        hasActivePoll={hasActivePoll}
+        chatUnavailable={chatUnavailable}
+        chatSending={chatSending}
+        disabled={!streamIsLive}
+        useSheetComposer={chatSheetOpen}
       />
 
-      <ViewerGiftBurst
-        gift={giftBurst?.gift ?? null}
-        senderName={giftBurst?.senderName}
-        quantity={giftBurst?.quantity}
-        onDone={() => setGiftBurst(null)}
+      <PulseTapButton
+        onPress={handlePulseTap}
+        disabled={pulseDisabled}
+        comboFlash={comboFlash}
       />
 
-      <LiveBottomSheet
-        visible={pollSheetOpen && !!activePoll}
-        onClose={() => setPollSheetOpen(false)}
-        title="Live poll"
-        maxHeightRatio={0.42}
-      >
+      {giftSentBanner ? (
+        <LiveGiftSentBanner message={giftSentBanner} onDone={() => setGiftSentBanner(null)} />
+      ) : null}
+
+      <LiveGiftOverlay
+        giftSlug={giftOverlay?.giftSlug ?? ''}
+        giftName={giftOverlay?.giftName ?? ''}
+        shopItem={giftOverlay?.shopItem ?? null}
+        senderName={giftOverlay?.senderName}
+        onDone={() => setGiftOverlay(null)}
+      />
+
+      <LiveBottomSheet visible={chatSheetOpen} onClose={() => setChatSheetOpen(false)} title="Live chat" maxHeightRatio={0.62}>
+        <LiveChatPanel
+          messages={messages}
+          pinned={pinned}
+          currentUserId={viewerUserId}
+          inputText={inputText}
+          onChangeInput={onChangeInput}
+          onSend={() => {
+            handleSendMessage();
+          }}
+          onUnpin={() => {}}
+          onMessageLongPress={onMessageLongPress}
+          onPressUser={(msg) => {
+            setChatSheetOpen(false);
+            openPulsePage(router, msg.userId);
+          }}
+          chatBlocked={chatBlocked}
+          chatSending={chatSending}
+          listHeight={240}
+        />
+      </LiveBottomSheet>
+
+      <LiveBottomSheet visible={giftSheetOpen} onClose={() => setGiftSheetOpen(false)} title="Send a gift" maxHeightRatio={0.78} scrollable>
+        {giftsEnabled && viewerUserId ? (
+          <LiveGiftDrawer
+            streamId={streamId}
+            streamStatus={streamIsLive ? 'live' : 'ended'}
+            broadcastLive={broadcastLive}
+            creatorUserId={host.id}
+            creatorDisplayName={host.displayName}
+            creatorHandle={host.username ?? null}
+            showToast={showToast}
+            onClose={() => setGiftSheetOpen(false)}
+            onSent={(payload) => {
+              try {
+                setGiftOverlay({
+                  giftSlug: payload.giftSlug,
+                  giftName: payload.giftName,
+                  shopItem: payload.shopItem,
+                  senderName: 'You',
+                });
+                setGiftSentBanner('Gift sent!');
+                onGiftSent?.(payload);
+                setGiftSheetOpen(false);
+              } catch (err) {
+                if (__DEV__) console.warn('[ViewerLivePlayer.onGiftSent]', err);
+              }
+            }}
+          />
+        ) : null}
+      </LiveBottomSheet>
+
+      <LiveBottomSheet visible={pollSheetOpen && !!activePoll} onClose={() => setPollSheetOpen(false)} title="Live poll" maxHeightRatio={0.44}>
         {activePoll ? (
           <PollWidget
             poll={activePoll}
@@ -245,6 +420,91 @@ export function ViewerLivePlayer({
           />
         ) : null}
       </LiveBottomSheet>
+
+      <LiveBottomSheet visible={qnaSheetOpen} onClose={() => setQnaSheetOpen(false)} title="Q&A" maxHeightRatio={0.58} scrollable>
+        <LiveQnaViewerPanel
+          questions={questions}
+          pinnedQuestion={pinnedQuestion ?? null}
+          viewerUserId={viewerUserId}
+          broadcastLive={broadcastLive}
+          streamIsLive={streamIsLive}
+          submitting={questionSubmitting}
+          backendReady={qnaBackendReady}
+          onSubmit={handleSubmitQuestion}
+        />
+      </LiveBottomSheet>
+
+      <LiveBottomSheet
+        visible={clipSheetOpen}
+        onClose={() => setClipSheetOpen(false)}
+        title="Clip moment"
+        maxHeightRatio={0.52}
+      >
+        <ViewerClipMomentSheet
+          signedIn={Boolean(viewerUserId)}
+          clipsAllowed={viewerClipsAllowed}
+          broadcastLive={broadcastLive}
+          streamIsLive={streamIsLive}
+          backendReady={clipMarkersBackendReady}
+          saving={clipMomentLoading}
+          onSave={handleSaveClipMoment}
+        />
+      </LiveBottomSheet>
+
+      <LiveBottomSheet visible={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} title="Stream info" maxHeightRatio={0.52} scrollable>
+        <ViewerStreamInfoPanel
+          host={host}
+          streamTitle={streamTitle}
+          viewerCount={viewerCount}
+          welcomeMessage={welcomeMessage}
+          isFollowing={isFollowing}
+          canFollow={canFollow}
+          onToggleFollow={onToggleFollow}
+          onOpenHostProfile={() => {
+            closeSheets();
+            openPulsePage(router, host.id);
+          }}
+          onShare={() => {
+            closeSheets();
+            onShare();
+          }}
+          onOpenLeaderboard={
+            showLeaderboard && onOpenLeaderboard
+              ? () => {
+                  closeSheets();
+                  onOpenLeaderboard();
+                }
+              : undefined
+          }
+          onOpenQna={
+            qnaBackendReady
+              ? () => {
+                  closeSheets();
+                  setQnaSheetOpen(true);
+                }
+              : undefined
+          }
+          qnaAvailable={qnaBackendReady && streamIsLive}
+          showLeaderboard={showLeaderboard}
+          signedIn={Boolean(viewerUserId)}
+          onReportStream={
+            onReportStream
+              ? () => {
+                  closeSheets();
+                  onReportStream();
+                }
+              : undefined
+          }
+          onBlockHost={
+            onBlockHost
+              ? () => {
+                  closeSheets();
+                  onBlockHost();
+                }
+              : undefined
+          }
+        />
+      </LiveBottomSheet>
     </View>
   );
 }
@@ -252,35 +512,24 @@ export function ViewerLivePlayer({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: pulseSpacing.md,
+    position: 'relative',
     zIndex: 20,
   },
-  flexSpacer: { flex: 1, minHeight: 80 },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingBottom: 4,
-  },
-  chatCol: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: '88%',
-  },
+  flexSpacer: { flex: 1, minHeight: 48 },
   statusBanner: {
     alignSelf: 'center',
-    marginTop: 8,
-    paddingHorizontal: 12,
+    marginTop: pulseSpacing.sm,
+    paddingHorizontal: pulseSpacing.md,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(15,28,48,0.72)',
+    borderRadius: pulseRadius.full,
+    backgroundColor: pulseColors.glass,
     borderWidth: 1,
-    borderColor: 'rgba(56,189,248,0.22)',
+    borderColor: pulseColors.borderStrong,
   },
   statusBannerTxt: {
-    ...typography.caption,
-    fontSize: 11,
+    ...pulseTypography.caption,
     fontWeight: '700',
-    color: colors.neutral.white,
+    color: pulseColors.text,
   },
 });

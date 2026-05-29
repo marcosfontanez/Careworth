@@ -26,7 +26,7 @@ export function rpcEconomySendCreatorGift(params: {
   p_creator_user_id: string;
   p_gift_item_id: string;
   p_context_type: 'live' | 'post' | 'profile';
-  p_context_id: string | null;
+  p_context_id: string;
   p_idempotency_key: string;
 }) {
   return supabase.rpc('economy_send_creator_gift', params);

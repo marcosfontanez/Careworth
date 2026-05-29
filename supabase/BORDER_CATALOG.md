@@ -49,7 +49,55 @@ Rows in **`border_pricing_rules`** are admin-tunable recommendations (`default_p
 ## RLS
 
 - `border_collections` / `border_pricing_rules`: world read; admin CRUD via `_economy_is_admin()`.
-- `shop_items` select: active rows **or** rows the user **owns** in `user_inventory` (so retired/legacy borders still resolve for display and equip).
+- `shop_items` select (migration **229+**):
+  - **Active** rows (`is_active = true`), **or**
+  - **Retired archive** rows (`metadata.retired_catalog_visible = true`), **or**
+  - Rows the user **owns** in `user_inventory` (equip/history), **or**
+  - Admin.
+
+## Retiring shop borders (Pulse Shop policy)
+
+When a border leaves the active shelf:
+
+| Goal | How |
+|------|-----|
+| **Stop sales / claims** | `is_active = false`, `is_shop_item = false`, clear IAP SKUs if needed, `free_in_shop = false` |
+| **Mark retired** | `is_retired = true`, `availability_status = 'retired'`, `is_giftable = false` |
+| **Show in Retired tab** | `metadata.retired_catalog_visible = true` |
+| **Keep history** | **Never hard-delete** the row — owners keep inventory; slugs stay reserved |
+
+Users who **already own** the border still equip it. Everyone else sees it under **Pulse Shop → Borders → Retired** (browse only — “what you missed”), with **no purchase or claim CTA**.
+
+**Do not** set `retired_catalog_visible` on leaderboard / earned-only borders — they were never shop merchandise.
+
+### Migration template
+
+```sql
+update public.shop_items
+set
+  is_active = false,
+  is_retired = true,
+  availability_status = 'retired',
+  is_shop_item = false,
+  is_giftable = false,
+  store_product_id_ios = null,       -- when delisting IAP
+  store_product_id_android = null,
+  metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
+    'retired_catalog_visible', true,
+    'free_in_shop', false,
+    'retired_reason', 'event_window_ended',
+    'event_note', 'Short label for ops'
+  ),
+  updated_at = now()
+where slug = 'border-your-slug-here';
+
+-- Optional: retire linked collection
+update public.border_collections
+set is_retired = true, updated_at = now()
+where slug = 'collection_your_collection_slug';
+```
+
+Reference migrations: **228** (delisted IAP borders), **229** (Mother’s Day 2026 archive).
 
 ## App surfaces
 

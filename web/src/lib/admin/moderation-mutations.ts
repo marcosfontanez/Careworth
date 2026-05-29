@@ -152,6 +152,133 @@ export async function warnOnReport(
   return r;
 }
 
+type CircleModerationAction = "hide" | "remove" | "restore" | "pending_review";
+
+function moderationThreadUpdate(
+  status: "hidden" | "removed" | "active" | "pending_review",
+  moderatorId: string,
+  reason?: string | null,
+) {
+  const now = new Date().toISOString();
+  const hiddenOrRemoved = status === "hidden" || status === "removed";
+  const pending = status === "pending_review";
+  return {
+    moderation_status: status === "active" ? "active" : status,
+    moderated_by: moderatorId,
+    moderated_at: now,
+    moderation_reason: reason?.trim() || (pending ? "Queued for moderator review" : null),
+    deleted_at: hiddenOrRemoved || pending ? now : null,
+    deleted_by: hiddenOrRemoved || pending ? moderatorId : null,
+  };
+}
+
+function moderationReplyUpdate(
+  status: "hidden" | "removed" | "active" | "pending_review",
+  moderatorId: string,
+  reason?: string | null,
+) {
+  const now = new Date().toISOString();
+  return {
+    moderation_status: status === "active" ? "active" : status,
+    moderated_by: moderatorId,
+    moderated_at: now,
+    moderation_reason: reason?.trim() || (status === "pending_review" ? "Queued for moderator review" : null),
+  };
+}
+
+async function softHidePost(supabase: SupabaseClient, postId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.from("posts").update({ privacy_mode: "private" }).eq("id", postId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+async function softHideComment(
+  supabase: SupabaseClient,
+  commentId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("comments")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", commentId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Circle thread/reply moderation — mirrors mobile circleModerationService. */
+export async function moderateCircleReportedContent(
+  reportId: string,
+  circleAction: CircleModerationAction,
+  internalNote?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  const { supabase, adminUserId } = g;
+
+  const { data: rep, error: repErr } = await supabase
+    .from("reports")
+    .select("target_type, target_id, reason")
+    .eq("id", reportId)
+    .single();
+
+  if (repErr || !rep) return { ok: false, error: repErr?.message ?? "Report not found" };
+
+  const tt = normalizeModerationTargetType(String(rep.target_type));
+  const tid = String(rep.target_id);
+  const reason = internalNote?.trim() || String(rep.reason ?? "Staff moderation");
+
+  if (tt !== "circle_thread" && tt !== "circle_reply") {
+    return { ok: false, error: `Circle moderation applies to circle_thread/circle_reply, not ${tt}` };
+  }
+
+  if (tt === "circle_thread") {
+    let payload: Record<string, unknown>;
+    if (circleAction === "restore") {
+      payload = moderationThreadUpdate("active", adminUserId);
+    } else if (circleAction === "hide") {
+      payload = moderationThreadUpdate("hidden", adminUserId, reason);
+    } else if (circleAction === "remove") {
+      payload = moderationThreadUpdate("removed", adminUserId, reason);
+    } else {
+      payload = moderationThreadUpdate("pending_review", adminUserId, reason);
+    }
+    const { error } = await supabase.from("circle_threads").update(payload).eq("id", tid);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    let payload: Record<string, unknown>;
+    if (circleAction === "restore") {
+      payload = moderationReplyUpdate("active", adminUserId);
+    } else if (circleAction === "hide") {
+      payload = moderationReplyUpdate("hidden", adminUserId, reason);
+    } else if (circleAction === "remove") {
+      payload = moderationReplyUpdate("removed", adminUserId, reason);
+    } else {
+      payload = moderationReplyUpdate("pending_review", adminUserId, reason);
+    }
+    const { error } = await supabase.from("circle_replies").update(payload).eq("id", tid);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  const reportStatus: DbReportStatus =
+    circleAction === "restore" ? "reviewed" : "action_taken";
+  const notePrefix =
+    circleAction === "hide"
+      ? "HIDE"
+      : circleAction === "remove"
+        ? "REMOVE"
+        : circleAction === "pending_review"
+          ? "PENDING_REVIEW"
+          : "RESTORE";
+  const closed = await updateReport(supabase, reportId, adminUserId, reportStatus, `${notePrefix}: ${reason}`);
+  if (closed.ok) {
+    await logReportModeration(supabase, adminUserId, "circle_moderate", reportId, {
+      circleAction,
+      targetType: tt,
+      targetId: tid,
+    });
+  }
+  return closed;
+}
+
 export async function removeReportedContent(
   reportId: string,
   internalNote?: string,
@@ -172,11 +299,11 @@ export async function removeReportedContent(
   const tid = String(rep.target_id);
 
   if (tt === "post") {
-    const { error } = await supabase.from("posts").delete().eq("id", tid);
-    if (error) return { ok: false, error: error.message };
+    const hide = await softHidePost(supabase, tid);
+    if (!hide.ok) return hide;
   } else if (tt === "comment") {
-    const { error } = await supabase.from("comments").delete().eq("id", tid);
-    if (error) return { ok: false, error: error.message };
+    const hide = await softHideComment(supabase, tid);
+    if (!hide.ok) return hide;
   } else if (tt === "live") {
     const { error } = await supabase
       .from("live_streams")
@@ -187,7 +314,30 @@ export async function removeReportedContent(
       .eq("id", tid);
     if (error) return { ok: false, error: error.message };
   } else if (tt === "circle_thread") {
-    const { error } = await supabase.from("circle_threads").delete().eq("id", tid);
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("circle_threads")
+      .update({
+        moderation_status: "removed",
+        moderated_by: adminUserId,
+        moderated_at: now,
+        moderation_reason: internalNote?.trim() || "Removed by staff via web admin",
+        deleted_at: now,
+        deleted_by: adminUserId,
+      })
+      .eq("id", tid);
+    if (error) return { ok: false, error: error.message };
+  } else if (tt === "circle_reply") {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("circle_replies")
+      .update({
+        moderation_status: "removed",
+        moderated_by: adminUserId,
+        moderated_at: now,
+        moderation_reason: internalNote?.trim() || "Removed by staff via web admin",
+      })
+      .eq("id", tid);
     if (error) return { ok: false, error: error.message };
   } else if (tt === "stream_message") {
     const { error } = await supabase
@@ -210,8 +360,8 @@ export async function removeReportedContent(
 
   const noteExtra = internalNote?.trim()
     ? internalNote.trim()
-    : `Content removed (${tt} ${tid.slice(0, 8)}…)`;
-  const closed = await updateReport(supabase, reportId, adminUserId, "action_taken", `REMOVE: ${noteExtra}`);
+    : `Content hidden (${tt} ${tid.slice(0, 8)}…)`;
+  const closed = await updateReport(supabase, reportId, adminUserId, "action_taken", `HIDE: ${noteExtra}`);
   if (closed.ok) {
     await logReportModeration(supabase, adminUserId, "remove_content", reportId, {
       targetType: tt,
@@ -255,6 +405,9 @@ export async function suspendSubjectFromReport(
     subjectUserId = (row?.host_id as string) ?? null;
   } else if (tt === "circle_thread") {
     const { data: row } = await supabase.from("circle_threads").select("author_id").eq("id", tid).maybeSingle();
+    subjectUserId = (row?.author_id as string) ?? null;
+  } else if (tt === "circle_reply") {
+    const { data: row } = await supabase.from("circle_replies").select("author_id").eq("id", tid).maybeSingle();
     subjectUserId = (row?.author_id as string) ?? null;
   } else if (tt === "stream_message") {
     const { data: row } = await supabase.from("stream_messages").select("user_id").eq("id", tid).maybeSingle();

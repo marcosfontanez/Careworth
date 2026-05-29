@@ -106,6 +106,7 @@ export async function fetchLiveHubHome(
   });
 
   const featured = featuredPool.slice(0, 5);
+  const happeningNow = activeMerged.slice(0, 6);
   const trending = allFiltered.filter((s) => !featured.some((f) => f.id === s.id)).slice(0, 8);
 
   const shopLiveDeals = filterForTab('shop', activeMerged).slice(0, 12);
@@ -128,6 +129,7 @@ export async function fetchLiveHubHome(
 
   return {
     tab,
+    happeningNow,
     featured,
     trending,
     shopLiveDeals,

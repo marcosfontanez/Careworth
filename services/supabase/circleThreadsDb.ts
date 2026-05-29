@@ -9,6 +9,17 @@ import type {
   TrendingTopic24h,
 } from '@/types';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
+import {
+  finalizeCircleRepliesForViewer,
+  finalizeCircleThreadsForViewer,
+  redactCircleReplyForViewer,
+  redactCircleThreadForViewer,
+} from '@/lib/circleViewerPrivacy';
+import { circleContentIsPubliclyVisible } from '@/lib/circleModeration';
+import {
+  hydrateReplyRowsWithAuthors,
+  hydrateThreadRowsWithRelations,
+} from '@/lib/postgrestViewerSafeEmbeds';
 import { isDemoCatalogMediaUrl } from '@/utils/postPreviewMedia';
 import { communitiesService, rowToCommunity } from './communities';
 import { profileRowToCreatorSummary, PROFILE_SELECT_CREATOR_WITH_FRAME } from './profileRowMapper';
@@ -63,18 +74,23 @@ function rowToThread(row: any): CircleThread {
     replyCount: row.reply_count ?? 0,
     reactionCount: row.reaction_count ?? 0,
     shareCount: row.share_count ?? 0,
+    moderationStatus: row.moderation_status ?? 'active',
   };
 }
 
 function rowToReply(row: any): CircleReply {
+  const status = row.moderation_status ?? 'active';
+  const removed = !circleContentIsPubliclyVisible(status);
   return {
     id: row.id,
     threadId: row.thread_id,
     authorId: row.author_id,
     author: authorFromRow(row.author),
-    body: row.body,
+    body: removed ? '' : row.body,
     createdAt: row.created_at,
     reactionCount: row.reaction_count ?? 0,
+    moderationStatus: status,
+    isModerationRemoved: removed,
   };
 }
 
@@ -86,6 +102,18 @@ const THREAD_SELECT = `
   communities(id, slug, name),
   author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
 `;
+
+/** Plain columns only — PostgREST embeds fail on definer views; hydrate after fetch. */
+const THREAD_SELECT_VIEWER = '*';
+
+/** Read path masks Confessions author_id (migration 218). Writes stay on base table. */
+function fromCircleThreadsViewerSafe() {
+  return supabase.from('circle_threads_viewer_safe');
+}
+
+function fromCircleRepliesViewerSafe() {
+  return supabase.from('circle_replies_viewer_safe');
+}
 
 export const circleThreadsDb = {
   /**
@@ -123,52 +151,100 @@ export const circleThreadsDb = {
     return rowToThread(data);
   },
 
-  async listByCommunityId(communityId: string): Promise<CircleThread[]> {
+  async listByCommunityId(
+    communityId: string,
+    opts?: { limit?: number; cursor?: string | null; viewerId?: string | null },
+  ): Promise<CircleThread[]> {
     const id = (communityId ?? '').trim();
     if (!id) return [];
-    const { data, error } = await supabase
-      .from('circle_threads')
-      .select(THREAD_SELECT)
+    const limit = opts?.limit ?? 48;
+    const cursor = opts?.cursor?.trim() || null;
+
+    let q = fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
       .eq('community_id', id)
-      .order('created_at', { ascending: false });
+      .eq('moderation_status', 'active')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (cursor) {
+      q = q.lt('created_at', cursor);
+    }
+
+    const { data, error } = await q;
 
     if (error) throw error;
-    return (data ?? []).map(rowToThread);
+    const hydrated = await hydrateThreadRowsWithRelations(data ?? []);
+    return finalizeCircleThreadsForViewer(hydrated.map(rowToThread), opts?.viewerId);
   },
 
-  async listBySlug(slug: string): Promise<CircleThread[]> {
+  async listBySlug(slug: string, viewerId?: string | null): Promise<CircleThread[]> {
     const comm = await communitiesService.getBySlug(slug);
     if (!comm) return [];
-    const { data, error } = await supabase
-      .from('circle_threads')
-      .select(THREAD_SELECT)
+    const { data, error } = await fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
       .eq('community_id', comm.id)
+      .eq('moderation_status', 'active')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data ?? []).map(rowToThread);
+    const hydrated = await hydrateThreadRowsWithRelations(data ?? []);
+    return finalizeCircleThreadsForViewer(hydrated.map(rowToThread), viewerId);
   },
 
-  async getById(id: string): Promise<CircleThread | null> {
-    const { data, error } = await supabase.from('circle_threads').select(THREAD_SELECT).eq('id', id).maybeSingle();
+  async getById(id: string, viewerId?: string | null): Promise<CircleThread | null> {
+    const { data, error } = await fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
+      .eq('id', id)
+      .eq('moderation_status', 'active')
+      .is('deleted_at', null)
+      .maybeSingle();
     if (error || !data) return null;
-    return rowToThread(data);
+    const [hydrated] = await hydrateThreadRowsWithRelations([data]);
+    return redactCircleThreadForViewer(rowToThread(hydrated), viewerId);
   },
 
-  async listReplies(threadId: string): Promise<CircleReply[]> {
-    const { data, error } = await supabase
-      .from('circle_replies')
-      .select(
-        `
-        *,
-        author:author_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})
-      `,
-      )
+  async listReplies(
+    threadId: string,
+    opts?: {
+      limit?: number;
+      cursor?: string | null;
+      viewerId?: string | null;
+      thread?: CircleThread | null;
+    },
+  ): Promise<CircleReply[]> {
+    const limit = opts?.limit ?? 40;
+    const cursor = opts?.cursor?.trim() || null;
+    const viewerId = opts?.viewerId ?? null;
+
+    let q = fromCircleRepliesViewerSafe()
+      .select('*')
       .eq('thread_id', threadId)
-      .order('created_at', { ascending: true });
+      .eq('moderation_status', 'active')
+      .order('created_at', { ascending: true })
+      .limit(limit);
+
+    if (cursor) {
+      q = q.gt('created_at', cursor);
+    }
+
+    const { data, error } = await q;
 
     if (error) throw error;
-    return (data ?? []).map(rowToReply);
+    const hydrated = await hydrateReplyRowsWithAuthors(data ?? []);
+    const replies = hydrated.map(rowToReply);
+    const ctx = opts?.thread ?? (await this.getById(threadId, viewerId));
+    if (!ctx) return replies;
+    return finalizeCircleRepliesForViewer(replies, ctx, viewerId);
+  },
+
+  /** @deprecated Use circleModerationService.removeThread */
+  async softDeleteThread(threadId: string, moderatorId: string): Promise<void> {
+    const { circleModerationService } = await import('./circleModeration');
+    await circleModerationService.removeThread(threadId, 'legacy soft delete');
+    void moderatorId;
   },
 
   /**
@@ -328,7 +404,7 @@ export const circleThreadsDb = {
 
     const [threadFetch, commFetch] = await Promise.all([
       threadIdsToLoad.length
-        ? supabase.from('circle_threads').select(THREAD_SELECT).in('id', threadIdsToLoad)
+        ? fromCircleThreadsViewerSafe().select(THREAD_SELECT_VIEWER).in('id', threadIdsToLoad)
         : Promise.resolve({ data: [] as unknown[], error: null as null }),
       wallCommunityIds.length
         ? supabase.from('communities').select('id, slug, name').in('id', wallCommunityIds)
@@ -339,8 +415,9 @@ export const circleThreadsDb = {
     if (commFetch.error) throw commFetch.error;
 
     const threadById = new Map<string, CircleThread>();
-    for (const raw of threadFetch.data ?? []) {
-      threadById.set(String((raw as { id: string }).id), rowToThread(raw));
+    const hydratedThreads = await hydrateThreadRowsWithRelations((threadFetch.data ?? []) as any[]);
+    for (const raw of hydratedThreads) {
+      threadById.set(String(raw.id), rowToThread(raw));
     }
 
     const commById = new Map<string, { slug: string; name: string }>();
@@ -375,6 +452,48 @@ export const circleThreadsDb = {
     return out;
   },
 
+  async getThreadReactionForUser(threadId: string, userId: string | null): Promise<boolean> {
+    const uid = (userId ?? '').trim();
+    if (!uid) return false;
+    const { data, error } = await supabase
+      .from('circle_thread_reactions')
+      .select('id')
+      .eq('thread_id', threadId)
+      .eq('user_id', uid)
+      .maybeSingle();
+    if (error) {
+      if (__DEV__) console.warn('[circleThreadsDb.getThreadReactionForUser]', error.message);
+      return false;
+    }
+    return !!data;
+  },
+
+  async toggleThreadReaction(threadId: string): Promise<{ reacted: boolean }> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+    const { data: existing, error: readErr } = await supabase
+      .from('circle_thread_reactions')
+      .select('id')
+      .eq('thread_id', threadId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (readErr) throw readErr;
+    if (existing?.id) {
+      const { error } = await supabase.from('circle_thread_reactions').delete().eq('id', existing.id);
+      if (error) throw error;
+      return { reacted: false };
+    }
+    const { error } = await supabase.from('circle_thread_reactions').insert({
+      thread_id: threadId,
+      user_id: user.id,
+      reaction: 'heart',
+    });
+    if (error) throw error;
+    return { reacted: true };
+  },
+
   async addReply(threadId: string, body: string): Promise<void> {
     const {
       data: { user },
@@ -393,22 +512,28 @@ export const circleThreadsDb = {
     const raw = query.trim();
     if (!raw) return [];
     const s = escapePostgrestIlike(raw);
-    const { data, error } = await supabase
-      .from('circle_threads')
-      .select(
-        `
-        community_id,
-        communities(id, slug, name, icon, description, accent_color, banner_url, member_count, post_count, categories, trending_topics)
-      `,
-      )
+    const { data, error } = await fromCircleThreadsViewerSafe()
+      .select('community_id')
+      .eq('moderation_status', 'active')
+      .is('deleted_at', null)
       .or(`title.ilike.%${s}%,body.ilike.%${s}%`)
       .limit(50);
 
     if (error) throw error;
+    const communityIds = [
+      ...new Set((data ?? []).map((row) => String((row as { community_id: string }).community_id)).filter(Boolean)),
+    ];
+    if (communityIds.length === 0) return [];
+
+    const { data: communities, error: commErr } = await supabase
+      .from('communities')
+      .select('id, slug, name, icon, description, accent_color, banner_url, member_count, post_count, categories, trending_topics')
+      .in('id', communityIds);
+    if (commErr) throw commErr;
+
     const seen = new Set<string>();
     const out: Community[] = [];
-    for (const row of data ?? []) {
-      const c = (row as { communities?: Record<string, unknown> }).communities;
+    for (const c of communities ?? []) {
       if (!c?.id || seen.has(String(c.id))) continue;
       seen.add(String(c.id));
       out.push(rowToCommunity(c));
@@ -434,9 +559,10 @@ export const circleThreadsDb = {
     windowMs: number,
     maxFetch = 100,
   ): Promise<TrendingTopic24h[]> {
-    let q = supabase
-      .from('circle_threads')
-      .select(THREAD_SELECT)
+    let q = fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
+      .eq('moderation_status', 'active')
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
       .limit(maxFetch);
 
@@ -447,7 +573,8 @@ export const circleThreadsDb = {
 
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []).map((row: any) => {
+    const hydrated = await hydrateThreadRowsWithRelations(data ?? []);
+    return hydrated.map((row: any) => {
       const t = rowToThread(row);
       return {
         id: `trend-thread-${t.id}`,

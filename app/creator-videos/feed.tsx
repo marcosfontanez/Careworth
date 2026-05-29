@@ -16,18 +16,16 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { VideoFeedPost } from '@/components/feed/VideoFeedPost';
+import { FeedCommentsSheet } from '@/components/feed/FeedCommentsSheet';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLikedPostIds, useUser, useUserPosts } from '@/hooks/useQueries';
+import { useUser, useUserPosts } from '@/hooks/useQueries';
+import { useFeedEngagement } from '@/hooks/useFeedEngagement';
+import { useFeedCommentsSheet } from '@/hooks/useFeedCommentsSheet';
 import { useViewTracker } from '@/hooks/useViewTracker';
-import { useAppStore } from '@/store/useAppStore';
 import { useToast } from '@/components/ui/Toast';
-import { sharePostMenu } from '@/lib/share';
-import { postsService, profilesService } from '@/services/supabase';
-import { queryClient } from '@/lib/queryClient';
-import { bumpPostCount } from '@/lib/postCacheUpdates';
-import { enqueueAction } from '@/lib/offlineQueue';
 import {
   creatorVideoStartIndex,
   filterCreatorVideos,
@@ -35,7 +33,6 @@ import {
   type CreatorVideoSort,
 } from '@/lib/creatorVideosCatalog';
 import { getFeedVideoListWindow } from '@/lib/feedVideoListWindow';
-import { likedPostKeys, savedPostKeys, userKeys } from '@/lib/queryKeys';
 import type { Post } from '@/types';
 
 const VIEWABILITY_CONFIG = {
@@ -73,15 +70,22 @@ export default function CreatorVideosFeedScreen() {
   const toast = useToast();
   const { onViewStart, onViewEnd } = useViewTracker(user?.id);
 
-  const savedPostIds = useAppStore((s) => s.savedPostIds);
-  const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
-  const toggleSavePost = useAppStore((s) => s.toggleSavePost);
-  const setCreatorFollowed = useAppStore((s) => s.setCreatorFollowed);
+  const {
+    likedPostsRef,
+    savedPostIdsRef,
+    followedCreatorIdsRef,
+    rowUiEpoch,
+    bumpRowUi,
+    toggleLike,
+    handleToggleSave,
+    handleToggleFollow,
+    handleShare,
+  } = useFeedEngagement();
+  const { commentsPost, commentsOpen, openComments, closeComments } = useFeedCommentsSheet();
 
   const isOwner = !!user?.id && creatorId === user.id;
   const { data: profile, isLoading: profileLoading } = useUser(creatorId);
   const { data: posts, isLoading: postsLoading } = useUserPosts(creatorId);
-  const { data: likedIdsArr = [] } = useLikedPostIds(user?.id);
 
   const privateBlocked = !isOwner && profile?.privacyMode === 'private';
   const privacyGateLoading = !isOwner && profile === undefined && profileLoading;
@@ -98,29 +102,12 @@ export default function CreatorVideosFeedScreen() {
 
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const [videoSurfaceEpoch, setVideoSurfaceEpoch] = useState(0);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [rowUiEpoch, setRowUiEpoch] = useState(0);
-  const bumpRowUi = useCallback(() => setRowUiEpoch((e) => e + 1), []);
-  const likedServerSig = likedIdsArr.join('|');
-
-  useEffect(() => {
-    setLikedPosts(new Set(likedIdsArr));
-    bumpRowUi();
-  }, [likedServerSig, bumpRowUi]);
-
-  const likedPostsRef = useRef(likedPosts);
-  const savedPostIdsRef = useRef(savedPostIds);
-  const followedCreatorIdsRef = useRef(followedCreatorIds);
-  likedPostsRef.current = likedPosts;
-  savedPostIdsRef.current = savedPostIds;
-  followedCreatorIdsRef.current = followedCreatorIds;
-
-  const flatListRef = useRef<FlatList<Post>>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const prevActiveId = useRef<string | null>(null);
   const activePostIdRef = useRef<string | null>(null);
   activePostIdRef.current = activePostId;
   const didInitialScroll = useRef(false);
+  const flatListRef = useRef<FlatList<Post>>(null);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -222,83 +209,6 @@ export default function CreatorVideosFeedScreen() {
     },
   ]);
 
-  const toggleLike = useCallback(
-    async (id: string) => {
-      let willBeLiked = false;
-      setLikedPosts((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) {
-          next.delete(id);
-          willBeLiked = false;
-        } else {
-          next.add(id);
-          willBeLiked = true;
-        }
-        return next;
-      });
-      bumpRowUi();
-      bumpPostCount(id, 'likeCount', willBeLiked ? 1 : -1);
-      if (!user) return;
-      try {
-        await postsService.toggleLike(user.id, id);
-        queryClient.invalidateQueries({ queryKey: likedPostKeys.forUser(user.id) });
-      } catch {
-        enqueueAction({
-          type: willBeLiked ? 'like_post' : 'unlike_post',
-          payload: { postId: id, userId: user.id },
-        }).catch(() => {});
-      }
-    },
-    [user, bumpRowUi],
-  );
-
-  const handleToggleSave = useCallback(
-    async (id: string) => {
-      const wasSaved = savedPostIdsRef.current.has(id);
-      toggleSavePost(id);
-      bumpRowUi();
-      bumpPostCount(id, 'saveCount', wasSaved ? -1 : 1);
-      if (!user) return;
-      try {
-        await postsService.toggleSave(user.id, id);
-        queryClient.invalidateQueries({ queryKey: savedPostKeys.forUser(user.id) });
-      } catch (e: unknown) {
-        enqueueAction({
-          type: wasSaved ? 'unsave_post' : 'save_post',
-          payload: { postId: id, userId: user.id },
-        }).catch(() => {});
-        const msg =
-          e && typeof e === 'object' && 'message' in e
-            ? String((e as Error).message)
-            : 'Save failed';
-        toast.show(msg.length > 100 ? `${msg.slice(0, 97)}…` : msg, 'error');
-      }
-    },
-    [user, toggleSavePost, toast, bumpRowUi],
-  );
-
-  const handleToggleFollow = useCallback(async () => {
-    if (!creatorId || creatorId === user?.id) return;
-    const wasFollowing = followedCreatorIdsRef.current.has(creatorId);
-    setCreatorFollowed(creatorId, !wasFollowing);
-    bumpRowUi();
-    if (!user) return;
-    try {
-      await profilesService.toggleFollow(user.id, creatorId);
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(creatorId) });
-    } catch (e: unknown) {
-      enqueueAction({
-        type: wasFollowing ? 'unfollow_user' : 'follow_user',
-        payload: { followerId: user.id, followingId: creatorId },
-      }).catch(() => {});
-      const msg =
-        e && typeof e === 'object' && 'message' in e
-          ? String((e as Error).message)
-          : 'Follow failed';
-      toast.show(msg.length > 100 ? `${msg.slice(0, 97)}…` : msg, 'error');
-    }
-  }, [creatorId, user, setCreatorFollowed, toast, bumpRowUi]);
-
   const openCreatorGrid = useCallback(() => {
     router.back();
   }, [router]);
@@ -318,12 +228,12 @@ export default function CreatorVideosFeedScreen() {
           if (item.commentsDisabled) {
             toast.show('Comments are off — you can still read the thread.', 'info');
           }
-          router.push(`/comments/${item.id}`);
+          openComments(item);
         }}
         onSave={() => handleToggleSave(item.id)}
-        onShare={() => sharePostMenu(item, { toast: toast.show, queryClient })}
-        onFollow={handleToggleFollow}
-        onProfile={() => router.push(`/profile/${item.creatorId}` as any)}
+        onShare={() => handleShare(item)}
+        onFollow={() => handleToggleFollow(item.creatorId)}
+        onProfile={() => openPulsePage(router, item.creatorId)}
         onHashtag={(tag) => router.push(`/hashtag/${encodeURIComponent(tag)}` as any)}
         onOpenCreatorVideos={openCreatorGrid}
       />
@@ -336,9 +246,11 @@ export default function CreatorVideosFeedScreen() {
       toggleLike,
       handleToggleSave,
       handleToggleFollow,
+      handleShare,
       router,
       toast,
       openCreatorGrid,
+      openComments,
     ],
   );
 
@@ -429,6 +341,13 @@ export default function CreatorVideosFeedScreen() {
       >
         <Ionicons name="grid-outline" size={22} color="#FFF" />
       </TouchableOpacity>
+
+      <FeedCommentsSheet
+        visible={commentsOpen}
+        post={commentsPost}
+        onClose={closeComments}
+        onCommentAdded={bumpRowUi}
+      />
     </View>
   );
 }

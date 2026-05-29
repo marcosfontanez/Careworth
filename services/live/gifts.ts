@@ -1,3 +1,4 @@
+/** @deprecated Legacy emoji sticker catalog — live uses shop creator gifts via `@/lib/gifts`. */
 import type { LiveGift, LiveGiftTier } from '@/types';
 
 /** Canonical ids + Spark prices — keep aligned with `live_stream_gift_catalog` (Supabase migration). */

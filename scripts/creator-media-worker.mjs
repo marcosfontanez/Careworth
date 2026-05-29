@@ -300,6 +300,268 @@ function normalizeStitchOrBroll(job) {
   throw new Error(`PERMANENT_PAYLOAD: unsupported kind: ${job.kind}`);
 }
 
+function normalizeTrim(job) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const uid = job.user_id;
+  const clipId = typeof input.target_live_clip_id === 'string' ? input.target_live_clip_id.trim() : '';
+  const postId = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
+  if (!clipId && !postId) {
+    throw new Error('PERMANENT_PAYLOAD: trim requires target_live_clip_id or target_post_id');
+  }
+  const bucketIn =
+    typeof input.bucket === 'string' && input.bucket.trim()
+      ? input.bucket.trim()
+      : postId
+        ? DEFAULT_BUCKET
+        : 'live-recordings';
+  const storagePathIn = input.storagePathIn;
+  if (typeof storagePathIn !== 'string' || !storagePathIn.trim()) {
+    throw new Error('PERMANENT_PAYLOAD: trim requires input.storagePathIn: string');
+  }
+  const trimStartSec = Number(input.trimStartSec);
+  const trimEndSec = Number(input.trimEndSec);
+  if (!Number.isFinite(trimStartSec) || !Number.isFinite(trimEndSec) || trimEndSec <= trimStartSec) {
+    throw new Error('PERMANENT_PAYLOAD: trim requires valid trimStartSec/trimEndSec');
+  }
+
+  const outputBucket =
+    typeof input.outputBucket === 'string' && input.outputBucket.trim()
+      ? input.outputBucket.trim()
+      : DEFAULT_BUCKET;
+  const defaultOutputPath = postId
+    ? assertUserScopedStoragePath(uid, `feed-clips/${postId}.mp4`)
+    : assertUserScopedStoragePath(uid, `live-clips/${job.id}.mp4`);
+  const outputPath =
+    typeof input.outputPath === 'string' && input.outputPath.trim()
+      ? assertUserScopedStoragePath(uid, input.outputPath.trim())
+      : defaultOutputPath;
+  const thumbPath = outputPath.replace(/\.mp4$/i, '.jpg');
+
+  return {
+    bucketIn,
+    storagePathIn: storagePathIn.trim(),
+    trimStartSec,
+    trimEndSec,
+    outputBucket,
+    outputPath,
+    thumbPath,
+    clipId,
+    postId,
+  };
+}
+
+async function ffmpegTrimSegment(localIn, localOut, trimStartSec, trimEndSec) {
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-ss',
+      String(trimStartSec),
+      '-to',
+      String(trimEndSec),
+      '-i',
+      localIn,
+      '-c:v',
+      'libx264',
+      '-preset',
+      'fast',
+      '-crf',
+      '23',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '128k',
+      '-movflags',
+      '+faststart',
+      localOut,
+    ],
+    { maxBuffer: 20 * 1024 * 1024, timeout: FFMPEG_TIMEOUT_MS, killSignal: 'SIGKILL' },
+  );
+}
+
+async function ffmpegExtractThumbnail(localVideo, localThumb) {
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-ss',
+      '1',
+      '-i',
+      localVideo,
+      '-frames:v',
+      '1',
+      '-q:v',
+      '2',
+      localThumb,
+    ],
+    { maxBuffer: 8 * 1024 * 1024, timeout: FFPROBE_TIMEOUT_MS, killSignal: 'SIGKILL' },
+  );
+}
+
+async function processTrimEncode(job) {
+  const { bucketIn, storagePathIn, trimStartSec, trimEndSec, outputBucket, outputPath, thumbPath } =
+    normalizeTrim(job);
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pv-trim-'));
+  try {
+    const ext = path.extname(storagePathIn) || '.mp4';
+    const localIn = path.join(workDir, `src${ext}`);
+    await downloadToStreaming(supabase, bucketIn, storagePathIn, localIn);
+
+    const clipDur = trimEndSec - trimStartSec;
+    if (clipDur > MAX_CLIP_DURATION_SEC) {
+      throw new Error(
+        `PERMANENT_DURATION_CAP: trim window ${clipDur}s exceeds CREATOR_MEDIA_MAX_CLIP_DURATION_SEC (${MAX_CLIP_DURATION_SEC})`,
+      );
+    }
+
+    const outLocal = path.join(workDir, `out_${job.id}.mp4`);
+    await ffmpegTrimSegment(localIn, outLocal, trimStartSec, trimEndSec);
+    const dur = await ffprobeDurationSeconds(outLocal);
+
+    const thumbLocal = path.join(workDir, `thumb_${job.id}.jpg`);
+    await ffmpegExtractThumbnail(outLocal, thumbLocal).catch(() => {});
+
+    const outBody = await fs.readFile(outLocal);
+    const { error: upErr } = await supabase.storage.from(outputBucket).upload(outputPath, outBody, {
+      contentType: 'video/mp4',
+      upsert: true,
+    });
+    if (upErr) throw new Error(`TRANSIENT_DOWNLOAD: upload failed ${upErr.message}`);
+
+    let thumbUploaded = false;
+    try {
+      const thumbBody = await fs.readFile(thumbLocal);
+      const { error: thErr } = await supabase.storage.from(outputBucket).upload(thumbPath, thumbBody, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+      thumbUploaded = !thErr;
+    } catch {
+      thumbUploaded = false;
+    }
+
+    const outStat = await fs.stat(outLocal);
+    return {
+      bucket: outputBucket,
+      storagePath: outputPath,
+      thumbnailPath: thumbUploaded ? thumbPath : null,
+      bytes: outStat.size,
+      durationSeconds: Math.round(dur),
+      sourceBucket: bucketIn,
+      sourcePath: storagePathIn,
+    };
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function patchTargetPostAfterTrim(job, output) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const tid = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
+  if (!tid || job.kind !== 'trim') return true;
+
+  const { data: postRow, error: selErr } = await supabase
+    .from('posts')
+    .select('id, creator_id')
+    .eq('id', tid)
+    .maybeSingle();
+  if (selErr || !postRow || postRow.creator_id !== job.user_id) {
+    console.error('[worker] feed clip target_post_id invalid or ownership mismatch', tid, selErr?.message);
+    return false;
+  }
+
+  const bucket = output.bucket;
+  const storagePath = output.storagePath;
+  const { data: pub } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+  const mediaUrl = pub?.publicUrl?.trim();
+  if (!mediaUrl) {
+    console.error('[worker] getPublicUrl returned empty for trim output');
+    return false;
+  }
+
+  const update = {
+    media_url: mediaUrl,
+    media_processing_status: null,
+    media_processing_job_id: null,
+    media_processing_error: null,
+  };
+  if (output.thumbnailPath) {
+    const { data: thPub } = supabase.storage.from(bucket).getPublicUrl(output.thumbnailPath);
+    if (thPub?.publicUrl?.trim()) update.thumbnail_url = thPub.publicUrl.trim();
+  }
+
+  const { error: upErr } = await supabase
+    .from('posts')
+    .update(update)
+    .eq('id', tid)
+    .eq('creator_id', job.user_id);
+  if (upErr) {
+    console.error('[worker] posts patch after feed trim failed', upErr.message);
+    return false;
+  }
+  return true;
+}
+
+async function patchLiveClipAfterTrim(job, output) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const clipId = typeof input.target_live_clip_id === 'string' ? input.target_live_clip_id.trim() : '';
+  if (!clipId) return false;
+
+  const { error } = await supabase
+    .from('live_clips')
+    .update({
+      status: 'ready',
+      storage_path: output.storagePath,
+      thumbnail_path: output.thumbnailPath,
+      duration_seconds: output.durationSeconds,
+      error_message: null,
+    })
+    .eq('id', clipId)
+    .eq('host_id', job.user_id);
+  if (error) {
+    console.error('[worker] live_clips patch after trim failed', error.message);
+    return false;
+  }
+  return true;
+}
+
+async function patchLiveClipOnFailure(job, errorMsg) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const clipId = typeof input.target_live_clip_id === 'string' ? input.target_live_clip_id.trim() : '';
+  if (!clipId || job.kind !== 'trim') return;
+
+  const safe = errorMsg.length > 500 ? `${errorMsg.slice(0, 497)}…` : errorMsg;
+  const { error } = await supabase
+    .from('live_clips')
+    .update({ status: 'failed', error_message: safe })
+    .eq('id', clipId)
+    .eq('host_id', job.user_id);
+  if (error) console.error('[worker] live_clips failure patch', error.message);
+}
+
+async function runTrimPass(job) {
+  const output = await processTrimEncode(job);
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const postId = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
+  if (postId) {
+    const patched = await patchTargetPostAfterTrim(job, output);
+    if (!patched) throw new Error('TRANSIENT_DB: posts patch failed after feed trim');
+  } else {
+    const patched = await patchLiveClipAfterTrim(job, output);
+    if (!patched) throw new Error('TRANSIENT_DB: live_clips patch failed after trim');
+  }
+  await markSucceeded(job, output);
+  console.log('[worker] trim succeeded', job.id, output.storagePath);
+}
+
 async function processStitchOrBrollEncode(job) {
   const { bucket, clipPaths, outputPath } = normalizeStitchOrBroll(job);
   const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pv-job-'));
@@ -411,7 +673,10 @@ async function patchTargetPostAfterStitch(job, output) {
 async function patchTargetPostOnFailure(job, errorMsg) {
   const input = job.input && typeof job.input === 'object' ? job.input : {};
   const tid = typeof input.target_post_id === 'string' ? input.target_post_id.trim() : '';
-  if (!tid || (job.kind !== 'stitch' && job.kind !== 'broll')) return;
+  if (!tid) return;
+  const isTargetKind =
+    job.kind === 'stitch' || job.kind === 'broll' || (job.kind === 'trim' && tid);
+  if (!isTargetKind) return;
 
   const safe = errorMsg.length > 500 ? `${errorMsg.slice(0, 497)}…` : errorMsg;
   const { error } = await supabase
@@ -462,6 +727,7 @@ async function finalizePermanentFailure(job, msg, lastCode) {
     .eq('id', job.id);
 
   await patchTargetPostOnFailure(job, safe);
+  await patchLiveClipOnFailure(job, safe);
   console.error('[worker] failed permanently', job.id, job.kind, lastCode, msg);
 }
 
@@ -595,16 +861,21 @@ async function processOne() {
 
   const job = normalizeClaimedJob(claimed);
   if (!job?.id) {
-    console.log('[worker] no queued stitch/broll jobs');
+    console.log('[worker] no queued stitch/broll/trim jobs');
     return;
   }
 
   const maxA = typeof job.max_attempts === 'number' ? job.max_attempts : Number(job.max_attempts) || 5;
 
   try {
+    if (job.kind === 'trim') {
+      await runTrimPass(job);
+      return;
+    }
+
     if (job.kind !== 'stitch' && job.kind !== 'broll') {
       throw new Error(
-        `PERMANENT_PAYLOAD: Worker does not implement kind "${job.kind}" yet. Extend scripts/creator-media-worker.mjs or use stitch/broll.`,
+        `PERMANENT_PAYLOAD: Worker does not implement kind "${job.kind}" yet. Extend scripts/creator-media-worker.mjs or use stitch/broll/trim.`,
       );
     }
 
@@ -628,7 +899,25 @@ async function processOne() {
   }
 }
 
+async function startHealthServer() {
+  const port = Number(process.env.PORT || process.env.WORKER_HEALTH_PORT || 0);
+  if (!Number.isFinite(port) || port <= 0) return;
+  const { createServer } = await import('node:http');
+  createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('ok');
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  }).listen(port, () => {
+    console.log('[worker] health listening on', port);
+  });
+}
+
 async function main() {
+  await startHealthServer();
   await recoverStaleRunningOnce();
 
   if (!watch) {

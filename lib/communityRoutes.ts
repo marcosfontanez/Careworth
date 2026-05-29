@@ -1,5 +1,9 @@
 import type { Href } from 'expo-router';
 import { normalizeCommunitySlug } from '@/lib/communitySlug';
+import {
+  resolvePostViewerRoute,
+  type PostViewerRouteInput,
+} from '@/lib/postViewerRoute';
 
 /** Typed routes for Circles / community surfaces (avoids `as any` on `router.push`). */
 export function hrefTabCircles(scope?: 'yours' | 'discover'): Href {
@@ -16,21 +20,21 @@ export function hrefCommunityThread(slug: string, threadId: string): Href {
   return `/communities/${normalizeCommunitySlug(slug)}/thread/${threadId}`;
 }
 
-export function hrefPost(postId: string, circleSlug?: string): Href {
-  if (circleSlug) return `/post/${postId}?circle=${encodeURIComponent(normalizeCommunitySlug(circleSlug))}`;
-  return `/post/${postId}`;
+export function hrefPost(post: PostViewerRouteInput, circleSlug?: string): Href {
+  return resolvePostViewerRoute(post, { circle: circleSlug }) as Href;
 }
 
 /**
- * Same destination as {@link hrefPost}, plus `focusComments=1` so the post
- * composer focuses — used when opening a linked clip from My Pulse (card tap
- * or Comment) so users land in the thread immediately.
+ * Same destination as {@link hrefPost}, plus comment focus — video posts open
+ * `/comments/[id]`; non-video opens `/post/[id]?focusComments=1`.
  */
-export function hrefPostFocusComments(postId: string, circleSlug?: string): Href {
-  const base = hrefPost(postId, circleSlug);
-  const path = typeof base === 'string' ? base : `/post/${postId}`;
-  const sep = path.includes('?') ? '&' : '?';
-  return `${path}${sep}focusComments=1`;
+export function hrefPostFocusComments(post: PostViewerRouteInput, circleSlug?: string): Href {
+  return resolvePostViewerRoute(post, { circle: circleSlug, focusComments: true }) as Href;
+}
+
+/** Opens post detail with the Sparks gift tray (same flow as the post header gift icon). */
+export function hrefPostOpenGift(post: PostViewerRouteInput, circleSlug?: string): Href {
+  return resolvePostViewerRoute(post, { circle: circleSlug, openGift: true }) as Href;
 }
 
 /** Circle wall scrolled to a specific post (e.g. opening a pin from My Pulse). */

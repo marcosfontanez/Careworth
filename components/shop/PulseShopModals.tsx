@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,8 @@ import type { PurchaseOutcome } from '@/services/shop/purchaseService';
 import type { IapPurchaseStage } from '@/lib/shop/iap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileByHandle } from '@/hooks/useShopEconomy';
+import { profilesService } from '@/services/supabase/profiles';
+import type { UserProfile } from '@/types';
 import { shopErrorHint } from '@/lib/shop/shopErrors';
 import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
@@ -331,6 +333,18 @@ export function BorderGiftRecipientModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * Handle autocomplete (recipient picker). Suggests matching @handles as the
+   * user types so they don't have to remember the exact spelling. Backed by
+   * `profilesService.searchByHandle` (same source as @mention autocomplete),
+   * which orders by follower_count desc so high-signal creators surface first.
+   * The picker is dismissed once the user advances to the review step or
+   * explicitly picks a suggestion.
+   */
+  const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const suppressNextSearch = useRef(false);
+
   const normalized = normalizeHandle(handle);
   const profileQ = useProfileByHandle(normalized, step === 1 && normalized.length > 0);
 
@@ -341,8 +355,58 @@ export function BorderGiftRecipientModal({
       setStep(0);
       setError(null);
       setBusy(false);
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      suppressNextSearch.current = false;
     }
   }, [visible]);
+
+  /** Debounced handle suggestion fetch — only while typing on step 0. */
+  useEffect(() => {
+    if (!visible || step !== 0) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+    if (suppressNextSearch.current) {
+      suppressNextSearch.current = false;
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+    const frag = normalizeHandle(handle);
+    if (frag.length < 2) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSuggestionsLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await profilesService.searchByHandle(frag, 6);
+        if (cancelled) return;
+        const filtered = res.filter((u) => !authUser?.id || u.id !== authUser.id);
+        setSuggestions(filtered);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      } finally {
+        if (!cancelled) setSuggestionsLoading(false);
+      }
+    }, 220);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [handle, step, visible, authUser?.id]);
+
+  const pickSuggestion = (u: UserProfile) => {
+    suppressNextSearch.current = true;
+    setHandle(u.username ? `@${u.username}` : '');
+    setSuggestions([]);
+    setSuggestionsLoading(false);
+    setError(null);
+  };
 
   const disp = normalized ? `@${normalized}` : '';
 
@@ -447,6 +511,53 @@ export function BorderGiftRecipientModal({
                   underlineColorAndroid="transparent"
                   style={styles.input}
                 />
+                {(suggestionsLoading || suggestions.length > 0) ? (
+                  <View style={styles.handleSuggestionsPanel}>
+                    {suggestionsLoading ? (
+                      <View style={styles.handleSuggestionLoadingRow}>
+                        <ActivityIndicator size="small" color={colors.dark.textMuted} />
+                        <Text style={styles.handleSuggestionLoadingText}>Searching creators…</Text>
+                      </View>
+                    ) : (
+                      suggestions.map((u, idx) => (
+                        <TouchableOpacity
+                          key={u.id}
+                          activeOpacity={0.7}
+                          onPress={() => pickSuggestion(u)}
+                          style={[
+                            styles.handleSuggestionRow,
+                            idx === suggestions.length - 1 && styles.handleSuggestionRowLast,
+                          ]}
+                        >
+                          {u.avatar_url ? (
+                            <Image
+                              source={{ uri: u.avatar_url }}
+                              style={styles.handleSuggestionAvatarImg}
+                              {...pulseImageListThumbProps}
+                            />
+                          ) : (
+                            <View style={styles.handleSuggestionAvatarFallback}>
+                              <Ionicons name="person" size={16} color={colors.dark.textMuted} />
+                            </View>
+                          )}
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.handleSuggestionName} numberOfLines={1}>
+                              {(u.display_name ?? '').trim() || u.username || 'Pulse creator'}
+                            </Text>
+                            <Text style={styles.handleSuggestionHandle} numberOfLines={1}>
+                              {u.username ? `@${u.username}` : ''}
+                            </Text>
+                          </View>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={16}
+                            color={colors.dark.textQuiet}
+                          />
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </View>
+                ) : null}
                 <Text style={styles.fieldLabel}>Optional note</Text>
                 <TextInput
                   value={note}
@@ -948,6 +1059,63 @@ const styles = StyleSheet.create({
   },
   recipientName: { fontSize: 15, fontWeight: '800', color: colors.dark.text },
   recipientHandle: { fontSize: 13, color: pulseverse.electric, fontWeight: '700', marginTop: 2 },
+  handleSuggestionsPanel: {
+    marginTop: 8,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.dark.borderSubtle,
+    backgroundColor: 'rgba(12,18,32,0.92)',
+    overflow: 'hidden',
+  },
+  handleSuggestionLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  handleSuggestionLoadingText: {
+    fontSize: 13,
+    color: colors.dark.textMuted,
+    fontWeight: '600',
+  },
+  handleSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(56,189,248,0.10)',
+  },
+  handleSuggestionRowLast: {
+    borderBottomWidth: 0,
+  },
+  handleSuggestionAvatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.dark.card,
+  },
+  handleSuggestionAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.dark.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  handleSuggestionName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.dark.text,
+  },
+  handleSuggestionHandle: {
+    fontSize: 12,
+    color: pulseverse.electric,
+    fontWeight: '700',
+    marginTop: 1,
+  },
   fieldLabel: {
     marginTop: 12,
     fontSize: 12,

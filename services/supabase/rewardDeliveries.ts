@@ -128,10 +128,10 @@ export const rewardDeliveriesService = {
       p_item_type: opts.itemType,
       p_idempotency_key: opts.idempotencyKey,
       p_metadata: (opts.metadata ?? {}) as Json,
-      p_quantity: opts.quantity ?? null,
-      p_item_id: opts.itemId ?? null,
-      p_source_user_id: opts.sourceUserId ?? null,
-      p_source_display_name: opts.sourceDisplayName ?? null,
+      p_quantity: opts.quantity ?? undefined,
+      p_item_id: opts.itemId ?? undefined,
+      p_source_user_id: opts.sourceUserId ?? undefined,
+      p_source_display_name: opts.sourceDisplayName ?? undefined,
     });
     const id = data != null ? String(data) : null;
     if (error) {

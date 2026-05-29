@@ -31,7 +31,7 @@ import {
 import { CreatorGiftOrb } from '@/components/shop/CreatorGiftOrb';
 import { analytics } from '@/lib/analytics';
 import { shopErrorHint } from '@/lib/shop/shopErrors';
-import { ShopResultModal } from '@/components/shop/ShopResultModal';
+import { useToast } from '@/components/ui/Toast';
 
 /** Matches economy RPC `p_context_type` (`live` = `/live/:id`). Receipt metadata may use reason `live_stream`. */
 export type CreatorGiftContext = 'live' | 'post' | 'profile';
@@ -45,6 +45,8 @@ function giftContextSurfaceLabel(c: GiftContext): string {
 type Props = {
   visible: boolean;
   onClose: () => void;
+  /** When true, renders inline content for {@link LiveBottomSheet} (no Modal shell). */
+  embedded?: boolean;
   creatorUserId: string;
   creatorDisplayName?: string | null;
   creatorHandle?: string | null;
@@ -56,6 +58,7 @@ type Props = {
 
 export function SendCreatorGiftTray({
   visible,
+  embedded = false,
   onClose,
   creatorUserId,
   creatorDisplayName,
@@ -66,6 +69,7 @@ export function SendCreatorGiftTray({
 }: Props) {
   const router = useRouter();
   const { user: authUser } = useAuth();
+  const showToast = useToast((s) => s.show);
   const userId = authUser?.id;
   const catalogQ = useShopCatalog();
   const { gifts } = useShopDerived(catalogQ.data);
@@ -76,9 +80,6 @@ export function SendCreatorGiftTray({
   const [picked, setPicked] = useState<ShopItemRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  /** Success modal open — hides sheet Modal so it stacks above (RN Modal order). */
-  const [sentCelebrationOpen, setSentCelebrationOpen] = useState(false);
-  const [sentGiftName, setSentGiftName] = useState<string | null>(null);
   const [giftTierFilter, setGiftTierFilter] = useState<GiftTierFilter>('all');
 
   const recipientDisplay = useMemo(() => {
@@ -88,15 +89,6 @@ export function SendCreatorGiftTray({
     if (h) return `@${h}`;
     return 'This creator';
   }, [creatorDisplayName, creatorHandle]);
-
-  const senderGiftContextNavigate = useMemo(() => {
-    const id = contextId?.trim();
-    if (!id) return null;
-    if (contextType === 'post') return { label: 'View post', href: `/post/${id}` } as const;
-    if (contextType === 'profile') return { label: 'View profile', href: `/profile/${id}` } as const;
-    if (contextType === 'live') return { label: 'View live', href: `/live/${encodeURIComponent(id)}` } as const;
-    return null;
-  }, [contextType, contextId]);
 
   useEffect(() => {
     if (visible && userId) {
@@ -109,8 +101,6 @@ export function SendCreatorGiftTray({
       setPicked(null);
       setConfirmOpen(false);
       setSending(false);
-      setSentCelebrationOpen(false);
-      setSentGiftName(null);
       setGiftTierFilter('all');
     }
   }, [visible]);
@@ -137,6 +127,14 @@ export function SendCreatorGiftTray({
     if (giftTierFilter === 'all') return sortedGifts;
     return giftsByTier.get(giftTierFilter) ?? [];
   }, [giftTierFilter, giftsByTier, sortedGifts]);
+
+  const featuredGifts = useMemo(() => {
+    const flagged = sortedGifts.filter(
+      (g) => (g.metadata as { featured?: boolean } | null)?.featured === true,
+    );
+    const pool = flagged.length > 0 ? flagged : sortedGifts.slice(-3).reverse();
+    return pool.slice(0, 3);
+  }, [sortedGifts]);
 
   const goGetSparks = useCallback(() => {
     analytics.track('insufficient_sparks_prompt_shown', {
@@ -219,7 +217,6 @@ export function SendCreatorGiftTray({
       }
       setConfirmOpen(false);
       setPicked(null);
-      setSentGiftName(gift.name);
       await refreshAfterPurchase();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       analytics.track('gift_sent', {
@@ -229,7 +226,9 @@ export function SendCreatorGiftTray({
         context_id: contextId,
         sparks: gift.spark_price,
       });
-      setSentCelebrationOpen(true);
+      showToast(`Gift sent to ${recipientDisplay}.`, 'success');
+      onSent?.();
+      handleClose();
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
@@ -242,33 +241,22 @@ export function SendCreatorGiftTray({
     }
   };
 
-  const finishCelebration = useCallback(() => {
-    setSentCelebrationOpen(false);
-    setSentGiftName(null);
-    onSent?.();
-    handleClose();
-  }, [handleClose, onSent]);
-
   const ctxLabel =
     contextType === 'live' ? 'Live' : contextType === 'post' ? 'Post' : 'Profile';
 
-  return (
+  if (!visible && !embedded) return null;
+
+  const sheetBody = (
     <>
-      <Modal
-        visible={visible && !sentCelebrationOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={sending || sentCelebrationOpen ? () => undefined : handleClose}
-      >
-        <Pressable style={styles.backdrop} onPress={sending || sentCelebrationOpen ? undefined : handleClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <LinearGradient
-            colors={['#A78BFA', pulseverse.electric]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sheetAccentStripe}
-          />
-          <View style={styles.handle} />
+          {!embedded ? (
+            <LinearGradient
+              colors={['#A78BFA', pulseverse.electric]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sheetAccentStripe}
+            />
+          ) : null}
+          {!embedded ? <View style={styles.handle} /> : null}
           <View style={styles.modeRow}>
             <View style={styles.modeBadge}>
               <Ionicons name="flash" size={14} color="#A5F3FC" />
@@ -277,7 +265,7 @@ export function SendCreatorGiftTray({
           </View>
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Send a gift</Text>
+              {!embedded ? <Text style={styles.title}>Send a gift</Text> : null}
               <Text style={styles.sub}>
                 {creatorDisplayName ?? 'Creator'}
                 {creatorHandle ? ` · @${creatorHandle}` : ''} · {ctxLabel}
@@ -310,6 +298,37 @@ export function SendCreatorGiftTray({
                 <Text style={styles.empty}>No gifts in the catalog yet. Check back soon.</Text>
               ) : (
                 <>
+                  {featuredGifts.length > 0 ? (
+                    <>
+                      <Text style={styles.featuredTitle}>Featured</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.featuredRow}
+                      >
+                        {featuredGifts.map((g) => {
+                          const price = g.spark_price ?? 0;
+                          const contexts = (g.gift_contexts ?? []) as GiftContext[];
+                          const allowed = contexts.length === 0 || contexts.includes(contextType);
+                          return (
+                            <TouchableOpacity
+                              key={`feat-${g.id}`}
+                              style={[styles.featuredCard, !allowed && styles.giftRowDisabled]}
+                              onPress={() => onGiftRowPress(g, contexts, allowed)}
+                              disabled={sending}
+                              activeOpacity={0.88}
+                            >
+                              <CreatorGiftOrb item={g} size={44} />
+                              <Text style={styles.featuredName} numberOfLines={1}>
+                                {g.name}
+                              </Text>
+                              <Text style={styles.featuredPrice}>{price.toLocaleString()}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </>
+                  ) : null}
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -438,28 +457,52 @@ export function SendCreatorGiftTray({
               </View>
             </View>
           ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return <View style={styles.embeddedWrap}>{sheetBody}</View>;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={sending ? () => undefined : handleClose}
+    >
+      <Pressable style={styles.backdrop} onPress={sending ? undefined : handleClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          {sheetBody}
         </Pressable>
       </Pressable>
     </Modal>
-    <ShopResultModal
-      visible={sentCelebrationOpen}
-      variant="success"
-      title="Gift sent"
-      message={`You sent ${sentGiftName ?? 'a gift'} with Sparks. Your balance is updated.`}
-      pulseCelebration={{
-        kind: 'gift_sent',
-        recipient: recipientDisplay,
-        sentKind: 'creator_sparks',
-        contextNavigate: senderGiftContextNavigate,
-      }}
-      secondaryLabel="Done"
-      onClose={finishCelebration}
-    />
-    </>
   );
 }
 
 const styles = StyleSheet.create({
+  embeddedWrap: { maxHeight: 520 },
+  featuredTitle: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: colors.primary.gold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  featuredRow: { gap: 10, paddingBottom: 12 },
+  featuredCard: {
+    width: 108,
+    padding: 10,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(12,18,32,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(250,204,21,0.28)',
+    alignItems: 'center',
+    gap: 6,
+  },
+  featuredName: { fontSize: 11, fontWeight: '800', color: colors.dark.text, textAlign: 'center' },
+  featuredPrice: { fontSize: 11, fontWeight: '800', color: pulseverse.electricSoft },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(5,8,14,0.55)',

@@ -1,0 +1,8 @@
+{
+  "name": "pulseverse-creator-media-worker",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.3"
+  }
+}

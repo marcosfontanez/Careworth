@@ -35,8 +35,8 @@ export const creatorTipsService = {
       const { data: tipId, error } = await supabase.rpc('create_creator_tip_and_apply_earnings', {
         p_to_creator_id: toCreatorId,
         p_amount: amount,
-        p_message: message ?? null,
-        p_post_id: postId ?? null,
+        p_message: message,
+        p_post_id: postId,
       });
 
       if (error || !tipId) return false;

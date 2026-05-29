@@ -15,6 +15,13 @@ import type { LiveHubCategoryTab, LiveHubStream, LiveModeType, LiveScheduledEven
 const W = Dimensions.get('window').width;
 const TREND_COL_W = (W - layout.screenPadding * 2 - spacing.md) / 2;
 
+function safeMediaUri(uri?: string | null): string | undefined {
+  const trimmed = uri?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+const HUB_MEDIA_FALLBACK = { backgroundColor: 'rgba(12,18,32,0.92)' } as const;
+
 export function liveModeLabel(mode: LiveModeType): string {
   switch (mode) {
     case 'casual':
@@ -241,6 +248,9 @@ export function HubTrendingCard({
   /** Taller tiles read closer to TikTok-style discover mocks. */
   posterHeight?: number;
 }) {
+  const thumbUri = safeMediaUri(stream.thumbnailUrl);
+  const avatarUri = safeMediaUri(stream.host.avatarUrl);
+
   return (
     <Pressable
       onPress={onPress}
@@ -255,12 +265,16 @@ export function HubTrendingCard({
       accessibilityRole="button"
       accessibilityLabel={stream.title}
     >
-      <Image
-        source={{ uri: stream.thumbnailUrl }}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        {...pulseImageFeedHeroProps}
-      />
+      {thumbUri ? (
+        <Image
+          source={{ uri: thumbUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          {...pulseImageFeedHeroProps}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, HUB_MEDIA_FALLBACK]} />
+      )}
       <LinearGradient
         colors={['rgba(6,14,26,0.1)', 'rgba(6,14,26,0.95)']}
         style={StyleSheet.absoluteFill}
@@ -277,11 +291,15 @@ export function HubTrendingCard({
           {stream.title}
         </Text>
         <View style={styles.trendHost}>
-          <Image
-            source={{ uri: stream.host.avatarUrl }}
-            style={styles.trendAv}
-            {...pulseImageListThumbProps}
-          />
+          {avatarUri ? (
+            <Image
+              source={{ uri: avatarUri }}
+              style={styles.trendAv}
+              {...pulseImageListThumbProps}
+            />
+          ) : (
+            <View style={[styles.trendAv, HUB_MEDIA_FALLBACK]} />
+          )}
           <Text style={styles.trendHostName} numberOfLines={1}>
             {stream.host.displayName}
           </Text>
@@ -295,15 +313,20 @@ export function HubShopLiveCard({ stream, onPress }: { stream: LiveHubStream; on
   const dealLabel =
     stream.promoTag?.trim() || (stream.hasProducts ? 'Live Deal' : null);
   const priceLine = stream.products?.[0]?.price?.trim();
+  const thumbUri = safeMediaUri(stream.thumbnailUrl);
 
   return (
     <Pressable style={styles.shopCard} onPress={onPress} accessibilityRole="button">
-      <Image
-        source={{ uri: stream.thumbnailUrl }}
-        style={styles.shopThumb}
-        contentFit="cover"
-        {...pulseImageFeedHeroProps}
-      />
+      {thumbUri ? (
+        <Image
+          source={{ uri: thumbUri }}
+          style={styles.shopThumb}
+          contentFit="cover"
+          {...pulseImageFeedHeroProps}
+        />
+      ) : (
+        <View style={[styles.shopThumb, HUB_MEDIA_FALLBACK]} />
+      )}
       <LinearGradient
         colors={['transparent', 'rgba(6,14,26,0.92)']}
         style={StyleSheet.absoluteFill}
@@ -352,9 +375,11 @@ export function upcomingSessionCategoryLabel(ev: LiveScheduledEvent): string {
 export function HubUpcomingSessionCard({
   ev,
   onRsvp,
+  onOpenSession,
 }: {
   ev: LiveScheduledEvent;
   onRsvp: () => void;
+  onOpenSession?: () => void;
 }) {
   const d = new Date(ev.startsAt);
   const month = d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
@@ -368,26 +393,34 @@ export function HubUpcomingSessionCard({
         <CreatorHubGlassBackdrop borderRadius={borderRadius.xl} blurIntensity={34} />
       </View>
       <View style={styles.upRailInner}>
-        <View style={styles.upRailDateCol}>
-          <Text style={styles.upRailMonth}>{month}</Text>
-          <Text style={styles.upRailDay}>{dayNum}</Text>
-        </View>
-        <View style={styles.upRailMid}>
-          <Text style={styles.upRailCat}>{upcomingSessionCategoryLabel(ev)}</Text>
-          <Text style={styles.upRailTitle} numberOfLines={2}>
-            {ev.title}
-          </Text>
-          <Text style={styles.upRailHost} numberOfLines={2}>
-            {ev.hostName}
-            {ev.hostTitle ? ` · ${ev.hostTitle}` : ''}
-          </Text>
-          <View style={styles.upRailWhenRow}>
-            <Ionicons name="calendar-outline" size={13} color={pulseverse.electric} />
-            <Text style={styles.upRailWhenTxt}>
-              {weekday} · {timeStr}
-            </Text>
+        <Pressable
+          style={styles.upRailTapTarget}
+          onPress={onOpenSession}
+          disabled={!onOpenSession}
+          accessibilityRole="button"
+          accessibilityLabel={`Open scheduled session: ${ev.title}`}
+        >
+          <View style={styles.upRailDateCol}>
+            <Text style={styles.upRailMonth}>{month}</Text>
+            <Text style={styles.upRailDay}>{dayNum}</Text>
           </View>
-        </View>
+          <View style={styles.upRailMid}>
+            <Text style={styles.upRailCat}>{upcomingSessionCategoryLabel(ev)}</Text>
+            <Text style={styles.upRailTitle} numberOfLines={2}>
+              {ev.title}
+            </Text>
+            <Text style={styles.upRailHost} numberOfLines={2}>
+              {ev.hostName}
+              {ev.hostTitle ? ` · ${ev.hostTitle}` : ''}
+            </Text>
+            <View style={styles.upRailWhenRow}>
+              <Ionicons name="calendar-outline" size={13} color={pulseverse.electric} />
+              <Text style={styles.upRailWhenTxt}>
+                {weekday} · {timeStr}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
         <Pressable onPress={onRsvp} style={styles.upRailBtn} accessibilityRole="button">
           <Text style={styles.upRailBtnTxt}>{ev.rsvpState === 'going' ? 'Saved' : 'Remind Me'}</Text>
         </Pressable>
@@ -402,14 +435,20 @@ export function HubUpcomingCard(props: { ev: LiveScheduledEvent; onRsvp: () => v
 }
 
 export function HubCircleLiveCard({ stream, onPress }: { stream: LiveHubStream; onPress: () => void }) {
+  const thumbUri = safeMediaUri(stream.thumbnailUrl);
+
   return (
     <Pressable style={styles.circleCard} onPress={onPress}>
-      <Image
-        source={{ uri: stream.thumbnailUrl }}
-        style={styles.circleThumb}
-        contentFit="cover"
-        {...pulseImageFeedHeroProps}
-      />
+      {thumbUri ? (
+        <Image
+          source={{ uri: thumbUri }}
+          style={styles.circleThumb}
+          contentFit="cover"
+          {...pulseImageFeedHeroProps}
+        />
+      ) : (
+        <View style={[styles.circleThumb, HUB_MEDIA_FALLBACK]} />
+      )}
       <LinearGradient colors={['rgba(6,14,26,0.2)', 'rgba(6,14,26,0.92)']} style={StyleSheet.absoluteFill} />
       <View style={styles.circleTop}>
         <LivePill />
@@ -689,6 +728,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     zIndex: 1,
+  },
+  upRailTapTarget: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    minWidth: 0,
   },
   upRailDateCol: {
     width: 44,

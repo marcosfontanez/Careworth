@@ -1,7 +1,9 @@
 import type { Comment, PostReactionCounts, PostReactionKind } from '@/types';
 import { commentsService as supaComments } from '@/services/supabase/comments';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
+import { finalizeCommentsForViewer } from '@/lib/commentViewerPrivacy';
 import { normalizePostReactionKind } from '@/lib/postReactions';
+import { supabase } from '@/lib/supabase';
 import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
 
 function rowToCommentReactionCounts(row: any): PostReactionCounts {
@@ -94,7 +96,10 @@ export const commentService = {
    *     without picked-reaction state). Viewer can still see the thread.
    */
   async getByPostId(postId: string, viewerId?: string | null): Promise<Comment[]> {
-    const data = await supaComments.getByPostId(postId);
+    const [data, postMeta] = await Promise.all([
+      supaComments.getByPostId(postId),
+      supabase.from('posts_viewer_safe').select('is_anonymous').eq('id', postId).maybeSingle(),
+    ]);
     const ids = data.map((r) => r.id);
     let viewerMap: Partial<Record<string, PostReactionKind>> = {};
     if (viewerId && ids.length > 0) {
@@ -106,7 +111,9 @@ export const commentService = {
         }
       }
     }
-    return buildTree(data, viewerMap);
+    const tree = buildTree(data, viewerMap);
+    const isAnonymous = postMeta.data?.is_anonymous === true;
+    return finalizeCommentsForViewer(tree, postId, { isAnonymous, viewerId });
   },
 
   async addComment(postId: string, content: string, parentId?: string, mediaUrl?: string | null) {

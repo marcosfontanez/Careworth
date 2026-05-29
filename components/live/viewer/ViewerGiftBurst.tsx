@@ -11,7 +11,10 @@ type Props = {
   onDone?: () => void;
 };
 
-/** Brief gift burst over the video — does not block the whole stream. */
+/**
+ * @deprecated Legacy emoji sticker burst — live uses `LiveGiftOverlay` + `CreatorGiftOrb`.
+ * Brief gift burst over the video — does not block the whole stream.
+ */
 export function ViewerGiftBurst({ gift, senderName, quantity = 1, onDone }: Props) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;

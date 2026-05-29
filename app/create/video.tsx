@@ -6,7 +6,20 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import {
+  DEFAULT_OVERLAY_STYLE,
+  computeOverlayTopLeft,
+  overlayTextStyle,
+  serializeOverlayStyle,
+  type VideoOverlayStyle,
+} from '@/lib/videoOverlayStyle';
+import {
+  DraggableOverlayText,
+  OverlayStylePanel,
+} from '@/components/create/VideoOverlayTextEditor';
+import { OverlayEditFloatingPreview } from '@/components/create/OverlayEditFloatingPreview';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useNavigation } from '@react-navigation/native';
 import { usePost } from '@/hooks/useQueries';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -111,12 +124,16 @@ type FilterPreset = VideoLookId;
 
 const EDITOR_FILTER_IDS: VideoLookId[] = VIDEO_LOOKS.map((l) => l.id);
 
-/** Preview-only polish: playback speed, color grade overlay, optional sticker line (burned into caption on post). */
+/** Preview-only polish: playback speed, color grade overlay, optional sticker line (rendered live + draggable). */
 function ComposableVideoPreview({
   uri,
   playbackRate,
   filter,
   overlayText,
+  overlayStyle,
+  onChangeOverlayStyle,
+  containerWidth,
+  containerHeight,
   previewMuted = true,
   previewVolume = 0,
   brandKit,
@@ -125,6 +142,10 @@ function ComposableVideoPreview({
   playbackRate: number;
   filter: FilterPreset;
   overlayText: string;
+  overlayStyle: VideoOverlayStyle;
+  onChangeOverlayStyle: (next: VideoOverlayStyle) => void;
+  containerWidth: number;
+  containerHeight: number;
   /** When false, play original audio (e.g. hear your upload while picking a separate sound). */
   previewMuted?: boolean;
   previewVolume?: number;
@@ -161,11 +182,13 @@ function ComposableVideoPreview({
       {tint ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: tint }]} />
       ) : null}
-      {overlayText.trim() ? (
-        <View style={[styles.previewStickerWrap]} pointerEvents="none">
-          <Text style={styles.previewStickerText}>{overlayText.trim()}</Text>
-        </View>
-      ) : null}
+      <DraggableOverlayText
+        text={overlayText}
+        style={overlayStyle}
+        onChangeStyle={onChangeOverlayStyle}
+        containerWidth={containerWidth}
+        containerHeight={containerHeight}
+      />
       <VideoBrandWatermark brandKit={brandKit} compact position="bottom-center" edgeOffset={10} variant="subtle" />
     </>
   );
@@ -180,14 +203,29 @@ function ComposableVideoPreviewFrozen({
   posterUri,
   filter,
   overlayText,
+  overlayStyle,
+  containerWidth,
+  containerHeight,
   brandKit,
 }: {
   posterUri: string | null;
   filter: FilterPreset;
   overlayText: string;
+  overlayStyle: VideoOverlayStyle;
+  containerWidth: number;
+  containerHeight: number;
   brandKit?: BrandKit | null;
 }) {
   const tint = tintForLook(filter);
+  /** onLayout-measured text size — needed to anchor the visual center of the
+   *  text at (x_norm * containerWidth, y_norm * containerHeight). */
+  const [overlayTextSize, setOverlayTextSize] = useState<{ w: number; h: number } | null>(null);
+  const overlayAnchor = computeOverlayTopLeft(
+    overlayStyle,
+    containerWidth,
+    containerHeight,
+    overlayTextSize,
+  );
   return (
     <>
       {posterUri ? (
@@ -203,9 +241,26 @@ function ComposableVideoPreviewFrozen({
       {tint ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: tint }]} />
       ) : null}
-      {overlayText.trim() ? (
-        <View style={[styles.previewStickerWrap]} pointerEvents="none">
-          <Text style={styles.previewStickerText}>{overlayText.trim()}</Text>
+      {overlayText.trim() && containerWidth > 0 ? (
+        <View
+          pointerEvents="none"
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            if (!overlayTextSize || overlayTextSize.w !== width || overlayTextSize.h !== height) {
+              setOverlayTextSize({ w: width, h: height });
+            }
+          }}
+          style={{
+            position: 'absolute',
+            left: overlayAnchor?.left ?? 0,
+            top: overlayAnchor?.top ?? 0,
+            maxWidth: containerWidth * 0.9,
+            opacity: overlayAnchor ? 1 : 0,
+          }}
+        >
+          <Text style={overlayTextStyle(overlayStyle)} numberOfLines={3}>
+            {overlayText.trim()}
+          </Text>
         </View>
       ) : null}
       <VideoBrandWatermark brandKit={brandKit} compact position="bottom-center" edgeOffset={10} variant="subtle" />
@@ -300,6 +355,23 @@ export default function CreateVideoScreen() {
   const [evidenceLabel, setEvidenceLabel] = useState('');
   /** On-video sticker line; sent as `video_overlay_text` and rendered live over the feed video. */
   const [overlayLine, setOverlayLine] = useState('');
+  /** Overlay style — font / size / color / normalized x,y position. Initialized
+   *  to the centered-lower default so legacy behavior is preserved when the
+   *  user doesn't touch the new controls. Saved as `posts.video_overlay_style`. */
+  const [overlayStyle, setOverlayStyle] = useState<VideoOverlayStyle>(DEFAULT_OVERLAY_STYLE);
+  /** Live preview container size — needed to convert the draggable text's px
+   *  position to normalized 0..1 coords. Updated by onLayout below. */
+  const [previewSize, setPreviewSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  /** Floating mini-preview state — appears while editing the overlay text so
+   *  the user doesn't have to scroll back up to the main preview to see
+   *  font/size/color/position changes land. */
+  const [overlayInputFocused, setOverlayInputFocused] = useState(false);
+  const [scrolledPastPreview, setScrolledPastPreview] = useState(false);
+  const [pipDismissed, setPipDismissed] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  /** Y position of the main preview wrapper — captured at onLayout so the PIP's
+   *  tap-to-expand action can scroll the user back to it precisely. */
+  const previewYRef = useRef<number>(0);
   const [filterPreset, setFilterPreset] = useState<FilterPreset>('none');
   const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
   const [showDraftHint, setShowDraftHint] = useState(false);
@@ -1277,6 +1349,7 @@ export default function CreateVideoScreen() {
             mood_preset: moodId ?? undefined,
             video_look_id: filterPreset !== 'none' ? filterPreset : undefined,
             video_overlay_text: overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
+            video_overlay_style: overlayLine.trim() ? serializeOverlayStyle(overlayStyle) : null,
             comments_disabled: !commentsOn || undefined,
             ...clipPermissionsPayload,
             media_processing_status: 'queued',
@@ -1532,6 +1605,8 @@ export default function CreateVideoScreen() {
         video_look_id: postType === 'video' && filterPreset !== 'none' ? filterPreset : undefined,
         video_overlay_text:
           postType === 'video' && overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
+        video_overlay_style:
+          postType === 'video' && overlayLine.trim() ? serializeOverlayStyle(overlayStyle) : null,
         comments_disabled: !commentsOn || undefined,
         ...clipPermissionsPayload,
         ...communityCreatePayload,
@@ -1603,7 +1678,7 @@ export default function CreateVideoScreen() {
           publishSuccess?.pinned && user?.id
             ? () => {
                 setPublishSuccess(null);
-                router.replace(`/profile/${user.id}` as any);
+                openMyPulse(router, { replace: true });
               }
             : undefined
         }
@@ -1791,19 +1866,47 @@ export default function CreateVideoScreen() {
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={64}
+        onScroll={(e) => {
+          // Show the floating PIP whenever the user has scrolled the main
+          // preview out of view AND they have overlay text — so changing a
+          // font/size/color chip down the page never blind-fires.
+          const y = e.nativeEvent.contentOffset.y;
+          const threshold = previewYRef.current + previewSize.h * 0.6;
+          const past = y > threshold;
+          if (past !== scrolledPastPreview) setScrolledPastPreview(past);
+        }}
+      >
         {media ? (
           <>
             <PreviewOnlyCallout
               title="Preview only — not burned into upload"
               body="Color grade chips sync to the feed as a tint overlay (not baked into the MP4). Playback speed, trim markers, sound-hook placement, and clip-split planning stay preview-only until server export matches."
             />
-            <View style={styles.videoPreviewWrap}>
+            <View
+              style={styles.videoPreviewWrap}
+              onLayout={(e) => {
+                const { width, height, y } = e.nativeEvent.layout;
+                if (width !== previewSize.w || height !== previewSize.h) {
+                  setPreviewSize({ w: width, h: height });
+                }
+                // Remember the scrollable y so the PIP can scroll back here on tap.
+                previewYRef.current = y;
+              }}
+            >
               {Platform.OS === 'android' && androidFreezeComposerPreview ? (
                 <ComposableVideoPreviewFrozen
                   posterUri={composerPreviewPosterUri}
                   filter={filterPreset}
                   overlayText={overlayLine}
+                  overlayStyle={overlayStyle}
+                  containerWidth={previewSize.w}
+                  containerHeight={previewSize.h}
                   brandKit={brandKit}
                 />
               ) : (
@@ -1813,6 +1916,10 @@ export default function CreateVideoScreen() {
                   playbackRate={previewPlaybackRate}
                   filter={filterPreset}
                   overlayText={overlayLine}
+                  overlayStyle={overlayStyle}
+                  onChangeOverlayStyle={setOverlayStyle}
+                  containerWidth={previewSize.w}
+                  containerHeight={previewSize.h}
                   previewMuted={Boolean(soundPostIdTrim) || !originalAudioOn}
                   previewVolume={originalAudioOn && !soundPostIdTrim ? originalAudioMix : 0}
                   brandKit={brandKit}
@@ -1992,8 +2099,21 @@ export default function CreateVideoScreen() {
               placeholderTextColor={colors.dark.textMuted}
               editable={!posting}
               maxLength={80}
+              onFocus={() => {
+                setOverlayInputFocused(true);
+                // Reopen the PIP every time the user comes back to edit.
+                setPipDismissed(false);
+              }}
+              onBlur={() => setOverlayInputFocused(false)}
             />
           </AccentComposerFrame>
+          {overlayLine.trim() ? (
+            <OverlayStylePanel
+              style={overlayStyle}
+              onChangeStyle={setOverlayStyle}
+              disabled={posting}
+            />
+          ) : null}
         </View>
 
         <View style={styles.fieldGroup}>
@@ -2382,6 +2502,27 @@ export default function CreateVideoScreen() {
           </>
         ) : null}
       </ScrollView>
+      <OverlayEditFloatingPreview
+        visible={
+          Boolean(media) &&
+          !pipDismissed &&
+          overlayLine.trim().length > 0 &&
+          (overlayInputFocused || scrolledPastPreview)
+        }
+        posterUri={composerPreviewPosterUri ?? media?.uri ?? null}
+        text={overlayLine}
+        style={overlayStyle}
+        onDismiss={() => setPipDismissed(true)}
+        onTapExpand={() => {
+          // Close the keyboard and scroll back to the main preview so the
+          // user can drag-position the text on the full-size canvas.
+          Keyboard.dismiss();
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, previewYRef.current - 8),
+            animated: true,
+          });
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

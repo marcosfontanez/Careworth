@@ -23,6 +23,7 @@ import { CircleHighlightsRow } from '@/components/circles/CircleHighlightsRow';
 import { CircleModeChips, type CircleMode } from '@/components/circles/CircleModeChips';
 import { CirclePostCard } from '@/components/circles/CirclePostCard';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
+import { ReportModal } from '@/components/ui/ReportModal';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { communityService } from '@/services';
@@ -30,13 +31,16 @@ import { communitiesService, postsService } from '@/services/supabase';
 import { colors } from '@/theme';
 import { shareCommunity, sharePostMenu } from '@/lib/share';
 import { useToast } from '@/components/ui/Toast';
-import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { isAnonymousConfessionCircle, CIRCLE_JOIN_BETA_NOTE, CONFESSIONS_BETA_DISCLOSURE } from '@/lib/anonymousCircle';
 import { getCircleAccent } from '@/lib/circleAccents';
 import { patchPostReactionCounts } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { circleContentKeys, communityKeys, likedPostKeys } from '@/lib/queryKeys';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
-import { hrefCommunityThread, hrefPost, hrefTabCircles } from '@/lib/communityRoutes';
+import { hrefCommunityThread, hrefPost, hrefPostFocusComments, hrefPostOpenGift, hrefTabCircles } from '@/lib/communityRoutes';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
+import { useFeatureFlags } from '@/lib/featureFlags';
+import { pushPostViewer } from '@/lib/postViewerRoute';
 import {
   getThreadReadReplyCount,
   hasSeenCircleQuestionsHint,
@@ -44,10 +48,19 @@ import {
   isCommunityMuted,
   setCommunityMuted,
 } from '@/lib/circleExperience';
-import type { CircleThread, Post, PostReactionKind } from '@/types';
+import type { InfiniteData } from '@tanstack/react-query';
+import type { Post, CircleThread, PostReactionKind } from '@/types';
 import { feedPerfEnabled, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
 import { getCommunityWallFeedListWindow } from '@/lib/feedVideoListWindow';
 import { normalizeCommunitySlug } from '@/lib/communitySlug';
+import { circleRoomDiag } from '@/lib/circleRoomDiag';
+import {
+  ensureCircleThreadsQuery,
+  ensureCommunityWallQuery,
+} from '@/lib/communityCache';
+import {
+  patchCommunityWallPostsInCache,
+} from '@/lib/communityWallPostsCache';
 
 const COMMUNITY_WALL_LIST_WINDOW = getCommunityWallFeedListWindow();
 
@@ -61,7 +74,18 @@ function prettySlugLabel(raw: string) {
     .join(' ');
 }
 
-/** Hot score used to rank "Top" — same shape we used in the previous version. */
+/**
+ * Time-decayed "hot" score used to rank "Top" (and the Video tab).
+ *
+ *   hotScore = (likeCount + comments×2 + shares×3) / (ageHours + 2)^1.5
+ *
+ * Numerator = weighted engagement (likes×1, comments×2, shares×3 — comments and
+ * shares are stronger signals). Denominator = time decay: `(ageHours + 2)^1.5`
+ * grows as the post ages, so a post needs fresh, ongoing engagement to stay on
+ * top. The `+2` prevents brand-new posts from getting a runaway score; the
+ * `^1.5` exponent makes older posts fade faster. This keeps the same post from
+ * camping at the top forever — popular-but-aging posts gradually drop off.
+ */
 function hotScore(post: Post): number {
   const age = (Date.now() - new Date(post.createdAt).getTime()) / 3600000;
   return (post.likeCount + post.commentCount * 2 + post.shareCount * 3) / Math.pow(age + 2, 1.5);
@@ -74,7 +98,10 @@ export default function CommunityDetailScreen() {
     const segs = segments as string[];
     const i = segs.indexOf('communities');
     if (i < 0 || i >= segs.length - 1) return '';
-    return normalizeCommunitySlug(segs[i + 1]);
+    const raw = segs[i + 1];
+    // Expo file-based routes can briefly expose the dynamic segment name `[slug]`.
+    if (!raw || raw.startsWith('[')) return '';
+    return normalizeCommunitySlug(raw);
   }, [segments]);
 
   const slug = useMemo(() => {
@@ -92,12 +119,16 @@ export default function CommunityDetailScreen() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
+  const ensuredCommunityFetchRef = useRef<string | null>(null);
+  const ensuredWallFetchRef = useRef<string | null>(null);
+  const ensuredThreadsFetchRef = useRef<string | null>(null);
   const {
     data: community,
     isPending,
     isError,
     isFetching,
     fetchStatus: communityFetchStatus,
+    isCommunityInitialLoading,
     refetch,
   } = useCommunity(slug);
   /** Ignore cached rows from another slug (defense if anything primes the wrong key). */
@@ -109,25 +140,100 @@ export default function CommunityDetailScreen() {
   const communityQuerySettled = !isPending && !isFetching;
   const slugMismatchAfterSettled = communityQuerySettled && staleSlugMismatch;
   /**
-   * Drop mismatched rows immediately (persisted cache / bad primes). Otherwise
-   * `refetchOnMount` keeps `isFetching` true while the row never matches the URL,
-   * and `(isFetching || staleSlugMismatch)` traps the room on “Loading circle…”
-   * until navigation resets the observer.
+   * Drop mismatched rows immediately (persisted cache / bad primes), then
+   * authoritatively fetch when TanStack Query v5 leaves an enabled query in
+   * `pending` + `fetchStatus: 'idle'` (first cold navigation after `enabled`
+   * flips — remount on back+re-enter masks the bug).
    */
   useLayoutEffect(() => {
-    if (!slug || community == null) return;
-    if (normalizeCommunitySlug(community.slug) === slug) return;
-    queryClient.removeQueries({ queryKey: ['community', slug], exact: true });
-  }, [slug, community, queryClient]);
-  /** True pending or cache row that doesn’t match the URL (cleared in layout effect). */
+    if (!slug) return;
+    const normalized = normalizeCommunitySlug(slug);
+    if (!normalized) return;
+    const key = ['community', normalized] as const;
+
+    if (community != null && normalizeCommunitySlug(community.slug) !== normalized) {
+      queryClient.removeQueries({ queryKey: key, exact: true });
+      ensuredCommunityFetchRef.current = null;
+      circleRoomDiag('room:clearedSlugMismatchCache', {
+        urlSlug: normalized,
+        cachedSlug: community.slug,
+      });
+    }
+
+    if (activeCommunity) return;
+
+    const state = queryClient.getQueryState(key);
+    if (state?.fetchStatus === 'fetching') return;
+    if (state?.status === 'success' || state?.status === 'error') return;
+    if (ensuredCommunityFetchRef.current === normalized) return;
+
+    ensuredCommunityFetchRef.current = normalized;
+    circleRoomDiag('room:ensureCommunityFetch', {
+      slug: normalized,
+      status: state?.status,
+      fetchStatus: state?.fetchStatus,
+    });
+
+    void queryClient.fetchQuery({
+      queryKey: key,
+      queryFn: () => communityService.getBySlug(normalized),
+      staleTime: 60_000,
+    });
+  }, [slug, community, activeCommunity, queryClient]);
+
+  useEffect(() => {
+    ensuredCommunityFetchRef.current = null;
+    ensuredWallFetchRef.current = null;
+    ensuredThreadsFetchRef.current = null;
+  }, [slug]);
+
+  /** Nudge wall + threads when RQ v5 leaves them pending+idle after `enabled` flips. */
+  useLayoutEffect(() => {
+    const cid = activeCommunity?.id;
+    if (!cid || !slug) return;
+    const viewerId = user?.id ?? null;
+    const wallSig = `${cid}:${viewerId ?? ''}`;
+    const threadsSig = `${slug}:${cid}`;
+
+    const wallKey = circleContentKeys.communityPosts(cid, viewerId);
+    const wallState = queryClient.getQueryState(wallKey);
+    if (
+      wallState?.status !== 'success' &&
+      wallState?.status !== 'error' &&
+      wallState?.fetchStatus !== 'fetching' &&
+      ensuredWallFetchRef.current !== wallSig
+    ) {
+      ensuredWallFetchRef.current = wallSig;
+      ensureCommunityWallQuery(queryClient, cid, viewerId);
+    }
+
+    const threadsKey = [...circleContentKeys.threadsForRoom(slug, cid), 'inf'] as const;
+    const threadsState = queryClient.getQueryState(threadsKey);
+    if (
+      threadsState?.status !== 'success' &&
+      threadsState?.status !== 'error' &&
+      threadsState?.fetchStatus !== 'fetching' &&
+      ensuredThreadsFetchRef.current !== threadsSig
+    ) {
+      ensuredThreadsFetchRef.current = threadsSig;
+      ensureCircleThreadsQuery(queryClient, slug, cid, viewerId);
+    }
+  }, [activeCommunity?.id, slug, user?.id, queryClient]);
+
+  /**
+   * Shell only while the community row is actively fetching. Do not treat
+   * `staleSlugMismatch` or bare `isPending` as loading — RQ v5 can keep
+   * `isPending` true with `fetchStatus: 'idle'` until an explicit fetch runs.
+   */
   const showRoomLoadingShell =
     !!slug &&
     !isError &&
     !activeCommunity &&
     !slugMismatchAfterSettled &&
-    (isPending || staleSlugMismatch);
+    isCommunityInitialLoading;
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const setCommunityJoined = useAppStore((s) => s.setCommunityJoined);
+  const feedCreatorGifting = useFeatureFlags((s) => s.feedCreatorGifting);
 
   const [mode, setMode] = useState<CircleMode>('top');
   const [refreshing, setRefreshing] = useState(false);
@@ -168,32 +274,54 @@ export default function CommunityDetailScreen() {
     refetch: refetchPosts,
     isWallInitialLoading,
     isError: postsError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useCommunityPosts(activeCommunity?.id ?? '');
   const postsStillLoading = isWallInitialLoading;
   const {
     data: circleThreadsRaw,
     refetch: refetchThreads,
     isThreadsInitialLoading,
+    fetchNextPage: fetchNextThreadsPage,
+    hasNextPage: hasNextThreadsPage,
+    isFetchingNextPage: isFetchingNextThreadsPage,
   } = useCircleThreads(slug, activeCommunity?.id);
   const circleThreads = circleThreadsRaw ?? [];
 
   useEffect(() => {
-    if (!__DEV__) return;
-    const cid = activeCommunity?.id ?? '';
-    // eslint-disable-next-line no-console -- intentional dev-only Circle room diagnostics
-    console.log('[circleRoom:diag]', {
+    circleRoomDiag('room:renderState', {
       slug: slug || undefined,
       slugFromSegments: slugFromSegments || undefined,
-      activeCommunityId: cid || undefined,
+      activeCommunityId: activeCommunity?.id,
       communityRowSlug: community?.slug,
+      branch: !slug
+        ? 'missingSlug'
+        : isError && community == null
+          ? 'communityError'
+          : slugMismatchAfterSettled
+            ? 'slugMismatchSettled'
+            : showRoomLoadingShell
+              ? 'loadingShell'
+              : !activeCommunity
+                ? communityQuerySettled
+                  ? 'notFound'
+                  : 'awaitingCommunity'
+                : isWallInitialLoading
+                  ? 'contentWallLoading'
+                  : isThreadsInitialLoading
+                    ? 'contentThreadsLoading'
+                    : 'content',
       communityQuery: {
         isPending,
         isFetching,
         isError,
         fetchStatus: communityFetchStatus,
+        isCommunityInitialLoading,
+        staleSlugMismatch,
       },
       wall: {
-        enabled: !!cid,
+        enabled: !!activeCommunity?.id,
         isWallInitialLoading,
         hasPostsData: allPosts !== undefined,
         postsError,
@@ -212,6 +340,11 @@ export default function CommunityDetailScreen() {
     isFetching,
     isError,
     communityFetchStatus,
+    isCommunityInitialLoading,
+    staleSlugMismatch,
+    showRoomLoadingShell,
+    slugMismatchAfterSettled,
+    communityQuerySettled,
     isWallInitialLoading,
     allPosts,
     postsError,
@@ -270,9 +403,12 @@ export default function CommunityDetailScreen() {
       return posts;
     }
     if (mode === 'fresh') {
+      // Newest first, strictly chronological.
       return raw.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
     if (mode === 'top') {
+      // Time-decayed engagement — fresh, ongoing interaction wins; aging posts
+      // gradually drop so the same post doesn't camp at the top forever.
       return raw.sort((a, b) => hotScore(b) - hotScore(a));
     }
     return raw;
@@ -348,6 +484,8 @@ export default function CommunityDetailScreen() {
   const [roomMuted, setRoomMuted] = useState(false);
   const [showCirclesNavHint, setShowCirclesNavHint] = useState(false);
   const [captionEditPost, setCaptionEditPost] = useState<Post | null>(null);
+  const [reportPostId, setReportPostId] = useState<string | null>(null);
+  const [reportThreadId, setReportThreadId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -387,25 +525,6 @@ export default function CommunityDetailScreen() {
       setRoomMuted(muted);
     })();
   }, [activeCommunity?.id, user?.id, joinedIds]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!activeCommunity?.id) return;
-      void refetchPosts();
-      void refetchThreads();
-    }, [activeCommunity?.id, refetchPosts, refetchThreads]),
-  );
-
-  /**
-   * Web + first paint: `useFocusEffect` can run before `activeCommunity?.id` exists and never
-   * re-fire when the id hydrates (screen already focused). Kick wall + threads once the
-   * room identity is known so the list does not sit on “Loading…” until a manual back/re-enter.
-   */
-  useEffect(() => {
-    if (!slug || !activeCommunity?.id) return;
-    void refetchPosts();
-    void refetchThreads();
-  }, [slug, activeCommunity?.id, refetchPosts, refetchThreads]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -484,6 +603,21 @@ export default function CommunityDetailScreen() {
   const handleCreatePost = useCallback(
     (intent?: 'meme' | 'thread' | 'question' | 'video') => {
       if (!activeCommunity) return;
+      if (!user) {
+        router.push('/auth/login');
+        return;
+      }
+      if (!joinedIds.has(activeCommunity.id)) {
+        Alert.alert(
+          'Join to post',
+          'Join this Circle to post or reply.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Join for updates and posting', onPress: () => void handleJoinPress() },
+          ],
+        );
+        return;
+      }
       const params = new URLSearchParams({
         communityId: activeCommunity.id,
         communityName: activeCommunity.name,
@@ -492,7 +626,7 @@ export default function CommunityDetailScreen() {
       if (intent) params.set('intent', intent);
       router.push(`/communities/create-post?${params.toString()}`);
     },
-    [activeCommunity, router],
+    [activeCommunity, router, user, joinedIds, handleJoinPress],
   );
 
   /* ---------- Per-card actions (reuse the same patterns as feed.tsx) ---------- */
@@ -588,7 +722,10 @@ export default function CommunityDetailScreen() {
               await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
               queryClient.setQueryData(
                 circleContentKeys.communityPosts(activeCommunity.id, user.id),
-                (old: Post[] | undefined) => (old ? old.filter((p) => p.id !== post.id) : old),
+                (old: InfiniteData<Post[]> | undefined) =>
+                  patchCommunityWallPostsInCache(old, (page) =>
+                    page.filter((p) => p.id !== post.id),
+                  ),
               );
               toast.show('Post deleted', 'success');
             } catch {
@@ -600,6 +737,14 @@ export default function CommunityDetailScreen() {
     },
     [user?.id, activeCommunity?.id, queryClient, toast],
   );
+
+  const openCirclePostGuestMenu = useCallback((post: Post) => {
+    if (user?.id && user.id === post.creatorId) return;
+    Alert.alert('Post options', undefined, [
+      { text: 'Report post', onPress: () => setReportPostId(post.id) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [user?.id]);
 
   const openCirclePostOwnerMenu = useCallback(
     (post: Post) => {
@@ -625,7 +770,10 @@ export default function CommunityDetailScreen() {
         await invalidatePostRelatedQueries(queryClient, { creatorId: user.id });
         queryClient.setQueryData(
           circleContentKeys.communityPosts(activeCommunity.id, user.id),
-          (old: Post[] | undefined) => (old ? old.map((p) => (p.id === updated.id ? updated : p)) : old),
+          (old: InfiniteData<Post[]> | undefined) =>
+            patchCommunityWallPostsInCache(old, (page) =>
+              page.map((p) => (p.id === updated.id ? updated : p)),
+            ),
         );
         toast.show('Caption updated', 'success');
       } catch (e) {
@@ -761,6 +909,7 @@ export default function CommunityDetailScreen() {
           categories={activeCommunity.categories}
           isMember={isJoined}
           notificationsMuted={roomMuted}
+          showConfessionsDisclosure={isAnonCircle}
           onToggleNotificationsMuted={async (next) => {
             if (!user?.id) return;
             try {
@@ -781,6 +930,15 @@ export default function CommunityDetailScreen() {
         />
       )}
 
+      {isAnonCircle ? (
+        <View style={styles.confessionsBanner}>
+          <Ionicons name="shield-outline" size={16} color={accent.color} />
+          <Text style={styles.confessionsBannerText}>{CONFESSIONS_BETA_DISCLOSURE}</Text>
+        </View>
+      ) : !showAbout ? (
+        <Text style={styles.joinBetaHint}>{CIRCLE_JOIN_BETA_NOTE}</Text>
+      ) : null}
+
       <CircleHighlightsRow
         posts={allPosts ?? []}
         threads={circleThreads}
@@ -788,9 +946,19 @@ export default function CommunityDetailScreen() {
         /** Anonymous rooms must never out a "Top Creator" — defeats the
          *  purpose of the room. Suppress the card entirely. */
         hideTopCreator={isAnonCircle}
-        onSelectPost={(id) => router.push(hrefPost(id, activeCommunity.slug))}
+        onSelectPost={(id) => {
+          const post = allPosts?.find((p) => p.id === id);
+          if (post) {
+            router.push(hrefPost(post, activeCommunity.slug));
+            return;
+          }
+          void pushPostViewer(router, id, {
+            viewerId: user?.id ?? null,
+            circle: activeCommunity.slug,
+          });
+        }}
         onSelectThread={(id) => router.push(hrefCommunityThread(activeCommunity.slug, id))}
-        onSelectCreator={(uid) => router.push(`/profile/${uid}`)}
+        onSelectCreator={(uid) => openPulsePage(router, uid)}
       />
 
       <CircleModeChips
@@ -820,6 +988,35 @@ export default function CommunityDetailScreen() {
 
     </View>
   );
+
+  const loadMoreWallPosts = useCallback(() => {
+    if (mode === 'questions') {
+      if (!hasNextThreadsPage || isFetchingNextThreadsPage) return;
+      void fetchNextThreadsPage();
+      return;
+    }
+    if (!hasNextPage || isFetchingNextPage) return;
+    void fetchNextPage();
+  }, [
+    mode,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextThreadsPage,
+    isFetchingNextThreadsPage,
+    fetchNextThreadsPage,
+  ]);
+
+  const wallListFooter =
+    (mode === 'questions' && isFetchingNextThreadsPage) ||
+    (mode !== 'questions' && isFetchingNextPage) ? (
+      <View style={styles.empty}>
+        <ActivityIndicator size="small" color={accent.color} />
+        <Text style={styles.emptyLoadingLabel}>
+          {mode === 'questions' ? 'Loading more threads…' : 'Loading more posts…'}
+        </Text>
+      </View>
+    ) : null;
 
   return (
     <View style={styles.container}>
@@ -856,7 +1053,12 @@ export default function CommunityDetailScreen() {
               onPress={() =>
                 router.push(hrefCommunityThread(activeCommunity.slug, (item as CircleThread).id))
               }
-              onProfile={() => router.push(`/profile/${(item as CircleThread).authorId}` as never)}
+              onProfile={
+                isAnonCircle
+                  ? undefined
+                  : () => openPulsePage(router, (item as CircleThread).authorId)
+              }
+              onReport={() => setReportThreadId((item as CircleThread).id)}
             />
           ) : (
             <CirclePostCard
@@ -866,22 +1068,20 @@ export default function CommunityDetailScreen() {
               viewerReaction={viewerReactionForPost((item as Post).id)}
               isOwner={!!user?.id && user.id === (item as Post).creatorId}
               onOwnerMenu={() => openCirclePostOwnerMenu(item as Post)}
+              onGuestMenu={() => openCirclePostGuestMenu(item as Post)}
               jumpHighlight={jumpHighlightPostId === (item as Post).id}
               onPress={() =>
-                router.push(
-                  `/post/${(item as Post).id}?circle=${encodeURIComponent(activeCommunity.slug)}` as any,
-                )
+                router.push(hrefPost(item as Post, activeCommunity.slug))
               }
-              onProfile={() => router.push(`/profile/${(item as Post).creatorId}`)}
+              onProfile={() => openPulsePage(router, (item as Post).creatorId)}
               onReply={() => {
                 const p = item as Post;
-                const base = `/post/${p.id}?circle=${encodeURIComponent(activeCommunity.slug)}`;
                 if (p.commentsDisabled) {
                   toast.show('Comments are off for this post.', 'info');
-                  router.push(base as never);
+                  router.push(hrefPost(p, activeCommunity.slug));
                   return;
                 }
-                router.push(`${base}&focusComments=1` as never);
+                router.push(hrefPostFocusComments(p, activeCommunity.slug));
               }}
               onPickReaction={(k) => {
                 if (!user) {
@@ -891,6 +1091,15 @@ export default function CommunityDetailScreen() {
                 void handleCircleWallReaction(item as Post, k);
               }}
               onShare={() => handleShare(item as Post)}
+              onGift={
+                feedCreatorGifting &&
+                user?.id &&
+                user.id !== (item as Post).creatorId &&
+                !isAnonCircle &&
+                !(item as Post).isAnonymous
+                  ? () => router.push(hrefPostOpenGift(item as Post, activeCommunity.slug))
+                  : undefined
+              }
             />
           )
         }
@@ -903,6 +1112,9 @@ export default function CommunityDetailScreen() {
         updateCellsBatchingPeriod={50}
         /* Android + expo-image: clipping off-screen rows often clears visible textures on scroll. */
         removeClippedSubviews={false}
+        onEndReached={loadMoreWallPosts}
+        onEndReachedThreshold={0.35}
+        ListFooterComponent={wallListFooter}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1010,6 +1222,18 @@ export default function CommunityDetailScreen() {
         onSave={handleSaveCaptionFromCircle}
         onClose={() => setCaptionEditPost(null)}
       />
+      <ReportModal
+        visible={reportPostId != null}
+        onClose={() => setReportPostId(null)}
+        targetType="post"
+        targetId={reportPostId ?? ''}
+      />
+      <ReportModal
+        visible={reportThreadId != null}
+        onClose={() => setReportThreadId(null)}
+        targetType="circle_thread"
+        targetId={reportThreadId ?? ''}
+      />
     </View>
   );
 }
@@ -1025,6 +1249,7 @@ function AboutSheet({
   categories,
   isMember,
   notificationsMuted,
+  showConfessionsDisclosure,
   onToggleNotificationsMuted,
   onClose,
 }: {
@@ -1033,6 +1258,7 @@ function AboutSheet({
   categories: string[];
   isMember: boolean;
   notificationsMuted: boolean;
+  showConfessionsDisclosure?: boolean;
   onToggleNotificationsMuted: (muted: boolean) => void;
   onClose: () => void;
 }) {
@@ -1051,6 +1277,13 @@ function AboutSheet({
         </TouchableOpacity>
       </View>
       <Text style={aboutStyles.desc}>{description}</Text>
+      {showConfessionsDisclosure ? (
+        <View style={aboutStyles.disclosureBox}>
+          <Text style={aboutStyles.disclosureText}>{CONFESSIONS_BETA_DISCLOSURE}</Text>
+        </View>
+      ) : (
+        <Text style={aboutStyles.betaNote}>{CIRCLE_JOIN_BETA_NOTE}</Text>
+      )}
       {isMember ? (
         <TouchableOpacity
           style={aboutStyles.muteRow}
@@ -1076,7 +1309,7 @@ function AboutSheet({
         </TouchableOpacity>
       ) : (
         <Text style={aboutStyles.nonMemberHint}>
-          Join this circle to choose whether you get alerts for new posts.
+          Join for updates to keep this Circle in Yours and choose post alerts.
         </Text>
       )}
       <View style={aboutStyles.divider} />
@@ -1119,6 +1352,21 @@ const aboutStyles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   title: { fontSize: 15, fontWeight: '800', color: colors.dark.text },
   desc: { fontSize: 13.5, color: colors.dark.textSecondary, lineHeight: 19 },
+  betaNote: {
+    fontSize: 12,
+    color: colors.dark.textMuted,
+    marginTop: 10,
+    lineHeight: 17,
+  },
+  disclosureBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  disclosureText: { fontSize: 12, color: colors.dark.textSecondary, lineHeight: 17 },
   nonMemberHint: {
     fontSize: 12.5,
     color: colors.dark.textMuted,
@@ -1204,5 +1452,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.dark.text,
+  },
+  joinBetaHint: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.dark.textMuted,
+    fontWeight: '500',
+  },
+  confessionsBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: colors.dark.border,
+  },
+  confessionsBannerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.dark.textSecondary,
+    fontWeight: '500',
   },
 });

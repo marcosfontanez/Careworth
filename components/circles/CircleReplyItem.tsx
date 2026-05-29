@@ -1,24 +1,28 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { timeAgo } from '@/utils/format';
-import { anonymousDisplayName, isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { CIRCLE_REPLY_REMOVED_TOMBSTONE } from '@/lib/circleModeration';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import type { CircleReply, CreatorSummary } from '@/types';
 
 type Props = {
   reply?: CircleReply | null;
-  /** When set with `threadId` + anonymous circle slug, hides real identity and highlights OP replies. */
+  /** When set with anonymous circle slug, hides real identity. */
   circleSlug?: string;
-  threadAuthorId?: string;
   threadId?: string;
+  onReport?: () => void;
+  canModerate?: boolean;
+  onModerate?: () => void;
 };
 
-export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }: Props) {
+export function CircleReplyItem({ reply, circleSlug, threadId, onReport, canModerate, onModerate }: Props) {
   const isAnonRoom = isAnonymousConfessionCircle(circleSlug);
   const router = useRouter();
   const author: CreatorSummary = useMemo(
@@ -38,24 +42,20 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
 
   const displayName = useMemo(() => {
     if (!reply) return 'Member';
-    if (isAnonRoom && threadId) return anonymousDisplayName(reply.authorId, threadId);
+    if (isAnonRoom) return author.displayName || 'Anonymous';
     return author.displayName;
-  }, [isAnonRoom, threadId, reply, author.displayName]);
-
-  const isOp = Boolean(
-    reply && isAnonRoom && threadAuthorId && threadId && reply.authorId === threadAuthorId,
-  );
+  }, [isAnonRoom, reply, author.displayName]);
 
   if (!reply) {
     return null;
   }
 
-  const bodyText = reply.body ?? '';
+  const bodyText = reply.isModerationRemoved ? CIRCLE_REPLY_REMOVED_TOMBSTONE : (reply.body ?? '');
 
   return (
     <View style={styles.row}>
       {isAnonRoom ? (
-        <View style={[styles.avatar, isOp && styles.opNeonRing]}>
+        <View style={styles.avatar}>
           <Ionicons name="eye-off-outline" size={18} color={colors.dark.textMuted} />
         </View>
       ) : author.id ? (
@@ -65,7 +65,7 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
           ringColor={colors.dark.border}
           pulseAvatarFrame={author.pulseAvatarFrame}
           ownerDisplayName={displayName}
-          onPress={() => router.push(`/profile/${author.id}` as never)}
+          onPress={() => openPulsePage(router, author.id)}
         />
       ) : (
         <BorderedAvatar
@@ -85,14 +85,25 @@ export function CircleReplyItem({ reply, circleSlug, threadAuthorId, threadId }:
           <Text style={styles.time}>{timeAgo(reply.createdAt)}</Text>
         </View>
         <Text style={styles.role} numberOfLines={1}>
-          {isAnonRoom ? (isOp ? 'Original poster' : 'Anonymous') : buildNeonPillTags(author).join(' · ') || '\u00a0'}
+          {isAnonRoom ? 'Anonymous' : buildNeonPillTags(author).join(' · ') || '\u00a0'}
         </Text>
         <CommentRichText
           text={bodyText}
-          style={styles.body}
-          mentionsInteractive={!isAnonRoom}
-          linksInteractive={!isAnonRoom}
+          style={[styles.body, reply.isModerationRemoved ? styles.removedBody : null]}
+          mentionsInteractive={!isAnonRoom && !reply.isModerationRemoved}
+          linksInteractive={!isAnonRoom && !reply.isModerationRemoved}
         />
+        {onReport && !reply.isModerationRemoved ? (
+          <TouchableOpacity onPress={onReport} hitSlop={8} style={styles.reportBtn}>
+            <Text style={styles.reportBtnText}>Report</Text>
+          </TouchableOpacity>
+        ) : null}
+        {canModerate && onModerate && !reply.isModerationRemoved ? (
+          <TouchableOpacity onPress={onModerate} hitSlop={8} style={styles.modBtn}>
+            <Ionicons name="shield-outline" size={14} color={colors.primary.teal} />
+            <Text style={styles.modBtnText}>Moderate</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -137,4 +148,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: colors.dark.textSecondary,
   },
+  removedBody: { fontStyle: 'italic', color: colors.dark.textMuted },
+  reportBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  reportBtnText: { fontSize: 11, fontWeight: '700', color: colors.dark.textMuted },
+  modBtn: { marginTop: 8, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4 },
+  modBtnText: { fontSize: 11, fontWeight: '700', color: colors.primary.teal },
 });

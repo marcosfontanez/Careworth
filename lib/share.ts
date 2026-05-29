@@ -100,14 +100,44 @@ async function persistShare(postId: string, channel?: string) {
   }
 }
 
+/**
+ * Cache-busting suffix for shared post URLs. iMessage caches link previews
+ * **by exact URL string** for ~30 days; if an earlier deploy returned an
+ * incomplete preview, the same recipient phone will keep showing that stale
+ * preview until the URL changes. Appending a daily `v=YYYYMMDD` token forces
+ * iMessage / link-preview crawlers to refetch once per day, picking up any
+ * server-rendered Open Graph improvements without invalidating bookmarks.
+ *
+ * Unknown query params are ignored by the Next.js share landing page.
+ */
+function postShareCacheBust(): string {
+  const d = new Date();
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}`;
+}
+
+/**
+ * Canonical web URL for a shared post / clip. Use this for both Share and
+ * Copy Link so iMessage / WhatsApp / Twitter see the **same exact URL**
+ * (recipients with stale caches still hit the cache; new recipients get the
+ * fresh Open Graph rendering). The path is the server-rendered
+ * `/post/<uuid>` route which carries og:title / og:description / og:image
+ * pulled from `posts_viewer_safe` via the marketing app's `generateMetadata`.
+ */
+export function buildPostShareUrl(postId: string): string {
+  const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
+  return `${base}/post/${postId}?v=${postShareCacheBust()}`;
+}
+
 export async function sharePost(
   postId: string,
   caption: string,
   opts?: { anonymous?: boolean },
 ) {
   try {
-    const base = LAUNCH_LINKS.marketingBaseUrl.replace(/\/$/, '');
-    const link = `${base}/post/${postId}`;
+    const link = buildPostShareUrl(postId);
     /**
      * Anonymous rooms deliberately scrub the caption so we don't leak
      * any identifying content in the recipient's text thread. We still

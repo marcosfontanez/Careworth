@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Camera } from 'expo-camera';
 import {
   AndroidAudioTypePresets,
   AudioSession,
@@ -24,8 +23,11 @@ import {
   type RemoteTrack,
 } from 'livekit-client';
 
-import { LiveBrbOverlay } from '@/components/live/LiveBrbOverlay';
+import { LiveSceneOverlay } from '@/components/live/LiveSceneOverlay';
+import { requestLiveBroadcastPermissions } from '@/lib/live/liveBroadcastPermissions';
+import { sceneAllowsCamera, sceneIsFullOverlay, type LiveSceneMode } from '@/lib/live/liveSceneMode';
 import { liveKitAudioDebug } from '@/lib/live/liveKitAudioDebug';
+import { liveKitJoinDebug } from '@/lib/live/liveKitJoinDebug';
 import type { LiveKitMintRole } from '@/services/live/liveKitToken';
 
 type AttachedRemote = {
@@ -34,16 +36,17 @@ type AttachedRemote = {
 };
 
 async function ensureHostAvPermissions(): Promise<{ mic: boolean; camera: boolean }> {
-  const mic = await Camera.requestMicrophonePermissionsAsync();
-  if (mic.status !== 'granted') {
+  const state = await requestLiveBroadcastPermissions();
+  if (!state.microphone.granted) {
     liveKitAudioDebug.permissionDenied('microphone');
-    return { mic: false, camera: false };
   }
-  const cam = await Camera.requestCameraPermissionsAsync();
-  if (cam.status !== 'granted') {
+  if (!state.camera.granted) {
     liveKitAudioDebug.permissionDenied('camera');
   }
-  return { mic: true, camera: cam.status === 'granted' };
+  return {
+    mic: state.microphone.granted,
+    camera: state.camera.granted,
+  };
 }
 
 async function bootAudioSession(role: LiveKitMintRole): Promise<void> {
@@ -165,30 +168,40 @@ function LiveKitRemoteAudioPlayback({
 }
 
 function LiveKitHostAvController({
-  brbMode,
+  sceneMode,
   micMuted,
   flipCameraNonce,
   onHostAudioPublished,
+  onBroadcastReady,
 }: {
-  brbMode: boolean;
+  sceneMode: LiveSceneMode;
   micMuted: boolean;
   flipCameraNonce?: number;
   onHostAudioPublished?: (published: boolean) => void;
+  onBroadcastReady?: () => void;
 }) {
   const room = useRoomContext();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const hostAudioReportedRef = useRef(false);
+  const broadcastReadyRef = useRef(false);
   const facingRef = useRef<'user' | 'environment'>('user');
+  const cameraEnabled = sceneAllowsCamera(sceneMode);
+
+  const markBroadcastReady = useCallback(() => {
+    if (broadcastReadyRef.current) return;
+    broadcastReadyRef.current = true;
+    onBroadcastReady?.();
+  }, [onBroadcastReady]);
 
   useEffect(() => {
     if (!localParticipant) return;
-    void localParticipant.setCameraEnabled(!brbMode).catch((e) => {
+    void localParticipant.setCameraEnabled(cameraEnabled).catch((e) => {
       if (__DEV__) console.warn('[LiveKitStage] setCameraEnabled', e);
     });
-  }, [localParticipant, brbMode]);
+  }, [localParticipant, cameraEnabled]);
 
   useEffect(() => {
-    if (!flipCameraNonce || !localParticipant || brbMode) return;
+    if (!flipCameraNonce || !localParticipant || !cameraEnabled) return;
     facingRef.current = facingRef.current === 'user' ? 'environment' : 'user';
     const pub = localParticipant.getTrackPublication(Track.Source.Camera);
     const videoTrack = pub?.videoTrack as { restartTrack?: (opts: { facingMode: string }) => Promise<void> } | undefined;
@@ -197,7 +210,7 @@ function LiveKitHostAvController({
         if (__DEV__) console.warn('[LiveKitStage] flipCamera restartTrack', e);
       });
     }
-  }, [flipCameraNonce, localParticipant, brbMode]);
+  }, [flipCameraNonce, localParticipant, cameraEnabled]);
 
   useEffect(() => {
     if (!localParticipant) return;
@@ -211,10 +224,14 @@ function LiveKitHostAvController({
     if (!room) return;
 
     const onLocalPublished = (pub: LocalTrackPublication) => {
-      if (pub.kind !== Track.Kind.Audio) return;
-      liveKitAudioDebug.localAudioPublished(pub.trackSid);
-      hostAudioReportedRef.current = true;
-      onHostAudioPublished?.(true);
+      if (pub.kind === Track.Kind.Audio) {
+        liveKitAudioDebug.localAudioPublished(pub.trackSid);
+        hostAudioReportedRef.current = true;
+        onHostAudioPublished?.(true);
+      }
+      if (pub.kind === Track.Kind.Audio || pub.kind === Track.Kind.Video) {
+        markBroadcastReady();
+      }
     };
 
     const onLocalUnpublished = (pub: LocalTrackPublication) => {
@@ -226,9 +243,13 @@ function LiveKitHostAvController({
     room.localParticipant.on(ParticipantEvent.LocalTrackUnpublished, onLocalUnpublished);
 
     const hasAudio = room.localParticipant.audioTrackPublications.size > 0;
-    if (hasAudio && !hostAudioReportedRef.current) {
+    const hasVideo = room.localParticipant.videoTrackPublications.size > 0;
+    if ((hasAudio || hasVideo) && !hostAudioReportedRef.current && hasAudio) {
       hostAudioReportedRef.current = true;
       onHostAudioPublished?.(true);
+    }
+    if (hasAudio || hasVideo) {
+      markBroadcastReady();
     }
 
     const warnTimer = setTimeout(() => {
@@ -243,7 +264,7 @@ function LiveKitHostAvController({
       room.localParticipant.off(ParticipantEvent.LocalTrackPublished, onLocalPublished);
       room.localParticipant.off(ParticipantEvent.LocalTrackUnpublished, onLocalUnpublished);
     };
-  }, [room, onHostAudioPublished]);
+  }, [room, onHostAudioPublished, markBroadcastReady]);
 
   useEffect(() => {
     if (isMicrophoneEnabled === undefined) return;
@@ -285,20 +306,24 @@ function LiveKitVideoFill({ role, hidden }: { role: LiveKitMintRole; hidden?: bo
 
 function LiveKitRoomContent({
   role,
-  brbMode,
+  sceneMode,
   micMuted,
   flipCameraNonce,
   viewerAudioMuted,
   onHostAudioPublished,
+  onBroadcastReady,
   onResumeFromBrb,
+  pollQuestion,
 }: {
   role: LiveKitMintRole;
-  brbMode: boolean;
+  sceneMode: LiveSceneMode;
   micMuted: boolean;
   flipCameraNonce?: number;
   viewerAudioMuted: boolean;
   onHostAudioPublished?: (published: boolean) => void;
+  onBroadcastReady?: () => void;
   onResumeFromBrb?: () => void;
+  pollQuestion?: string | null;
 }) {
   const room = useRoomContext();
   useIOSAudioManagement(room, true);
@@ -313,21 +338,29 @@ function LiveKitRoomContent({
     };
   }, [room, role]);
 
+  const showFullScene = sceneIsFullOverlay(sceneMode);
+
   return (
     <>
       {role === 'host' ? (
         <LiveKitHostAvController
-          brbMode={brbMode}
+          sceneMode={sceneMode}
           micMuted={micMuted}
           flipCameraNonce={flipCameraNonce}
           onHostAudioPublished={onHostAudioPublished}
+          onBroadcastReady={onBroadcastReady}
         />
       ) : null}
-      {brbMode && role === 'host' ? (
-        <LiveBrbOverlay showResume onResume={onResumeFromBrb} />
-      ) : (
-        <LiveKitVideoFill role={role} hidden={brbMode && role === 'host'} />
-      )}
+      {showFullScene ? (
+        <LiveSceneOverlay
+          mode={sceneMode}
+          onResume={role === 'host' ? onResumeFromBrb : undefined}
+          pollQuestion={pollQuestion}
+        />
+      ) : sceneMode === 'qna' || sceneMode === 'poll' ? (
+        <LiveSceneOverlay mode={sceneMode} pollQuestion={pollQuestion} />
+      ) : null}
+      {!showFullScene ? <LiveKitVideoFill role={role} /> : null}
       <LiveKitRemoteAudioPlayback role={role} viewerAudioMuted={viewerAudioMuted} />
     </>
   );
@@ -342,12 +375,21 @@ export interface LiveKitStageProps {
   onDisconnected?: () => void;
   onError?: (e: Error) => void;
   brbMode?: boolean;
+  sceneMode?: LiveSceneMode;
   micMuted?: boolean;
   viewerAudioMuted?: boolean;
   onMicPermissionDenied?: () => void;
   onHostAudioPublished?: (published: boolean) => void;
+  onAvPermissionsResolved?: (state: { micGranted: boolean; cameraGranted: boolean }) => void;
+  /** Host: fired once when camera or mic is publishing — gate viewer discovery. */
+  onBroadcastReady?: () => void;
   flipCameraNonce?: number;
   onResumeFromBrb?: () => void;
+  pollQuestion?: string | null;
+  /** Dev diagnostics only — never pass tokens. */
+  streamId?: string;
+  roomName?: string;
+  participantIdentity?: string;
 }
 
 /**
@@ -363,13 +405,22 @@ export function LiveKitStage({
   onDisconnected,
   onError,
   brbMode = false,
+  sceneMode: sceneModeProp,
   micMuted = false,
   viewerAudioMuted = false,
   onMicPermissionDenied,
   onHostAudioPublished,
+  onAvPermissionsResolved,
+  onBroadcastReady,
   flipCameraNonce,
   onResumeFromBrb,
+  pollQuestion,
+  streamId,
+  roomName,
+  participantIdentity,
 }: LiveKitStageProps) {
+  const sceneMode: LiveSceneMode = sceneModeProp ?? (brbMode ? 'brb' : 'live');
+  const cameraEnabled = sceneAllowsCamera(sceneMode);
   const [audioSessionReady, setAudioSessionReady] = useState(false);
   const [hostAvReady, setHostAvReady] = useState(role !== 'host');
   const [hostMicGranted, setHostMicGranted] = useState(role !== 'host');
@@ -411,11 +462,13 @@ export function LiveKitStage({
           setHostAvReady(false);
           setHostMicGranted(false);
           setPermissionMessage('Microphone access is required to go live with audio.');
+          onAvPermissionsResolved?.({ micGranted: false, cameraGranted: camera });
           onMicPermissionDenied?.();
           return;
         }
         setHostMicGranted(true);
         setHostAvReady(true);
+        onAvPermissionsResolved?.({ micGranted: true, cameraGranted: camera });
         if (!camera) {
           setPermissionMessage(
             'Camera access is off — viewers may only hear you until camera is enabled in Settings.',
@@ -430,16 +483,28 @@ export function LiveKitStage({
         setHostAvReady(false);
         setHostMicGranted(false);
         setPermissionMessage('Could not access camera or microphone. Check Settings and try again.');
+        onAvPermissionsResolved?.({ micGranted: false, cameraGranted: false });
         onMicPermissionDenied?.();
       });
 
     return () => {
       cancelled = true;
     };
-  }, [role, onMicPermissionDenied]);
+  }, [role, onMicPermissionDenied, onAvPermissionsResolved]);
 
   const canConnect =
     Boolean(token && serverUrl) && audioSessionReady && hostAvReady && (role !== 'host' || hostMicGranted);
+
+  useEffect(() => {
+    if (!canConnect) return;
+    liveKitJoinDebug.connectAttempt({
+      streamId: streamId ?? 'unknown',
+      roomName: roomName ?? null,
+      userId: null,
+      participantIdentity: participantIdentity ?? null,
+      role,
+    });
+  }, [canConnect, streamId, roomName, participantIdentity, role]);
 
   const publishAv = role === 'host' && hostMicGranted;
 
@@ -466,23 +531,33 @@ export function LiveKitStage({
         token={token}
         connect={canConnect}
         audio={publishAv}
-        video={publishAv && !brbMode}
+        video={publishAv && cameraEnabled}
         options={{
           adaptiveStream: { pixelDensity: 'screen' },
         }}
-        onConnected={onConnected}
+        onConnected={() => {
+          liveKitJoinDebug.connected({
+            streamId: streamId ?? 'unknown',
+            roomName: roomName ?? null,
+            participantIdentity: participantIdentity ?? null,
+            role,
+          });
+          onConnected?.();
+        }}
         onDisconnected={onDisconnected}
         onError={onError}
         onMediaDeviceFailure={handleMediaDeviceFailure}
       >
         <LiveKitRoomContent
           role={role}
-          brbMode={brbMode}
+          sceneMode={sceneMode}
           micMuted={micMuted}
           flipCameraNonce={flipCameraNonce}
           viewerAudioMuted={viewerAudioMuted}
           onHostAudioPublished={onHostAudioPublished}
+          onBroadcastReady={onBroadcastReady}
           onResumeFromBrb={onResumeFromBrb}
+          pollQuestion={pollQuestion}
         />
       </LiveKitRoom>
     </View>

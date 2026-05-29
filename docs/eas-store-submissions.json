@@ -1,9 +1,16 @@
 {
   "_readme": "Track store uploads so we never eas submit the same build twice. After submit: npm run eas:log:ios -- <buildId> <version> <buildNumber> submitted",
-  "lastSubmittedIosBuildNumber": 27,
+  "lastSubmittedIosBuildNumber": 30,
   "lastSubmittedAndroidBuildNumber": 7,
-  "nextExpectedIosBuildNumber": 28,
+  "nextExpectedIosBuildNumber": 31,
   "ios": [
+    {
+      "buildId": "08f6009a-f647-46fd-8887-bce6cb47aac9",
+      "appVersion": "1.0.1",
+      "buildNumber": "30",
+      "result": "submitted",
+      "loggedAt": "2026-05-24"
+    },
     {
       "buildId": "35427e8a-ea89-4a88-85ea-38cde00ce983",
       "appVersion": "1.0.1",

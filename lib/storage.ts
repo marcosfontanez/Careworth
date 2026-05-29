@@ -348,14 +348,56 @@ function fileExtForUpload(file: { uri: string; type?: string; name?: string }): 
 }
 
 async function uriToBlob(uri: string): Promise<Blob> {
+  if (typeof fetch === 'function') {
+    const res = await fetch(uri);
+    if (!res.ok) {
+      throw new Error(`Failed to read media file (${res.status})`);
+    }
+    const blob = await res.blob();
+    if (!blob || blob.size <= 0) {
+      throw new Error('Upload file is empty — pick the video again from your library.');
+    }
+    return blob;
+  }
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.onload = () => resolve(xhr.response as Blob);
+    xhr.onload = () => {
+      const blob = xhr.response as Blob;
+      if (!blob || blob.size <= 0) {
+        reject(new Error('Upload file is empty — pick the video again from your library.'));
+        return;
+      }
+      resolve(blob);
+    };
     xhr.onerror = () => reject(new Error('Failed to load file'));
     xhr.responseType = 'blob';
     xhr.open('GET', uri, true);
     xhr.send(null);
   });
+}
+
+function normalizeUploadContentType(declared?: string, detected?: string): string {
+  const d = declared?.trim() || detected?.trim() || '';
+  if (d.startsWith('video/') || d.startsWith('image/')) return d;
+  if (d.includes('quicktime')) return 'video/quicktime';
+  if (d.includes('mp4')) return 'video/mp4';
+  if (d.includes('jpeg') || d.includes('jpg')) return 'image/jpeg';
+  if (d.includes('png')) return 'image/png';
+  return 'application/octet-stream';
+}
+
+function formatStorageUploadError(error: { message?: string; statusCode?: string | number }): string {
+  const msg = error.message?.trim() || 'Storage upload failed';
+  if (/row-level security|not authorized|jwt/i.test(msg)) {
+    return 'Upload blocked — sign out and sign in again, then retry.';
+  }
+  if (/payload too large|entity too large|413|maximum allowed size|exceeded the maximum/i.test(msg)) {
+    return 'Video is too large (50 MB max). We will compress it automatically — if this persists, try a shorter clip or use the mobile app.';
+  }
+  if (/invalid|mime|content type/i.test(msg)) {
+    return 'Upload rejected — pick the video again (MP4/MOV).';
+  }
+  return msg;
 }
 
 async function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
@@ -377,21 +419,27 @@ async function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
 async function uploadFile(
   bucket: string,
   path: string,
-  file: { uri: string; type?: string; name?: string },
+  file: { uri: string; type?: string; name?: string; webBlob?: Blob },
   options?: { upsert?: boolean },
 ) {
-  const contentType = file.type || 'application/octet-stream';
   const upsert = options?.upsert ?? false;
 
   if (Platform.OS === 'web') {
-    const blob = await uriToBlob(file.uri);
+    const blob = file.webBlob ?? (await uriToBlob(file.uri));
+    if (!blob || blob.size <= 0) {
+      throw new Error('Upload file is empty — pick the video again from your library.');
+    }
+    const contentType = normalizeUploadContentType(file.type, blob.type);
+    const body = await blobToArrayBuffer(blob);
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(path, blob, { contentType, upsert });
+      .upload(path, body, { contentType, upsert });
 
-    if (error) throw error;
+    if (error) throw new Error(formatStorageUploadError(error));
     return data;
   }
+
+  const contentType = normalizeUploadContentType(file.type);
 
   // Preferred path on native: stream the file with the OS HTTP stack so we never
   // hold the whole video in JS memory. Fixes "RangeError: String length exceeds limit"
@@ -479,7 +527,7 @@ export const storageService = {
    */
   async uploadPostMediaWithMeta(
     userId: string,
-    file: { uri: string; type?: string; name?: string },
+    file: { uri: string; type?: string; name?: string; webBlob?: Blob },
   ): Promise<{ publicUrl: string; storagePath: string; bucket: string }> {
     const ext = fileExtForUpload(file);
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -499,7 +547,10 @@ export const storageService = {
     };
   },
 
-  async uploadPostMedia(userId: string, file: { uri: string; type?: string; name?: string }) {
+  async uploadPostMedia(
+    userId: string,
+    file: { uri: string; type?: string; name?: string; webBlob?: Blob },
+  ) {
     const { publicUrl } = await this.uploadPostMediaWithMeta(userId, file);
     return publicUrl;
   },

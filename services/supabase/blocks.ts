@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 
-export type BlockRelationship = 'none' | 'viewer_blocked' | 'blocked_by_viewer';
+export type BlockRelationship = 'none' | 'viewer_blocked' | 'blocked_by_viewer' | 'unknown';
 
 /**
  * Returns how `viewerId` relates to `profileUserId` through `blocked_users`.
@@ -23,7 +23,7 @@ export async function getBlockRelationship(
 
   if (error) {
     if (__DEV__) console.warn('[blocks.getBlockRelationship]', error.message);
-    return 'none';
+    return 'unknown';
   }
 
   for (const row of data ?? []) {
@@ -34,4 +34,14 @@ export async function getBlockRelationship(
   }
 
   return 'none';
+}
+
+/** Insert a row into `blocked_users` (idempotent on duplicate). */
+export async function blockUser(blockerId: string, blockedId: string): Promise<void> {
+  if (!blockerId || !blockedId || blockerId === blockedId) return;
+  const { error } = await supabase.from('blocked_users').insert({
+    blocker_id: blockerId,
+    blocked_id: blockedId,
+  } as never);
+  if (error && (error as { code?: string }).code !== '23505') throw error;
 }

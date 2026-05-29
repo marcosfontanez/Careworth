@@ -12,6 +12,7 @@ import { timeAgo } from '@/utils/format';
 import { anonymousNameOnPost } from '@/lib/anonymousCircle';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { COMMENT_DELETED_TOMBSTONE } from '@/constants';
 import { analytics } from '@/lib/analytics';
 import { CommentEditComposer } from '@/components/comments/CommentEditComposer';
@@ -246,7 +247,7 @@ export function CommentItem({
           ringColor={colors.dark.border}
           pulseAvatarFrame={comment.author.pulseAvatarFrame}
           ownerDisplayName={displayName}
-          onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+          onPress={() => openPulsePage(router, comment.author.id)}
         />
       ) : (
         <BorderedAvatar
@@ -262,7 +263,7 @@ export function CommentItem({
         <View style={styles.headerRow}>
           {!anonymousMode && !isDeleted && comment.author.id ? (
             <TouchableOpacity
-              onPress={() => router.push(`/profile/${comment.author.id}` as never)}
+              onPress={() => openPulsePage(router, comment.author.id)}
               activeOpacity={0.7}
               hitSlop={{ top: 4, bottom: 4 }}
               accessibilityRole="button"

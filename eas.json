@@ -13,6 +13,7 @@
         "simulator": false
       },
       "env": {
+        "EXPO_PUBLIC_LIVE_STREAMING": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
@@ -25,6 +26,7 @@
         "simulator": true
       },
       "env": {
+        "EXPO_PUBLIC_LIVE_STREAMING": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
@@ -40,10 +42,32 @@
       },
       "env": {
         "EXPO_PUBLIC_LIVE_STREAMING": "1",
+        "EXPO_PUBLIC_LIVE_CLIP_EGRESS": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
+    },
+    "beta": {
+      "distribution": "internal",
+      "channel": "beta",
+      "environment": "preview",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_LIVE_STREAMING": "1",
+        "EXPO_PUBLIC_LIVE_FEED_INJECTION": "1",
+        "EXPO_PUBLIC_FEED_CLIPPING": "1",
+        "EXPO_PUBLIC_FEED_CREATOR_GIFTING": "1",
+        "EXPO_PUBLIC_LIVE_DISCOVERY_DEMOS": "0",
+        "EXPO_PUBLIC_LIVE_CLIP_EGRESS": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
+      "distribution": "store",
       "channel": "production",
       "environment": "production",
       "node": "20.19.4",

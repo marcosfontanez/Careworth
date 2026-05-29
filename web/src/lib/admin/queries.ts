@@ -103,6 +103,7 @@ function mapTargetType(t: string): ReportType {
     raw === "profile" ||
     raw === "live" ||
     raw === "circle_thread" ||
+    raw === "circle_reply" ||
     raw === "stream_message"
   ) {
     return raw as ReportType;
@@ -148,6 +149,9 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
     const circleThreadTargetIds = [
       ...new Set(rows.filter((r) => String(r.target_type) === "circle_thread").map((r) => String(r.target_id))),
     ];
+    const circleReplyTargetIds = [
+      ...new Set(rows.filter((r) => String(r.target_type) === "circle_reply").map((r) => String(r.target_id))),
+    ];
     const liveTargetIds = [
       ...new Set(
         rows
@@ -182,6 +186,10 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
       circleThreadTargetIds.length > 0
         ? supabase.from("circle_threads").select("id, title, body, author_id").in("id", circleThreadTargetIds)
         : Promise.resolve({ data: [] as { id: string; title: string; body: string; author_id: string }[] });
+    const circleRepliesQ =
+      circleReplyTargetIds.length > 0
+        ? supabase.from("circle_replies").select("id, body, author_id").in("id", circleReplyTargetIds)
+        : Promise.resolve({ data: [] as { id: string; body: string; author_id: string }[] });
     const liveStreamsQ =
       liveTargetIds.length > 0
         ? supabase.from("live_streams").select("id, title, host_id").in("id", liveTargetIds)
@@ -191,13 +199,14 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
         ? supabase.from("stream_messages").select("id, content, user_id, stream_id").in("id", streamMessageTargetIds)
         : Promise.resolve({ data: [] as { id: string; content: string; user_id: string; stream_id: string }[] });
 
-    const [reporters, profileTargets, posts, comments, circleThreads, liveStreams, streamMessages] =
+    const [reporters, profileTargets, posts, comments, circleThreads, circleReplies, liveStreams, streamMessages] =
       await Promise.all([
       reportersQ,
       profileTargetsQ,
       postsQ,
       commentsQ,
       circleThreadsQ,
+      circleRepliesQ,
       liveStreamsQ,
       streamMessagesQ,
     ]);
@@ -207,6 +216,7 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
     const postById = new Map((posts.data ?? []).map((p) => [p.id as string, p]));
     const commentById = new Map((comments.data ?? []).map((c) => [c.id as string, c]));
     const circleThreadById = new Map((circleThreads.data ?? []).map((t) => [t.id as string, t]));
+    const circleReplyById = new Map((circleReplies.data ?? []).map((r) => [r.id as string, r]));
     const liveStreamById = new Map((liveStreams.data ?? []).map((s) => [s.id as string, s]));
     const streamMessageById = new Map((streamMessages.data ?? []).map((m) => [m.id as string, m]));
 
@@ -215,6 +225,7 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
         ...(posts.data ?? []).map((p) => p.creator_id as string),
         ...(comments.data ?? []).map((c) => c.author_id as string),
         ...(circleThreads.data ?? []).map((t) => t.author_id as string),
+        ...(circleReplies.data ?? []).map((r) => r.author_id as string),
         ...(liveStreams.data ?? []).map((s) => s.host_id as string),
         ...(streamMessages.data ?? []).map((m) => m.user_id as string),
       ]),
@@ -272,6 +283,16 @@ export async function loadReports(options?: LoadReportsOptions): Promise<ReportR
           subjectMeta = author ? `Circle thread · ${author.display_name}` : "Circle thread";
         } else {
           subjectMeta = "Circle thread";
+        }
+      } else if (tt === "circle_reply") {
+        const reply = circleReplyById.get(String(r.target_id));
+        if (reply) {
+          const body = String(reply.body || "").trim();
+          subjectDisplayName = (body || "Circle reply").slice(0, 140);
+          const author = profileById.get(reply.author_id as string);
+          subjectMeta = author ? `Circle reply · ${author.display_name}` : "Circle reply";
+        } else {
+          subjectMeta = "Circle reply";
         }
       } else if (tt === "live" || tt === "live_stream") {
         const stream = liveStreamById.get(String(r.target_id));

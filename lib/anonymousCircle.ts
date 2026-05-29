@@ -7,6 +7,14 @@ export function isAnonymousConfessionCircle(slug: string | undefined | null): bo
   return (ANONYMOUS_CONFESSION_SLUGS as readonly string[]).includes(s);
 }
 
+/** Closed-beta disclosure — honest pseudonymity; moderation retains account linkage. */
+export const CONFESSIONS_BETA_DISCLOSURE =
+  'Posts appear anonymous in the app. PulseVerse retains account information for moderation and safety. Your identity is hidden from other users in Confessions. Do not share patient-identifying information. Confessions cannot be pinned to My Pulse during beta.';
+
+/** Shown in circle rooms — join required to post/reply; alerts optional on join. */
+export const CIRCLE_JOIN_BETA_NOTE =
+  'Join this Circle to post, reply, and receive updates.';
+
 /**
  * Whether a post’s author should be masked in UI.
  * Uses DB `is_anonymous` and/or opening context (`?circle=`) for anonymous rooms.

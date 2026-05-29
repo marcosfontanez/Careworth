@@ -19,6 +19,8 @@ const LEGACY_SHOP_SLUG_TO_FRAME_SLUG: Record<string, string> = {
   'beta-pioneer': 'beta-tester-border',
   'border-mothers-day-2026': 'mothers-day-2026-border',
   'border_mothers_day_2026': 'mothers-day-2026-border',
+  'border-fathers-day-2026': 'fathers-day-2026-border',
+  'border_fathers_day_2026': 'fathers-day-2026-border',
   'border-juneteenth-2026-charity': 'juneteenth-2026-border',
   'border_juneteenth_2026_charity': 'juneteenth-2026-border',
   'border-emerald-renewal-may-2026': 'emerald-renewal-may-2026-border',
@@ -42,7 +44,7 @@ export function resolveShopBorderFrameSlug(item: ShopItemRow): string | null {
  * generic "person" placeholder rendered by {@link BorderPreviewPlate}).
  *
  * - When the shop item maps to a bundled raster (Pride, Beta, Mother's Day,
- *   Juneteenth, Emerald Renewal …), AvatarDisplay's raster path renders the
+ *   Father's Day, Juneteenth, Emerald Renewal …), AvatarDisplay's raster path renders the
  *   real border PNG around the avatar.
  * - When no bundled raster exists, AvatarDisplay falls back to a colored
  *   stroke ring tinted with the rarity color — the avatar still shows.

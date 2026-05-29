@@ -21,7 +21,12 @@ import { MessengerInboxPanel } from '@/components/messenger/MessengerInboxPanel'
 import { notificationService } from '@/services';
 import { queryClient } from '@/lib/queryClient';
 import { commentKeys, postKeys } from '@/lib/queryKeys';
-import { prefetchCircleRoom } from '@/lib/communityCache';
+import { pushPostViewer } from '@/lib/postViewerRoute';
+import { openPulsePage, openUserPulsePage, openMyPulse } from '@/lib/navigation/pulsePageRoutes';
+import { notificationActorHasProfile } from '@/lib/notificationPrivacy';
+import { navigateToCircleRoom, navigateToCircleThread } from '@/lib/communityCache';
+import { liveNotificationStreamId } from '@/lib/liveNotificationRouting';
+import { liveStreamHref } from '@/lib/navigation/liveRoutes';
 import { getNotificationSectionListWindow } from '@/lib/feedVideoListWindow';
 import { colors, typography, spacing } from '@/theme';
 import type { NotificationItem } from '@/types';
@@ -100,6 +105,7 @@ export default function NotificationsScreen() {
           'badge_earned',
           'tier_up',
           'circle_new_post',
+          'circle_post_digest',
           'creator_new_post',
         ].includes(n.type),
       );
@@ -130,14 +136,27 @@ export default function NotificationsScreen() {
     }
 
     if (notification.targetId) {
+      const liveStreamId = liveNotificationStreamId(notification);
+      if (liveStreamId) {
+        router.push(liveStreamHref(liveStreamId));
+        return;
+      }
+
       if (notification.type === 'comment' || notification.type === 'reply' || notification.type === 'circle_thread_reply') {
         if (notification.targetId?.startsWith('profile_update:')) {
-          router.push('/(tabs)/my-pulse' as any);
+          openMyPulse(router);
         } else if (isCircleThreadNotification(notification)) {
           const { circleThreadsDb } = await import('@/services/supabase');
           const thread = await circleThreadsDb.getById(notification.targetId);
           if (thread?.circleSlug) {
-            router.push(`/communities/${thread.circleSlug}/thread/${thread.id}` as any);
+            void navigateToCircleThread(
+              router,
+              queryClient,
+              thread.circleSlug,
+              thread.id,
+              authUser?.id ?? null,
+              'notifications:threadReply',
+            );
           } else {
             router.push('/(tabs)/circles');
           }
@@ -151,19 +170,21 @@ export default function NotificationsScreen() {
            */
           queryClient.invalidateQueries({ queryKey: commentKeys.byPostPrefix(notification.targetId) });
           queryClient.invalidateQueries({ queryKey: postKeys.byId(notification.targetId) });
-          router.push(`/post/${notification.targetId}?focusComments=1` as any);
+          await pushPostViewer(router, notification.targetId, {
+            viewerId: authUser?.id ?? null,
+            focusComments: true,
+          });
         }
       } else if (
         notification.type === 'like' ||
         notification.type === 'save' ||
         notification.type === 'share'
       ) {
-        /* Engagement notifications that don't carry a body open the post
-           itself — the creator's first instinct is "what did they react
-           to?", not the comments panel. */
-        router.push(`/post/${notification.targetId}`);
+        await pushPostViewer(router, notification.targetId, {
+          viewerId: authUser?.id ?? null,
+        });
       } else if (notification.type === 'new_follower') {
-        router.push(`/profile/${notification.targetId}`);
+        openPulsePage(router, notification.targetId);
       } else if (notification.type === 'mention') {
         // Migration 049 encodes target as `{content_type}:{id}` so we can
         // route each mention to the exact surface it came from.
@@ -173,56 +194,82 @@ export default function NotificationsScreen() {
         const id = colon >= 0 ? raw.slice(colon + 1) : raw;
 
         if (kind === 'post' || kind === 'post_comment') {
-          router.push(`/post/${id}`);
+          await pushPostViewer(router, id, { viewerId: authUser?.id ?? null });
         } else if (kind === 'profile_update_comment') {
           router.push(`/my-pulse/${id}` as any);
         } else if (kind === 'profile_update') {
-          router.push('/(tabs)/my-pulse');
+          openMyPulse(router);
         } else if (kind === 'circle_thread' || kind === 'circle_reply') {
           // Community-scoped thread route needs the slug. getById's THREAD_SELECT
           // already joins the community record, so we can read it off the row.
           const { circleThreadsDb } = await import('@/services/supabase');
           const thread = await circleThreadsDb.getById(id);
           if (thread?.circleSlug) {
-            router.push(`/communities/${thread.circleSlug}/thread/${thread.id}` as any);
+            void navigateToCircleThread(
+              router,
+              queryClient,
+              thread.circleSlug,
+              thread.id,
+              authUser?.id ?? null,
+              'notifications:threadReply',
+            );
           } else {
             router.push('/(tabs)/circles');
           }
         } else {
           // Legacy / unknown payload — fall back to the author's profile.
-          const actorId = notification.actor?.id;
-          if (actorId) router.push(`/profile/${actorId}`);
+          openPulsePage(router, notification.actor?.id);
         }
       } else if (notification.type === 'community_invite') {
         const { communityService } = await import('@/services');
         const community = await communityService.getById(notification.targetId);
         if (community?.slug) {
-          prefetchCircleRoom(queryClient, community, authUser?.id ?? null);
-          router.push(`/communities/${community.slug}`);
+          void navigateToCircleRoom(router, queryClient, community, authUser?.id ?? null, {
+            source: 'notifications:communityInvite',
+          });
         }
       } else if (notification.type === 'circle_new_post' && notification.targetId) {
-        let qs = '';
+        let circleSlug: string | undefined;
         if (notification.communityId) {
           const { communityService } = await import('@/services');
           const c = await communityService.getById(notification.communityId);
-          if (c?.slug) qs = `?circle=${encodeURIComponent(c.slug)}`;
+          if (c?.slug) circleSlug = c.slug;
         }
-        router.push(`/post/${notification.targetId}${qs}` as any);
+        await pushPostViewer(router, notification.targetId, {
+          viewerId: authUser?.id ?? null,
+          circle: circleSlug,
+        });
+      } else if (notification.type === 'circle_post_digest') {
+        const communityId = notification.communityId ?? notification.targetId;
+        if (communityId) {
+          const { communityService } = await import('@/services');
+          const c = await communityService.getById(communityId);
+          if (c?.slug) {
+            void navigateToCircleRoom(router, queryClient, c, authUser?.id ?? null, {
+              source: 'notifications:circleDigest',
+            });
+            return;
+          }
+        }
+        router.push('/(tabs)/circles');
       } else if (notification.type === 'creator_new_post' && notification.targetId) {
-        router.push(`/post/${notification.targetId}` as any);
+        await pushPostViewer(router, notification.targetId, {
+          viewerId: authUser?.id ?? null,
+        });
       } else if (notification.type === 'tier_up') {
         // Tier promotions send the recipient to their own profile so the
         // history sheet (tap the pill) is one tap away. We include:
         //   - `openPulseHistory=1` → MyPageContent auto-opens the sheet.
         //   - `tierUp=1`          → the sheet renders the "Share my
         //                            tier" card at the top (growth loop).
-        router.push(
-          `/profile/${notification.targetId}?openPulseHistory=1&tierUp=1` as any,
-        );
+        openUserPulsePage(router, notification.targetId, {
+          openPulseHistory: true,
+          tierUp: true,
+        });
       } else if (notification.type === 'diamonds_earned') {
         router.push('/pulse-shop' as any);
       } else if (notification.type === 'gift_sent' && notification.targetId) {
-        router.push(`/profile/${notification.targetId}` as any);
+        openPulsePage(router, notification.targetId);
       }
     }
   }, [router, queryClient, authUser?.id]);
@@ -310,7 +357,9 @@ export default function NotificationsScreen() {
               notification={item}
               onPress={() => handleNotificationPress(item)}
               onAvatarPress={
-                item.actor?.id ? () => router.push(`/profile/${item.actor.id}` as never) : undefined
+                notificationActorHasProfile(item)
+                  ? () => openPulsePage(router, item.actor.id)
+                  : undefined
               }
             />
           )}

@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, FlatList } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { colors } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { StreamGiftLeaderboard } from '@/types';
@@ -19,6 +21,11 @@ interface Props {
 }
 
 export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
+  const router = useRouter();
+  const openSupporter = (userId: string) => {
+    if (!openPulsePage(router, userId)) return;
+    onClose();
+  };
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -43,7 +50,12 @@ export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
               windowSize={GIFT_LEADERBOARD_LIST_WINDOW.windowSize}
               removeClippedSubviews={false}
               renderItem={({ item, index }) => (
-                <View style={[styles.row, index < 3 && styles.rowTop]}>
+                <Pressable
+                  style={[styles.row, index < 3 && styles.rowTop]}
+                  onPress={() => openSupporter(item.userId)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.displayName}'s Pulse Page`}
+                >
                   <View style={[styles.rankBadge, { backgroundColor: index < 3 ? RANK_COLORS[index] + '20' : colors.dark.cardAlt }]}>
                     {index < 3 ? (
                       <Text style={styles.rankEmoji}>{RANK_EMOJIS[index]}</Text>
@@ -73,7 +85,7 @@ export function GiftLeaderboard({ visible, leaderboard, onClose }: Props) {
                       {item.totalSparks.toLocaleString()}
                     </Text>
                   </View>
-                </View>
+                </Pressable>
               )}
               contentContainerStyle={styles.list}
               showsVerticalScrollIndicator={false}

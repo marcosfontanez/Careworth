@@ -141,6 +141,18 @@ Deno.serve(async (req) => {
     } else {
       data.url = `${site}/post/${targetId}`;
     }
+  } else if (type === "circle_post_digest" && communityId) {
+    const { data: comm } = await supabase
+      .from("communities")
+      .select("slug")
+      .eq("id", communityId)
+      .maybeSingle();
+    if (comm?.slug) {
+      data.circleSlug = comm.slug;
+      data.url = `${site}/communities/${comm.slug}`;
+    } else {
+      data.url = `${site}/notifications`;
+    }
   } else if (type === "creator_new_post" && targetId) {
     data.postId = targetId;
     data.url = `${site}/post/${targetId}`;
@@ -163,6 +175,10 @@ Deno.serve(async (req) => {
   } else if (type === "gift_sent" && targetId) {
     data.profileId = targetId;
     data.url = `${site}/profile/${targetId}`;
+  } else if ((type === "live_go_live" || type === "live_stream_live") && targetId) {
+    data.streamId = targetId;
+    data.liveStreamId = targetId;
+    data.url = `${site}/live/${targetId}`;
   }
 
   if (!data.url) {

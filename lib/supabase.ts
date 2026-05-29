@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, processLock } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 import { supabaseAuthStorage } from './authStorage';
 
@@ -23,6 +23,21 @@ const resolvedKey = supabaseAnonKey || 'invalid-anon-key';
 export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {
   auth: {
     storage: supabaseAuthStorage as any,
+    /**
+     * Use Supabase's in-memory `processLock` on every platform.
+     *
+     * On web, supabase-js defaults to the browser `navigator.locks` API, whose
+     * holder is force-"stolen" after ~5s. During cold boot we fire the profile
+     * row + 5 satellite reads + token auto-refresh, all of which acquire the
+     * single exclusive auth-token lock. On a slow/flaky network the refresh
+     * holds the lock past 5s, the lock is stolen, and the in-flight queries
+     * abort with "Lock broken by another request with the 'steal' option" —
+     * which stalled profile hydrate past the 18s timeout and left My Pulse
+     * stuck loading. `processLock` queues instead of stealing, so the holder
+     * finishes and queued reads resolve in order. (Native already uses
+     * processLock by default; this only changes web behavior.)
+     */
+    lock: processLock,
     autoRefreshToken: true,
     /**
      * Session JSON (access + refresh token) lives in AsyncStorage / localStorage

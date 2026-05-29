@@ -1,6 +1,12 @@
 import { anonymousNameOnPost } from '@/lib/anonymousCircle';
 import type { CreatorSummary, Post } from '@/types';
 
+/**
+ * SECURITY (Sprint 2C): DB views `posts_viewer_safe` / `comments_viewer_safe` mask
+ * identity for anonymous posts when read through app services. Direct PostgREST on
+ * base tables may still expose ids to determined clients — staff retain moderation access.
+ * Confessions is pseudonymous in-app, not cryptographic anonymity.
+ */
 /** Placeholder profile id for anonymous posts shown to non-authors (not a real user). */
 export const ANONYMOUS_PUBLIC_CREATOR_ID = '00000000-0000-0000-0000-000000000001';
 

@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy live sticker picker (`LIVE_GIFTS` emoji catalog).
+ * Use `SendCreatorGiftTray` from `@/lib/gifts` or `@/components/shop/SendCreatorGiftTray`.
+ */
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, Pressable,

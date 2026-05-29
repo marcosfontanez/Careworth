@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, layout, spacing, typography, borderRadius, shadows } from '@/theme';
@@ -164,7 +165,7 @@ export function MessengerInboxPanel({
           },
           {
             text: 'View profile',
-            onPress: () => router.push(`/profile/${item.otherUser.id}` as any),
+            onPress: () => openPulsePage(router, item.otherUser.id),
           },
           {
             text: 'Delete conversation',
@@ -238,7 +239,7 @@ export function MessengerInboxPanel({
               <View style={styles.rowMain}>
                 <TouchableOpacity
                   style={styles.avatarHit}
-                  onPress={() => router.push(`/profile/${item.otherUser.id}` as any)}
+                  onPress={() => openPulsePage(router, item.otherUser.id)}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${item.otherUser.displayName} profile`}

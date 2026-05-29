@@ -213,7 +213,7 @@ export const pulseScoresService = {
     const { data, error } = await supabase
       .rpc('get_top_current_pulse', {
         p_limit: safeLimit,
-        p_circle_id: circleId ?? null,
+        p_circle_id: circleId ?? undefined,
       });
     if (error) throw error;
     return (Array.isArray(data) ? data : []).map(rowToLeaderboard);
@@ -231,7 +231,7 @@ export const pulseScoresService = {
     const { data, error } = await supabase
       .rpc('get_top_lifetime_pulse', {
         p_limit: safeLimit,
-        p_circle_id: circleId ?? null,
+        p_circle_id: circleId ?? undefined,
       });
     if (error) throw error;
     return (Array.isArray(data) ? data : []).map(rowToLifetimeLeaderboard);

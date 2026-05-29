@@ -23,6 +23,18 @@ function rowToPin(row: StreamPinRow): StreamPinnedMessage {
   };
 }
 
+async function deactivateAllActive(streamId: string): Promise<void> {
+  const { error } = await supabase
+    .from('stream_pinned_messages')
+    .update({ is_active: false })
+    .eq('stream_id', streamId)
+    .eq('is_active', true);
+
+  if (error && __DEV__) {
+    console.warn('[streamPins.deactivateAllActive]', error.message);
+  }
+}
+
 export const streamPinsService = {
   /** Latest active pin on the given stream (if any). */
   async getActive(streamId: string): Promise<StreamPinnedMessage | null> {
@@ -45,9 +57,8 @@ export const streamPinsService = {
   },
 
   /**
-   * Pin a new message. Server RLS ensures only the stream host can do this.
-   * Hosts calling this while another pin is active should first call `unpin`
-   * on the previous one — the viewer room only renders one pin at a time.
+   * Pin a new message. Deactivates any previous active pin on the stream first.
+   * Server RLS ensures only the stream host can do this while the stream is live.
    */
   async pin(input: {
     streamId: string;
@@ -57,6 +68,8 @@ export const streamPinsService = {
   }): Promise<StreamPinnedMessage | null> {
     const { streamId, content, pinnedBy, pinnedByName } = input;
     if (!streamId || !content.trim() || !pinnedBy) return null;
+
+    await deactivateAllActive(streamId);
 
     const { data, error } = await supabase
       .from('stream_pinned_messages')
@@ -111,14 +124,8 @@ export const streamPinsService = {
           table: 'stream_pinned_messages',
           filter: `stream_id=eq.${streamId}`,
         },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as StreamPinRow | undefined;
-          if (!row) return;
-          if (!row.is_active) {
-            onChange(null);
-            return;
-          }
-          onChange(rowToPin(row));
+        () => {
+          void streamPinsService.getActive(streamId).then(onChange);
         },
       )
       .subscribe();

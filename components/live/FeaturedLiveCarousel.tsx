@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,7 +9,11 @@ import {
   type NativeScrollEvent,
 } from 'react-native';
 import { layout, spacing, colors } from '@/theme';
-import { FeaturedLiveCard } from './FeaturedLiveCard';
+import {
+  FeaturedLiveCard,
+  FEATURED_LIVE_COMPACT_HEIGHT,
+  FEATURED_LIVE_HERO_HEIGHT,
+} from './FeaturedLiveCard';
 import type { LiveStream } from '@/types';
 import { getFeaturedLiveHeroCarouselWindow } from '@/lib/feedVideoListWindow';
 
@@ -35,6 +39,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SIDE_PADDING = layout.screenPadding;
 const CARD_WIDTH = SCREEN_WIDTH - SIDE_PADDING * 2;
 const SNAP_INTERVAL = CARD_WIDTH + spacing.md;
+const CARD_HEIGHTS = { hero: FEATURED_LIVE_HERO_HEIGHT, compact: FEATURED_LIVE_COMPACT_HEIGHT } as const;
 
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 60 };
 
@@ -50,7 +55,26 @@ export function FeaturedLiveCarousel({
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<LiveStream>>(null);
 
-  const data = streams.slice(0, maxCards);
+  const data = useMemo(() => {
+    const seen = new Set<string>();
+    const unique: LiveStream[] = [];
+    for (const stream of streams) {
+      if (seen.has(stream.id)) continue;
+      seen.add(stream.id);
+      unique.push(stream);
+      if (unique.length >= maxCards) break;
+    }
+    return unique;
+  }, [streams, maxCards]);
+  const cardHeight = CARD_HEIGHTS[variant];
+  const showDots = data.length > 1;
+  const carouselHeight = cardHeight + (showDots ? spacing.md + 6 : 0);
+
+  useEffect(() => {
+    if (activeIndex >= data.length) {
+      setActiveIndex(Math.max(0, data.length - 1));
+    }
+  }, [activeIndex, data.length]);
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -74,17 +98,19 @@ export function FeaturedLiveCarousel({
   if (data.length === 0) return null;
 
   return (
-    <View style={[styles.wrap, variant === 'hero' ? styles.wrapHero : styles.wrapCompact]}>
+    <View style={[styles.wrap, { minHeight: carouselHeight }]}>
       <FlatList
         ref={listRef}
         data={data}
         keyExtractor={(item) => item.id}
         nestedScrollEnabled
+        style={{ height: cardHeight }}
         initialNumToRender={FEATURED_LIVE_CAROUSEL_WINDOW.initialNumToRender}
         maxToRenderPerBatch={FEATURED_LIVE_CAROUSEL_WINDOW.maxToRenderPerBatch}
         windowSize={FEATURED_LIVE_CAROUSEL_WINDOW.windowSize}
+        removeClippedSubviews={false}
         renderItem={({ item }) => (
-          <View style={{ width: CARD_WIDTH, marginRight: spacing.md }}>
+          <View style={{ width: CARD_WIDTH, height: cardHeight, marginRight: spacing.md }}>
             <FeaturedLiveCard
               stream={item}
               width={CARD_WIDTH}
@@ -112,7 +138,7 @@ export function FeaturedLiveCarousel({
         })}
       />
 
-      {data.length > 1 ? (
+      {showDots ? (
         <View style={styles.dots}>
           {data.map((s, i) => {
             const active = i === activeIndex;
@@ -131,8 +157,6 @@ export function FeaturedLiveCarousel({
 
 const styles = StyleSheet.create({
   wrap: { width: '100%' },
-  wrapCompact: { minHeight: 360 },
-  wrapHero: { minHeight: 496 },
   scroll: {
     paddingLeft: SIDE_PADDING,
     /** trailing padding so last card snaps cleanly without trailing gap */

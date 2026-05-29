@@ -7,6 +7,7 @@ import {
   approveReportDismiss,
   markReportActionTaken,
   markReportInReview,
+  moderateCircleReportedContent,
   removeReportedContent,
   suspendSubjectFromReport,
   warnOnReport,
@@ -17,6 +18,7 @@ type ModerationBody = {
   reportId?: string;
   note?: string;
   banReason?: string;
+  circleAction?: "hide" | "remove" | "restore" | "pending_review";
 };
 
 /**
@@ -65,6 +67,19 @@ export async function POST(req: NextRequest) {
     case "remove":
       result = await removeReportedContent(reportId, note);
       break;
+    case "circle_moderate": {
+      const circleAction = body.circleAction;
+      if (
+        circleAction !== "hide" &&
+        circleAction !== "remove" &&
+        circleAction !== "restore" &&
+        circleAction !== "pending_review"
+      ) {
+        return NextResponse.json({ ok: false, error: "circleAction is required for circle_moderate" }, { status: 400 });
+      }
+      result = await moderateCircleReportedContent(reportId, circleAction, note);
+      break;
+    }
     case "suspend":
       result = await suspendSubjectFromReport(
         reportId,

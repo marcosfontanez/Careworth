@@ -97,55 +97,16 @@ export const shopQueriesService = {
    * with client-side filters to exclude leaderboard / beta / earned-only clutter.
    */
   async getRetiredBorders(limit = 80): Promise<ShopItemRow[]> {
-    const RETIRED_SHOP_DRAWER_QUERY_ENABLED = false;
-    if (!RETIRED_SHOP_DRAWER_QUERY_ENABLED) {
-      return [];
-    }
-
-    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from('shop_items')
       .select('*')
       .eq('type', 'border')
-      .or(
-        [
-          'is_active.eq.false',
-          `expires_at.lte.${nowIso}`,
-          'is_retired.eq.true',
-          'availability_status.eq.retired',
-        ].join(','),
-      )
+      .contains('metadata', { retired_catalog_visible: true })
       .order('expires_at', { ascending: false, nullsFirst: false })
       .order('updated_at', { ascending: false })
       .limit(limit);
     if (error) throw error;
-    const rows = (data ?? []) as unknown as ShopItemRow[];
-    const now = Date.now();
-    return rows
-      .filter((row) => {
-        // Defensive: keep only rows that are genuinely *not* purchasable right now.
-        if (row.is_active === false) return true;
-        if (row.is_retired === true) return true;
-        if (row.availability_status === 'retired') return true;
-        if (row.expires_at) {
-          const t = new Date(row.expires_at).getTime();
-          if (!Number.isNaN(t) && t <= now) return true;
-        }
-        return false;
-      })
-      .filter((row) => {
-        // Hide monthly leaderboard prize borders + other earned-only grants —
-        // these rotate constantly and would clutter the drawer.
-        if (row.source_type === 'leaderboard_reward') return false;
-        if (row.source_type === 'beta_reward') return false;
-        if (row.unlock_method === 'leaderboard_rank') return false;
-        if (row.unlock_method === 'beta_tester_grant') return false;
-        if (row.rank_place != null) return false;
-        // `is_earned_only` items were never on shop shelves to begin with —
-        // hiding them keeps the drawer focused on past-but-once-available drops.
-        if (row.is_earned_only === true && row.is_shop_item !== true) return false;
-        return true;
-      });
+    return (data ?? []) as unknown as ShopItemRow[];
   },
 
   async getSparkWallet(userId: string): Promise<SparkWalletRow | null> {

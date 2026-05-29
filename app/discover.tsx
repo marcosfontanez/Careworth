@@ -4,6 +4,7 @@ import {
   Dimensions, RefreshControl, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
@@ -19,12 +20,13 @@ import { formatCount } from '@/utils/format';
 import { supabase } from '@/lib/supabase';
 import { postsService } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { prefetchCircleRoom } from '@/lib/communityCache';
+import { navigateToCircleRoom } from '@/lib/communityCache';
 import type { UserProfile, Post } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { getDiscoverHorizontalShelfWindow } from '@/lib/feedVideoListWindow';
+import { resolvePostViewerHref } from '@/lib/postViewerRoute';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W * 0.42;
@@ -233,7 +235,7 @@ export default function DiscoverScreen() {
             <TouchableOpacity
               key={c.id}
               style={styles.creatorCard}
-              onPress={() => router.push(`/profile/${c.id}`)}
+              onPress={() => openPulsePage(router, c.id)}
               activeOpacity={0.7}
             >
               <View style={styles.creatorAvatarWrap}>
@@ -281,7 +283,7 @@ export default function DiscoverScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.postCard}
-                  onPress={() => router.push(`/post/${item.id}`)}
+                  onPress={() => router.push(resolvePostViewerHref(item))}
                   activeOpacity={0.8}
                 >
                   <RecentMediaThumb
@@ -320,7 +322,7 @@ export default function DiscoverScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.postCard}
-                  onPress={() => router.push(`/post/${item.id}`)}
+                  onPress={() => router.push(resolvePostViewerHref(item))}
                   activeOpacity={0.8}
                 >
                   <RecentMediaThumb
@@ -356,7 +358,7 @@ export default function DiscoverScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.postCard}
-              onPress={() => router.push(`/post/${item.id}`)}
+              onPress={() => router.push(resolvePostViewerHref(item))}
               activeOpacity={0.8}
             >
               <RecentMediaThumb
@@ -395,8 +397,7 @@ export default function DiscoverScreen() {
                   <TouchableOpacity
                     style={styles.communityCard}
                     onPress={() => {
-                      prefetchCircleRoom(queryClient, item, user?.id ?? null);
-                      router.push(`/communities/${item.slug}`);
+                      navigateToCircleRoom(router, queryClient, item, user?.id ?? null);
                     }}
                     activeOpacity={0.7}
                   >

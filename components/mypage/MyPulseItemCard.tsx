@@ -1,7 +1,11 @@
 import React, { useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Post, ProfileUpdate } from '@/types';
 import { hrefPostFocusComments } from '@/lib/communityRoutes';
+import { pushPostViewer } from '@/lib/postViewerRoute';
+import { navigateToCircleRoom, navigateToCircleThread } from '@/lib/communityCache';
+import { useAuth } from '@/contexts/AuthContext';
 import { getMyPulseDisplayType } from '@/utils/myPulseDisplayType';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
@@ -69,6 +73,8 @@ export function MyPulseItemCard({
   resolveLinkedPost,
 }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const displayType = getMyPulseDisplayType(u);
 
   const handleDelete = useCallback(async () => {
@@ -109,9 +115,17 @@ export function MyPulseItemCard({
 
   const openSource = useCallback(() => {
     if (u.linkedPostId) {
-      router.push(
-        hrefPostFocusComments(u.linkedPostId, u.linkedCircleSlug?.trim() || undefined) as any,
-      );
+      const linked = resolveLinkedPost?.(u.linkedPostId);
+      if (linked) {
+        router.push(
+          hrefPostFocusComments(linked, u.linkedCircleSlug?.trim() || undefined) as any,
+        );
+      } else {
+        void pushPostViewer(router, u.linkedPostId, {
+          focusComments: true,
+          circle: u.linkedCircleSlug?.trim() || undefined,
+        });
+      }
       return;
     }
     /**
@@ -120,13 +134,26 @@ export function MyPulseItemCard({
      * full conversation and reply in context.
      */
     if (u.linkedThreadId && u.linkedCircleSlug) {
-      router.push(
-        `/communities/${u.linkedCircleSlug}/thread/${u.linkedThreadId}` as any,
+      const circleSlug = u.linkedCircleSlug.trim();
+      void navigateToCircleThread(
+        router,
+        queryClient,
+        circleSlug,
+        u.linkedThreadId,
+        user?.id ?? null,
+        'myPulseCard:linkedThread',
       );
       return;
     }
     if (u.linkedCircleSlug) {
-      router.push(`/communities/${u.linkedCircleSlug}` as any);
+      const circleSlug = u.linkedCircleSlug.trim();
+      void navigateToCircleRoom(
+        router,
+        queryClient,
+        { slug: circleSlug },
+        user?.id ?? null,
+        { source: 'myPulseCard:linkedCircle' },
+      );
       return;
     }
     if (u.linkedLiveId && isFeatureEnabled('liveStreaming')) {
@@ -138,7 +165,7 @@ export function MyPulseItemCard({
       return;
     }
     router.push(`/my-pulse/${u.id}` as any);
-  }, [router, u]);
+  }, [router, u, resolveLinkedPost, queryClient, user?.id]);
 
   /**
    * Types where editing the body from the Pulse card is meaningful.

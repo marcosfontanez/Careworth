@@ -23,6 +23,12 @@ const typeConfig: Record<string, { name: string; color: string; bg: string; acti
   mention: { name: 'at', color: colors.primary.teal, bg: colors.primary.teal + '22', action: 'View' },
   community_invite: { name: 'people', color: colors.status.invite, bg: colors.status.invite + '18', action: 'Join' },
   circle_new_post: { name: 'albums', color: colors.primary.teal, bg: colors.primary.teal + '18', action: 'View' },
+  circle_post_digest: {
+    name: 'albums-outline',
+    color: colors.primary.teal,
+    bg: colors.primary.teal + '18',
+    action: 'Open',
+  },
   creator_new_post: {
     name: 'notifications',
     color: colors.primary.teal,
@@ -32,6 +38,8 @@ const typeConfig: Record<string, { name: string; color: string; bg: string; acti
   job_alert: { name: 'briefcase', color: colors.primary.gold, bg: colors.primary.gold + '18' },
   badge_earned: { name: 'ribbon', color: colors.primary.gold, bg: colors.primary.gold + '18' },
   tier_up: { name: 'pulse', color: '#F59E0B', bg: 'rgba(245,158,11,0.18)', action: 'View' },
+  live_go_live: { name: 'radio', color: '#EF4444', bg: 'rgba(239,68,68,0.18)', action: 'Watch' },
+  live_stream_live: { name: 'radio', color: '#EF4444', bg: 'rgba(239,68,68,0.18)', action: 'Watch' },
 };
 
 interface Props {

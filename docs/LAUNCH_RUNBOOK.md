@@ -110,15 +110,26 @@ npx supabase secrets set LIVEKIT_API_SECRET=...
 
 Deploy `dispatch-scheduled`, set `DISPATCH_SCHEDULED_SECRET`, schedule a cron (Supabase or external) with header `x-cron-secret`. See function README.
 
-### 7. Creator media worker (YOU — if stitch/B-roll posts matter)
+### 7. Creator media worker (YOU — if stitch/B-roll / Feed clips matter)
 
-On a small VPS or your PC while testing:
+**Production:** deploy always-on worker to Fly.io — full steps in **`docs/CREATOR_MEDIA_WORKER_DEPLOY.md`**.
+
+Quick deploy (after `fly auth login` and secrets):
+
+```powershell
+fly apps create pulseverse-creator-media
+fly secrets set SUPABASE_URL=https://YOUR.supabase.co SUPABASE_SERVICE_ROLE_KEY=your_key -a pulseverse-creator-media
+fly deploy -c fly.creator-media-worker.toml
+fly logs -a pulseverse-creator-media
+```
+
+**Local testing only** (stop when Fly worker is live):
 
 ```powershell
 # Requires ffmpeg + ffprobe on PATH
 $env:SUPABASE_URL="https://YOUR.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY="your_service_role_key"
-npm run worker:media
+npm run worker:media -- --watch
 ```
 
 ---

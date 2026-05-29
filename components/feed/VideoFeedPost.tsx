@@ -15,20 +15,34 @@ import { FeedActionRail } from './FeedActionRail';
 import { FeedOriginalSound } from './FeedOriginalSound';
 import { formatCount } from '@/utils/format';
 import { colors, typography, borderRadius, spacing } from '@/theme';
+import { pulseColors, pulseRadius } from '@/lib/theme/pulseTheme';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
-import { profileHandleLineForCreator } from '@/utils/profileHandle';
+import { formatFeedCircleChipLabel } from '@/lib/feedCircleChipLabel';
+import { FeedClipAttributionRow } from '@/components/feed/FeedClipAttributionChip';
+import { useFeedClipAttribution } from '@/hooks/useFeedClipAttribution';
+import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
+import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
+import { feedCaptionForOverlay } from '@/lib/feedCaptionDisplay';
+import { feedCreatorHandleOnly } from '@/lib/feedCreatorIdentityLine';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Post } from '@/types';
 import { getMoodPreset, resolveFeedGradeLookId } from '@/lib/moodPresets';
+import {
+  DEFAULT_OVERLAY_STYLE,
+  computeOverlayTopLeft,
+  overlayTextStyle,
+  type VideoOverlayStyle,
+} from '@/lib/videoOverlayStyle';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
 import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
 import { pickAbCoverUrl } from '@/lib/coverAbPoster';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
 import { usePostCoverAbImpression } from '@/hooks/usePostCoverAbImpression';
-import { usePost } from '@/hooks/useQueries';
+import { useCommunities, usePost } from '@/hooks/useQueries';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { DuetParentPreview } from '@/components/feed/DuetParentPreview';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
@@ -64,6 +78,89 @@ interface Props {
   videoSurfaceEpoch?: number;
 }
 
+/**
+ * Renders the per-post on-video sticker text at the position + style the
+ * creator picked in the composer. When `style` is missing (legacy posts),
+ * we fall back to the original centered/lower-third layout — visually
+ * identical to pre-migration-237 behavior so old posts don't shift.
+ *
+ * Position math:
+ *  - x_norm 0..1 → maps to `left = x_norm * pageWidth`, then translate-X by
+ *    -50% so the user's anchor point sits at the visual center of the text.
+ *  - y_norm 0..1 → maps to `top = y_norm * pageHeight`, then translate-Y by
+ *    -50% so the anchor is the visual middle of the text.
+ *  - Clamped to a small margin so the text never paints outside the page.
+ */
+function FeedOverlayText({
+  text,
+  style,
+  pageWidth,
+  pageHeight,
+  fallbackBottom,
+}: {
+  text: string;
+  style: VideoOverlayStyle;
+  pageWidth: number;
+  pageHeight: number;
+  /** Legacy fallback: when style is the default, render in the old centered
+   *  position (anchored to bottom) so historic posts don't visually shift. */
+  fallbackBottom: number;
+}) {
+  /** Rendered text size, measured via onLayout. We need this to anchor the
+   *  visual center at (x_norm * pageWidth, y_norm * pageHeight) — without it
+   *  the absolute wrapper would shrink to text width and anchor at top-left,
+   *  pushing the text into the upper-left corner. */
+  const [textSize, setTextSize] = React.useState<{ w: number; h: number } | null>(null);
+
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const isDefaultPosition =
+    Math.abs(style.x_norm - DEFAULT_OVERLAY_STYLE.x_norm) < 0.0001 &&
+    Math.abs(style.y_norm - DEFAULT_OVERLAY_STYLE.y_norm) < 0.0001;
+
+  /** Legacy: keep old "centered, anchored to bottom" layout to avoid shifting
+   *  every existing post when the new column is empty. */
+  if (isDefaultPosition && style.font === DEFAULT_OVERLAY_STYLE.font &&
+      style.size === DEFAULT_OVERLAY_STYLE.size && style.color === DEFAULT_OVERLAY_STYLE.color) {
+    return (
+      <View
+        pointerEvents="none"
+        style={[styles.videoOverlayWrap, { bottom: fallbackBottom }]}
+      >
+        <Text style={styles.videoOverlayText} numberOfLines={3}>
+          {trimmed}
+        </Text>
+      </View>
+    );
+  }
+
+  const anchor = computeOverlayTopLeft(style, pageWidth, pageHeight, textSize);
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (!textSize || textSize.w !== width || textSize.h !== height) {
+          setTextSize({ w: width, h: height });
+        }
+      }}
+      style={{
+        position: 'absolute',
+        left: anchor?.left ?? 0,
+        top: anchor?.top ?? 0,
+        maxWidth: pageWidth * 0.9,
+        opacity: anchor ? 1 : 0,
+        zIndex: 5,
+      }}
+    >
+      <Text style={[overlayTextStyle(style), styles.feedOverlayChip]} numberOfLines={3}>
+        {trimmed}
+      </Text>
+    </View>
+  );
+}
+
 function VideoFeedPostInner({
   post, viewportHeight, isActive, isLiked, isSaved, isFollowing,
   onLike, onComment, onSave, onShare, onFollow, onProfile,
@@ -86,6 +183,26 @@ function VideoFeedPostInner({
 
   const canOpenFeedGift =
     feedCreatorGifting && Boolean(user?.id) && user!.id !== post.creatorId && !post.isAnonymous;
+
+  const { data: communitiesCatalog } = useCommunities();
+  const linkedCommunityId = post.communities[0]?.trim() ?? '';
+  const linkedCommunity = useMemo(() => {
+    if (!linkedCommunityId || !communitiesCatalog?.length) return null;
+    return communitiesCatalog.find((c) => c.id === linkedCommunityId) ?? null;
+  }, [linkedCommunityId, communitiesCatalog]);
+  const circleChipLabel = useMemo(
+    () =>
+      formatFeedCircleChipLabel(
+        post.linkedCommunityName ?? linkedCommunity?.name,
+        post.linkedCommunitySlug ?? linkedCommunity?.slug,
+        linkedCommunityId || null,
+      ),
+    [post.linkedCommunityName, post.linkedCommunitySlug, linkedCommunity, linkedCommunityId],
+  );
+  const clipAttribution = useFeedClipAttribution(post);
+  const feedCaption = useMemo(() => feedCaptionForOverlay(post.caption), [post.caption]);
+  const neonPillTags = useMemo(() => buildNeonPillTags(post.creator), [post.creator]);
+  const creatorHandle = useMemo(() => feedCreatorHandleOnly(post.creator), [post.creator]);
 
   useEffect(() => {
     setCreatorGiftOpen(false);
@@ -307,14 +424,13 @@ function VideoFeedPostInner({
             </View>
           ) : null}
           {post.videoOverlayText?.trim() ? (
-            <View
-              pointerEvents="none"
-              style={[styles.videoOverlayWrap, { bottom: chromeBottom.content + 220 }]}
-            >
-              <Text style={styles.videoOverlayText} numberOfLines={3}>
-                {post.videoOverlayText.trim()}
-              </Text>
-            </View>
+            <FeedOverlayText
+              text={post.videoOverlayText}
+              style={post.videoOverlayStyle ?? DEFAULT_OVERLAY_STYLE}
+              pageWidth={SCREEN_W}
+              pageHeight={pageH}
+              fallbackBottom={chromeBottom.content + 220}
+            />
           ) : null}
         </>
       ) : showImageCarousel ? (
@@ -354,14 +470,13 @@ function VideoFeedPostInner({
             ))}
           </View>
           {post.videoOverlayText?.trim() ? (
-            <View
-              pointerEvents="none"
-              style={[styles.videoOverlayWrap, { bottom: chromeBottom.content + 220 }]}
-            >
-              <Text style={styles.videoOverlayText} numberOfLines={3}>
-                {post.videoOverlayText.trim()}
-              </Text>
-            </View>
+            <FeedOverlayText
+              text={post.videoOverlayText}
+              style={post.videoOverlayStyle ?? DEFAULT_OVERLAY_STYLE}
+              pageWidth={SCREEN_W}
+              pageHeight={pageH}
+              fallbackBottom={chromeBottom.content + 220}
+            />
           ) : null}
         </View>
       ) : posterUri || (post.type === 'image' && post.mediaUrl) ? (
@@ -379,14 +494,13 @@ function VideoFeedPostInner({
             />
           ) : null}
           {post.videoOverlayText?.trim() ? (
-            <View
-              pointerEvents="none"
-              style={[styles.videoOverlayWrap, { bottom: chromeBottom.content + 220 }]}
-            >
-              <Text style={styles.videoOverlayText} numberOfLines={3}>
-                {post.videoOverlayText.trim()}
-              </Text>
-            </View>
+            <FeedOverlayText
+              text={post.videoOverlayText}
+              style={post.videoOverlayStyle ?? DEFAULT_OVERLAY_STYLE}
+              pageWidth={SCREEN_W}
+              pageHeight={pageH}
+              fallbackBottom={chromeBottom.content + 220}
+            />
           ) : null}
         </View>
       ) : (
@@ -394,14 +508,19 @@ function VideoFeedPostInner({
           {post.type === 'video' && !videoUri ? (
             <Text style={styles.videoMissingHint}>Video link missing — re-upload from Create, or check Storage (post-media) is public.</Text>
           ) : null}
-          <CaptionWithMentions text={post.caption} style={styles.textPostCaption} />
+          <CaptionWithMentions text={feedCaption} style={styles.textPostCaption} />
         </View>
       )}
 
       <HeartBurst visible={showHeart} />
 
       <GradientOverlay position="top" intensity="light" />
-      <GradientOverlay position="bottom" intensity="heavy" />
+      <LinearGradient
+        colors={['transparent', 'rgba(7,17,31,0.42)', 'rgba(7,17,31,0.78)']}
+        style={styles.bottomReadabilityVeil}
+        pointerEvents="none"
+      />
+      <GradientOverlay position="bottom" intensity="medium" />
 
       <FeedActionRail
         post={post}
@@ -430,18 +549,18 @@ function VideoFeedPostInner({
         {!isAnon && (
           <View style={styles.identityBlock}>
             <View style={styles.nameLine}>
-              <TouchableOpacity onPress={onProfile} activeOpacity={0.85}>
-                <Text style={[styles.displayName, typography.creatorName]} numberOfLines={1}>
-                  {post.creator.displayName}
+              <TouchableOpacity onPress={onProfile} activeOpacity={0.85} style={styles.identityPress}>
+                <Text style={styles.creatorIdentity} numberOfLines={1}>
+                  {creatorHandle}
                 </Text>
               </TouchableOpacity>
-              {post.creator.isVerified && (
-                <Ionicons name="checkmark-circle" size={14} color={colors.primary.teal} />
-              )}
+              {post.creator.isVerified ? (
+                <Ionicons name="checkmark-circle" size={14} color={pulseColors.teal} />
+              ) : null}
+              {neonPillTags.length > 0 ? (
+                <ProfileNeonPills tags={neonPillTags} style={styles.feedNeonPills} />
+              ) : null}
             </View>
-            <Text style={styles.creatorHandle} numberOfLines={1}>
-              {profileHandleLineForCreator(post.creator)}
-            </Text>
           </View>
         )}
 
@@ -449,6 +568,24 @@ function VideoFeedPostInner({
           <View style={styles.anonRow}>
             <Ionicons name="eye-off-outline" size={16} color={colors.onVideo.progressFill} />
             <Text style={styles.anonLabel}>Anonymous</Text>
+          </View>
+        )}
+
+        {feedCaption ? (
+          <CaptionWithMentions
+            text={feedCaption}
+            style={[styles.caption, typography.captionOverlay]}
+            numberOfLines={2}
+          />
+        ) : null}
+
+        {post.hashtags.length > 0 && (
+          <View style={styles.tagRow}>
+            {post.hashtags.slice(0, 3).map((tag) => (
+              <TouchableOpacity key={tag} onPress={() => onHashtag?.(tag)} activeOpacity={0.7}>
+                <Text style={[styles.hashtag, typography.overlayMicro]}>#{tag}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 
@@ -507,11 +644,23 @@ function VideoFeedPostInner({
           </TouchableOpacity>
         ) : null}
 
-        <CaptionWithMentions
-          text={post.caption}
-          style={[styles.caption, typography.captionOverlay]}
-          numberOfLines={3}
-        />
+        <FeedClipAttributionRow attribution={clipAttribution} variant="feed" />
+
+        {circleChipLabel && linkedCommunityId ? (
+          <TouchableOpacity
+            style={styles.circleChip}
+            onPress={() => onCommunity?.(linkedCommunityId)}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel={circleChipLabel}
+          >
+            <Ionicons name="people-outline" size={11} color={pulseColors.teal} />
+            <Text style={styles.circleChipText} numberOfLines={1}>
+              {circleChipLabel}
+            </Text>
+            <Ionicons name="chevron-forward" size={11} color={pulseColors.textQuiet} />
+          </TouchableOpacity>
+        ) : null}
 
         {post.soundTitle && !hasVideo ? (
           <View style={styles.soundRow}>
@@ -522,28 +671,8 @@ function VideoFeedPostInner({
           </View>
         ) : null}
 
-        {post.hashtags.length > 0 && (
-          <View style={styles.tagRow}>
-            {post.hashtags.slice(0, 2).map((tag) => (
-              <TouchableOpacity key={tag} onPress={() => onHashtag?.(tag)} activeOpacity={0.7}>
-                <Text style={[styles.hashtag, typography.overlayMicro]}>#{tag}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         <View style={styles.footerMeta}>
-          {post.communities.length > 0 ? (
-            <TouchableOpacity
-              style={styles.communityPill}
-              onPress={() => onCommunity?.(post.communities[0])}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.communityText}>Circle</Text>
-            </TouchableOpacity>
-          ) : (
-            <View />
-          )}
+          <View style={styles.footerSpacer} />
           <Text style={[styles.viewCount, typography.overlayQuiet]}>
             {formatCount(post.viewCount)} views
           </Text>
@@ -631,6 +760,9 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
   if (
     pc.displayName !== nc.displayName ||
     pc.username !== nc.username ||
+    pc.firstName !== nc.firstName ||
+    pc.lastName !== nc.lastName ||
+    JSON.stringify(pc.identityTags ?? []) !== JSON.stringify(nc.identityTags ?? []) ||
     pc.avatarUrl !== nc.avatarUrl ||
     pc.role !== nc.role ||
     pc.specialty !== nc.specialty ||
@@ -653,6 +785,7 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.thumbnailUrl !== n.thumbnailUrl ||
     p.coverAltUrl !== n.coverAltUrl ||
     (p.videoOverlayText ?? '') !== (n.videoOverlayText ?? '') ||
+    JSON.stringify(p.videoOverlayStyle ?? null) !== JSON.stringify(n.videoOverlayStyle ?? null) ||
     (p.videoLookId ?? '') !== (n.videoLookId ?? '') ||
     (p.evidenceUrl ?? '') !== (n.evidenceUrl ?? '') ||
     (p.evidenceLabel ?? '') !== (n.evidenceLabel ?? '') ||
@@ -691,6 +824,11 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
   const pco = p.communities.join('\u0001');
   const nco = n.communities.join('\u0001');
   if (pco !== nco) return false;
+  if ((p.linkedCommunityName ?? '') !== (n.linkedCommunityName ?? '')) return false;
+  if ((p.linkedCommunitySlug ?? '') !== (n.linkedCommunitySlug ?? '')) return false;
+  if ((p.sourceLiveStreamId ?? '') !== (n.sourceLiveStreamId ?? '')) return false;
+  if ((p.sourcePostId ?? '') !== (n.sourcePostId ?? '')) return false;
+  if ((p.sourceCreatorId ?? '') !== (n.sourceCreatorId ?? '')) return false;
 
   const ps = p.sponsorInfo;
   const ns = n.sponsorInfo;
@@ -1059,6 +1197,14 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
   },
+  bottomReadabilityVeil: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '46%',
+    zIndex: 2,
+  },
   bg: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -1100,6 +1246,16 @@ const styles = StyleSheet.create({
     right: 80,
     alignItems: 'center',
     zIndex: 5,
+  },
+  /** Padded translucent chip behind dragged-position overlays so any font/color
+   *  combo stays readable against arbitrary video frames. The legacy centered
+   *  variant uses `videoOverlayText` which already has its own background. */
+  feedOverlayChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   videoOverlayText: {
     color: '#FFF',
@@ -1147,8 +1303,8 @@ const styles = StyleSheet.create({
   creatorMetaChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
+    gap: 5,
+    marginBottom: 4,
     alignItems: 'center',
   },
   metaChip: {
@@ -1198,35 +1354,81 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 88,
     left: 14,
-    right: 72,
+    right: 76,
     zIndex: 5,
   },
   identityBlock: {
-    marginBottom: 8,
+    marginBottom: 4,
     alignSelf: 'flex-start',
     maxWidth: '100%',
   },
+  identityPress: {
+    flexShrink: 0,
+  },
   nameLine: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 5,
-    marginBottom: 2,
+    maxWidth: '100%',
   },
-  creatorHandle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.onVideo.mutedStrong,
-    marginBottom: 6,
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  displayName: {
-    color: colors.onVideo.primary,
+  feedNeonPills: {
+    marginTop: 0,
+    marginBottom: 0,
     flexShrink: 1,
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    maxWidth: '100%',
+  },
+  creatorIdentity: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: pulseColors.text,
+    letterSpacing: 0.1,
+    textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
+    flexShrink: 0,
+  },
+  circleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    maxWidth: SCREEN_W * 0.72,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: pulseRadius.full,
+    backgroundColor: 'rgba(15, 28, 48, 0.72)',
+    borderWidth: 1,
+    borderColor: pulseColors.borderAccent,
+  },
+  circleChipText: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: pulseColors.textSecondary,
+    letterSpacing: 0.15,
+  },
+  liveSourceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    maxWidth: SCREEN_W * 0.72,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: pulseRadius.full,
+    backgroundColor: 'rgba(15, 28, 48, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 71, 87, 0.35)',
+  },
+  liveSourceChipText: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: pulseColors.textSecondary,
+    letterSpacing: 0.15,
   },
   anonRow: {
     flexDirection: 'row',
@@ -1244,7 +1446,8 @@ const styles = StyleSheet.create({
   },
   caption: {
     color: colors.onVideo.primary,
-    marginBottom: 4,
+    marginTop: 2,
+    marginBottom: 2,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
@@ -1265,8 +1468,8 @@ const styles = StyleSheet.create({
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 6,
+    gap: 6,
+    marginBottom: 2,
   },
   hashtag: {
     color: colors.onVideo.tag,
@@ -1274,26 +1477,13 @@ const styles = StyleSheet.create({
   footerMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: 8,
     marginTop: 2,
   },
-  communityPill: {
-    backgroundColor: colors.glass.sm,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: borderRadius.chip,
-    borderWidth: 1,
-    borderColor: colors.onVideo.borderSoft,
-  },
-  communityText: {
-    color: colors.onVideo.live,
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
+  footerSpacer: { flex: 1 },
   viewCount: {
-    color: colors.onVideo.muted,
+    color: pulseColors.textQuiet,
   },
 
   bufferingWrap: {

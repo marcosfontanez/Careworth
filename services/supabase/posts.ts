@@ -1,16 +1,25 @@
 import { supabase } from '@/lib/supabase';
 import { feedPerfLane, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
 import { finalizePostsForViewer } from '@/lib/postViewerPrivacy';
+import { hydratePostRowsWithProfiles } from '@/lib/postgrestViewerSafeEmbeds';
 import { normalizeDuetLayoutMode } from '@/lib/duetLayoutMode';
 import { clampVideoOverlayText } from '@/lib/videoOverlayText';
+import { parseOverlayStyle, serializeOverlayStyle, type VideoOverlayStyle } from '@/lib/videoOverlayStyle';
 import { normalizeVideoLookId } from '@/lib/videoFilters';
 import { mergePinnedCommunityPosts, type CommunityPostPinRow } from '@/lib/communityPostPins';
+import { COMMUNITY_WALL_PAGE_SIZE } from '@/lib/communityWallPostsCache';
 import type { Post, FeedType, PostType, SoundLibraryRow, ViralSoundRow, Role, Specialty, PostReactionCounts, PostReactionKind } from '@/types';
 import { normalizePostReactionKind } from '@/lib/postReactions';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { feedSignalsService } from '@/services/supabase/feedSignals';
 import { profilesService } from '@/services/supabase/profiles';
+import { getBlockRelationship } from '@/services/supabase/blocks';
 import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
+
+/** Read path masks anonymous creator_id (migration 215). Writes stay on `posts`. */
+function fromPostsViewerSafe() {
+  return supabase.from('posts_viewer_safe');
+}
 
 /** Batches `post_views` inserts — cuts HTTPS round-trips during feed scroll (see Query Performance). */
 type PostViewRow = { post_id: string; viewer_id: string; view_duration_ms: number };
@@ -88,7 +97,7 @@ function postIsLiveForPublicSurface(p: Post): boolean {
 function postAppearsInMainFeeds(p: Post): boolean {
   if (!postIsLiveForPublicSurface(p)) return false;
   const proc = (p.mediaProcessingStatus ?? '').trim().toLowerCase();
-  if (proc === 'queued' || proc === 'running') return false;
+  if (proc === 'queued' || proc === 'running' || proc === 'failed') return false;
   const tags = p.feedTypeEligible ?? [];
   return tags.some((x) => x === 'forYou' || x === 'following' || x === 'topToday');
 }
@@ -176,6 +185,17 @@ function rowToPost(row: any): Post {
     soundTitle: row.sound_title?.trim() || undefined,
     soundSourcePostId: row.sound_source_post_id ?? undefined,
     stitchSourcePostId: row.stitch_source_post_id ? String(row.stitch_source_post_id) : undefined,
+    sourceLiveStreamId: row.source_live_stream_id ? String(row.source_live_stream_id) : undefined,
+    sourcePostId: row.source_post_id ? String(row.source_post_id) : undefined,
+    sourceCreatorId: row.source_creator_id ? String(row.source_creator_id) : undefined,
+    clipStartSeconds:
+      row.clip_start_seconds != null && Number.isFinite(Number(row.clip_start_seconds))
+        ? Number(row.clip_start_seconds)
+        : undefined,
+    clipEndSeconds:
+      row.clip_end_seconds != null && Number.isFinite(Number(row.clip_end_seconds))
+        ? Number(row.clip_end_seconds)
+        : undefined,
     soundSourceMediaUrl: normalizeMediaUrl(row.sound_source_media_url),
     duetParentId: row.duet_parent_id ? String(row.duet_parent_id) : undefined,
     ...(duetLay ? { duetLayoutMode: duetLay } : {}),
@@ -203,7 +223,13 @@ function rowToPost(row: any): Post {
     videoOverlayText: typeof row.video_overlay_text === 'string'
       ? row.video_overlay_text.trim() || undefined
       : undefined,
+    videoOverlayStyle: parseOverlayStyle(
+      (row as { video_overlay_style?: unknown }).video_overlay_style,
+    ),
     commentsDisabled: Boolean(row.comments_disabled),
+    allowViewerClips: row.allow_viewer_clips !== false,
+    allowRemix: row.allow_remix !== false,
+    allowClipDownloads: row.allow_clip_downloads === true,
     mediaProcessingStatus:
       row.media_processing_status != null && String(row.media_processing_status).trim()
         ? String(row.media_processing_status).trim()
@@ -281,6 +307,11 @@ const POST_SELECT = [
   'sound_source_post_id',
   'sound_source_media_url',
   'stitch_source_post_id',
+  'source_live_stream_id',
+  'source_post_id',
+  'source_creator_id',
+  'clip_start_seconds',
+  'clip_end_seconds',
   // Duet / evidence / shift context (Innovation feed)
   'duet_parent_id',
   'duet_layout_mode',
@@ -300,13 +331,20 @@ const POST_SELECT = [
   'video_look_id',
   // On-video sticker text (rendered as <Text> overlay on the feed video)
   'video_overlay_text',
+  // On-video sticker STYLE (migration 237) — font/size/color/x_norm/y_norm
+  'video_overlay_style',
   'comments_disabled',
+  'allow_viewer_clips',
+  'allow_remix',
+  'allow_clip_downloads',
   'media_processing_status',
   'media_processing_job_id',
   'media_processing_error',
   // Joined creator profile — explicit columns to avoid shipping email,
   // push tokens, role_admin flag, etc. to the client.
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  // Joined creator profile — explicit FK hint required since migration 213 added
+  // posts.source_creator_id → profiles (second relationship).
+  'profiles!posts_creator_id_fkey(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /**
@@ -338,6 +376,11 @@ const POST_SELECT_FEED = [
   'sound_source_post_id',
   'sound_source_media_url',
   'stitch_source_post_id',
+  'source_live_stream_id',
+  'source_post_id',
+  'source_creator_id',
+  'clip_start_seconds',
+  'clip_end_seconds',
   'duet_parent_id',
   'duet_layout_mode',
   'evidence_url',
@@ -353,19 +396,30 @@ const POST_SELECT_FEED = [
   'mood_preset',
   'video_look_id',
   'video_overlay_text',
+  'video_overlay_style',
   'comments_disabled',
+  'allow_viewer_clips',
+  'allow_remix',
+  'allow_clip_downloads',
   'media_processing_status',
   'media_processing_job_id',
   'media_processing_error',
-  'profiles(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  'profiles!posts_creator_id_fkey(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */
-async function fetchPostsByIdsOrdered(ids: string[], selectSql: string = POST_SELECT): Promise<Post[]> {
+async function fetchPostsByIdsOrdered(
+  ids: string[],
+  selectSql: string = POST_SELECT,
+  useViewerSafe = true,
+): Promise<Post[]> {
   if (ids.length === 0) return [];
-  const { data, error } = await supabase.from('posts').select(selectSql).in('id', ids);
+  const source = useViewerSafe ? fromPostsViewerSafe() : supabase.from('posts');
+  const sql = useViewerSafe ? '*' : selectSql;
+  const { data, error } = await source.select(sql).in('id', ids);
   if (error) throw error;
-  const byId = new Map<string, Post>((data ?? []).map((row: any) => [row.id, rowToPost(row)]));
+  const rows = useViewerSafe ? await hydratePostRowsWithProfiles(data ?? []) : (data ?? []);
+  const byId = new Map<string, Post>(rows.map((row: any) => [row.id, rowToPost(row)]));
   const out: Post[] = [];
   for (const id of ids) {
     const p = byId.get(id);
@@ -383,8 +437,14 @@ async function fetchForYouPostsChronological(viewerId: string, limit: number): P
 
   if (!rpcErr && idRows != null && (idRows as { id: string }[]).length > 0) {
     const ids = (idRows as { id: string }[]).map((r) => r.id);
-    const ordered = await fetchPostsByIdsOrdered(ids, POST_SELECT_FEED);
-    return ordered.filter(postAppearsInMainFeeds);
+    try {
+      const ordered = await fetchPostsByIdsOrdered(ids, POST_SELECT_FEED);
+      return ordered.filter(postAppearsInMainFeeds);
+    } catch (e: any) {
+      if (__DEV__) {
+        console.warn('fetchForYouPostsChronological hydrate failed, using REST fallback:', e?.message);
+      }
+    }
   }
 
   if (__DEV__ && rpcErr) {
@@ -488,12 +548,56 @@ function withFeedPrivacy(query: any, viewerId?: string) {
   return query.eq('privacy_mode', 'public');
 }
 
+/** Profile-level private mode + blocks — used before reading posts on Pulse Page. */
+async function profilePostsReadableForViewer(
+  profileUserId: string,
+  viewerId?: string | null,
+): Promise<boolean> {
+  if (!profileUserId) return false;
+  if (viewerId && viewerId === profileUserId) return true;
+
+  const { data: owner, error: ownerErr } = await supabase
+    .from('profiles')
+    .select('privacy_mode')
+    .eq('id', profileUserId)
+    .maybeSingle();
+
+  if (ownerErr || !owner) return false;
+
+  if (viewerId) {
+    const block = await getBlockRelationship(viewerId, profileUserId);
+    if (block !== 'none') return false;
+
+    if (owner.privacy_mode === 'private') {
+      const { data: viewer } = await supabase
+        .from('profiles')
+        .select('role_admin')
+        .eq('id', viewerId)
+        .maybeSingle();
+      return Boolean(viewer?.role_admin);
+    }
+    return true;
+  }
+
+  return owner.privacy_mode !== 'private';
+}
+
 /** PostgREST `in` payloads stay smaller than giant URLs; merge chunks client-side. */
 const FOLLOWING_FEED_CREATOR_CHUNK = 100;
 
 /**
  * Chronological posts from creators the viewer follows only.
- * Uses `feed_type_eligible` containing `following` so opted-out posts stay out.
+ *
+ * Defense-in-depth filter stack (matches beta-launch audit requirement #7):
+ *   - SQL `feed_type_eligible` contains `'following'` → opted-out posts stay out.
+ *   - SQL `withFeedPrivacy` → public OR own (no private leaks).
+ *   - SQL `creator_id IN followed` → only followed creators.
+ *   - JS `postAppearsInMainFeeds` → rejects scheduled != live and
+ *     media_processing_status IN (queued, running, failed); also requires the
+ *     post to still carry a main-feed eligibility tag.
+ *   - Caller `applyViewerFeedFilters` → applies blocked / hide_creator /
+ *     not_interested exclusions from feedSignalsService.
+ *   - Caller `finalizePostsForViewer` → anonymous identity redaction.
  */
 async function fetchFollowingFeedPosts(args: {
   viewerId: string;
@@ -543,29 +647,70 @@ async function fetchFollowingFeedPosts(args: {
 }
 
 /**
- * Try the Tier 1 personalized ranker (042) first, then fall back to the
- * baseline ranker (006/023) if v2 isn't deployed yet. This lets us ship the
- * client and the migration independently.
+ * Personalized ranker call with documented fallback chain.
+ *
+ * Try order (each tier is additive on the prior):
+ *   1. get_ranked_feed_v3  (migration 234) — paginatable via exclude_post_ids;
+ *                                            SQL-level viewer exclusions;
+ *                                            graduated quick-skip penalty;
+ *                                            cold-start cohort blend.
+ *   2. get_ranked_feed_v2  (migration 042/051/160/211) — personalization layer
+ *                                            but no exclude_post_ids → page 2+
+ *                                            must dedupe client-side.
+ *   3. get_ranked_feed     (migration 006/023/160/211) — baseline scorer only.
+ *
+ * Chronological fallback (no ranker at all) is handled one level up in
+ * runRankedForYouFeed / runRankedForYouContinuation.
+ *
+ * `excludeIds`: ids the caller has already shown (page 2+). Used directly by
+ * v3; client-deduped against v2/v1 results.
  */
 async function callRankedRpc(
   viewerId: string,
   feedLimit: number,
-): Promise<{ post_id: string; score: number }[]> {
-  const v2 = await supabase.rpc('get_ranked_feed_v2', {
+  excludeIds: readonly string[] = [],
+): Promise<{ post_id: string; score: number; source?: string }[]> {
+  const excludeArray = excludeIds.length
+    ? Array.from(new Set(excludeIds))
+    : ([] as string[]);
+  const excludeSet = new Set(excludeArray);
+  const headroom = excludeArray.length;
+
+  /* Tier 1: v3 — preferred. Supports exclude_post_ids natively. */
+  const v3 = await supabase.rpc('get_ranked_feed_v3', {
     viewer_id: viewerId,
     feed_limit: feedLimit,
+    exclude_post_ids: excludeArray,
   });
-  if (!v2.error && v2.data?.length) return v2.data as { post_id: string; score: number }[];
+  if (!v3.error && v3.data?.length) {
+    return v3.data as { post_id: string; score: number; source?: string }[];
+  }
+  if (__DEV__ && v3.error) {
+    console.warn('get_ranked_feed_v3 unavailable, falling back to v2:', v3.error.message);
+  }
+
+  /* Tier 2: v2 — personalization without exclude_post_ids. Ask for headroom
+     equal to the number of already-seen ids so dedupe leaves enough rows. */
+  const v2 = await supabase.rpc('get_ranked_feed_v2', {
+    viewer_id: viewerId,
+    feed_limit: feedLimit + headroom,
+  });
+  if (!v2.error && v2.data?.length) {
+    const rows = v2.data as { post_id: string; score: number }[];
+    return rows.filter((r) => !excludeSet.has(r.post_id));
+  }
   if (__DEV__ && v2.error) {
     console.warn('get_ranked_feed_v2 unavailable, falling back to v1:', v2.error.message);
   }
 
+  /* Tier 3: v1 — baseline scorer. */
   const v1 = await supabase.rpc('get_ranked_feed', {
     viewer_id: viewerId,
-    feed_limit: feedLimit,
+    feed_limit: feedLimit + headroom,
   });
   if (v1.error) throw v1.error;
-  return (v1.data ?? []) as { post_id: string; score: number }[];
+  const v1Rows = (v1.data ?? []) as { post_id: string; score: number }[];
+  return v1Rows.filter((r) => !excludeSet.has(r.post_id));
 }
 
 /** Lightweight Top-Today fetch for stitching trending posts into the For You stream. */
@@ -612,25 +757,48 @@ function stitchTrending(personal: Post[], trending: Post[], every = 7): Post[] {
  * Module-level (no `this`) so Hermes never sees unresolved identifiers if `getFeed` is called unbound
  * or Metro Fast Refresh leaves a stale query closure after refactors.
  *
- * Tier 1 feed pipeline:
+ * Tier 1 feed pipeline (PAGE 1 ONLY — see runRankedForYouContinuation for page 2+):
  *   1. Fetch own / recent / ranked / trending in parallel (each lane is independent).
  *   2. Hydrate ranked rows by id (RPC returns ids+scores only).
  *   3. Cap creator concentration in the personalized band (max 2 per creator).
  *   4. Stitch one trending post every 7 personalized slots.
- *   5. Prepend the viewer's own recent posts (privacy=Followers safety net).
+ *   5. Prepend AT MOST 1 own post — only if it is <24h old. Acts as a soft
+ *      "your post is live" confirmation without flooding the discovery feed.
+ *      Older own posts still compete in the ranked band by score.
+ *
+ * Fallback chain (worst→best resolution):
+ *   ranked RPC (v3 → v2 → v1) > chronological getForYouPostIds > REST chrono
+ *   When ranked + recent both die, we still try a wider chronological pull;
+ *   if even that fails, we return own posts or empty.
  */
 async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
   const rankedRunT0 = feedPerfNow();
   const RECENT_FIRST = 15;
   const MAX_FEED = 50;
-  const OWN_FIRST = 20;
+  /* Own-post prepend cap. PRE-BETA: was 20, which flooded the top of For You
+     with the viewer's own uploads on accounts with many posts. Capped to 1 +
+     a 24h freshness window so we only ever show a single "your post is live"
+     confirmation at most. My Pulse remains the primary place to browse own
+     content. See requirement #3 in the feed beta-readiness audit. */
+  const OWN_PREPEND_CAP = 1;
+  const OWN_PREPEND_MAX_AGE_MS = 24 * 60 * 60 * 1000;
   const RPC_LIMIT = 60;          // small headroom so the diversity cap has alternates to swap in
   const TRENDING_BUDGET = 12;    // worst case ~7 injections at every:7 across 50 slots
 
   const [ownRecent, recentPosts, rankedRpc, trendingPosts] = await Promise.all([
     feedPerfLane('ownRecent', () =>
-      fetchOwnRecentPosts(viewerId, OWN_FIRST)
+      fetchOwnRecentPosts(viewerId, OWN_PREPEND_CAP)
         .then((p) => p.filter(postAppearsInMainFeeds))
+        .then((p) => {
+          /* Only prepend if the most-recent own post is fresh enough to be a
+             "your post is live" confirmation. Older own posts still appear via
+             the ranker because the SQL filter is (privacy=public OR creator=viewer). */
+          const cutoff = Date.now() - OWN_PREPEND_MAX_AGE_MS;
+          return p.filter((post) => {
+            const t = new Date(post.createdAt).getTime();
+            return Number.isFinite(t) && t > cutoff;
+          });
+        })
         .catch((e: any) => {
           if (__DEV__) console.warn('getRankedFeed own slice failed:', e?.message);
           return [] as Post[];
@@ -645,7 +813,7 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
     feedPerfLane('rankedRpc', () =>
       callRankedRpc(viewerId, RPC_LIMIT).catch((e: any) => {
         if (__DEV__) console.warn('get_ranked_feed RPC failed, falling back:', e?.message);
-        return [] as { post_id: string; score: number }[];
+        return [] as { post_id: string; score: number; source?: string }[];
       }),
     ),
     feedPerfLane('trendingInject', () => fetchTrendingForInjection(TRENDING_BUDGET)),
@@ -683,7 +851,8 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
         if (__DEV__) console.warn('getRankedFeed chronological failed, returning own only:', e?.message);
         return ownRecent.slice(0, MAX_FEED);
       }
-      throw e;
+      if (__DEV__) console.warn('getRankedFeed chronological failed, returning empty:', e?.message);
+      return [];
     }
   }
 
@@ -716,7 +885,108 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
   return out;
 }
 
-async function runTopTodayFeed(): Promise<Post[]> {
+/**
+ * For You page 2+ continuation — keeps personalized ranking across pagination
+ * (requirement #1 in feed beta-readiness audit). Previously this path went
+ * straight to chronological tail, which made the feed feel smart on page 1
+ * and random thereafter.
+ *
+ * Fallback chain (best→worst):
+ *   1. callRankedRpc(viewerId, limit + 8, seenIds)
+ *        - v3 honors exclude_post_ids natively (no dupes possible).
+ *        - v2/v1 dedupe client-side against seenIds.
+ *   2. If ranked returns <50% of requested rows, top up with chronological
+ *      tail after `cursor` (excluding seenIds).
+ *   3. If ranked returns 0 rows AND chronological tail also fails, return
+ *      empty so the infinite query terminates instead of looping.
+ */
+async function runRankedForYouContinuation(
+  viewerId: string,
+  seenIds: readonly string[],
+  limit: number,
+  cursor: string | null,
+): Promise<{ posts: Post[]; nextCursor: string | null }> {
+  const seen = new Set(seenIds);
+  const t0 = feedPerfNow();
+
+  /* Tier 1: ranked RPC with exclude_post_ids (v3) or client-dedupe (v2/v1). */
+  let ranked: { post_id: string; score: number }[] = [];
+  try {
+    ranked = await callRankedRpc(viewerId, limit + 8, seenIds);
+  } catch (e: any) {
+    if (__DEV__) console.warn('runRankedForYouContinuation ranked RPC failed:', e?.message);
+  }
+
+  let rankedPosts: Post[] = [];
+  if (ranked.length) {
+    try {
+      const ids = ranked.map((r) => r.post_id).filter((id) => !seen.has(id));
+      if (ids.length) {
+        const { data } = await supabase.from('posts').select(POST_SELECT_FEED).in('id', ids);
+        if (data?.length) {
+          const scoreMap = new Map(ranked.map((r) => [r.post_id, r.score]));
+          rankedPosts = data
+            .map(rowToPost)
+            .filter(postAppearsInMainFeeds)
+            .filter((p) => !seen.has(p.id))
+            .sort(
+              (a, b) =>
+                ((scoreMap.get(b.id) ?? 0) as number) -
+                ((scoreMap.get(a.id) ?? 0) as number),
+            );
+          rankedPosts = diversifyByCreator(rankedPosts, limit, 2);
+        }
+      }
+    } catch (e: any) {
+      if (__DEV__) console.warn('runRankedForYouContinuation hydrate failed:', e?.message);
+    }
+  }
+
+  /* Tier 2: top up with chronological tail when ranked is thin. */
+  if (rankedPosts.length < Math.ceil(limit / 2) && cursor) {
+    try {
+      let q = supabase
+        .from('posts')
+        .select(POST_SELECT_FEED)
+        .contains('feed_type_eligible', ['forYou'])
+        .lt('created_at', cursor)
+        .order('created_at', { ascending: false })
+        .limit(limit * 2);
+      q = withFeedPrivacy(q, viewerId);
+      const { data, error } = await q;
+      if (!error && data?.length) {
+        const chronoTail = (data as any[])
+          .map(rowToPost)
+          .filter((p) => !seen.has(p.id) && !rankedPosts.some((r) => r.id === p.id) && postAppearsInMainFeeds(p));
+        rankedPosts = [...rankedPosts, ...chronoTail];
+        if (__DEV__ && ranked.length === 0) {
+          console.warn('runRankedForYouContinuation: ranker empty, using pure chronological tail');
+        }
+      }
+    } catch (e: any) {
+      if (__DEV__) console.warn('runRankedForYouContinuation chrono tail failed:', e?.message);
+    }
+  }
+
+  const sliced = rankedPosts.slice(0, limit);
+  /* nextCursor: use the oldest createdAt in this batch so Tier 2 chronological
+     fallback still works on the next call even if the ranker remains empty. */
+  let nextCursor: string | null = null;
+  if (sliced.length) {
+    let oldest = sliced[0].createdAt;
+    for (const p of sliced) {
+      if (p.createdAt < oldest) oldest = p.createdAt;
+    }
+    nextCursor = oldest;
+  } else if (cursor) {
+    nextCursor = null; // signal end-of-feed
+  }
+
+  feedPerfLog('forYou:continuation', t0, `returned=${sliced.length}, hadRanked=${ranked.length > 0}`);
+  return { posts: sliced, nextCursor };
+}
+
+async function runTopTodayFeed(viewerId?: string | null): Promise<Post[]> {
   const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   /** Mirrors `get_top_today` in supabase/migrations/006_feed_algorithm.sql (RPC path). */
@@ -727,6 +997,38 @@ async function runTopTodayFeed(): Promise<Post[]> {
     p.saveCount * 2.5 +
     Math.log(Math.max(p.viewCount, 1) + 1) * 2.0;
 
+  /* Tier 1: get_top_today_v2 (migration 234) — quality lifts + safety penalties
+     + viewer-aware exclusions when signed in. */
+  try {
+    const v2 = await supabase.rpc('get_top_today_v2', {
+      viewer_uuid: viewerId ?? null,
+      feed_limit: 50,
+      exclude_post_ids: [] as string[],
+    });
+    if (!v2.error && v2.data?.length) {
+      const ids = (v2.data as { post_id: string }[]).map((r) => r.post_id);
+      const { data, error } = await supabase
+        .from('posts')
+        .select(POST_SELECT_FEED)
+        .in('id', ids);
+      if (!error && data?.length) {
+        const scoreMap = new Map(
+          (v2.data as { post_id: string; score: number }[]).map((r) => [r.post_id, r.score]),
+        );
+        const sorted = data
+          .map(rowToPost)
+          .filter(postAppearsInMainFeeds)
+          .sort((a, b) => ((scoreMap.get(b.id) ?? 0) as number) - ((scoreMap.get(a.id) ?? 0) as number));
+        return diversifyByCreator(sorted, 50, 3);
+      }
+    } else if (__DEV__ && v2.error) {
+      console.warn('get_top_today_v2 unavailable, falling back to v1:', v2.error.message);
+    }
+  } catch (e: any) {
+    if (__DEV__) console.warn('get_top_today_v2 threw, falling back to v1:', e?.message);
+  }
+
+  /* Tier 2: get_top_today (v1) — engagement-only scorer. */
   try {
     const { data: ranked, error: rpcError } = await supabase
       .rpc('get_top_today', { feed_limit: 50 });
@@ -785,7 +1087,7 @@ export const postsService = {
       }
 
       if (type === 'topToday') {
-        const [p, ex] = await Promise.all([runTopTodayFeed(), exclusionsPromise]);
+        const [p, ex] = await Promise.all([runTopTodayFeed(userId ?? null), exclusionsPromise]);
         posts = await applyViewerFeedFilters(p, userId, ex);
         return finalizePostsForViewer(posts, userId);
       }
@@ -890,6 +1192,31 @@ export const postsService = {
         return { posts, nextCursor };
       }
 
+      /* For You page 2+: keep personalized ranking across pagination
+         (requirement #1 in feed beta-readiness audit). Previously dropped to a
+         pure chronological tail here, which made the feed feel smart on page 1
+         and random after. runRankedForYouContinuation owns the fallback chain:
+           ranked v3 (exclude_post_ids) → ranked v2/v1 (client dedupe) →
+           chronological tail (last resort). */
+      if (type === 'forYou' && viewerId?.trim()) {
+        const [{ posts: rawPosts, nextCursor: rankedCursor }, exclusions] = await Promise.all([
+          runRankedForYouContinuation(viewerId.trim(), excludeIds, limit, cursor),
+          loadFeedExclusions(viewerId),
+        ]);
+        let posts = finalizePostsForViewer(
+          await applyViewerFeedFilters(rawPosts, viewerId, exclusions),
+          viewerId,
+        );
+        posts = posts.slice(0, limit);
+        /* Prefer ranked-derived cursor; fall back to oldest in the batch. */
+        const nextCursor =
+          posts.length === limit
+            ? rankedCursor ?? posts[posts.length - 1].createdAt
+            : null;
+        return { posts, nextCursor };
+      }
+
+      /* Top Today + anonymous For You: chronological tail (no ranker). */
       let query = supabase
         .from('posts')
         .select(POST_SELECT_FEED)
@@ -1004,14 +1331,14 @@ export const postsService = {
   },
 
   async getById(id: string, viewerId?: string | null): Promise<Post | null> {
-    const { data, error } = await supabase
-      .from('posts')
-      .select(POST_SELECT)
+    const { data, error } = await fromPostsViewerSafe()
+      .select('*')
       .eq('id', id)
       .single();
 
     if (error || !data) return null;
-    const mapped = rowToPost(data);
+    const [hydrated] = await hydratePostRowsWithProfiles([data]);
+    const mapped = rowToPost(hydrated);
     if (!postIsLiveForPublicSurface(mapped) && viewerId !== mapped.creatorId) return null;
     return finalizePostsForViewer([mapped], viewerId)[0] ?? null;
   },
@@ -1057,32 +1384,54 @@ export const postsService = {
   },
 
   async getByUser(profileUserId: string, viewerId?: string | null): Promise<Post[]> {
-    const { data, error } = await supabase
-      .from('posts')
-      .select(POST_SELECT)
+    const readable = await profilePostsReadableForViewer(profileUserId, viewerId);
+    if (!readable) return [];
+
+    const { data, error } = await fromPostsViewerSafe()
+      .select('*')
       .eq('creator_id', profileUserId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    let posts = (data ?? []).map(rowToPost);
+    if (error) {
+      if (__DEV__) console.warn('[postsService.getByUser]', error.message);
+      return [];
+    }
+
+    const hydrated = await hydratePostRowsWithProfiles(data ?? []);
+    let posts = hydrated.map(rowToPost);
     if (viewerId && viewerId !== profileUserId) {
       posts = posts.filter((p) => !p.isAnonymous && postIsLiveForPublicSurface(p));
     }
     return finalizePostsForViewer(posts, viewerId);
   },
 
-  async getByCommunity(communityId: string, viewerId?: string | null): Promise<Post[]> {
-    const [{ data, error }, pinsResult] = await Promise.all([
-      supabase
-        .from('posts')
-        .select(POST_SELECT)
-        .contains('communities', [communityId])
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('community_post_pins')
-        .select('post_id, sort_order')
-        .eq('community_id', communityId),
-    ]);
+  async getByCommunity(
+    communityId: string,
+    viewerId?: string | null,
+    opts?: { limit?: number; cursor?: string | null },
+  ): Promise<Post[]> {
+    const limit = opts?.limit ?? COMMUNITY_WALL_PAGE_SIZE;
+    const cursor = opts?.cursor?.trim() || null;
+    const isFirstPage = !cursor;
+
+    let postsQuery = fromPostsViewerSafe()
+      .select('*')
+      .contains('communities', [communityId])
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (cursor) {
+      postsQuery = postsQuery.lt('created_at', cursor);
+    }
+
+    const pinsPromise = isFirstPage
+      ? supabase
+          .from('community_post_pins')
+          .select('post_id, sort_order')
+          .eq('community_id', communityId)
+      : Promise.resolve({ data: [] as CommunityPostPinRow[], error: null });
+
+    const [{ data, error }, pinsResult] = await Promise.all([postsQuery, pinsPromise]);
 
     if (error) throw error;
 
@@ -1093,11 +1442,14 @@ export const postsService = {
       console.warn('[postsService.getByCommunity] community_post_pins:', pinsResult.error.message);
     }
 
+    const hydrated = await hydratePostRowsWithProfiles(data ?? []);
     let posts = finalizePostsForViewer(
-      (data ?? []).map(rowToPost).filter(postIsLiveForPublicSurface),
+      hydrated.map(rowToPost).filter(postIsLiveForPublicSurface),
       viewerId,
     );
-    posts = mergePinnedCommunityPosts(posts, pins);
+    if (isFirstPage) {
+      posts = mergePinnedCommunityPosts(posts, pins);
+    }
     return posts;
   },
 
@@ -1259,6 +1611,12 @@ export const postsService = {
     sound_source_media_url?: string | null;
     /** Migration 183 — feed stitch / combine Part 1 attribution. */
     stitch_source_post_id?: string | null;
+    /** Migration 207/210 — live or feed clip lineage. */
+    source_live_stream_id?: string | null;
+    source_post_id?: string | null;
+    source_creator_id?: string | null;
+    clip_start_seconds?: number | null;
+    clip_end_seconds?: number | null;
     duet_parent_id?: string | null;
     /** Migration 161 — strip vs floating parent chrome in feed. */
     duet_layout_mode?: 'strip' | 'floating' | null;
@@ -1280,8 +1638,13 @@ export const postsService = {
     additional_media?: string[] | null;
     /** On-video sticker line (<=80 chars). Rendered live on the feed video; not baked. */
     video_overlay_text?: string | null;
+    /** On-video sticker style metadata (font, size, color, x_norm, y_norm). Migration 237. */
+    video_overlay_style?: VideoOverlayStyle | Record<string, unknown> | null;
     /** When true, new comments are rejected for this post (migration 156). */
     comments_disabled?: boolean;
+    allow_viewer_clips?: boolean;
+    allow_remix?: boolean;
+    allow_clip_downloads?: boolean;
     /** Stitch/export pipeline (migration 159). Omit unless concat job is in flight. */
     media_processing_status?: 'queued' | 'running' | 'failed' | null;
     media_processing_job_id?: string | null;
@@ -1311,6 +1674,11 @@ export const postsService = {
       sound_source_post_id: soundSourceIn,
       sound_source_media_url: soundMediaIn,
       stitch_source_post_id: stitchSourcePostIdIn,
+      source_live_stream_id: sourceLiveStreamIdIn,
+      source_post_id: sourcePostIdIn,
+      source_creator_id: sourceCreatorIdIn,
+      clip_start_seconds: clipStartSecondsIn,
+      clip_end_seconds: clipEndSecondsIn,
       duet_parent_id: duetParentIn,
       duet_layout_mode: duetLayoutModeIn,
       evidence_url: evidenceUrlIn,
@@ -1328,7 +1696,11 @@ export const postsService = {
       video_look_id: videoLookIdIn,
       additional_media: additionalMediaIn,
       video_overlay_text: videoOverlayTextIn,
+      video_overlay_style: videoOverlayStyleIn,
       comments_disabled: commentsDisabledIn,
+      allow_viewer_clips: allowViewerClipsIn,
+      allow_remix: allowRemixIn,
+      allow_clip_downloads: allowClipDownloadsIn,
       media_processing_status: mediaProcessingStatusIn,
       media_processing_job_id: mediaProcessingJobIdIn,
       media_processing_error: mediaProcessingErrorIn,
@@ -1422,10 +1794,27 @@ export const postsService = {
     const vot = typeof videoOverlayTextIn === 'string' ? videoOverlayTextIn.trim() : '';
     if (vot) extensionPayload.video_overlay_text = clampVideoOverlayText(vot);
 
+    /** Overlay style is only meaningful when overlay text exists. Empty text →
+     *  null style so we don't accumulate orphan rows with positions for no-op
+     *  overlays. Re-serialize so the DB receives a clean shape. */
+    if (vot && videoOverlayStyleIn) {
+      const parsed = parseOverlayStyle(videoOverlayStyleIn);
+      if (parsed) extensionPayload.video_overlay_style = serializeOverlayStyle(parsed);
+    }
+
     const vlk = normalizeVideoLookId(videoLookIdIn);
     if (vlk) extensionPayload.video_look_id = vlk;
 
     if (commentsDisabledIn === true) extensionPayload.comments_disabled = true;
+
+    if (allowViewerClipsIn === false) extensionPayload.allow_viewer_clips = false;
+    else if (allowViewerClipsIn === true) extensionPayload.allow_viewer_clips = true;
+
+    if (allowRemixIn === false) extensionPayload.allow_remix = false;
+    else if (allowRemixIn === true) extensionPayload.allow_remix = true;
+
+    if (allowClipDownloadsIn === true) extensionPayload.allow_clip_downloads = true;
+    else if (allowClipDownloadsIn === false) extensionPayload.allow_clip_downloads = false;
 
     const mps =
       mediaProcessingStatusIn != null ? String(mediaProcessingStatusIn).trim().toLowerCase() : '';
@@ -1446,6 +1835,23 @@ export const postsService = {
     const stitchSrc =
       stitchSourcePostIdIn != null ? String(stitchSourcePostIdIn).trim() : '';
     if (stitchSrc) extensionPayload.stitch_source_post_id = stitchSrc;
+
+    const liveSrc = sourceLiveStreamIdIn != null ? String(sourceLiveStreamIdIn).trim() : '';
+    if (liveSrc) extensionPayload.source_live_stream_id = liveSrc;
+
+    const feedClipSrc = sourcePostIdIn != null ? String(sourcePostIdIn).trim() : '';
+    if (feedClipSrc) extensionPayload.source_post_id = feedClipSrc;
+
+    const feedClipCreator =
+      sourceCreatorIdIn != null ? String(sourceCreatorIdIn).trim() : '';
+    if (feedClipCreator) extensionPayload.source_creator_id = feedClipCreator;
+
+    if (clipStartSecondsIn != null && Number.isFinite(Number(clipStartSecondsIn))) {
+      extensionPayload.clip_start_seconds = Number(clipStartSecondsIn);
+    }
+    if (clipEndSecondsIn != null && Number.isFinite(Number(clipEndSecondsIn))) {
+      extensionPayload.clip_end_seconds = Number(clipEndSecondsIn);
+    }
 
     const fullPayload = { ...insertPayload, ...extensionPayload };
 
@@ -1556,7 +1962,7 @@ export const postsService = {
   async getSavedPosts(userId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from('saved_posts')
-      .select('post_id, posts(*, profiles(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
+      .select('post_id, posts(*, profiles!posts_creator_id_fkey(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
       .eq('user_id', userId)
       .order('saved_at', { ascending: false });
 
@@ -1572,7 +1978,7 @@ export const postsService = {
   async getLikedPosts(userId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from('post_likes')
-      .select('created_at, posts(*, profiles(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
+      .select('created_at, posts(*, profiles!posts_creator_id_fkey(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -1657,7 +2063,14 @@ export const postsService = {
   async updateOwnPost(
     postId: string,
     creatorId: string,
-    patch: { caption?: string; hashtags?: string[]; commentsDisabled?: boolean },
+    patch: {
+      caption?: string;
+      hashtags?: string[];
+      commentsDisabled?: boolean;
+      allowViewerClips?: boolean;
+      allowRemix?: boolean;
+      allowClipDownloads?: boolean;
+    },
   ): Promise<Post> {
     const updates: Record<string, string | string[] | boolean | null> = {};
     if (Object.prototype.hasOwnProperty.call(patch, 'caption')) {
@@ -1675,6 +2088,15 @@ export const postsService = {
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'commentsDisabled')) {
       updates.comments_disabled = patch.commentsDisabled === true;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'allowViewerClips')) {
+      updates.allow_viewer_clips = patch.allowViewerClips === true;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'allowRemix')) {
+      updates.allow_remix = patch.allowRemix === true;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'allowClipDownloads')) {
+      updates.allow_clip_downloads = patch.allowClipDownloads === true;
     }
 
     if (Object.keys(updates).length === 0) {

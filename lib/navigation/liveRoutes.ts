@@ -18,7 +18,8 @@ function liveHubHrefFromOpts(opts: LiveHubHrefOpts): Href {
 }
 
 /**
- * Live hub (`(tabs)/live`): optional discover tab + optional scroll section (`featured`, `discover`, `shop`, `upcoming`).
+ * Live hub (`(tabs)/live`): optional discover tab + optional scroll section
+ * (`featured`, `discover`, `trending`, `shop`, `upcoming`).
  * Call `liveHubHref('shop')` or `liveHubHref({ tab: 'shop', section: 'upcoming' })`.
  */
 export function liveHubHref(tabOrOpts?: LiveHubCategoryTab | null | LiveHubHrefOpts): Href {
@@ -42,6 +43,11 @@ export function liveHostControlsHref(opts?: { demo?: boolean }): Href {
 
 export function liveHighlightsHref(streamId: string): Href {
   return `/live/highlights?streamId=${encodeURIComponent(streamId)}` as Href;
+}
+
+/** Alias — Clip Studio modal for a finished or active stream. */
+export function liveClipStudioHref(streamId: string): Href {
+  return liveHighlightsHref(streamId);
 }
 
 /** Highlights sheet without a stream context (info-only). */

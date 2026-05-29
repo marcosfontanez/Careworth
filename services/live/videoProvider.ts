@@ -25,6 +25,7 @@ export interface VideoSession {
   playbackUrl?: string;
   /** Provider-specific room name. */
   roomName: string;
+  participantIdentity?: string;
   /** Seconds-since-epoch when the token expires. Re-request a session past this. */
   expiresAt: number;
 }
@@ -71,8 +72,10 @@ export const MockVideoProvider: VideoProvider = {
 export const LiveKitVideoProvider: VideoProvider = {
   id: 'livekit',
 
-  async getSession({ streamId }) {
-    const cred = await mintLiveKitCredentials(streamId);
+  async getSession({ streamId, role, userId }) {
+    const cred = await mintLiveKitCredentials(streamId, {
+      userId,
+    });
     if (!cred) {
       throw new Error('Could not mint LiveKit credentials');
     }
@@ -81,6 +84,7 @@ export const LiveKitVideoProvider: VideoProvider = {
       role: cred.role,
       token: cred.token,
       roomName: cred.roomName,
+      participantIdentity: cred.participantIdentity,
       playbackUrl: cred.serverUrl,
       expiresAt: cred.expiresAt,
     };

@@ -4,6 +4,7 @@
  */
 /** Starter “rooms” on Circles home — order matches horizontal carousel (subreddit-style communities). */
 export const FEATURED_CIRCLE_SLUGS_ORDER = [
+  'app-suggestions',
   'bug-reports',
   'memes',
   'border-envy',

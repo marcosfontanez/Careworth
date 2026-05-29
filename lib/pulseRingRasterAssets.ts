@@ -30,6 +30,9 @@ export const PULSE_PRIDE_MONTH_2026_FRAME_SLUG = 'pride-month-2026-border';
 /** Mother’s Day 2026 limited shop drop (migration 133). */
 export const PULSE_MOTHERS_DAY_2026_FRAME_SLUG = 'mothers-day-2026-border';
 
+/** Father’s Day 2026 free shop drop (migration 232). */
+export const PULSE_FATHERS_DAY_2026_FRAME_SLUG = 'fathers-day-2026-border';
+
 /** Juneteenth 2026 charity IAP border (migration 135). */
 export const PULSE_JUNETEENTH_2026_FRAME_SLUG = 'juneteenth-2026-border';
 
@@ -44,6 +47,9 @@ const PRIDE_MONTH_2026_BORDER =
 
 const MOTHERS_DAY_2026_BORDER =
   require('../assets/images/pulse-rings/mothers-day-2026-border.png') as ImageSourcePropType;
+
+const FATHERS_DAY_2026_BORDER =
+  require('../assets/images/pulse-rings/fathers-day-2026-border.png') as ImageSourcePropType;
 
 const JUNETEENTH_2026_BORDER =
   require('../assets/images/pulse-rings/juneteenth-2026-border.png') as ImageSourcePropType;
@@ -67,6 +73,9 @@ export const RASTER_PRIDE_MONTH_2026_INNER_OPENING_FRAC = 0.562;
 /** Measured from matted `mothers-day-2026-border.png` (2026 art swap). */
 export const RASTER_MOTHERS_DAY_2026_INNER_OPENING_FRAC = 0.699;
 
+/** Measured from processed `fathers-day-2026-border.png` (transparent hole / square edge). */
+export const RASTER_FATHERS_DAY_2026_INNER_OPENING_FRAC = 0.621;
+
 /** Measured from processed `juneteenth-2026-border.png` (transparent hole / square edge). */
 export const RASTER_JUNETEENTH_2026_INNER_OPENING_FRAC = 0.582;
 
@@ -81,6 +90,11 @@ const SHOP_SLUGS_PRIDE_2026 = new Set(['border-pride-month-2026', 'border_pride_
 const SHOP_SLUGS_MOTHERS_DAY_2026 = new Set([
   'border-mothers-day-2026',
   'border_mothers_day_2026',
+]);
+
+const SHOP_SLUGS_FATHERS_DAY_2026 = new Set([
+  'border-fathers-day-2026',
+  'border_fathers_day_2026',
 ]);
 
 const SHOP_SLUGS_JUNETEENTH_2026 = new Set([
@@ -117,6 +131,12 @@ export function shopItemBundledRasterPreview(
       innerOpeningFrac: RASTER_MOTHERS_DAY_2026_INNER_OPENING_FRAC,
     };
   }
+  if (SHOP_SLUGS_FATHERS_DAY_2026.has(slug) || SHOP_SLUGS_FATHERS_DAY_2026.has(slugNorm)) {
+    return {
+      source: FATHERS_DAY_2026_BORDER,
+      innerOpeningFrac: RASTER_FATHERS_DAY_2026_INNER_OPENING_FRAC,
+    };
+  }
   if (SHOP_SLUGS_JUNETEENTH_2026.has(slug) || SHOP_SLUGS_JUNETEENTH_2026.has(slugNorm)) {
     return {
       source: JUNETEENTH_2026_BORDER,
@@ -140,6 +160,12 @@ export function shopItemBundledRasterPreview(
     return {
       source: MOTHERS_DAY_2026_BORDER,
       innerOpeningFrac: RASTER_MOTHERS_DAY_2026_INNER_OPENING_FRAC,
+    };
+  }
+  if (meta?.pulse_frame_slug === PULSE_FATHERS_DAY_2026_FRAME_SLUG) {
+    return {
+      source: FATHERS_DAY_2026_BORDER,
+      innerOpeningFrac: RASTER_FATHERS_DAY_2026_INNER_OPENING_FRAC,
     };
   }
   if (meta?.pulse_frame_slug === PULSE_JUNETEENTH_2026_FRAME_SLUG) {
@@ -174,6 +200,12 @@ export function resolvePulseRingRaster(frame: {
     return {
       source: MOTHERS_DAY_2026_BORDER,
       innerOpeningFrac: RASTER_MOTHERS_DAY_2026_INNER_OPENING_FRAC,
+    };
+  }
+  if (frame.slug === PULSE_FATHERS_DAY_2026_FRAME_SLUG) {
+    return {
+      source: FATHERS_DAY_2026_BORDER,
+      innerOpeningFrac: RASTER_FATHERS_DAY_2026_INNER_OPENING_FRAC,
     };
   }
   if (frame.slug === PULSE_JUNETEENTH_2026_FRAME_SLUG) {

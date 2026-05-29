@@ -1,10 +1,11 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, InteractionManager } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
+import { profilesService } from '@/services/supabase/profiles';
 import { useUserPosts, useProfileUpdates } from '@/hooks/useQueries';
 import { MyPageContent } from '@/components/mypage/MyPageContent';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -22,18 +23,71 @@ export default function MyPulseTabScreen() {
     tierUp?: string;
   }>();
   const queryClient = useQueryClient();
-  const { profile: authProfile, user: authUser, refreshProfile } = useAuth();
+  const { profile: authProfile, user: authUser, isLoading: authLoading, applyProfilePatch, refreshProfile } = useAuth();
   const storeUser = useAppStore((s) => s.currentUser);
 
   const postsOwnerId = authUser?.id ?? '';
+  /** Defer the heavy My Pulse tree until the tab transition finishes (avoids decoder + audio spikes mid-switch). */
+  const [contentReady, setContentReady] = useState(false);
+  /** True while the manual "Try again" retry is fetching the profile. */
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetryProfile = useCallback(async () => {
+    setRetrying(true);
+    try {
+      await refreshProfile();
+    } finally {
+      setRetrying(false);
+    }
+  }, [refreshProfile]);
+
+  const refreshStatsOnFocus = useCallback(async () => {
+    if (!postsOwnerId) return;
+    try {
+      /** One profiles row — not the full auth hydrate (badges, follows×2000, saved×2000). */
+      const row = await profilesService.getById(postsOwnerId);
+      if (!row) return;
+      applyProfilePatch({
+        followerCount: row.followerCount,
+        followingCount: row.followingCount,
+        likeCount: row.likeCount,
+        postCount: row.postCount,
+        pulseScoreCurrent: row.pulseScoreCurrent,
+        pulseTier: row.pulseTier,
+        profileShareCount: row.profileShareCount,
+      });
+    } catch {
+      /* non-fatal — stat strip keeps last cached values */
+    }
+  }, [postsOwnerId, applyProfilePatch]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!postsOwnerId) return;
-      void queryClient.invalidateQueries({ queryKey: ['userPosts', postsOwnerId] });
-      /** Follower / following tallies on the stat strip come from `profiles`; refresh on tab focus. */
-      void refreshProfile();
-    }, [postsOwnerId, queryClient, refreshProfile]),
+      let cancelled = false;
+      const task = InteractionManager.runAfterInteractions(() => {
+        if (!cancelled) setContentReady(true);
+      });
+
+      if (postsOwnerId) {
+        const refreshTask = InteractionManager.runAfterInteractions(() => {
+          if (cancelled) return;
+          void queryClient.invalidateQueries({ queryKey: ['userPosts', postsOwnerId] });
+          void refreshStatsOnFocus();
+        });
+        return () => {
+          cancelled = true;
+          task.cancel?.();
+          refreshTask.cancel?.();
+          setContentReady(false);
+        };
+      }
+
+      return () => {
+        cancelled = true;
+        task.cancel?.();
+        setContentReady(false);
+      };
+    }, [postsOwnerId, queryClient, refreshStatsOnFocus]),
   );
 
   const { data: userPosts } = useUserPosts(postsOwnerId);
@@ -54,7 +108,36 @@ export default function MyPulseTabScreen() {
   }
 
   const user = authProfile ?? storeUser;
+
   if (!user) {
+    // Auth is still hydrating the profile — show the spinner. But once hydrate
+    // has finished (`authLoading === false`) with no profile, the fetch timed
+    // out; surface a retry instead of an endless spinner.
+    if (authLoading || retrying) {
+      return <LoadingState />;
+    }
+    return (
+      <PVPageBackground style={{ flex: 1 }}>
+        <View style={gateStyles.wrap}>
+          <Text style={gateStyles.title}>Couldn’t load your profile</Text>
+          <Text style={gateStyles.sub}>
+            Your profile took too long to load (slow or dropped connection). Your data is safe — tap below to try again.
+          </Text>
+          <TouchableOpacity
+            style={gateStyles.btn}
+            onPress={handleRetryProfile}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading your profile"
+          >
+            <Text style={gateStyles.btnText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      </PVPageBackground>
+    );
+  }
+
+  if (!contentReady) {
     return <LoadingState />;
   }
 

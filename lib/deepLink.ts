@@ -1,7 +1,11 @@
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { queryClient } from '@/lib/queryClient';
-import { prefetchCircleRoomBySlug } from '@/lib/communityCache';
+import {
+  navigateToCircleRoom,
+  navigateToCircleThread,
+} from '@/lib/communityCache';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
 import {
   liveGoLiveHref,
   liveHighlightsHref,
@@ -91,16 +95,16 @@ export function parseAndNavigate(url: string) {
     if (communitiesRest !== null) {
       const segments = communitiesRest.split('/').filter(Boolean);
       if (segments.length >= 3 && segments[1].toLowerCase() === 'thread' && segments[2]) {
-        const slug = safeDecodeURIComponent(segments[0]);
+        const slug = normalizeCommunitySlug(safeDecodeURIComponent(segments[0]));
         const threadId = safeDecodeURIComponent(segments[2]);
-        prefetchCircleRoomBySlug(queryClient, slug, null);
-        router.push(`/communities/${slug}/thread/${threadId}` as any);
+        if (!slug || !threadId) return false;
+        void navigateToCircleThread(router, queryClient, slug, threadId, null, 'deepLink:thread');
         return true;
       }
       if (segments.length === 1 && segments[0]) {
-        const s = safeDecodeURIComponent(segments[0]);
-        prefetchCircleRoomBySlug(queryClient, s, null);
-        router.push(`/communities/${s}` as any);
+        const slug = normalizeCommunitySlug(safeDecodeURIComponent(segments[0]));
+        if (!slug) return false;
+        void navigateToCircleRoom(router, queryClient, { slug }, null, { source: 'deepLink:room' });
         return true;
       }
       return false;
@@ -154,10 +158,9 @@ export function parseAndNavigate(url: string) {
 
     const communityRest = stripPrefixCaseInsensitive(path, 'community/');
     if (communityRest !== null) {
-      const slug = communityRest.split('/').filter(Boolean)[0]?.trim() ?? '';
+      const slug = normalizeCommunitySlug(communityRest.split('/').filter(Boolean)[0]?.trim() ?? '');
       if (!slug) return false;
-      prefetchCircleRoomBySlug(queryClient, slug, null);
-      router.push(`/communities/${slug}` as any);
+      void navigateToCircleRoom(router, queryClient, { slug }, null, { source: 'deepLink:legacyCommunity' });
       return true;
     }
 

@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,15 +17,19 @@ import { profileUpdatesService } from '@/services/profileUpdates';
 import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius, spacing } from '@/theme';
 import { HubTileImage, RecentMediaThumb } from '@/components/mypage/RecentMediaThumb';
+import { FeedClipAttributionBadge } from '@/components/feed/FeedClipAttributionBadge';
 import { profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
+import { resolvePostViewerHref } from '@/lib/postViewerRoute';
 import type { Post, ProfileUpdate } from '@/types';
 import { getMyPulseDisplayType, resolvePicsUrls } from '@/utils/myPulseDisplayType';
+import { getDiscoverHorizontalShelfWindow } from '@/lib/feedVideoListWindow';
 import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 
 /** Same physical size as `styles.card` — thumbs use this for Supabase transform + layout. */
 const CARD_WIDTH = 118;
 const CARD_HEIGHT = 168;
 const MEDIA_HUB_THUMB_CSS = { w: CARD_WIDTH, h: CARD_HEIGHT };
+const MEDIA_HUB_SHELF_WIN = getDiscoverHorizontalShelfWindow(4, 4);
 
 type TabKey = 'recent' | 'favorites' | 'photos';
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -72,6 +76,8 @@ interface Props {
    */
   profileUpdates?: ProfileUpdate[];
   isOwner: boolean;
+  /** Private/blocked visitors — show locked state instead of media grids. */
+  contentLocked?: boolean;
   viewAllRoute?: string;
 }
 
@@ -103,6 +109,7 @@ export function MediaHubSection({
   userPosts,
   profileUpdates,
   isOwner,
+  contentLocked = false,
   viewAllRoute = '/my-posts',
 }: Props) {
   const router = useRouter();
@@ -207,7 +214,7 @@ export function MediaHubSection({
   const onOpenItem = useCallback(
     (item: MediaHubItem) => {
       if (item.kind === 'post') {
-        router.push(`/feed/${item.post.id}` as any);
+        router.push(resolvePostViewerHref(item.post) as any);
       } else {
         router.push(`/my-pulse/${item.updateId}` as any);
       }
@@ -369,21 +376,22 @@ export function MediaHubSection({
         })}
       </View>
 
-      {items.length === 0 ? (
+      {contentLocked && !isOwner ? (
+        <MediaHubLocked />
+      ) : items.length === 0 ? (
         <MediaHubEmpty tab={activeTab} isOwner={isOwner} router={router} />
       ) : (
-        <ScrollView
+        <FlatList
           horizontal
+          data={items}
+          keyExtractor={(item, i) => `${item.key}:${i}`}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.strip}
-        >
-          {items.map((item, i) => (
-            // Index suffix guards against the rare case where backend data
-            // returns the same post id more than once in a single list —
-            // without it, React warns about duplicate keys and the strip
-            // can miss-update one of the thumbs on re-render.
+          windowSize={MEDIA_HUB_SHELF_WIN.windowSize}
+          maxToRenderPerBatch={MEDIA_HUB_SHELF_WIN.maxToRenderPerBatch}
+          initialNumToRender={MEDIA_HUB_SHELF_WIN.initialNumToRender}
+          renderItem={({ item }) => (
             <MediaThumbCard
-              key={`${item.key}:${i}`}
               item={item}
               canDelete={isOwner}
               isFavoritesTab={activeTab === 'favorites'}
@@ -391,8 +399,8 @@ export function MediaHubSection({
               onLongPress={() => onLongPressItem(item)}
               onRequestDelete={() => onLongPressItem(item)}
             />
-          ))}
-        </ScrollView>
+          )}
+        />
       )}
     </View>
   );
@@ -445,6 +453,7 @@ function MediaThumbCard({
       ) : (
         <PulsePicThumb imageUrl={item.imageUrl} style={styles.cardImage} />
       )}
+      {item.kind === 'post' ? <FeedClipAttributionBadge post={item.post} /> : null}
 
       <LinearGradient
         colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}
@@ -496,6 +505,20 @@ function PulsePicThumb({ imageUrl, style }: { imageUrl: string; style: any }) {
       layoutSizeCss={MEDIA_HUB_THUMB_CSS}
       contentFit="contain"
     />
+  );
+}
+
+function MediaHubLocked() {
+  return (
+    <View style={styles.emptyBox}>
+      <View style={styles.emptyIconWrap}>
+        <Ionicons name="lock-closed-outline" size={20} color={colors.primary.teal} />
+      </View>
+      <Text style={styles.emptyTitle}>Media Hub is private</Text>
+      <Text style={styles.emptyBody}>
+        This creator keeps their videos, photos, and saves private.
+      </Text>
+    </View>
   );
 }
 

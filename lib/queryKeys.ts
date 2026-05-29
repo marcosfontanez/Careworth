@@ -204,7 +204,16 @@ export const rewardDeliveryKeys = {
 // Feed
 // ─────────────────────────────────────────────────────────────────────
 /** Bump with `useFeedInfinite` when the first-page or continuation queryFn shape changes. */
-export const FEED_INFINITE_QUERY_KEY_VERSION = 2 as const;
+/**
+ * Bump when feed pagination shape or fallback semantics change so dev clients
+ * and live users do not keep stale cached pages from the prior algorithm.
+ *
+ *   v1 → v2: initial infinite query
+ *   v2 → v3: ranked-merge shape
+ *   v3 → v4: For You page 2+ switched from chronological tail to ranked
+ *            continuation (migration 234 + get_ranked_feed_v3).
+ */
+export const FEED_INFINITE_QUERY_KEY_VERSION = 4 as const;
 
 export const feedKeys = {
   /** Matches every legacy non-infinite feed page key `['feed', ver, …]`. */

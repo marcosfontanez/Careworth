@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,12 @@ import {
   Switch,
   Platform,
   Keyboard,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import { CameraView, type CameraType } from 'expo-camera';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
 import { borderRadius, colors, layout, spacing, typography, shadows, pulseverse } from '@/theme';
@@ -26,6 +27,14 @@ import type { StreamCategory } from '@/types';
 import { PV_LIVE_MODE_TAG_PREFIX, type LiveModeType } from '@/types/liveHub';
 import { liveStreamHref } from '@/lib/navigation/liveRoutes';
 import { analytics } from '@/lib/analytics';
+import {
+  checkLiveBroadcastPermissions,
+  missingPermissionLabel,
+  openAppSettings,
+  requestLiveBroadcastPermissions,
+  type LiveBroadcastPermissionState,
+} from '@/lib/live/liveBroadcastPermissions';
+import { LiveBroadcastPermissionModal } from '@/components/live/go-live/LiveBroadcastPermissionModal';
 
 const MODES: { id: LiveModeType; title: string; desc: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -104,12 +113,69 @@ export function GoLiveWizard() {
     return d;
   });
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
-  /** Extra scroll padding so actions below fields stay reachable when the keyboard is open (esp. step 2 → Review). */
   const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
 
-  const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('front');
   const cameraRef = useRef<CameraView>(null);
+  const [permState, setPermState] = useState<LiveBroadcastPermissionState | null>(null);
+  const [permChecking, setPermChecking] = useState(false);
+  const [permModalVisible, setPermModalVisible] = useState(false);
+  const [permRequesting, setPermRequesting] = useState(false);
+
+  const broadcastReady = permState?.allGranted === true;
+
+  const refreshPermissions = useCallback(async (autoRequest: boolean) => {
+    setPermChecking(true);
+    try {
+      let state = await checkLiveBroadcastPermissions();
+      if (autoRequest && state.requestable.length > 0) {
+        state = await requestLiveBroadcastPermissions();
+      }
+      setPermState(state);
+      return state;
+    } finally {
+      setPermChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    void refreshPermissions(true);
+  }, [step, refreshPermissions]);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        void refreshPermissions(false).then((state) => {
+          if (state.allGranted) setPermModalVisible(false);
+        });
+      }
+    });
+    return () => sub.remove();
+  }, [step, refreshPermissions]);
+
+  const handleGrantAccess = useCallback(async () => {
+    setPermRequesting(true);
+    try {
+      const state = await requestLiveBroadcastPermissions();
+      setPermState(state);
+      if (state.allGranted) {
+        setPermModalVisible(false);
+        return;
+      }
+      if (state.blocked.length > 0) {
+        showToast('Turn on access in Settings, then return to PulseVerse.', 'info');
+      }
+    } finally {
+      setPermRequesting(false);
+    }
+  }, [showToast]);
+
+  const handleOpenSettings = useCallback(async () => {
+    const ok = await openAppSettings();
+    if (!ok) showToast('Could not open Settings.', 'error');
+  }, [showToast]);
 
   const parsedTags = useMemo(
     () =>
@@ -149,6 +215,10 @@ export function GoLiveWizard() {
   }, [parsedTags, mode, learnTopic, giftsEnabled, scheduled]);
 
   const start = async () => {
+    if (!broadcastReady) {
+      setPermModalVisible(true);
+      return;
+    }
     if (!title.trim()) {
       Alert.alert('Missing title', 'Give viewers a clear title.');
       return;
@@ -196,254 +266,312 @@ export function GoLiveWizard() {
     }
   };
 
+  const previewPlaceholderMessage = permState
+    ? permState.blocked.length > 0
+      ? `Allow ${missingPermissionLabel(permState.missing)} in Settings to preview your stream.`
+      : `Allow ${missingPermissionLabel(permState.missing)} to preview your camera before going live.`
+    : 'Checking camera and microphone access…';
+
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={[
-        styles.scroll,
-        {
-          paddingBottom:
-            insets.bottom + spacing.xl + keyboardBottomInset + (step === 2 ? spacing['2xl'] : 0),
-        },
-      ]}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      nestedScrollEnabled
-    >
-      <Text style={styles.stepHint}>Step {step} of 3</Text>
+    <>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scroll,
+          {
+            paddingBottom:
+              insets.bottom + spacing.xl + keyboardBottomInset + (step === 2 ? spacing['2xl'] : 0),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        nestedScrollEnabled
+      >
+        <Text style={styles.stepHint}>Step {step} of 3</Text>
 
-      {step === 1 ? (
-        <View style={{ gap: spacing.md }}>
-          <Text style={styles.screenTitle}>Choose Live Type</Text>
-          {MODES.map((m) => {
-            const on = mode === m.id;
-            return (
-              <TouchableOpacity
-                key={m.id}
-                activeOpacity={0.85}
-                style={[styles.modeCard, on && styles.modeCardOn]}
-                onPress={() => setMode(m.id)}
-              >
-                <View style={styles.modeIconWrap}>
-                  <Ionicons name={m.icon} size={22} color={on ? pulseverse.electric : colors.dark.textMuted} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modeTitle}>{m.title}</Text>
-                  <Text style={styles.modeDesc}>{m.desc}</Text>
-                </View>
-                {on ? <Ionicons name="checkmark-circle" size={22} color={pulseverse.electric} /> : null}
-              </TouchableOpacity>
-            );
-          })}
-          <TouchableOpacity
-            style={[styles.primaryBtn, !mode && styles.disabled]}
-            disabled={!mode}
-            onPress={() => setStep(2)}
-          >
-            <Text style={styles.primaryBtnTxt}>Continue</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {step === 2 ? (
-        <View>
-          <Text style={styles.screenTitle}>Configure Stream</Text>
-
-          <Text style={styles.label}>Title</Text>
-          <AccentComposerFrame
-            accentColor={colors.primary.teal}
-            compact
-            noShadow
-            footer={
-              <AccentCharCount
-                length={title.length}
-                max={100}
-                accentColor={colors.primary.teal}
-                warnWithin={15}
-                hideWhenEmpty={false}
-              />
-            }
-          >
-            <TextInput
-              style={styles.inputPlain}
-              placeholder="What should viewers expect?"
-              placeholderTextColor={colors.dark.textMuted}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={100}
-            />
-          </AccentComposerFrame>
-
-          <Text style={styles.label}>Description</Text>
-          <AccentComposerFrame
-            accentColor={colors.primary.teal}
-            noShadow
-            footer={
-              <AccentCharCount
-                length={description.length}
-                max={300}
-                accentColor={colors.primary.teal}
-                warnWithin={40}
-                hideWhenEmpty={false}
-              />
-            }
-          >
-            <TextInput
-              style={[styles.inputPlain, styles.inputMulti]}
-              placeholder="Optional context — great for Learn / Shop streams."
-              placeholderTextColor={colors.dark.textMuted}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              maxLength={300}
-            />
-          </AccentComposerFrame>
-
-          <Text style={styles.label}>Tags</Text>
-          <AccentComposerFrame accentColor={colors.primary.teal} compact noShadow>
-            <TextInput
-              style={styles.inputPlain}
-              placeholder="nightshift, icu, scrubhaul"
-              placeholderTextColor={colors.dark.textMuted}
-              value={tags}
-              onChangeText={setTags}
-            />
-          </AccentComposerFrame>
-
-          <RowToggle label="Schedule for later" value={scheduled} onChange={setScheduled} />
-          {scheduled ? (
-            <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
-              <TouchableOpacity
-                style={styles.schedulePickBtn}
-                onPress={() => setShowSchedulePicker((v) => !v)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="calendar-outline" size={18} color={pulseverse.electric} />
-                <Text style={styles.schedulePickTxt}>{scheduleAt.toLocaleString()}</Text>
-                <Text style={styles.schedulePickHint}>Tap to adjust</Text>
-              </TouchableOpacity>
-              {showSchedulePicker ? (
-                <DateTimePicker
-                  value={scheduleAt}
-                  mode="datetime"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  minimumDate={new Date(Date.now() + 120_000)}
-                  onChange={(_, date) => {
-                    if (Platform.OS === 'android') setShowSchedulePicker(false);
-                    if (date) setScheduleAt(date);
-                  }}
-                />
-              ) : null}
-              <Text style={styles.hint}>
-                Push notifications at go-live are not wired yet — reminders sync across devices when you use Remind Me on the Live hub.
-              </Text>
-            </View>
-          ) : null}
-          <RowToggle label="Enable gifts / Sparks" value={giftsEnabled} onChange={setGiftsEnabled} />
-
-          {mode === 'learn' ? (
-            <>
-              <Text style={styles.label}>Session topic</Text>
-              <AccentComposerFrame accentColor={colors.primary.teal} compact noShadow>
-                <TextInput
-                  style={styles.inputPlain}
-                  placeholder="e.g. SBAR refresher"
-                  placeholderTextColor={colors.dark.textMuted}
-                  value={learnTopic}
-                  onChangeText={setLearnTopic}
-                />
-              </AccentComposerFrame>
-              <RowToggle label="Enable Q&A queue" value={learnQna} onChange={setLearnQna} />
-              <RowToggle label="Enable polls" value={learnPolls} onChange={setLearnPolls} />
-              <Text style={styles.hint}>
-                Resources attachments — TODO: link Supabase Storage handouts.
-              </Text>
-            </>
-          ) : null}
-
-          {mode === 'shop' ? (
-            <>
-              <Text style={styles.label}>Product queue</Text>
-              <Text style={styles.hint}>
-                TODO: bind `shop_live_product_sets` — mock SKUs ship from discovery demos only.
-              </Text>
-              <RowToggle label="Live deal timer (demo)" value={liveDeal} onChange={setLiveDeal} />
-              <RowToggle label="Giveaway (demo)" value={giveaway} onChange={setGiveaway} />
-              <RowToggle
-                label="I agree to accurate descriptions & disclosures"
-                value={disclosuresOk}
-                onChange={setDisclosuresOk}
-              />
-            </>
-          ) : null}
-
-          <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep(1)}>
-              <Text style={styles.secondaryBtnTxt}>Back</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={() => setStep(3)}>
-              <Text style={styles.primaryBtnTxt}>Review</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
-
-      {step === 3 ? (
-        <View>
-          <Text style={styles.screenTitle}>Ready</Text>
-          <Text style={styles.summary}>
-            {MODES.find((m) => m.id === mode)?.title ?? 'Live'} · {title || 'Untitled stream'}
-          </Text>
-
-          <View style={styles.previewCard}>
-            {!permission ? (
-              <View style={styles.cameraPreview}>
-                <ActivityIndicator color={colors.primary.teal} />
-              </View>
-            ) : !permission.granted ? (
-              <View style={styles.cameraPreview}>
-                <Ionicons name="videocam-off-outline" size={40} color={colors.dark.textMuted} />
-                <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
-                  <Text style={styles.permBtnText}>Grant camera</Text>
+        {step === 1 ? (
+          <View style={{ gap: spacing.md }}>
+            <Text style={styles.screenTitle}>Choose Live Type</Text>
+            {MODES.map((m) => {
+              const on = mode === m.id;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  activeOpacity={0.85}
+                  style={[styles.modeCard, on && styles.modeCardOn]}
+                  onPress={() => setMode(m.id)}
+                >
+                  <View style={styles.modeIconWrap}>
+                    <Ionicons name={m.icon} size={22} color={on ? pulseverse.electric : colors.dark.textMuted} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modeTitle}>{m.title}</Text>
+                    <Text style={styles.modeDesc}>{m.desc}</Text>
+                  </View>
+                  {on ? <Ionicons name="checkmark-circle" size={22} color={pulseverse.electric} /> : null}
                 </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <CameraView ref={cameraRef} style={styles.cameraPreview} facing={facing} mode="video" />
-                <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}>
-                  <Ionicons name="camera-reverse-outline" size={18} color={colors.dark.text} />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-
-          <Text style={styles.disclaimer}>
-            Mobile broadcast uses LiveKit on development / EAS builds (not Expo Go). Chat, gifts, polls stay on Supabase.
-          </Text>
-
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep(2)}>
-              <Text style={styles.secondaryBtnTxt}>Back</Text>
-            </TouchableOpacity>
+              );
+            })}
             <TouchableOpacity
-              style={[styles.startBtn, { flex: 1 }, creating && { opacity: 0.7 }]}
-              onPress={start}
-              disabled={creating}
+              style={[styles.primaryBtn, !mode && styles.disabled]}
+              disabled={!mode}
+              onPress={() => setStep(2)}
             >
-              {creating ? (
-                <ActivityIndicator color={colors.dark.text} />
-              ) : (
-                <>
-                  <View style={styles.startDot} />
-                  <Text style={styles.startText}>{scheduled ? 'Schedule Session' : 'Go Live'}</Text>
-                </>
-              )}
+              <Text style={styles.primaryBtnTxt}>Continue</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      ) : null}
-    </ScrollView>
+        ) : null}
+
+        {step === 2 ? (
+          <View>
+            <Text style={styles.screenTitle}>Configure Stream</Text>
+
+            <Text style={styles.label}>Title</Text>
+            <AccentComposerFrame
+              accentColor={colors.primary.teal}
+              compact
+              noShadow
+              footer={
+                <AccentCharCount
+                  length={title.length}
+                  max={100}
+                  accentColor={colors.primary.teal}
+                  warnWithin={15}
+                  hideWhenEmpty={false}
+                />
+              }
+            >
+              <TextInput
+                style={styles.inputPlain}
+                placeholder="What should viewers expect?"
+                placeholderTextColor={colors.dark.textMuted}
+                value={title}
+                onChangeText={setTitle}
+                maxLength={100}
+              />
+            </AccentComposerFrame>
+
+            <Text style={styles.label}>Description</Text>
+            <AccentComposerFrame
+              accentColor={colors.primary.teal}
+              noShadow
+              footer={
+                <AccentCharCount
+                  length={description.length}
+                  max={300}
+                  accentColor={colors.primary.teal}
+                  warnWithin={40}
+                  hideWhenEmpty={false}
+                />
+              }
+            >
+              <TextInput
+                style={[styles.inputPlain, styles.inputMulti]}
+                placeholder="Optional context — great for Learn / Shop streams."
+                placeholderTextColor={colors.dark.textMuted}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                maxLength={300}
+              />
+            </AccentComposerFrame>
+
+            <Text style={styles.label}>Tags</Text>
+            <AccentComposerFrame accentColor={colors.primary.teal} compact noShadow>
+              <TextInput
+                style={styles.inputPlain}
+                placeholder="nightshift, icu, scrubhaul"
+                placeholderTextColor={colors.dark.textMuted}
+                value={tags}
+                onChangeText={setTags}
+              />
+            </AccentComposerFrame>
+
+            <RowToggle label="Schedule for later" value={scheduled} onChange={setScheduled} />
+            {scheduled ? (
+              <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+                <TouchableOpacity
+                  style={styles.schedulePickBtn}
+                  onPress={() => setShowSchedulePicker((v) => !v)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="calendar-outline" size={18} color={pulseverse.electric} />
+                  <Text style={styles.schedulePickTxt}>{scheduleAt.toLocaleString()}</Text>
+                  <Text style={styles.schedulePickHint}>Tap to adjust</Text>
+                </TouchableOpacity>
+                {showSchedulePicker ? (
+                  <DateTimePicker
+                    value={scheduleAt}
+                    mode="datetime"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    minimumDate={new Date(Date.now() + 120_000)}
+                    onChange={(_, date) => {
+                      if (Platform.OS === 'android') setShowSchedulePicker(false);
+                      if (date) setScheduleAt(date);
+                    }}
+                  />
+                ) : null}
+                <Text style={styles.hint}>
+                  Tap Remind Me on upcoming streams — we&apos;ll send a push and in-app alert when the host goes live.
+                </Text>
+              </View>
+            ) : null}
+            <RowToggle label="Enable gifts / Sparks" value={giftsEnabled} onChange={setGiftsEnabled} />
+
+            {mode === 'learn' ? (
+              <>
+                <Text style={styles.label}>Session topic</Text>
+                <AccentComposerFrame accentColor={colors.primary.teal} compact noShadow>
+                  <TextInput
+                    style={styles.inputPlain}
+                    placeholder="e.g. SBAR refresher"
+                    placeholderTextColor={colors.dark.textMuted}
+                    value={learnTopic}
+                    onChangeText={setLearnTopic}
+                  />
+                </AccentComposerFrame>
+                <RowToggle label="Enable Q&A queue" value={learnQna} onChange={setLearnQna} />
+                <RowToggle label="Enable polls" value={learnPolls} onChange={setLearnPolls} />
+                <Text style={styles.hint}>
+                  Resources attachments — TODO: link Supabase Storage handouts.
+                </Text>
+              </>
+            ) : null}
+
+            {mode === 'shop' ? (
+              <>
+                <Text style={styles.label}>Product queue</Text>
+                <Text style={styles.hint}>
+                  TODO: bind `shop_live_product_sets` — mock SKUs ship from discovery demos only.
+                </Text>
+                <RowToggle label="Live deal timer (demo)" value={liveDeal} onChange={setLiveDeal} />
+                <RowToggle label="Giveaway (demo)" value={giveaway} onChange={setGiveaway} />
+                <RowToggle
+                  label="I agree to accurate descriptions & disclosures"
+                  value={disclosuresOk}
+                  onChange={setDisclosuresOk}
+                />
+              </>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep(1)}>
+                <Text style={styles.secondaryBtnTxt}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={() => setStep(3)}>
+                <Text style={styles.primaryBtnTxt}>Review</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
+        {step === 3 ? (
+          <View>
+            <Text style={styles.screenTitle}>Ready</Text>
+            <Text style={styles.summary}>
+              {MODES.find((m) => m.id === mode)?.title ?? 'Live'} · {title || 'Untitled stream'}
+            </Text>
+
+            <View style={styles.previewCard}>
+              {permChecking || !permState ? (
+                <View style={styles.cameraPreview}>
+                  <ActivityIndicator color={pulseverse.electric} />
+                  <Text style={styles.previewHint}>Checking camera and microphone…</Text>
+                </View>
+              ) : broadcastReady ? (
+                <>
+                  <CameraView ref={cameraRef} style={styles.cameraPreview} facing={facing} mode="video" />
+                  <TouchableOpacity
+                    style={styles.flipBtn}
+                    onPress={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
+                  >
+                    <Ionicons name="camera-reverse-outline" size={18} color={colors.dark.text} />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={styles.cameraPreview}>
+                  <View style={styles.previewIconRow}>
+                    <View style={[styles.previewIconOrb, permState.missing.includes('camera') && styles.previewIconOrbWarn]}>
+                      <Ionicons
+                        name={permState.camera.granted ? 'videocam-outline' : 'videocam-off-outline'}
+                        size={28}
+                        color={permState.camera.granted ? pulseverse.electricSoft : colors.dark.textMuted}
+                      />
+                    </View>
+                    <View style={[styles.previewIconOrb, permState.missing.includes('microphone') && styles.previewIconOrbWarn]}>
+                      <Ionicons
+                        name={permState.microphone.granted ? 'mic-outline' : 'mic-off-outline'}
+                        size={28}
+                        color={permState.microphone.granted ? pulseverse.electricSoft : colors.dark.textMuted}
+                      />
+                    </View>
+                  </View>
+                  <Text style={styles.previewTitle}>Allow camera & microphone</Text>
+                  <Text style={styles.previewHint}>{previewPlaceholderMessage}</Text>
+                  <TouchableOpacity
+                    style={styles.previewCta}
+                    onPress={() => {
+                      if (permState.blocked.length > 0) void handleOpenSettings();
+                      else setPermModalVisible(true);
+                    }}
+                    activeOpacity={0.88}
+                  >
+                    <Text style={styles.previewCtaTxt}>
+                      {permState.blocked.length > 0 ? 'Open Settings' : 'Grant Access'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {!broadcastReady ? (
+              <Text style={styles.permGateHint}>
+                Go Live unlocks after camera and microphone access are granted.
+              </Text>
+            ) : null}
+
+            <Text style={styles.disclaimer}>
+              Mobile broadcast uses LiveKit on development / EAS builds (not Expo Go). Chat, gifts, polls stay on Supabase.
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep(2)}>
+                <Text style={styles.secondaryBtnTxt}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.startBtn,
+                  { flex: 1 },
+                  (creating || !broadcastReady) && styles.disabled,
+                ]}
+                onPress={start}
+                disabled={creating || !broadcastReady}
+              >
+                {creating ? (
+                  <ActivityIndicator color={colors.dark.text} />
+                ) : (
+                  <>
+                    <View style={styles.startDot} />
+                    <Text style={styles.startText}>{scheduled ? 'Schedule Session' : 'Go Live'}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <LiveBroadcastPermissionModal
+        visible={permModalVisible}
+        missing={permState?.missing ?? ['camera', 'microphone']}
+        blocked={permState?.blocked ?? []}
+        requesting={permRequesting}
+        onGrantAccess={handleGrantAccess}
+        onOpenSettings={handleOpenSettings}
+        onCancel={() => setPermModalVisible(false)}
+      />
+    </>
   );
 }
 
@@ -569,17 +697,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: '#000',
+    backgroundColor: '#020617',
+    paddingHorizontal: spacing.lg,
   },
-  permBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.button,
-    backgroundColor: colors.primary.teal + '20',
+  previewIconRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  previewIconOrb: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15,28,48,0.92)',
     borderWidth: 1,
-    borderColor: colors.primary.teal + '55',
+    borderColor: 'rgba(56,189,248,0.25)',
   },
-  permBtnText: { ...typography.button, fontSize: 13, color: colors.primary.teal },
+  previewIconOrbWarn: {
+    borderColor: 'rgba(251,191,36,0.45)',
+    backgroundColor: 'rgba(127,29,29,0.15)',
+  },
+  previewTitle: {
+    ...typography.h3,
+    fontSize: 17,
+    color: colors.dark.text,
+    textAlign: 'center',
+  },
+  previewHint: {
+    ...typography.bodySmall,
+    color: colors.dark.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+  previewCta: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: pulseverse.electric,
+    ...shadows.ctaSoft,
+  },
+  previewCtaTxt: {
+    ...typography.button,
+    fontWeight: '800',
+    color: pulseverse.onElectric,
+  },
+  permGateHint: {
+    ...typography.bodySmall,
+    color: colors.status.warning,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
   flipBtn: {
     position: 'absolute',
     top: spacing.sm,

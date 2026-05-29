@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MyPulseItemCard } from './MyPulseItemCard';
 import { MyPulseComposerChips } from './MyPulseComposerChips';
 import { profileUpdateKeys } from '@/lib/queryKeys';
-import { hrefPostFocusComments } from '@/lib/communityRoutes';
+import { pushPostViewer } from '@/lib/postViewerRoute';
 import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
 import type { Post, ProfileUpdate } from '@/types';
 
@@ -33,6 +33,8 @@ interface Props {
   userId: string;
   /** Visitor profile — no add/remove. */
   readOnly?: boolean;
+  /** Private/blocked visitors see a locked state instead of cards. */
+  contentLocked?: boolean;
   /** Resolve linked post id → full Post (for thumbnails + paused video frames). */
   resolveLinkedPost?: (postId: string) => Post | undefined;
 }
@@ -46,6 +48,7 @@ export function MyPulseSection({
   updates,
   userId,
   readOnly,
+  contentLocked = false,
   resolveLinkedPost,
 }: Props) {
   const queryClient = useQueryClient();
@@ -239,9 +242,10 @@ export function MyPulseSection({
     (id: string) => {
       const row = updates.find((u) => u.id === id);
       if (row?.linkedPostId) {
-        router.push(
-          hrefPostFocusComments(row.linkedPostId, row.linkedCircleSlug?.trim() || undefined) as any,
-        );
+        void pushPostViewer(router, row.linkedPostId, {
+          focusComments: true,
+          circle: row.linkedCircleSlug?.trim() || undefined,
+        });
         return;
       }
       router.push(`/my-pulse/${id}` as any);
@@ -285,7 +289,17 @@ export function MyPulseSection({
 
       <MyPulseComposerChips isOwner={!readOnly} />
 
-      {!count ? (
+      {contentLocked && readOnly ? (
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="lock-closed-outline" size={22} color={colors.primary.teal} />
+          </View>
+          <Text style={styles.emptyTitle}>My Pulse is private</Text>
+          <Text style={styles.emptyBody}>
+            This creator keeps their Pulse updates private.
+          </Text>
+        </View>
+      ) : !count ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
             <Ionicons

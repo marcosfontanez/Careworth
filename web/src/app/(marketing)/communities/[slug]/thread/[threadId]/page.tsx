@@ -5,6 +5,11 @@ import { OpenInPulseverseCta } from "@/components/marketing/open-in-pulseverse-c
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { absoluteUrl } from "@/lib/breadcrumbs";
+import {
+  CONFESSIONS_THREAD_WEB_DESCRIPTION,
+  CONFESSIONS_THREAD_WEB_TITLE,
+  isConfessionsCommunitySlug,
+} from "@/lib/marketing/confessions-share";
 import { createPublicSupabaseAnonClient } from "@/lib/supabase/public-anon";
 import { getPublicSiteUrl } from "@/lib/site-url";
 import { marketingInlineLink } from "@/lib/ui-classes";
@@ -18,12 +23,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, threadId } = await params;
   const base = getPublicSiteUrl();
   const canonical = `${base}/communities/${encodeURIComponent(slug)}/thread/${encodeURIComponent(threadId)}`;
-  let title = `Discussion · ${humanizeSlug(slug)} · PulseVerse`;
-  let description = "Open this Circle discussion in PulseVerse.";
+  const confessionsShare = isConfessionsCommunitySlug(slug);
+  let title = confessionsShare
+    ? `${CONFESSIONS_THREAD_WEB_TITLE} · PulseVerse`
+    : `Discussion · ${humanizeSlug(slug)} · PulseVerse`;
+  let description = confessionsShare
+    ? CONFESSIONS_THREAD_WEB_DESCRIPTION
+    : "Open this Circle discussion in PulseVerse.";
 
   const supabase = createPublicSupabaseAnonClient();
-  if (supabase && SLUG_RE.test(slug) && UUID_RE.test(threadId)) {
-    const { data: thread } = await supabase.from("circle_threads").select("title, body").eq("id", threadId).maybeSingle();
+  if (supabase && !confessionsShare && SLUG_RE.test(slug) && UUID_RE.test(threadId)) {
+    const { data: thread } = await supabase
+      .from("circle_threads_viewer_safe")
+      .select("title, body")
+      .eq("id", threadId)
+      .maybeSingle();
     if (thread?.title) {
       title = `${thread.title} · PulseVerse`;
       if (thread.body?.trim()) description = clampText(thread.body, 160);
@@ -74,7 +88,7 @@ export default async function CircleThreadSharePage({ params }: Props) {
   }
 
   const { data: threadRow, error: threadErr } = await supabase
-    .from("circle_threads")
+    .from("circle_threads_viewer_safe")
     .select("id, title, body, community_id")
     .eq("id", threadId)
     .maybeSingle();
@@ -90,17 +104,28 @@ export default async function CircleThreadSharePage({ params }: Props) {
     redirect(`/communities/${communityRow.slug}/thread/${threadId}`);
   }
 
-  const teaserSnippet = threadRow.body?.trim() ? clampText(threadRow.body, 240) : "Join the conversation in PulseVerse.";
+  const confessionsShare =
+    isConfessionsCommunitySlug(communityRow.slug) || isConfessionsCommunitySlug(slug);
+  const teaserSnippet = confessionsShare
+    ? CONFESSIONS_THREAD_WEB_DESCRIPTION
+    : threadRow.body?.trim()
+      ? clampText(threadRow.body, 240)
+      : "Join the conversation in PulseVerse.";
+  const pageTitle = confessionsShare
+    ? CONFESSIONS_THREAD_WEB_TITLE
+    : threadRow.title;
   const base = getPublicSiteUrl();
   const httpsUrl = absoluteUrl(`/communities/${slug}/thread/${threadId}`);
   const appDeepLink = `pulseverse://communities/${slug}/thread/${threadId}`;
 
   return (
     <MarketingPageShell width="medium" breadcrumbPath={`/communities/${slug}/thread/${threadId}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{communityRow.name}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {confessionsShare ? "Confessions" : communityRow.name}
+      </p>
       <SectionHeader
-        eyebrow="Circle discussion"
-        title={threadRow.title}
+        eyebrow={confessionsShare ? "Anonymous discussion" : "Circle discussion"}
+        title={pageTitle}
         description={teaserSnippet}
       />
       <div className="mt-10 rounded-2xl border border-white/10 bg-white/3 p-8">

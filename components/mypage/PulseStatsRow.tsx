@@ -27,6 +27,8 @@ interface PulseStatsRowProps {
   initialTier?: string | null;
   initialHistoryOpen?: boolean;
   highlightShareTier?: boolean;
+  /** When false, the Pulse Score pill does not open history (private profile visitors). */
+  pulseHistoryEnabled?: boolean;
   onPressFollowers?: () => void;
   onPressFollowing?: () => void;
 }
@@ -44,6 +46,7 @@ export function PulseStatsRow({
   initialTier,
   initialHistoryOpen = false,
   highlightShareTier = false,
+  pulseHistoryEnabled = true,
   onPressFollowers,
   onPressFollowing,
 }: PulseStatsRowProps) {
@@ -93,6 +96,7 @@ export function PulseStatsRow({
   const scoreDisplayed = Math.min(100, Math.round(Number(overall) || 0));
 
   const handleOpenHistory = () => {
+    if (!pulseHistoryEnabled) return;
     Haptics.selectionAsync().catch(() => undefined);
     dismissTooltip();
     setHistoryOpen(true);
@@ -118,7 +122,8 @@ export function PulseStatsRow({
             score={scoreDisplayed}
             tierAccent={tier.accent}
             tierGlow={tier.glow}
-            onPress={handleOpenHistory}
+            onPress={pulseHistoryEnabled ? handleOpenHistory : undefined}
+            historyDisabled={!pulseHistoryEnabled}
           />
           {tooltipVisible ? (
             <PulseFirstTimeTooltip
@@ -188,11 +193,13 @@ function PulseScoreCard({
   tierAccent,
   tierGlow,
   onPress,
+  historyDisabled = false,
 }: {
   score: number;
   tierAccent: string;
   tierGlow: string;
-  onPress: () => void;
+  onPress?: () => void;
+  historyDisabled?: boolean;
 }) {
   const glow = useRef(new Animated.Value(0.45)).current;
   const crownShake = useRef(new Animated.Value(0)).current;
@@ -237,10 +244,17 @@ function PulseScoreCard({
 
   return (
     <Pressable
-      style={[styles.pulseCardOuter, { borderColor: `${tierAccent}88`, shadowColor: tierAccent }]}
+      style={[
+        styles.pulseCardOuter,
+        { borderColor: `${tierAccent}88`, shadowColor: tierAccent },
+        historyDisabled ? styles.pulseCardDisabled : null,
+      ]}
       onPress={onPress}
+      disabled={!onPress}
       accessibilityRole="button"
-      accessibilityLabel="View Pulse Score history"
+      accessibilityLabel={
+        historyDisabled ? 'Pulse Score' : 'View Pulse Score history'
+      }
     >
       <LinearGradient
         colors={['rgba(8,14,24,0.96)', 'rgba(12,22,38,0.98)']}
@@ -390,6 +404,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 5,
+  },
+  pulseCardDisabled: {
+    opacity: 0.88,
   },
   pulseCardHalo: {
     ...StyleSheet.absoluteFillObject,

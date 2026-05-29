@@ -36,6 +36,7 @@ import * as Updates from 'expo-updates';
 import { attachAppResumeStaleDataRefresh } from '@/lib/appResumeQuerySync';
 import { RewardDeliveryProvider } from '@/components/rewards/RewardDeliveryProvider';
 import { shouldBootstrapLiveKitNative } from '@/lib/expoRuntime';
+import { installMediaAbortErrorFilter } from '@/lib/web/suppressMediaAbortError';
 
 /**
  * LiveKit registers WebRTC globals — requires native modules (dev/EAS build only).
@@ -48,6 +49,9 @@ if (shouldBootstrapLiveKitNative()) {
 
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();
+/* Web-only: silence the harmless AbortError emitted by expo-video's web shim
+   when a feed video unmounts mid-play (e.g. Feed → Circles navigation). */
+installMediaAbortErrorFilter();
 
 /**
  * Required before calling hideAsync(): otherwise iOS may auto-dismiss the splash

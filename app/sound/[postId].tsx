@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { colors, layout, spacing, typography } from '@/theme';
 import { postKeys } from '@/lib/queryKeys';
+import { resolvePostViewerHref } from '@/lib/postViewerRoute';
 import { resolveFeedGradeLookId } from '@/lib/moodPresets';
 import { tintForLook } from '@/lib/videoFilters';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
@@ -90,7 +91,7 @@ export default function SoundDetailScreen() {
         key={item.id}
         style={styles.remixRow}
         activeOpacity={0.85}
-        onPress={() => router.push(`/post/${item.id}`)}
+        onPress={() => router.push(resolvePostViewerHref(item))}
       >
         <View style={styles.remixThumb}>
           {tUri ? (

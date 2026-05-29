@@ -293,7 +293,11 @@ export function RecentMediaThumb({
   style,
   hubTileCss,
   hubImageContentFit = 'cover',
-  /** Android: in dense lists/grids, skip `expo-video` first-frame decode when a real thumbnail URL exists. */
+  /**
+   * Dense grids (My Pulse Media Hub, clip cards): prefer a static thumbnail when
+   * one exists (avoids extra decoders). When none exists, fall back to a paused
+   * video frame like the default path.
+   */
   preferStaticAndroidVideoTile = false,
 }: {
   post: Post;
@@ -388,17 +392,16 @@ export function RecentMediaThumb({
         </View>
       );
     }
-    const androidThumb = post.thumbnailUrl?.trim();
+    const staticVideoThumb = post.thumbnailUrl?.trim();
     if (
-      Platform.OS === 'android' &&
       preferStaticAndroidVideoTile &&
-      androidThumb &&
-      !isDemoCatalogMediaUrl(androidThumb)
+      staticVideoThumb &&
+      !isDemoCatalogMediaUrl(staticVideoThumb)
     ) {
       return (
         <View style={[style, styles.videoTile]}>
           <HubTileImage
-            uri={androidThumb}
+            uri={staticVideoThumb}
             style={StyleSheet.absoluteFillObject}
             layoutSizeCss={hubTileCss}
             contentFit={hubImageContentFit}

@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
   View, FlatList, StyleSheet, Dimensions, Platform,
-  TouchableOpacity, Text, ViewToken, AppState,
+  Text, ViewToken, AppState,
   NativeSyntheticEvent, NativeScrollEvent, RefreshControl,
   InteractionManager,
   useWindowDimensions, type LayoutChangeEvent,
@@ -9,31 +9,33 @@ import {
 import { useRouter } from 'expo-router';
 import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
 import { avatarThumb } from '@/lib/storage';
 import { pickAbCoverUrl } from '@/lib/coverAbPoster';
 import { VideoFeedPost } from '@/components/feed/VideoFeedPost';
+import { FeedCommentsSheet } from '@/components/feed/FeedCommentsSheet';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
+import { FeedErrorState } from '@/components/feed/FeedErrorState';
 import { FeedLoadingSkeleton } from '@/components/feed/FeedLoadingSkeleton';
-import { ErrorState } from '@/components/ui/ErrorState';
+import { FeedTopChrome } from '@/components/feed/FeedTopChrome';
+import { FeedHappeningNowTray } from '@/components/feed/FeedHappeningNowTray';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { LongPressMenu } from '@/components/feed/LongPressMenu';
-import { useFeedInfinite, useLikedPostIds, usePrefetchPostsByIds } from '@/hooks/useQueries';
+import { useFeedInfinite, usePrefetchPostsByIds } from '@/hooks/useQueries';
+import { useFeedEngagement } from '@/hooks/useFeedEngagement';
+import { useFeedCommentsSheet } from '@/hooks/useFeedCommentsSheet';
+import { useFeedLiveDiscovery } from '@/hooks/useFeedLiveDiscovery';
 import { useViewTracker } from '@/hooks/useViewTracker';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { FEED_TABS } from '@/constants';
-import { colors } from '@/theme';
 import { useToast } from '@/components/ui/Toast';
-import { sharePostMenu } from '@/lib/share';
-import { postsService, feedSignalsService, profilesService } from '@/services/supabase';
+import { colors } from '@/theme';
 import { queryClient } from '@/lib/queryClient';
-import { prefetchCircleRoom } from '@/lib/communityCache';
-import { bumpPostCount } from '@/lib/postCacheUpdates';
-import { enqueueAction } from '@/lib/offlineQueue';
-import { feedKeys, likedPostKeys, savedPostKeys, userKeys } from '@/lib/queryKeys';
+import { navigateToCircleRoom } from '@/lib/communityCache';
+import { normalizeCommunitySlug } from '@/lib/communitySlug';
+import { liveStreamHref } from '@/lib/navigation/liveRoutes';
+import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { getFeedVideoListWindow } from '@/lib/feedVideoListWindow';
 import type { Post } from '@/types';
 
@@ -73,10 +75,7 @@ export default function FeedScreen() {
   const toast = useToast();
   const feedTab = useAppStore((s) => s.feedTab);
   const setFeedTab = useAppStore((s) => s.setFeedTab);
-  const savedPostIds = useAppStore((s) => s.savedPostIds);
-  const followedCreatorIds = useAppStore((s) => s.followedCreatorIds);
-  const toggleSavePost = useAppStore((s) => s.toggleSavePost);
-  const setCreatorFollowed = useAppStore((s) => s.setCreatorFollowed);
+  const { activeLives } = useFeedLiveDiscovery(feedTab === 'forYou');
 
   const { height: windowH } = useWindowDimensions();
   const [pageHeight, setPageHeight] = useState(() =>
@@ -121,7 +120,23 @@ export default function FeedScreen() {
   );
 
   const posts = useMemo(() => feedInfData?.pages.flatMap((p) => p.posts) ?? [], [feedInfData]);
-  const { data: likedIdsArr = [] } = useLikedPostIds(user?.id);
+
+  const {
+    likedPostsRef,
+    savedPostIds,
+    savedPostIdsRef,
+    followedCreatorIdsRef,
+    rowUiEpoch,
+    bumpRowUi,
+    toggleLike,
+    handleToggleSave,
+    handleToggleFollow,
+    handleShare,
+    handleNotInterested,
+    handleHideCreatorFromFeed,
+    handleBlockCreator,
+  } = useFeedEngagement();
+  const { commentsPost, commentsOpen, openComments, closeComments } = useFeedCommentsSheet();
 
   const { onViewStart, onViewEnd } = useViewTracker(user?.id);
   const flatListRef = useRef<FlatList>(null);
@@ -145,25 +160,10 @@ export default function FeedScreen() {
     return () => sub.remove();
   }, []);
 
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [rowUiEpoch, setRowUiEpoch] = useState(0);
-  const bumpRowUi = useCallback(() => setRowUiEpoch((e) => e + 1), []);
-  const likedServerSig = likedIdsArr.join('|');
-  useEffect(() => {
-    setLikedPosts(new Set(likedIdsArr));
-    bumpRowUi();
-  }, [likedServerSig, bumpRowUi]);
-
-  const likedPostsRef = useRef(likedPosts);
-  const savedPostIdsRef = useRef(savedPostIds);
-  const followedCreatorIdsRef = useRef(followedCreatorIds);
-  likedPostsRef.current = likedPosts;
-  savedPostIdsRef.current = savedPostIds;
-  followedCreatorIdsRef.current = followedCreatorIds;
-
   const [reportTarget, setReportTarget] = useState<string | null>(null);
   const [longPressTarget, setLongPressTarget] = useState<Post | null>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [liveTrayPinned, setLiveTrayPinned] = useState(false);
   const prevActiveId = useRef<string | null>(null);
   const activePostIdRef = useRef<string | null>(null);
   /** Synced each render; read from `renderItem` without listing `activePostId` in `useCallback` deps (avoids new renderItem every snap). */
@@ -176,6 +176,10 @@ export default function FeedScreen() {
     const i = posts.findIndex((p) => p.id === activePostId);
     return i >= 0 ? i : 0;
   }, [posts, activePostId]);
+
+  useEffect(() => {
+    if (activeWarmIndex > 0) setLiveTrayPinned(false);
+  }, [activeWarmIndex]);
 
   /**
    * Batch attributed-sound posts for the warm window only (single `getByIds`).
@@ -291,60 +295,6 @@ export default function FeedScreen() {
     [syncActiveFromScrollOffset],
   );
 
-  const toggleLike = useCallback(async (id: string) => {
-    /**
-     * Capture the optimistic-flip target so that, if the server call fails,
-     * we can enqueue exactly the action the user intended (like vs. unlike)
-     * and replay it from `processQueue` once the network / server recovers.
-     * Without this, a failed unlike would silently re-like on retry.
-     */
-    let willBeLiked = false;
-    setLikedPosts((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        willBeLiked = false;
-      } else {
-        next.add(id);
-        willBeLiked = true;
-      }
-      return next;
-    });
-    bumpRowUi();
-    /**
-     * Patch the cached post.likeCount in place so the number next to the heart
-     * updates on tap. We deliberately avoid invalidating ['feed'] / ['feedInf']
-     * (which would refetch and flash the active video on Android) -- see the
-     * note above. The natural pull-to-refresh path will reconcile against the
-     * server-side trigger total later.
-     */
-    bumpPostCount(id, 'likeCount', willBeLiked ? 1 : -1);
-    if (user) {
-      try {
-        await postsService.toggleLike(user.id, id);
-        /**
-         * Only invalidate the user's liked-id set — invalidating ['feed'] /
-         * ['feedInf'] here forces an immediate refetch that swaps the posts
-         * array reference and re-renders every cell, which on Android causes
-         * the active video surface to flash / shift. The denormalised
-         * post.likeCount refreshes on the next pull-to-refresh; the heart
-         * state is already correct via the local likedPosts set above.
-         */
-        queryClient.invalidateQueries({ queryKey: likedPostKeys.forUser(user.id) });
-      } catch {
-        /**
-         * Best-effort: stash the action so processQueue() can flush it on
-         * next foreground / reconnect. We deliberately keep the optimistic
-         * UI flip — the queued action is what ultimately reconciles state.
-         */
-        enqueueAction({
-          type: willBeLiked ? 'like_post' : 'unlike_post',
-          payload: { postId: id, userId: user.id },
-        }).catch(() => {});
-      }
-    }
-  }, [user, bumpRowUi]);
-
   const openCreatorVideoGrid = useCallback(
     (creatorId: string, postId: string) => {
       router.push(`/creator-videos/${creatorId}?fromPost=${encodeURIComponent(postId)}` as any);
@@ -352,58 +302,29 @@ export default function FeedScreen() {
     [router],
   );
 
-  const handleToggleSave = useCallback(async (id: string) => {
-    const wasSaved = savedPostIdsRef.current.has(id);
-    toggleSavePost(id);
-    bumpRowUi();
-    /**
-     * Patch the cached post.saveCount so the bookmark count ticks instantly
-     * on tap. Without this, a freshly saved post sticks at "0" until the
-     * user manually pull-to-refreshes (the bug being fixed here).
-     */
-    bumpPostCount(id, 'saveCount', wasSaved ? -1 : 1);
-    if (user) {
-      try {
-        await postsService.toggleSave(user.id, id);
-        queryClient.invalidateQueries({
-          queryKey: savedPostKeys.forUser(user.id),
-          refetchType: 'all',
-        });
-      } catch (e: unknown) {
-        /**
-         * Server call failed -- don't roll back the optimistic flip; instead
-         * queue the intended action so it replays on reconnect. This is the
-         * key resilience win: a flaky network never silently drops a save.
-         */
-        enqueueAction({
-          type: wasSaved ? 'unsave_post' : 'save_post',
-          payload: { postId: id, userId: user.id },
-        }).catch(() => {});
-        const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : 'Save failed';
-        toast.show(msg.length > 100 ? `${msg.slice(0, 97)}…` : msg, 'error');
-      }
+  const handleLiveNowPress = useCallback(() => {
+    if (feedTab !== 'forYou') {
+      setFeedTab('forYou');
     }
-  }, [user, toggleSavePost, toast, bumpRowUi]);
+    setLiveTrayPinned(true);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [feedTab, setFeedTab]);
 
-  const handleToggleFollow = useCallback(async (creatorId: string) => {
-    if (!creatorId || creatorId === user?.id) return;
-    /** Optimistic flip — server call below confirms / queues on failure. */
-    const wasFollowing = followedCreatorIdsRef.current.has(creatorId);
-    setCreatorFollowed(creatorId, !wasFollowing);
-    bumpRowUi();
-    if (!user) return;
-    try {
-      await profilesService.toggleFollow(user.id, creatorId);
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(creatorId) });
-    } catch (e: unknown) {
-      enqueueAction({
-        type: wasFollowing ? 'unfollow_user' : 'follow_user',
-        payload: { followerId: user.id, followingId: creatorId },
-      }).catch(() => {});
-      const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : 'Follow failed';
-      toast.show(msg.length > 100 ? `${msg.slice(0, 97)}…` : msg, 'error');
-    }
-  }, [user, setCreatorFollowed, toast, bumpRowUi]);
+  const dismissLiveTray = useCallback(() => {
+    setLiveTrayPinned(false);
+  }, []);
+
+  const openLiveStream = useCallback(
+    (streamId: string) => {
+      router.push(liveStreamHref(streamId));
+    },
+    [router],
+  );
+
+  const showFeedLiveTray =
+    feedTab === 'forYou' &&
+    activeLives.length > 0 &&
+    (activeWarmIndex === 0 || liveTrayPinned);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -447,22 +368,32 @@ export default function FeedScreen() {
           if (item.commentsDisabled) {
             toast.show('Comments are off — you can still read the thread.', 'info');
           }
-          router.push(`/comments/${item.id}`);
+          openComments(item);
         }}
         onSave={() => handleToggleSave(item.id)}
-        onShare={() => sharePostMenu(item, { toast: toast.show, queryClient })}
+        onShare={() => handleShare(item)}
         onFollow={() => handleToggleFollow(item.creatorId)}
-        onProfile={() => router.push(`/profile/${item.creatorId}`)}
+        onProfile={() => openPulsePage(router, item.creatorId)}
         onCommunity={async (cId) => {
+          const raw = cId.trim();
+          if (!raw) {
+            toast.show('Circle not found', 'error');
+            return;
+          }
           try {
             const { communitiesService } = await import('@/services/supabase');
-            const c = await communitiesService.getById(cId);
-            if (c?.slug) {
-              prefetchCircleRoom(queryClient, c, user?.id ?? null);
-              router.push(`/communities/${c.slug}`);
+            const UUID_RE =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            const community = UUID_RE.test(raw)
+              ? await communitiesService.getById(raw)
+              : await communitiesService.getBySlug(normalizeCommunitySlug(raw));
+            if (community?.slug) {
+              navigateToCircleRoom(router, queryClient, community, user?.id ?? null);
+              return;
             }
+            toast.show('Circle not found or unavailable', 'error');
           } catch {
-            /* noop */
+            toast.show('Could not open Circle — try again', 'error');
           }
         }}
         onReport={() => setReportTarget(item.id)}
@@ -475,7 +406,7 @@ export default function FeedScreen() {
         }
       />
     ),
-    [router, toggleLike, handleToggleSave, handleToggleFollow, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch, toast, user?.id],
+    [router, toggleLike, handleToggleSave, handleToggleFollow, handleShare, isFocused, appIsActive, pageHeight, openCreatorVideoGrid, queryClient, videoSurfaceEpoch, toast, user?.id, openComments],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
@@ -503,9 +434,32 @@ export default function FeedScreen() {
   if (isError) {
     const hint =
       __DEV__ && feedError != null
-        ? `${feedError instanceof Error ? feedError.message : String(feedError)}\n\nPull down to refresh or tap retry.`
-        : 'Pull down to refresh or tap retry';
-    return <ErrorState title="Couldn't load feed" subtitle={hint} onRetry={() => refetch()} />;
+        ? feedError instanceof Error
+          ? feedError.message
+          : typeof feedError === 'object' &&
+              feedError !== null &&
+              'message' in feedError &&
+              typeof (feedError as { message: unknown }).message === 'string'
+            ? (feedError as { message: string }).message
+            : String(feedError)
+        : undefined;
+    return (
+      <View style={styles.container} onLayout={onFeedLayout}>
+        <FeedErrorState
+          height={pageHeight > 0 ? pageHeight : SCREEN_H}
+          subtitle={hint ?? 'Pull down to refresh or try again.'}
+          onRetry={() => refetch()}
+        />
+        <FeedTopChrome
+          insetTop={insets.top}
+          activeTab={feedTab}
+          onTabChange={setFeedTab}
+          onSearch={() => router.push('/search')}
+          showLiveNowIndicator={activeLives.length > 0}
+          onLiveNowPress={activeLives.length > 0 ? handleLiveNowPress : undefined}
+        />
+      </View>
+    );
   }
 
   const feedPosts = posts ?? [];
@@ -573,44 +527,45 @@ export default function FeedScreen() {
               onMomentumScrollEnd,
               onScrollEndDrag,
             })}
-        ListEmptyComponent={<FeedEmptyState height={pageHeight > 0 ? pageHeight : SCREEN_H} />}
+        ListEmptyComponent={
+          <FeedEmptyState
+            height={pageHeight > 0 ? pageHeight : SCREEN_H}
+            tab={feedTab}
+            onExplore={() => router.push('/search')}
+          />
+        }
       />
 
-      <View style={[styles.feedChrome, { paddingTop: insets.top + 6 }]}>
-        <View style={styles.chromeSide} />
-        <View style={styles.tabRow}>
-          {FEED_TABS.map((tab) => {
-            const isActive = tab.key === feedTab;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={styles.tabItem}
-                onPress={() => setFeedTab(tab.key)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>
-                  {tab.label}
-                </Text>
-                {isActive ? <View style={styles.tabUnderline} /> : <View style={styles.tabUnderlineSpacer} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <TouchableOpacity
-          onPress={() => router.push('/search')}
-          style={styles.searchBtn}
-          hitSlop={10}
-          accessibilityLabel="Search"
-        >
-          <Ionicons name="search-outline" size={22} color={colors.dark.text} />
-        </TouchableOpacity>
-      </View>
+      <FeedTopChrome
+        insetTop={insets.top}
+        activeTab={feedTab}
+        onTabChange={setFeedTab}
+        onSearch={() => router.push('/search')}
+        showLiveNowIndicator={activeLives.length > 0}
+        onLiveNowPress={activeLives.length > 0 ? handleLiveNowPress : undefined}
+      />
+
+      {showFeedLiveTray ? (
+        <FeedHappeningNowTray
+          streams={activeLives}
+          onOpenStream={openLiveStream}
+          insetTop={insets.top}
+          onDismiss={dismissLiveTray}
+        />
+      ) : null}
 
       <ReportModal
         visible={!!reportTarget}
         onClose={() => setReportTarget(null)}
         targetType="post"
         targetId={reportTarget ?? ''}
+      />
+
+      <FeedCommentsSheet
+        visible={commentsOpen}
+        post={commentsPost}
+        onClose={closeComments}
+        onCommentAdded={bumpRowUi}
       />
 
       <LongPressMenu
@@ -625,29 +580,21 @@ export default function FeedScreen() {
           setLongPressTarget(null);
         }}
         isSaved={longPressTarget ? savedPostIds.has(longPressTarget.id) : false}
-        onNotInterested={async () => {
+        canBlockCreator={!!user?.id && longPressTarget?.creatorId !== user.id}
+        onNotInterested={() => {
           const p = longPressTarget;
-          if (!user?.id || !p) return;
-          try {
-            await feedSignalsService.recordAction(user.id, 'not_interested', { postId: p.id });
-            queryClient.invalidateQueries({ queryKey: feedKeys.root() });
-            queryClient.invalidateQueries({ queryKey: feedKeys.infiniteRoot() });
-            toast.show('We will show fewer posts like this', 'success');
-          } catch {
-            toast.show('Could not update feed', 'error');
-          }
+          if (!p) return;
+          void handleNotInterested(p.id);
         }}
-        onHideCreator={async () => {
+        onHideCreatorFromFeed={() => {
           const p = longPressTarget;
-          if (!user?.id || !p) return;
-          try {
-            await feedSignalsService.recordAction(user.id, 'hide_creator', { creatorId: p.creatorId });
-            queryClient.invalidateQueries({ queryKey: feedKeys.root() });
-            queryClient.invalidateQueries({ queryKey: feedKeys.infiniteRoot() });
-            toast.show('Hidden this creator from your feed', 'success');
-          } catch {
-            toast.show('Could not update feed', 'error');
-          }
+          if (!p) return;
+          void handleHideCreatorFromFeed(p.creatorId);
+        }}
+        onBlockCreator={() => {
+          const p = longPressTarget;
+          if (!p) return;
+          void handleBlockCreator(p.creatorId, p.creator.displayName);
         }}
       />
     </View>
@@ -656,63 +603,4 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: VIDEO_BG },
-  feedChrome: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 30,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    backgroundColor: colors.feed.chromeScrim,
-  },
-  chromeSide: { width: 44 },
-  tabRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    minWidth: 0,
-    paddingHorizontal: 4,
-    gap: 4,
-  },
-  tabItem: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingBottom: 2,
-  },
-  tabLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.12,
-    color: colors.feed.tabInactive,
-    textAlign: 'center',
-  },
-  tabLabelActive: {
-    color: colors.onVideo.primary,
-    fontWeight: '800',
-  },
-  tabUnderline: {
-    marginTop: 6,
-    height: 3,
-    width: 28,
-    borderRadius: 2,
-    backgroundColor: colors.primary.teal,
-  },
-  tabUnderlineSpacer: {
-    marginTop: 6,
-    height: 3,
-    width: 28,
-  },
-  searchBtn: {
-    width: 44,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

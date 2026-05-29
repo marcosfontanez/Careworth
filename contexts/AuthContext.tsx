@@ -9,7 +9,7 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { useProfileCustomization } from '@/store/useProfileCustomization';
 import { useAppStore } from '@/store/useAppStore';
-import { PROFILE_SELECT_WITH_AVATAR_FRAME } from '@/services/supabase/profiles';
+import { PROFILE_SELECT_WITH_AVATAR_FRAME, profilesService } from '@/services/supabase/profiles';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
 import { validateServerAuthSession } from '@/lib/authSessionGuard';
 import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
@@ -65,9 +65,12 @@ async function fetchProfileWithTimeout(
   fetchProfile: (userId: string) => Promise<UserProfile | null>,
   userId: string,
 ): Promise<UserProfile | null> {
+  const inFlight = fetchProfile(userId);
+  /** If the timeout wins the race, the fetch keeps running — swallow late rejections (RN "Network request failed"). */
+  void inFlight.catch(() => {});
   try {
     return await Promise.race([
-      fetchProfile(userId),
+      inFlight,
       new Promise<UserProfile | null>((resolve) => {
         setTimeout(() => {
           if (__DEV__) {
@@ -83,6 +86,34 @@ async function fetchProfileWithTimeout(
     console.error('[auth] fetchProfileWithTimeout', e);
     return null;
   }
+}
+
+/**
+ * Full hydrate with a lightweight self-healing fallback.
+ *
+ * If the bounded full hydrate (profile row + follows/saved/community satellite
+ * reads) times out and returns null, fetch ONLY the `profiles` row via
+ * {@link profilesService.getById}. That single read almost always succeeds even
+ * when the satellite bundle is slow, so the app lands on a usable profile (with
+ * empty side lists until the next refresh) instead of a stuck loading gate or
+ * the manual "Try again" card. Used by every hydrate entry point.
+ */
+async function hydrateProfileWithFallback(
+  fetchProfile: (userId: string) => Promise<UserProfile | null>,
+  userId: string,
+): Promise<UserProfile | null> {
+  const full = await fetchProfileWithTimeout(fetchProfile, userId);
+  if (full) return full;
+  try {
+    const lite = await profilesService.getById(userId);
+    if (lite) {
+      if (__DEV__) console.warn('[auth] hydrate used lite profiles-only fallback');
+      return lite;
+    }
+  } catch {
+    /* non-fatal — caller keeps any cached profile */
+  }
+  return null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -299,6 +330,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hidePulseMusicPlayerOnMyPage: Boolean(
         (row as { hide_pulse_music_player_on_my_page?: boolean }).hide_pulse_music_player_on_my_page,
       ),
+      defaultAllowViewerClips:
+        (row as { default_allow_viewer_clips?: boolean }).default_allow_viewer_clips !== false,
+      defaultAllowRemix: (row as { default_allow_remix?: boolean }).default_allow_remix !== false,
+      defaultAllowClipDownloads:
+        (row as { default_allow_clip_downloads?: boolean }).default_allow_clip_downloads === true,
       pulseTier: typeof pr.pulse_tier === 'string' ? pr.pulse_tier : 'murmur',
       pulseScoreCurrent:
         typeof pr.pulse_score_current === 'number' ? pr.pulse_score_current : 0,
@@ -342,7 +378,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let profile: UserProfile | null = null;
       try {
-        profile = await fetchProfileWithTimeout(fetchProfile, userId);
+        profile = await hydrateProfileWithFallback(fetchProfile, userId);
       } catch (e) {
         console.error('[auth] hydrateAuthenticatedSession profile bundle', e);
       }
@@ -388,18 +424,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [fetchProfile],
   );
 
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
+
   const refreshProfile = useCallback(async () => {
     if (!state.user) return;
-    try {
-      const profile = await fetchProfileWithTimeout(fetchProfile, state.user.id);
-      setState((prev) => ({
-        ...prev,
-        /** Resume / flaky cell: don’t wipe the shell if PostgREST hiccups (My Pulse tab stuck on spinner). */
-        profile: profile ?? prev.profile,
-      }));
-    } catch (e) {
-      if (__DEV__) console.warn('[auth] refreshProfile failed', e);
+    if (refreshInFlightRef.current) {
+      await refreshInFlightRef.current;
+      return;
     }
+    const job = (async () => {
+      try {
+        const profile = await hydrateProfileWithFallback(fetchProfile, state.user!.id);
+        setState((prev) => ({
+          ...prev,
+          /** Resume / flaky cell: don’t wipe the shell if PostgREST hiccups (My Pulse tab stuck on spinner). */
+          profile: profile ?? prev.profile,
+        }));
+      } catch (e) {
+        if (__DEV__) console.warn('[auth] refreshProfile failed', e);
+      } finally {
+        refreshInFlightRef.current = null;
+      }
+    })();
+    refreshInFlightRef.current = job;
+    await job;
   }, [state.user, fetchProfile]);
 
   const applyProfilePatch = useCallback((patch: Partial<UserProfile>) => {
@@ -554,7 +602,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void (async () => {
           let profile: UserProfile | null = null;
           try {
-            profile = await fetchProfileWithTimeout(fetchProfile, user.id);
+            profile = await hydrateProfileWithFallback(fetchProfile, user.id);
           } catch (e) {
             console.error('[auth] fetchProfile (initial session)', e);
           }
@@ -665,7 +713,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let profile: UserProfile | null = null;
         try {
-          profile = await fetchProfileWithTimeout(fetchProfile, user.id);
+          profile = await hydrateProfileWithFallback(fetchProfile, user.id);
         } catch (e) {
           console.error('[auth] onAuthStateChange profile hydrate', e);
         } finally {
