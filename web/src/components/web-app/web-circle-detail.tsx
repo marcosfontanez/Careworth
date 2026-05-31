@@ -6,6 +6,7 @@ import type { WebCircle, WebCircleThread } from "@/lib/web-app/circles-data";
 import type { WebFeedPost } from "@/lib/web-app/feed-data";
 import { formatCount } from "@/lib/web-app/format";
 
+import { WebCircleJoinButton } from "./web-circle-join-button";
 import { WebCircleThreadRow } from "./web-circle-thread-row";
 import { WebCircleWallPost } from "./web-circle-wall-post";
 import { WebFeedCard } from "./web-feed-card";
@@ -21,6 +22,7 @@ export function WebCircleDetail({
   openAppHref,
   isExternalApp,
   currentUserId = null,
+  isMember = false,
 }: {
   circle: WebCircle;
   isConfession: boolean;
@@ -32,6 +34,7 @@ export function WebCircleDetail({
   openAppHref: string;
   isExternalApp: boolean;
   currentUserId?: string | null;
+  isMember?: boolean;
 }) {
   const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
 
@@ -69,14 +72,17 @@ export function WebCircleDetail({
               {formatCount(circle.postCount)} {copy.postsLabel}
             </p>
           </div>
-          <a
-            href={openAppHref}
-            {...externalProps}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
-          >
-            <ExternalLink className="size-4" aria-hidden />
-            {copy.postInApp}
-          </a>
+          <div className="flex shrink-0 flex-col items-stretch gap-2">
+            <WebCircleJoinButton slug={circle.slug} initialJoined={isMember} copy={copy} />
+            <a
+              href={openAppHref}
+              {...externalProps}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-foreground/90 transition hover:border-white/25"
+            >
+              <ExternalLink className="size-4" aria-hidden />
+              {copy.postInApp}
+            </a>
+          </div>
         </div>
 
         {circle.description?.trim() ? (

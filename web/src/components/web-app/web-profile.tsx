@@ -1,12 +1,8 @@
 import {
-  Award,
   BadgeCheck,
   ChevronRight,
   ExternalLink,
-  GraduationCap,
   Heart,
-  HeartPulse,
-  Hexagon,
   Lock,
   MessageCircle,
   Moon,
@@ -14,11 +10,9 @@ import {
   Pin,
   ShieldCheck,
   Sparkles,
-  Stethoscope,
   Trophy,
   UserRound,
   Users,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,18 +24,69 @@ import type {
   WebProfilePost,
   WebPulseUpdate,
 } from "@/lib/web-app/profile-data";
+import { cn } from "@/lib/utils";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 
 import { FollowButton } from "./follow-button";
 import { WebProfilePosts } from "./web-profile-posts";
 
+/* ── Shared glass shell (mirrors native MyPulseGlassPanel) ───────────── */
+function GlassPanel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-3xl border border-[rgba(148,163,184,0.22)] bg-[rgba(11,18,32,0.62)] shadow-[0_24px_70px_-44px_rgba(0,0,0,0.95)] backdrop-blur-md",
+        className,
+      )}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_-10%,rgba(20,184,166,0.08),transparent_60%)]"
+      />
+      {children}
+    </section>
+  );
+}
+
+/* ── Neon gradient identity pills (mirrors native ProfileNeonPills) ──── */
+const NEON_PRESETS: ReadonlyArray<readonly [string, string]> = [
+  ["#14B8A6", "#EC4899"],
+  ["#A855F7", "#14B8A6"],
+  ["#38BDF8", "#EC4899"],
+  ["#F472B6", "#22D3EE"],
+];
+
+function NeonPill({ label, index }: { label: string; index: number }) {
+  const [a, b] = NEON_PRESETS[index % NEON_PRESETS.length];
+  return (
+    <span
+      className="inline-flex shrink rounded-full p-[1.5px]"
+      style={{ backgroundImage: `linear-gradient(135deg, ${a}, ${b})` }}
+    >
+      <span className="truncate rounded-full bg-[rgba(6,14,26,0.92)] px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-white/95 [text-shadow:0_0_8px_rgba(20,184,166,0.35)]">
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/* ── Avatar with frame ring ──────────────────────────────────────────── */
 function ringStyle(frame: WebProfileFrame | null): React.CSSProperties {
-  if (!frame) return { borderColor: "rgba(250,204,21,0.55)", boxShadow: "0 0 26px -4px rgba(250,204,21,0.45)" };
-  const ring = frame.ringColor ?? "#FACC15";
-  const glow = frame.glowColor ?? ring;
+  const ring = frame?.ringColor ?? "#2DD4BF";
+  const glow = frame?.glowColor ?? ring;
   return {
     borderColor: ring,
-    boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 0 28px -2px ${glow}, inset 0 0 14px -4px ${glow}`,
+    boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 0 30px -4px ${glow}, inset 0 0 14px -5px ${glow}`,
   };
 }
 
@@ -49,7 +94,7 @@ function ProfileAvatar({ profile }: { profile: WebProfileHeader }) {
   return (
     <div className="relative shrink-0">
       <span
-        className="grid size-24 place-items-center overflow-hidden rounded-full border-[3px] bg-secondary/60 sm:size-28"
+        className="grid size-24 place-items-center overflow-hidden rounded-full border-[3px] bg-secondary/60 ring-4 ring-[#0b1220] sm:size-28"
         style={ringStyle(profile.frame)}
       >
         {profile.avatarUrl ? (
@@ -68,59 +113,57 @@ function ProfileAvatar({ profile }: { profile: WebProfileHeader }) {
   );
 }
 
-const TAG_ICONS: LucideIcon[] = [Stethoscope, HeartPulse, GraduationCap, ShieldCheck, Award];
-
-function IdentityChip({ tag, index }: { tag: string; index: number }) {
-  const Icon = TAG_ICONS[index % TAG_ICONS.length];
+/* ── Stat cards (mirrors native PulseStatsRow) ──────────────────────── */
+function StatCard({ icon: Icon, value, label }: { icon: LucideIcon; value: number; label: string }) {
   return (
-    <li className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary/95">
-      <Icon className="size-3" aria-hidden />
-      {tag}
-    </li>
-  );
-}
-
-function Stat({ icon: Icon, value, label }: { icon: LucideIcon; value: number; label: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground">
-        <Icon className="size-4" aria-hidden />
+    <div className="flex min-h-[112px] flex-1 flex-col items-center justify-center rounded-2xl border border-white/10 bg-[rgba(13,21,36,0.92)] px-3 py-4 shadow-[0_18px_50px_-40px_rgba(0,0,0,0.9)]">
+      <span className="mb-2 grid size-9 place-items-center rounded-full bg-teal-400/14 text-teal-300">
+        <Icon className="size-[18px]" aria-hidden />
       </span>
-      <div>
-        <p className="text-lg font-bold leading-none text-foreground">{formatCount(value)}</p>
-        <p className="mt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      </div>
+      <p className="text-lg font-extrabold tracking-tight text-foreground">{formatCount(value)}</p>
+      <p className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
     </div>
   );
 }
 
-function PulseScoreBlock({
-  score,
-  tier,
-  label,
-}: {
-  score: number;
-  tier: string | null;
-  label: string;
-}) {
+function tierAccent(tier: string | null): { accent: string; glow: string } {
+  const t = (tier ?? "").toLowerCase();
+  if (t.includes("diamond") || t.includes("platinum")) return { accent: "#22D3EE", glow: "rgba(34,211,238,0.42)" };
+  if (t.includes("gold")) return { accent: "#FACC15", glow: "rgba(250,204,21,0.42)" };
+  if (t.includes("silver")) return { accent: "#CBD5E1", glow: "rgba(203,213,225,0.38)" };
+  if (t.includes("bronze")) return { accent: "#FB923C", glow: "rgba(251,146,60,0.4)" };
+  return { accent: "#2DD4BF", glow: "rgba(45,212,191,0.4)" };
+}
+
+function PulseScoreCard({ score, tier, label }: { score: number; tier: string | null; label: string }) {
+  const { accent, glow } = tierAccent(tier);
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-amber-300/25 bg-[rgba(28,22,8,0.45)] px-4 py-2.5 shadow-[0_0_30px_-14px_rgba(251,191,36,0.7)]">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">{label}</p>
-        <p className="mt-0.5 flex items-center gap-1.5">
-          <span className="text-xl font-black leading-none text-foreground">{formatCount(score)}</span>
-          <Zap className="size-4 fill-amber-300 text-amber-300" aria-hidden />
-          {tier ? <span className="text-sm font-bold text-amber-200">{tier}</span> : null}
-        </p>
+    <div
+      className="relative flex min-h-[112px] flex-1 flex-col items-center justify-center overflow-hidden rounded-2xl border-[1.5px] px-3 py-4"
+      style={{ borderColor: `${accent}88`, backgroundColor: "rgba(10,16,28,0.97)" }}
+    >
+      <span aria-hidden className="absolute inset-0" style={{ backgroundColor: glow, opacity: 0.16 }} />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -top-8 left-1/2 size-24 -translate-x-1/2 rounded-full blur-2xl"
+        style={{ backgroundColor: glow }}
+      />
+      <div className="relative flex items-end gap-0.5">
+        <span className="text-2xl [filter:drop-shadow(0_0_8px_rgba(20,184,166,0.6))]" aria-hidden>
+          👑
+        </span>
       </div>
-      <span className="relative grid size-9 shrink-0 place-items-center">
-        <Hexagon className="size-9 fill-amber-400/20 text-amber-300/70" aria-hidden />
-        <Award className="absolute size-4 text-amber-200" aria-hidden />
-      </span>
+      <p className="relative mt-0.5 text-2xl font-extrabold tabular-nums tracking-tight text-foreground">
+        {formatCount(score)}
+      </p>
+      <p className="relative mt-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em]" style={{ color: accent }}>
+        {tier ? `${tier} · ${label}` : label}
+      </p>
     </div>
   );
 }
 
+/* ── Pulse updates ──────────────────────────────────────────────────── */
 function updateVisual(type: string): { Icon: LucideIcon; tile: string } {
   const t = type.toLowerCase();
   if (/(milestone|achiev|badge|reward|level)/.test(t))
@@ -140,7 +183,7 @@ function PulseUpdateRow({ update }: { update: WebPulseUpdate }) {
   const body = update.content?.trim() || update.previewText?.trim() || "";
   const time = relativeTime(update.createdAt);
   return (
-    <li className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3.5 transition hover:border-white/15">
+    <li className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3.5 transition hover:border-white/15 hover:bg-white/[0.05]">
       <span className={`grid size-10 shrink-0 place-items-center rounded-xl border ${tile}`}>
         {update.isPinned ? <Pin className="size-4" aria-hidden /> : <Icon className="size-4" aria-hidden />}
       </span>
@@ -172,13 +215,13 @@ function PulseUpdateRow({ update }: { update: WebPulseUpdate }) {
 
 function LockedCard({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-8 text-center backdrop-blur-sm">
-      <span className="mx-auto grid size-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-muted-foreground">
+    <GlassPanel className="p-8 text-center">
+      <span className="mx-auto grid size-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-teal-300">
         <Lock className="size-5" aria-hidden />
       </span>
       <p className="mt-3 text-base font-semibold text-foreground">{title}</p>
       <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">{body}</p>
-    </div>
+    </GlassPanel>
   );
 }
 
@@ -214,62 +257,30 @@ export function WebProfile({
   const lockBody = lockReason === "blocked" ? copy.blockedBody : copy.privateBody;
 
   return (
-    <div className="mx-auto w-full max-w-[960px] px-4 py-6 sm:px-6 sm:py-8">
-      {/* ── Premium header card ─────────────────────────────────── */}
-      <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,16,30,0.9)] p-5 shadow-[0_30px_90px_-50px_rgba(0,0,0,0.95),0_0_0_1px_rgba(20,184,166,0.05)] backdrop-blur-sm sm:p-6">
-        {/* Banner / cinematic glow */}
-        {profile.bannerUrl ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={profile.bannerUrl} alt="" className="absolute inset-0 size-full object-cover opacity-30" />
-            <span aria-hidden className="absolute inset-0 bg-[rgba(8,13,26,0.7)]" />
-          </>
-        ) : null}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_55%_120%_at_18%_0%,rgba(20,184,166,0.22),transparent_60%),radial-gradient(ellipse_60%_120%_at_85%_30%,rgba(45,127,249,0.16),transparent_55%)]"
-        />
-
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start">
-          <div className="pt-1">
-            <ProfileAvatar profile={profile} />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate font-heading text-2xl font-black tracking-tight text-foreground sm:text-3xl">
-                {profile.displayName}
-              </h1>
-              {profile.isVerified ? (
-                <BadgeCheck className="size-6 shrink-0 text-sky-400" aria-label={copy.verifiedLabel} />
-              ) : null}
-            </div>
-            {profile.username ? (
-              <p className="truncate text-sm text-muted-foreground">@{profile.username}</p>
-            ) : null}
-
-            {profile.identityTags.length > 0 ? (
-              <ul className="mt-2.5 flex flex-wrap gap-1.5">
-                {profile.identityTags.map((tag, i) => (
-                  <IdentityChip key={tag} tag={tag} index={i} />
-                ))}
-              </ul>
-            ) : null}
-
-            {profile.bio?.trim() ? (
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/85 wrap-anywhere">{profile.bio}</p>
-            ) : null}
-          </div>
-
-          {/* Edit / follow */}
-          <div className="flex shrink-0 items-center gap-2 sm:ml-2">
+    <div className="mx-auto flex w-full max-w-[860px] flex-col gap-4 px-3 py-5 sm:gap-5 sm:px-6 sm:py-7">
+      {/* ── Profile header: banner + overlapping avatar ───────────── */}
+      <GlassPanel className="p-0">
+        {/* Banner */}
+        <div className="relative h-32 w-full overflow-hidden sm:h-40">
+          {profile.bannerUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile.bannerUrl} alt="" className="size-full object-cover" />
+          ) : (
+            <div className="size-full bg-[linear-gradient(120deg,#0a1a33_0%,#0a2e36_45%,#13294d_100%)]" />
+          )}
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-[radial-gradient(ellipse_60%_120%_at_20%_0%,rgba(20,184,166,0.28),transparent_60%),linear-gradient(to_top,rgba(6,12,24,0.92),transparent_70%)]"
+          />
+          {/* Action button floats top-right on the banner */}
+          <div className="absolute right-3 top-3 flex items-center gap-2">
             {isOwner ? (
               <a
                 href={openAppHref}
                 {...externalProps}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-semibold text-foreground/90 transition hover:border-white/30 hover:text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/35 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition hover:border-white/35"
               >
-                <Pencil className="size-4" aria-hidden />
+                <Pencil className="size-3.5" aria-hidden />
                 {copy.editProfile}
               </a>
             ) : (
@@ -283,60 +294,88 @@ export function WebProfile({
                       following: engagement.following,
                       error: engagement.followError,
                     }}
+                    size="sm"
                   />
                 ) : null}
                 <a
                   href={openAppHref}
                   {...externalProps}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-foreground/90 transition hover:border-white/25"
+                  aria-label={copy.openInApp}
+                  className="grid size-8 place-items-center rounded-full border border-white/15 bg-black/35 text-white backdrop-blur-md transition hover:border-white/35"
                 >
                   <ExternalLink className="size-4" aria-hidden />
-                  {copy.openInApp}
                 </a>
               </>
             )}
           </div>
         </div>
 
-        {/* Stats strip */}
-        <div className="relative mt-5 flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-white/8 pt-4">
-          <Stat icon={Users} value={profile.stats.followers} label={copy.statFollowers} />
-          <Stat icon={UserRound} value={profile.stats.following} label={copy.statFollowing} />
-          <div className="sm:ml-auto">
-            <PulseScoreBlock
-              score={profile.stats.pulseScore}
-              tier={profile.stats.pulseTier}
-              label={copy.pulseScoreLabel}
-            />
-          </div>
-        </div>
-      </header>
-
-      {/* ── Body ────────────────────────────────────────────────── */}
-      {!contentVisible ? (
-        <div className="mt-6">
-          <LockedCard title={lockTitle} body={lockBody} />
-        </div>
-      ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_330px]">
-          {/* Posts (client: grid/list toggle) */}
-          <div className="order-2 lg:order-1">
-            <WebProfilePosts posts={posts} copy={copy} engagement={engagement} isOwner={isOwner} />
-          </div>
-
-          {/* Pulse updates */}
-          <section className="order-1 lg:order-2">
-            <h2 className="mb-3 flex items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground">
-              <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
-              {copy.pulseUpdatesTitle}
-            </h2>
-            {pulseUpdates.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-5 text-center text-sm text-muted-foreground backdrop-blur-sm">
-                {copy.pulseUpdatesEmpty}
+        {/* Avatar (overlapping) + identity */}
+        <div className="relative px-4 pb-5 sm:px-6">
+          <div className="flex items-end gap-4 sm:gap-5">
+            <div className="-mt-12 sm:-mt-14">
+              <ProfileAvatar profile={profile} />
+            </div>
+            <div className="min-w-0 flex-1 pb-1">
+              <div className="flex items-center gap-1.5">
+                <h1 className="truncate font-heading text-xl font-black tracking-tight text-foreground sm:text-2xl">
+                  {profile.displayName}
+                </h1>
+                {profile.isVerified ? (
+                  <BadgeCheck className="size-5 shrink-0 text-sky-400" aria-label={copy.verifiedLabel} />
+                ) : null}
               </div>
+              {profile.username ? (
+                <p className="truncate text-[13px] font-bold tracking-wide text-teal-300">@{profile.username}</p>
+              ) : null}
+            </div>
+          </div>
+
+          {profile.identityTags.length > 0 ? (
+            <ul className="mt-3 flex flex-wrap items-center gap-1.5">
+              {profile.identityTags.map((tag, i) => (
+                <NeonPill key={tag} label={tag} index={i} />
+              ))}
+            </ul>
+          ) : null}
+
+          {profile.bio?.trim() ? (
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/85 wrap-anywhere">{profile.bio}</p>
+          ) : null}
+        </div>
+      </GlassPanel>
+
+      {/* ── Stat cards ────────────────────────────────────────────── */}
+      <div className="flex items-stretch gap-3">
+        <StatCard icon={Users} value={profile.stats.followers} label={copy.statFollowers} />
+        <StatCard icon={UserRound} value={profile.stats.following} label={copy.statFollowing} />
+        <PulseScoreCard
+          score={profile.stats.pulseScore}
+          tier={profile.stats.pulseTier}
+          label={copy.pulseScoreLabel}
+        />
+      </div>
+
+      {/* ── Body (single vertical flow, mirrors phone) ────────────── */}
+      {!contentVisible ? (
+        <LockedCard title={lockTitle} body={lockBody} />
+      ) : (
+        <>
+          {/* Pulse Updates */}
+          <GlassPanel className="p-4 sm:p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
+              <h2 className="font-heading text-base font-bold tracking-tight text-foreground">
+                {copy.pulseUpdatesTitle}
+              </h2>
+            </div>
+            {pulseUpdates.length === 0 ? (
+              <p className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 text-center text-sm text-muted-foreground">
+                {copy.pulseUpdatesEmpty}
+              </p>
             ) : (
               <>
-                <ul className="flex flex-col gap-2.5">
+                <ul className="grid gap-2.5 sm:grid-cols-2">
                   {pulseUpdates.map((update) => (
                     <PulseUpdateRow key={update.id} update={update} />
                   ))}
@@ -351,8 +390,13 @@ export function WebProfile({
                 </a>
               </>
             )}
-          </section>
-        </div>
+          </GlassPanel>
+
+          {/* Posts / Media */}
+          <GlassPanel className="p-4 sm:p-5">
+            <WebProfilePosts posts={posts} copy={copy} engagement={engagement} isOwner={isOwner} />
+          </GlassPanel>
+        </>
       )}
     </div>
   );

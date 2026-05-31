@@ -206,6 +206,14 @@ export type WebAppCirclesCopy = {
   replyComposerLoginCta: string;
   /** Membership-gated reply (web has no join flow yet). */
   replyMembersOnly: string;
+  /** Native web join / leave (unlocks replying). */
+  joinToReplyTitle: string;
+  joinToReplyBody: string;
+  joinCta: string;
+  joinPending: string;
+  joinError: string;
+  joinedCta: string;
+  leaveCta: string;
   /** My Circles section. */
   myCirclesTitle: string;
   myCirclesEmptyTitle: string;
@@ -587,7 +595,14 @@ const copy: Record<Locale, WebAppPageCopy> = {
       replyComposerPosting: "Posting…",
       replyComposerError: "Couldn’t post your reply. Try again.",
       replyComposerLoginCta: "Log in to reply",
-      replyMembersOnly: "Join this Circle in the app to reply.",
+      replyMembersOnly: "Join this Circle to reply.",
+      joinToReplyTitle: "Join to reply",
+      joinToReplyBody: "Join this Circle to post your reply. You can leave anytime.",
+      joinCta: "Join Circle",
+      joinPending: "Joining…",
+      joinError: "Couldn’t join. Try again.",
+      joinedCta: "Joined",
+      leaveCta: "Leave",
       myCirclesTitle: "My Circles",
       myCirclesEmptyTitle: "You haven’t joined any Circles yet.",
       myCirclesEmptyBody: "Join Circles in the app to see them here and jump back in fast.",
@@ -955,7 +970,14 @@ const copy: Record<Locale, WebAppPageCopy> = {
       replyComposerPosting: "Publicando…",
       replyComposerError: "No se pudo publicar tu respuesta. Inténtalo de nuevo.",
       replyComposerLoginCta: "Inicia sesión para responder",
-      replyMembersOnly: "Únete a este Círculo en la app para responder.",
+      replyMembersOnly: "Únete a este Círculo para responder.",
+      joinToReplyTitle: "Únete para responder",
+      joinToReplyBody: "Únete a este Círculo para publicar tu respuesta. Puedes salir cuando quieras.",
+      joinCta: "Unirme al Círculo",
+      joinPending: "Uniéndote…",
+      joinError: "No se pudo unir. Inténtalo de nuevo.",
+      joinedCta: "Unido",
+      leaveCta: "Salir",
       myCirclesTitle: "Mis Círculos",
       myCirclesEmptyTitle: "Aún no te has unido a ningún Círculo.",
       myCirclesEmptyBody: "Únete a Círculos en la app para verlos aquí y volver rápido.",

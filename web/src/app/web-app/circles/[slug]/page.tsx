@@ -68,6 +68,7 @@ export default async function WebAppCircleDetailPage({
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}
       currentUserId={account.id}
+      isMember={result.isMember}
     />
   );
 }

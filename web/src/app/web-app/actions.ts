@@ -365,6 +365,66 @@ export async function createPostCommentAction(
   }
 }
 
+/** Outcome of a Circle join / leave toggle. */
+export type CircleMembershipResult =
+  | { ok: true; joined: boolean }
+  | { ok: false; reason: "auth" | "unavailable" | "error" };
+
+/**
+ * Join or leave a Circle as the signed-in user. Mirrors the React Native
+ * `communitiesService.toggleJoin`: a plain insert/delete on `community_members`
+ * (RLS policy "Users can manage own memberships" enforces `user_id = auth.uid()`,
+ * so a user can only ever toggle their own membership). Joining sets
+ * `notify_new_posts = true` to match the app default. Membership is what the
+ * Circles posting RLS (`is_member_of_community`) checks, so a successful join
+ * immediately unlocks thread replies on the next server render.
+ */
+export async function toggleCircleMembershipAction(slug: string): Promise<CircleMembershipResult> {
+  if (!isSupabaseConfigured() || typeof slug !== "string" || !slug) {
+    return { ok: false, reason: "error" };
+  }
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    // The Circle must exist and be readable to this viewer (RLS on communities).
+    const { data: community } = await supabase
+      .from("communities")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!community) return { ok: false, reason: "unavailable" };
+    const communityId = String((community as { id: string }).id);
+
+    const { data: existing } = await supabase
+      .from("community_members")
+      .select("id")
+      .eq("community_id", communityId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from("community_members")
+        .delete()
+        .eq("id", (existing as { id: string }).id);
+      if (error) return { ok: false, reason: "error" };
+      return { ok: true, joined: false };
+    }
+
+    const { error } = await supabase
+      .from("community_members")
+      .insert({ community_id: communityId, user_id: user.id, notify_new_posts: true } as never);
+    if (error) return { ok: false, reason: "error" };
+    return { ok: true, joined: true };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
 /**
  * Create a text-only reply on a Circle thread as the signed-in user. Mirrors the
  * React Native `circleThreadsDb.addReply` insert (`circle_replies`:

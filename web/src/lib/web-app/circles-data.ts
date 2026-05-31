@@ -111,6 +111,8 @@ export type WebCircleDetailResult =
       isConfession: boolean;
       threads: WebCircleThread[];
       wallPosts: WebFeedPost[];
+      /** Whether the signed-in viewer has joined this Circle. */
+      isMember: boolean;
     };
 
 export type WebCircleThreadResult =
@@ -358,7 +360,7 @@ export async function loadCircleDetail(slug: string, viewerId: string): Promise<
     // One exclusions lookup shared across threads + wall posts.
     const hidden = await loadHiddenCreators(supabase, viewerId);
 
-    const [{ data: threadRows, error: threadsErr }, wallPosts] = await Promise.all([
+    const [{ data: threadRows, error: threadsErr }, wallPosts, isMember] = await Promise.all([
       supabase
         .from("circle_threads_viewer_safe")
         .select("*")
@@ -368,6 +370,7 @@ export async function loadCircleDetail(slug: string, viewerId: string): Promise<
         .order("created_at", { ascending: false })
         .limit(48),
       loadCircleWallPosts(supabase, circle.id, isConf, hidden, viewerId),
+      isCircleMember(supabase, circle.id, viewerId),
     ]);
     if (threadsErr) return { state: "error" };
 
@@ -402,7 +405,7 @@ export async function loadCircleDetail(slug: string, viewerId: string): Promise<
       };
     });
 
-    return { state: "ok", circle, isConfession: isConf, threads, wallPosts };
+    return { state: "ok", circle, isConfession: isConf, threads, wallPosts, isMember };
   } catch {
     return { state: "error" };
   }
