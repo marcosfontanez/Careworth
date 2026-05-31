@@ -8,6 +8,7 @@ import {
   platformPrefix,
   purchaseSku,
   restorePurchasesFromStore,
+  reconcilePendingPurchases,
   getIosReceiptBase64,
   type IapPurchaseStage,
 } from '@/lib/shop/iap';
@@ -77,6 +78,12 @@ export const purchaseService = {
 
     const res = await invokePulseShopFulfillment(body);
     if (!res.ok) {
+      /**
+       * Grant failed — do NOT finalize the store transaction. Leaving it
+       * un-acknowledged means Apple re-delivers it and Google auto-refunds it,
+       * so the user is never charged without receiving Sparks/borders. The next
+       * time the Shop opens, `reconcilePendingStorePurchases` retries the grant.
+       */
       emit('failed');
       return {
         ok: false,
@@ -85,6 +92,8 @@ export const purchaseService = {
         details: res.error.details,
       };
     }
+    /** Server granted (or it was already fulfilled) — safe to consume/ack now. */
+    await native.finalize();
     emit('fulfilled');
     return { ok: true, data: res.data as Record<string, unknown> };
   },
@@ -141,6 +150,12 @@ export const purchaseService = {
 
     const res = await invokePulseShopFulfillment(body);
     if (!res.ok) {
+      /**
+       * Grant failed — do NOT finalize the store transaction. Leaving it
+       * un-acknowledged means Apple re-delivers it and Google auto-refunds it,
+       * so the user is never charged without receiving Sparks/borders. The next
+       * time the Shop opens, `reconcilePendingStorePurchases` retries the grant.
+       */
       emit('failed');
       return {
         ok: false,
@@ -149,6 +164,8 @@ export const purchaseService = {
         details: res.error.details,
       };
     }
+    /** Server granted (or it was already fulfilled) — safe to consume/ack now. */
+    await native.finalize();
     emit('fulfilled');
     return { ok: true, data: res.data as Record<string, unknown> };
   },
@@ -196,6 +213,12 @@ export const purchaseService = {
 
     const res = await invokePulseShopFulfillment(body);
     if (!res.ok) {
+      /**
+       * Grant failed — do NOT finalize the store transaction. Leaving it
+       * un-acknowledged means Apple re-delivers it and Google auto-refunds it,
+       * so the user is never charged without receiving Sparks/borders. The next
+       * time the Shop opens, `reconcilePendingStorePurchases` retries the grant.
+       */
       emit('failed');
       return {
         ok: false,
@@ -204,6 +227,8 @@ export const purchaseService = {
         details: res.error.details,
       };
     }
+    /** Server granted (or it was already fulfilled) — safe to consume/ack now. */
+    await native.finalize();
     emit('fulfilled');
     return { ok: true, data: res.data as Record<string, unknown> };
   },
@@ -282,6 +307,82 @@ export const purchaseService = {
       return mapEdgeError(error.code ?? 'RPC_ERROR', error.message);
     }
     return { ok: true, data: (data ?? {}) as Record<string, unknown> };
+  },
+
+  /**
+   * Recover purchases the store charged for but the server never granted — e.g.
+   * a transient fulfillment failure or a config gap (missing store secrets). Safe
+   * to call whenever the Shop opens: it no-ops on web and when nothing is pending,
+   * re-validates each un-finalized purchase server-side, and only finishes the
+   * transaction when the grant succeeds. This is the safety net behind the
+   * "consume only after grant" rule in the purchase flows above.
+   */
+  async reconcilePendingStorePurchases(
+    catalogInput?: ShopItemRow[],
+  ): Promise<{ finished: number; left: number }> {
+    if (Platform.OS === 'web') return { finished: 0, left: 0 };
+
+    const platform = platformPrefix();
+    let mapPromise: Promise<Map<string, ShopItemRow>> | null = null;
+    const getStoreIdMap = (): Promise<Map<string, ShopItemRow>> => {
+      if (!mapPromise) {
+        mapPromise = (async () => {
+          const catalog =
+            catalogInput ?? (await shopQueriesService.getActiveCatalog().catch(() => [] as ShopItemRow[]));
+          const map = new Map<string, ShopItemRow>();
+          for (const row of catalog) {
+            const ios = row.store_product_id_ios?.trim();
+            const android = row.store_product_id_android?.trim();
+            if (ios) map.set(ios, row);
+            if (android) map.set(android, row);
+          }
+          return map;
+        })();
+      }
+      return mapPromise;
+    };
+
+    return reconcilePendingPurchases(async (p) => {
+      const map = await getStoreIdMap();
+      const item = map.get(p.productId);
+      if (!item || (item.type !== 'spark_pack' && item.type !== 'border')) {
+        return { outcome: 'leave', isConsumable: false };
+      }
+      const isConsumable = item.type === 'spark_pack';
+      // Free borders never came from the store; nothing to validate.
+      if (isFreeShopBorder(item)) return { outcome: 'leave', isConsumable };
+
+      const receipt =
+        platform === 'ios'
+          ? p.receiptIosBase64
+            ? { ios: { receipt_data_base64: p.receiptIosBase64 } }
+            : null
+          : p.purchaseToken
+            ? {
+                android: {
+                  purchase_token: p.purchaseToken,
+                  product_id: item.store_product_id_android ?? undefined,
+                },
+              }
+            : null;
+      if (!receipt) return { outcome: 'leave', isConsumable };
+
+      const res = await invokePulseShopFulfillment({
+        action: isConsumable ? 'fulfill_spark_pack' : 'fulfill_border_self',
+        shop_item_id: item.id,
+        platform,
+        receipt,
+      });
+      if (res.ok) return { outcome: 'granted', isConsumable };
+      // Already fulfilled on the server → safe to finish and clear the queue.
+      if (
+        res.error.code === 'DUPLICATE_PURCHASE' ||
+        /already|duplicate|fulfilled/i.test(res.error.message)
+      ) {
+        return { outcome: 'granted', isConsumable };
+      }
+      return { outcome: 'leave', isConsumable };
+    });
   },
 
   /**

@@ -82,15 +82,43 @@ export async function invokePulseShopFulfillment<T extends Record<string, unknow
   }
 
   const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-  const res = await fetch(`${base}/${PROJECT_FUNCTIONS}/pulse-shop-fulfillment`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: anon,
-    },
-    body: JSON.stringify(body),
-  });
+
+  /**
+   * Bound the request so the Shop "Crediting Sparks…" spinner can never hang
+   * forever. Apple's `verifyReceipt` endpoint (especially sandbox) occasionally
+   * stalls; without a timeout the Edge Function holds the connection open and
+   * this fetch never settles, freezing the purchase modal. 45s is generous for
+   * store validation + economy RPC but still bounded.
+   */
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  let res: Response;
+  try {
+    res = await fetch(`${base}/${PROJECT_FUNCTIONS}/pulse-shop-fulfillment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: anon,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    const aborted = controller.signal.aborted || (e as { name?: string })?.name === 'AbortError';
+    return {
+      ok: false,
+      error: {
+        code: 'FULFILLMENT_FAILED',
+        message: aborted
+          ? 'Store validation took too long. If your purchase went through, your Sparks will appear shortly — pull to refresh, or reopen the Shop. You were not charged twice.'
+          : `Could not reach Pulse Shop fulfillment (${e instanceof Error ? e.message : String(e)}). Check your connection and try again.`,
+        details: null,
+      },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const json = (await res.json().catch(() => null)) as unknown;
   const parsed = parsePulseShopFulfillmentJson(json);

@@ -27,8 +27,28 @@ export type IapPurchaseResult =
       receiptPayload: string;
       productId: string;
       transactionId?: string;
+      /**
+       * Acknowledge (iOS) / consume (Android consumables) the store transaction.
+       * Call this ONLY after the server grant has succeeded. Leaving a purchase
+       * un-finalized when the grant fails is intentional: Apple re-delivers the
+       * transaction on next launch and Google auto-refunds an unacknowledged
+       * purchase (~3 days), so the user is never charged without receiving value.
+       */
+      finalize: () => Promise<void>;
     }
   | { ok: false; code: string; message: string };
+
+/** A store purchase that has not yet been acknowledged/consumed. */
+export type PendingStorePurchase = {
+  productId: string;
+  purchaseToken?: string | null;
+  transactionId?: string | null;
+  /** Full iOS app receipt (base64) — same receipt validates any iOS product. */
+  receiptIosBase64?: string | null;
+};
+
+/** What the caller's re-fulfillment decided for a pending purchase. */
+export type ReconcileDecision = { outcome: 'granted' | 'leave'; isConsumable: boolean };
 
 type RNIap = typeof import('react-native-iap');
 
@@ -45,43 +65,6 @@ function loadModule(): RNIap | null {
 
 let connectionReady = false;
 
-/**
- * Finish (acknowledge) any transactions that were left pending from a previous
- * app session. Apple's StoreKit and Google's Play Billing both require us to
- * `finishTransaction` on every successful purchase — if the app crashes or
- * Expo reloads between Apple payment auth and our acknowledgement, the old
- * transaction stays in the queue. On the **next** `requestPurchase` call, the
- * native side re-emits the old transaction, our `purchaseUpdatedListener`
- * filters it out (wrong SKU), and the new purchase appears to hang.
- *
- * This drains them defensively at init. Best-effort: any individual error is
- * swallowed (the user can still complete a new purchase even if drain fails).
- */
-async function drainPendingTransactions(mod: RNIap): Promise<void> {
-  try {
-    const fn = mod.getAvailablePurchases as
-      | ((opts?: { alsoPublishToEventListenerIOS?: boolean; onlyIncludeActiveItemsIOS?: boolean }) => Promise<
-          Array<{ productId: string; purchaseToken?: string | null }>
-        >)
-      | undefined;
-    if (typeof fn !== 'function') return;
-    const stale = await fn({
-      alsoPublishToEventListenerIOS: false,
-      onlyIncludeActiveItemsIOS: false,
-    }).catch(() => [] as Array<{ productId: string; purchaseToken?: string | null }>);
-    if (!Array.isArray(stale) || stale.length === 0) return;
-    for (const purchase of stale) {
-      try {
-        await mod.finishTransaction({ purchase: purchase as unknown as Parameters<RNIap['finishTransaction']>[0]['purchase'], isConsumable: false });
-      } catch {
-        /* best effort */
-      }
-    }
-  } catch {
-    /* best effort */
-  }
-}
-
 export async function initIapConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
   const mod = loadModule();
   if (!mod) {
@@ -96,13 +79,88 @@ export async function initIapConnection(): Promise<{ ok: true } | { ok: false; m
   try {
     await mod.initConnection();
     connectionReady = true;
-    /** Drain BEFORE returning so the next requestPurchase isn't blocked by ghost transactions. */
-    await drainPendingTransactions(mod);
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, message: msg };
   }
+}
+
+/**
+ * Re-validate purchases that are still sitting un-finalized in the store queue
+ * (left over from a crash, an app reload, or — critically — a server grant that
+ * failed earlier, e.g. when fulfillment secrets were missing). For each one the
+ * caller maps the productId to a catalog item, re-runs server fulfillment, and
+ * tells us whether the grant succeeded.
+ *
+ * We `finishTransaction` ONLY when the grant succeeded (or was already
+ * fulfilled). A pending purchase we cannot grant is left untouched so the store
+ * can refund it or we can retry later — it is never silently consumed. This
+ * replaces the old blind "drain" that finished transactions without granting
+ * (which is exactly how a charge could happen with nothing delivered).
+ *
+ * Best-effort: any individual error leaves that purchase pending. Returns counts
+ * for diagnostics.
+ */
+export async function reconcilePendingPurchases(
+  reFulfill: (p: PendingStorePurchase) => Promise<ReconcileDecision>,
+): Promise<{ finished: number; left: number }> {
+  const mod = loadModule();
+  if (!mod) return { finished: 0, left: 0 };
+  const init = await initIapConnection();
+  if (!init.ok) return { finished: 0, left: 0 };
+
+  let finished = 0;
+  let left = 0;
+  try {
+    const fn = mod.getAvailablePurchases as
+      | ((opts?: { alsoPublishToEventListenerIOS?: boolean; onlyIncludeActiveItemsIOS?: boolean }) => Promise<
+          Array<{ productId?: string; purchaseToken?: string | null; transactionId?: string | null }>
+        >)
+      | undefined;
+    if (typeof fn !== 'function') return { finished: 0, left: 0 };
+    const list = await fn({
+      alsoPublishToEventListenerIOS: false,
+      onlyIncludeActiveItemsIOS: false,
+    }).catch(() => [] as Array<{ productId?: string; purchaseToken?: string | null; transactionId?: string | null }>);
+    if (!Array.isArray(list) || list.length === 0) return { finished: 0, left: 0 };
+
+    const iosReceipt = Platform.OS === 'ios' ? await getIosReceiptBase64() : null;
+
+    for (const purchase of list) {
+      const productId = typeof purchase.productId === 'string' ? purchase.productId : '';
+      if (!productId) {
+        left += 1;
+        continue;
+      }
+      try {
+        const decision = await reFulfill({
+          productId,
+          purchaseToken: purchase.purchaseToken ?? null,
+          transactionId: purchase.transactionId ?? null,
+          receiptIosBase64: iosReceipt,
+        });
+        if (decision.outcome === 'granted') {
+          try {
+            await mod.finishTransaction({
+              purchase: purchase as unknown as Parameters<RNIap['finishTransaction']>[0]['purchase'],
+              isConsumable: decision.isConsumable,
+            });
+          } catch {
+            /* best effort — grant already recorded; queue clears on next pass */
+          }
+          finished += 1;
+        } else {
+          left += 1;
+        }
+      } catch {
+        left += 1;
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+  return { finished, left };
 }
 
 export async function endIapConnection(): Promise<void> {
@@ -288,6 +346,19 @@ export async function purchaseSku(params: {
         cleanup();
         emit('validating');
 
+        /**
+         * Acknowledge/consume the transaction. We deliberately do NOT call this
+         * here — the caller invokes it only after the server grant succeeds, so
+         * a failed grant leaves the purchase recoverable instead of consumed.
+         */
+        const finalize = async () => {
+          try {
+            await mod.finishTransaction({ purchase, isConsumable });
+          } catch {
+            /* best effort — reconcile on next Shop open will retry the ack */
+          }
+        };
+
         if (Platform.OS === 'ios') {
           const p = purchase as {
             transactionReceipt?: string;
@@ -304,16 +375,8 @@ export async function purchaseSku(params: {
             receiptPayload: receipt,
             productId: pid,
             transactionId: p.transactionId ?? undefined,
+            finalize,
           });
-          /** finishTransaction MUST succeed to free the StoreKit queue for the
-           * next purchase. We still resolve first so the server fulfillment
-           * call isn't blocked, but we await the ack to free the queue. */
-          try {
-            await mod.finishTransaction({ purchase, isConsumable });
-          } catch {
-            /* best effort */
-          }
-          emit('fulfilled');
           return;
         }
 
@@ -328,13 +391,8 @@ export async function purchaseSku(params: {
           receiptPayload: token,
           productId: pid,
           transactionId: purchase.transactionId ?? undefined,
+          finalize,
         });
-        try {
-          await mod.finishTransaction({ purchase, isConsumable });
-        } catch {
-          /* best effort */
-        }
-        emit('fulfilled');
       } catch (e) {
         if (!settled) {
           settled = true;

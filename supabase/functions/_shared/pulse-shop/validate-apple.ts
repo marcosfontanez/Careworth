@@ -13,6 +13,32 @@ export type AppleValidatedPurchase = {
 const PROD = "https://buy.itunes.apple.com/verifyReceipt";
 const SANDBOX = "https://sandbox.itunes.apple.com/verifyReceipt";
 
+/**
+ * Apple's verifyReceipt endpoints (especially sandbox) occasionally stall. We
+ * bound each call so the Edge Function returns a clean error instead of holding
+ * the client's "Crediting Sparks…" spinner open until the platform kills it.
+ */
+const APPLE_FETCH_TIMEOUT_MS = 12_000;
+
+async function postVerifyReceipt(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), APPLE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    return (await res.json()) as Record<string, unknown>;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function verifyAppleReceipt(
   receiptBase64: string,
   sharedSecret: string,
@@ -24,24 +50,34 @@ export async function verifyAppleReceipt(
     "exclude-old-transactions": true,
   };
 
-  let url = PROD;
-  let res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  let json = (await res.json()) as Record<string, unknown>;
+  let json: Record<string, unknown>;
+  try {
+    json = await postVerifyReceipt(PROD, body);
+  } catch (e) {
+    const aborted = (e as { name?: string })?.name === "AbortError";
+    return {
+      ok: false,
+      status: 21005,
+      message: aborted
+        ? "App Store receipt server timed out (production)."
+        : `App Store receipt request failed: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
   let status = Number(json.status ?? -1);
 
   if (status === 21007) {
-    url = SANDBOX;
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    json = (await res.json()) as Record<string, unknown>;
+    try {
+      json = await postVerifyReceipt(SANDBOX, body);
+    } catch (e) {
+      const aborted = (e as { name?: string })?.name === "AbortError";
+      return {
+        ok: false,
+        status: 21005,
+        message: aborted
+          ? "App Store receipt server timed out (sandbox)."
+          : `App Store sandbox receipt request failed: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
     status = Number(json.status ?? -1);
   }
 

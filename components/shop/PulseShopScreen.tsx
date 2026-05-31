@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -135,6 +135,33 @@ export default function PulseShopScreen() {
   const { refreshAfterPurchase } = useShopRefetchers(userId);
   const receiptsQ = usePurchaseReceipts(userId);
   const shopReceipts: PurchaseReceiptRow[] = (receiptsQ.data ?? []) as PurchaseReceiptRow[];
+
+  /**
+   * Recovery pass (once per session): if a previous purchase was charged but
+   * never granted — e.g. a transient failure, or store secrets were missing —
+   * re-validate it server-side and credit it now. No-ops on web and when there
+   * is nothing pending.
+   */
+  const reconciledRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!shopScreenFocused || !userId || reconciledRef.current) return;
+    reconciledRef.current = true;
+    void (async () => {
+      try {
+        const r = await purchaseService.reconcilePendingStorePurchases(catalogQ.data);
+        if (r.finished > 0) {
+          await refreshAfterPurchase();
+          showToast(
+            `Recovered ${r.finished} pending purchase${r.finished === 1 ? '' : 's'} — your balance is updated.`,
+            'success',
+          );
+        }
+      } catch {
+        /* best effort — never blocks the Shop */
+      }
+    })();
+  }, [shopScreenFocused, userId, catalogQ.data, refreshAfterPurchase, showToast]);
 
   const { borders, packs, gifts, featured, browseBorders } = useShopDerived(catalogQ.data);
 

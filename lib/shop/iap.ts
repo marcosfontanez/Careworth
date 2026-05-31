@@ -8,6 +8,8 @@ export type {
   IapPurchaseStage,
   StoreProductPreview,
   PrefetchStoreProductsResult,
+  PendingStorePurchase,
+  ReconcileDecision,
 } from './iap.native';
 export {
   initIapConnection,
@@ -17,4 +19,5 @@ export {
   restorePurchasesFromStore,
   getIosReceiptBase64,
   prefetchStoreProducts,
+  reconcilePendingPurchases,
 } from './iap.native';

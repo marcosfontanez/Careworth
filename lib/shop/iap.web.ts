@@ -11,8 +11,18 @@ export type IapPurchaseResult =
       receiptPayload: string;
       productId: string;
       transactionId?: string;
+      finalize: () => Promise<void>;
     }
   | { ok: false; code: string; message: string };
+
+export type PendingStorePurchase = {
+  productId: string;
+  purchaseToken?: string | null;
+  transactionId?: string | null;
+  receiptIosBase64?: string | null;
+};
+
+export type ReconcileDecision = { outcome: 'granted' | 'leave'; isConsumable: boolean };
 
 export type StoreProductPreview = {
   productId: string;
@@ -70,4 +80,10 @@ export async function prefetchStoreProducts(
   _skus?: string[],
 ): Promise<PrefetchStoreProductsResult> {
   return { ok: false, message: 'Store product prefetch is only available in the iOS/Android app.' };
+}
+
+export async function reconcilePendingPurchases(
+  _reFulfill: (p: PendingStorePurchase) => Promise<ReconcileDecision>,
+): Promise<{ finished: number; left: number }> {
+  return { finished: 0, left: 0 };
 }
