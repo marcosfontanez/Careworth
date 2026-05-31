@@ -26,6 +26,18 @@ export function PostShareAppGate({
 }) {
   const autoOpenAttempted = useRef(false);
   const [hintVisible, setHintVisible] = useState(false);
+  // Resolved on the client only (avoids SSR/hydration mismatch). The custom
+  // `pulseverse://` scheme can only resolve on a device with the app installed;
+  // on desktop it throws "scheme does not have a registered handler", so we
+  // surface the direct app link on mobile only.
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Deferred (not synchronous in the effect body) so it runs after hydration —
+    // the server always renders the desktop variant, avoiding a mismatch.
+    const id = window.setTimeout(() => setIsMobile(isLikelyMobile()), 0);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     if (!isLikelyMobile()) return;
@@ -52,13 +64,15 @@ export function PostShareAppGate({
         </Button>
       </div>
 
-      <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        Button didn&apos;t open the app?{" "}
-        <a href={appDeepLink} className="font-semibold text-primary underline underline-offset-2">
-          Try the direct app link
-        </a>
-        .
-      </p>
+      {isMobile ? (
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
+          Button didn&apos;t open the app?{" "}
+          <a href={appDeepLink} className="font-semibold text-primary underline underline-offset-2">
+            Try the direct app link
+          </a>
+          .
+        </p>
+      ) : null}
 
       {hintVisible ? (
         <p className="text-center text-xs text-muted-foreground">

@@ -25,7 +25,14 @@ export const MARKETING_SEGMENT_LABELS: Record<string, string> = {
   trust: "Trust & safety",
 };
 
-export type BreadcrumbItem = { name: string; href: string };
+export type BreadcrumbItem = { name: string; href: string; linkable?: boolean };
+
+/**
+ * URL segments that are grouping prefixes only — they have no standalone index
+ * page (e.g. `/post`, `/communities`). They must appear in the visual trail but
+ * must NOT render as links: a linked crumb gets prefetched by Next and 404s.
+ */
+const NON_PAGE_SEGMENTS = new Set(["post", "communities"]);
 
 /** Build Home-first trail for a pathname (no query string). */
 export function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {
@@ -46,7 +53,9 @@ export function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {
     const label = isCircleThreadPath && i === segments.length - 1
       ? "Discussion"
       : MARKETING_SEGMENT_LABELS[seg] ?? seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    items.push({ name: label, href: acc });
+    const isIntermediate = i < segments.length - 1;
+    const linkable = !(isIntermediate && NON_PAGE_SEGMENTS.has(seg));
+    items.push({ name: label, href: acc, linkable });
   }
   return items;
 }

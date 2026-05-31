@@ -26,10 +26,12 @@ export function MarketingBreadcrumbs({ path, className }: { path: string; classN
                     /
                   </span>
                 ) : null}
-                {i < items.length - 1 ? (
+                {i < items.length - 1 && item.linkable !== false ? (
                   <Link href={item.href} className={marketingInlineLink}>
                     {item.name}
                   </Link>
+                ) : i < items.length - 1 ? (
+                  <span className="text-muted-foreground">{item.name}</span>
                 ) : (
                   <span className="font-medium text-foreground" aria-current="page">
                     {item.name}

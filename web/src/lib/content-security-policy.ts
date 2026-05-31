@@ -22,6 +22,10 @@ export function marketingContentSecurityPolicy(): string {
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
+    // Post/clip video + audio stream from Supabase Storage (and signed CDN URLs);
+    // blob: covers locally-generated previews. Without this, <video>/<audio> falls
+    // back to default-src 'self' and is blocked.
+    "media-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "object-src 'none'",
     "upgrade-insecure-requests",
