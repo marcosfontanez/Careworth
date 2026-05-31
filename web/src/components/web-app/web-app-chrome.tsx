@@ -1,24 +1,59 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
+  Flame,
   Home,
   LayoutGrid,
   LogOut,
   Plus,
   Radio,
+  Search,
   Settings as SettingsIcon,
+  Sparkles,
   User,
   type LucideIcon,
 } from "lucide-react";
 
 import { signOutUser } from "@/app/(marketing)/login/actions";
-import type { WebAppNavKey, WebAppShellCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppNavKey, WebAppShellCopy } from "@/lib/marketing-copy/web-app";
 import { cn } from "@/lib/utils";
+import { formatCount } from "@/lib/web-app/format";
+
+import { FollowButton } from "./follow-button";
+
+/** Centered top-bar search. Submits to the native Circles search (the one safe
+ *  native search surface today) via a query param. */
+function TopSearch({ placeholder }: { placeholder: string }) {
+  const router = useRouter();
+  const [value, setValue] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = value.trim();
+        router.push(q ? `/web-app/circles?q=${encodeURIComponent(q)}` : "/web-app/circles");
+      }}
+      className="mx-auto hidden w-full max-w-xl items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 backdrop-blur-sm transition focus-within:border-primary/40 focus-within:bg-white/[0.06] md:flex"
+    >
+      <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+      />
+    </form>
+  );
+}
 
 /** Native Next.js routes for each nav entry. */
 const NAV_ROUTE: Record<WebAppNavKey, string> = {
@@ -61,6 +96,7 @@ export type WebAppRailCircle = {
   slug: string;
   name: string;
   icon: string | null;
+  memberCount: number;
 };
 
 export type WebAppRailCreator = {
@@ -68,11 +104,16 @@ export type WebAppRailCreator = {
   displayName: string;
   username: string | null;
   avatarUrl: string | null;
+  /** Specialty / role line shown under the name (mockup), if public. */
+  specialty: string | null;
+  /** Whether the signed-in viewer already follows this creator. */
+  isFollowing: boolean;
 };
 
 export function WebAppChrome({
   account,
   copy,
+  engagement,
   externalAppBase,
   trendingCircles = [],
   suggestedCreators = [],
@@ -82,6 +123,8 @@ export function WebAppChrome({
 }: {
   account: Account;
   copy: WebAppShellCopy;
+  /** Follow/like labels for the rail Follow buttons. */
+  engagement: WebAppEngagementCopy;
   /** Usable external Expo export origin, or null when not configured. */
   externalAppBase: string | null;
   /** Safe, public circles for the right rail (empty hides the card). */
@@ -100,6 +143,10 @@ export function WebAppChrome({
     );
     return match ?? "feed";
   }, [pathname]);
+
+  // The Feed theater renders its own video-reactive contextual rail, so the
+  // global static rail is suppressed there to avoid a double right column.
+  const hideGlobalRail = pathname === "/web-app/feed";
 
   const openAppHref = externalAppBase ?? getAppHref;
   const isExternalApp = Boolean(externalAppBase);
@@ -122,7 +169,10 @@ export function WebAppChrome({
           </span>
         </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Centered search */}
+        <TopSearch placeholder={copy.searchPlaceholder} />
+
+        <div className="ml-auto flex items-center gap-2 md:ml-0">
           <Link
             href={NAV_ROUTE.creatorHub}
             className="hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_-6px_rgba(45,127,249,0.8)] transition hover:brightness-110 sm:inline-flex"
@@ -158,6 +208,7 @@ export function WebAppChrome({
               <span className="hidden max-w-[8rem] truncate text-sm font-medium lg:inline">
                 {account.displayName ?? `@${account.username ?? ""}`}
               </span>
+              <ChevronDown className="hidden size-4 text-muted-foreground lg:inline" aria-hidden />
             </button>
             <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[rgba(12,21,36,0.97)] opacity-0 shadow-2xl backdrop-blur-xl transition group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
               <Link
@@ -193,7 +244,7 @@ export function WebAppChrome({
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
                 isActive
-                  ? "bg-primary/15 text-primary"
+                  ? "bg-teal-400/15 text-teal-300"
                   : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
               )}
             >
@@ -220,11 +271,11 @@ export function WebAppChrome({
                   "group flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-semibold transition xl:px-3",
                   "justify-center xl:justify-start",
                   isActive
-                    ? "bg-gradient-to-r from-primary/20 to-accent/10 text-foreground ring-1 ring-primary/30"
+                    ? "bg-gradient-to-r from-teal-400/25 to-teal-400/5 text-foreground ring-1 ring-teal-300/40 shadow-[0_0_24px_-10px_rgba(45,212,191,0.7)]"
                     : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
                 )}
               >
-                <Icon className={cn("size-5 shrink-0", isActive && "text-primary")} aria-hidden />
+                <Icon className={cn("size-5 shrink-0", isActive && "text-teal-300")} aria-hidden />
                 <span className="hidden xl:inline">{copy.nav[key]}</span>
               </Link>
             );
@@ -240,24 +291,44 @@ export function WebAppChrome({
           <div className="relative flex min-h-full flex-col">{children}</div>
         </main>
 
-        {/* Right contextual rail (static, safe) */}
-        <aside className="hidden w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/8 bg-[rgba(8,14,28,0.4)] p-4 xl:flex">
+        {/* Right contextual rail (static, safe) — hidden on the Feed theater */}
+        <aside
+          className={cn(
+            "hidden w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/8 bg-[rgba(8,14,28,0.4)] p-4",
+            hideGlobalRail ? "" : "xl:flex",
+          )}
+        >
           {trendingCircles.length > 0 ? (
             <section className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.6)] p-4 backdrop-blur-sm">
-              <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
-                {copy.railCirclesTitle}
-              </h2>
-              <ul className="mt-3 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+                  <Flame className="size-4 text-amber-300" aria-hidden />
+                  {copy.railCirclesTitle}
+                </h2>
+                <Link
+                  href={NAV_ROUTE.circles}
+                  className="inline-flex items-center text-xs font-medium text-sky-300 transition hover:text-sky-200"
+                >
+                  {copy.viewAll}
+                  <ChevronRight className="size-3.5" aria-hidden />
+                </Link>
+              </div>
+              <ul className="mt-3 space-y-0.5">
                 {trendingCircles.map((circle) => (
                   <li key={circle.slug}>
                     <Link
                       href={`/web-app/circles/${encodeURIComponent(circle.slug)}`}
-                      className="flex items-center gap-2.5 rounded-xl px-2 py-2 text-sm text-foreground/90 transition hover:bg-white/5"
+                      className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/5"
                     >
-                      <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-base">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-gradient-to-br from-primary/20 to-accent/10 text-lg">
                         {circle.icon ?? "💬"}
                       </span>
-                      <span className="truncate font-medium">{circle.name}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-foreground">{circle.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {formatCount(circle.memberCount)} {copy.membersLabel}
+                        </span>
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -267,17 +338,15 @@ export function WebAppChrome({
 
           {suggestedCreators.length > 0 ? (
             <section className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.6)] p-4 backdrop-blur-sm">
-              <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+                <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
                 {copy.railCreatorsTitle}
               </h2>
-              <ul className="mt-3 space-y-1">
+              <ul className="mt-3 space-y-2">
                 {suggestedCreators.map((creator) => (
-                  <li key={creator.id}>
-                    <Link
-                      href={`/web-app/user/${creator.id}`}
-                      className="flex items-center gap-2.5 rounded-xl px-2 py-2 transition hover:bg-white/5"
-                    >
-                      <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary/60 text-xs font-bold text-foreground/80">
+                  <li key={creator.id} className="flex items-center gap-2.5">
+                    <Link href={`/web-app/user/${creator.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary/60 text-xs font-bold text-foreground/80">
                         {creator.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={creator.avatarUrl} alt="" className="size-full object-cover" />
@@ -286,16 +355,25 @@ export function WebAppChrome({
                         )}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-foreground">
+                        <span className="block truncate text-sm font-semibold text-foreground">
                           {creator.displayName}
                         </span>
-                        {creator.username ? (
-                          <span className="block truncate text-xs text-muted-foreground">
-                            @{creator.username}
-                          </span>
-                        ) : null}
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {creator.specialty ?? (creator.username ? `@${creator.username}` : "")}
+                        </span>
                       </span>
                     </Link>
+                    <FollowButton
+                      key={`${creator.id}:${creator.isFollowing}`}
+                      targetUserId={creator.id}
+                      initialFollowing={creator.isFollowing}
+                      labels={{
+                        follow: engagement.follow,
+                        following: engagement.following,
+                        error: engagement.followError,
+                      }}
+                      size="sm"
+                    />
                   </li>
                 ))}
               </ul>

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
-import { loadLikedPostIds } from "./engagement-data";
+import { loadFollowingIds, loadLikedPostIds } from "./engagement-data";
 
 export type WebFeedTab = "foryou" | "following" | "top";
 
@@ -28,6 +28,8 @@ export type WebFeedPost = {
   commentCount: number;
   /** Whether the signed-in viewer has liked this post. */
   likedByViewer: boolean;
+  /** Whether the signed-in viewer already follows this (non-anonymous) author. */
+  authorFollowedByViewer: boolean;
 };
 
 export type WebFeedResult =
@@ -196,7 +198,10 @@ export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
       }
     }
 
-    const likedSet = await loadLikedPostIds(supabase, user.id, ordered.map((r) => r.id));
+    const [likedSet, followingSet] = await Promise.all([
+      loadLikedPostIds(supabase, user.id, ordered.map((r) => r.id)),
+      loadFollowingIds(supabase, user.id, creatorIds),
+    ]);
 
     const posts: WebFeedPost[] = ordered.map((r) => {
       const creatorId = typeof r.creator_id === "string" ? r.creator_id : null;
@@ -223,6 +228,7 @@ export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
         likeCount: Number(r.like_count ?? 0) || 0,
         commentCount: Number(r.comment_count ?? 0) || 0,
         likedByViewer: likedSet.has(r.id),
+        authorFollowedByViewer: !anon && creatorId ? followingSet.has(creatorId) : false,
       };
     });
 

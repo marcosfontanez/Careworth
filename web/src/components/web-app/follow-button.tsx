@@ -18,10 +18,20 @@ export function FollowButton({
   targetUserId,
   initialFollowing,
   labels,
+  size = "md",
+  refreshOnSuccess = true,
 }: {
   targetUserId: string;
   initialFollowing: boolean;
   labels: Labels;
+  /** `md` = profile header pill; `sm` = compact (creator rails). */
+  size?: "sm" | "md";
+  /**
+   * When true (default) a successful toggle refreshes the route so server-rendered
+   * follower counts reconcile. Set false on surfaces with no visible count (e.g. the
+   * Feed theater) to avoid re-fetching/reshuffling the underlying server data.
+   */
+  refreshOnSuccess?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -48,11 +58,13 @@ export function FollowButton({
       }
       setFollowing(res.active);
       // Reconcile follower count (DB trigger) without a full reload.
-      router.refresh();
+      if (refreshOnSuccess) router.refresh();
     });
   }
 
   const label = errored ? labels.error : following ? labels.following : labels.follow;
+  const sizing = size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm";
+  const iconSize = size === "sm" ? "size-3.5" : "size-4";
 
   return (
     <button
@@ -61,14 +73,15 @@ export function FollowButton({
       disabled={pending}
       aria-pressed={following}
       className={[
-        "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+        "inline-flex items-center justify-center gap-1.5 rounded-full font-semibold transition disabled:opacity-60",
+        sizing,
         following
           ? "border border-white/15 bg-white/5 text-foreground/90 hover:border-white/25"
           : "bg-gradient-to-r from-teal-400 to-sky-500 text-[#04121f] shadow-[0_10px_30px_-12px_rgba(20,184,166,0.8)] hover:brightness-110",
         errored ? "ring-1 ring-amber-400/60" : "",
       ].join(" ")}
     >
-      {following ? <Check className="size-4" aria-hidden /> : <UserPlus className="size-4" aria-hidden />}
+      {following ? <Check className={iconSize} aria-hidden /> : <UserPlus className={iconSize} aria-hidden />}
       {label}
     </button>
   );

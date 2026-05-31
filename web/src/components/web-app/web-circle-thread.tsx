@@ -5,6 +5,8 @@ import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
 import type { WebCircle, WebCircleAuthor, WebCircleReply, WebCircleThread } from "@/lib/web-app/circles-data";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 
+import { WebCircleReplyComposer } from "./web-circle-reply-composer";
+
 function Byline({
   author,
   isAnonymous,
@@ -160,6 +162,11 @@ export function WebCircleThreadView({
         <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           {copy.repliesTitle}
         </h2>
+
+        {/* Text-only reply composer (signed-in; route is auth-gated) */}
+        <WebCircleReplyComposer slug={circle.slug} threadId={thread.id} copy={copy} />
+
+        <div className="mt-5">
         {replies.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-6 text-center text-sm text-muted-foreground backdrop-blur-sm">
             {copy.repliesEmpty}
@@ -171,6 +178,7 @@ export function WebCircleThreadView({
             ))}
           </ul>
         )}
+        </div>
       </section>
     </div>
   );

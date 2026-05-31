@@ -3,6 +3,8 @@ import "server-only";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 import type { WebAppRailCircle, WebAppRailCreator } from "@/components/web-app/web-app-chrome";
+import { ANON_SENTINEL } from "./circles-data";
+import { loadBlockedUserIds, loadFollowingIds } from "./engagement-data";
 import { toHttps } from "./format";
 
 type AnyRow = Record<string, unknown>;
@@ -50,6 +52,7 @@ async function loadTrendingCircles(
       slug: String(c.slug),
       name: typeof c.name === "string" && c.name.trim() ? c.name : String(c.slug),
       icon: typeof c.icon === "string" && c.icon.trim() ? c.icon : null,
+      memberCount: Number(c.member_count ?? 0) || 0,
     }));
   } catch {
     return [];
@@ -61,7 +64,7 @@ async function loadSuggestedCreators(
   viewerId: string,
 ): Promise<WebAppRailCreator[]> {
   try {
-    // Blocked / hidden creators for this viewer (best-effort).
+    // Hidden creators (muted/feed exclusions) for this viewer (best-effort).
     const hidden = new Set<string>();
     try {
       const { data: ex } = await supabase.rpc("get_feed_exclusions", { viewer_uuid: viewerId });
@@ -75,19 +78,41 @@ async function loadSuggestedCreators(
       /* best-effort */
     }
 
+    // Bidirectional blocks: never suggest someone the viewer blocked, nor anyone
+    // who blocked the viewer.
+    const blocked = await loadBlockedUserIds(supabase, viewerId);
+
     const { data } = await supabase
       .from("profiles")
-      .select("id, display_name, username, avatar_url, follower_count, privacy_mode")
+      .select("id, display_name, username, avatar_url, follower_count, privacy_mode, specialty, role")
       .order("follower_count", { ascending: false })
-      .limit(16);
+      .limit(24);
 
-    const out: WebAppRailCreator[] = [];
-    for (const p of (data ?? []) as AnyRow[]) {
+    // Eligible candidates: not self, not hidden, not blocked (either direction),
+    // not private, not the anonymous/confession sentinel.
+    const candidates = ((data ?? []) as AnyRow[]).filter((p) => {
       const id = String(p.id);
-      if (id === viewerId || hidden.has(id)) continue;
-      // Never surface private accounts as suggestions.
-      if (String(p.privacy_mode ?? "public").toLowerCase() === "private") continue;
-      out.push({
+      if (!id || id === viewerId || id === ANON_SENTINEL) return false;
+      if (hidden.has(id) || blocked.has(id)) return false;
+      return String(p.privacy_mode ?? "public").toLowerCase() !== "private";
+    });
+
+    const top = candidates.slice(0, 5);
+
+    // Hydrate follow state so each card opens in the correct Follow/Following state.
+    const following = await loadFollowingIds(
+      supabase,
+      viewerId,
+      top.map((p) => String(p.id)),
+    );
+
+    return top.map((p) => {
+      const id = String(p.id);
+      const specialty =
+        (typeof p.specialty === "string" && p.specialty.trim()) ||
+        (typeof p.role === "string" && p.role.trim()) ||
+        null;
+      return {
         id,
         displayName:
           (typeof p.display_name === "string" && p.display_name.trim()) ||
@@ -95,10 +120,10 @@ async function loadSuggestedCreators(
           "PulseVerse member",
         username: typeof p.username === "string" && p.username.trim() ? p.username : null,
         avatarUrl: toHttps(p.avatar_url),
-      });
-      if (out.length >= 5) break;
-    }
-    return out;
+        specialty,
+        isFollowing: following.has(id),
+      } satisfies WebAppRailCreator;
+    });
   } catch {
     return [];
   }

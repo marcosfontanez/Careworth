@@ -12,7 +12,7 @@ const PROCESSING_BLOCK = new Set(["queued", "running", "failed"]);
 const PUBLIC_PRIVACY = new Set(["public", "alias"]);
 
 /** Sentinel id the viewer-safe views emit for masked (anonymous) authors. */
-const ANON_SENTINEL = "00000000-0000-0000-0000-000000000001";
+export const ANON_SENTINEL = "00000000-0000-0000-0000-000000000001";
 
 /** Slugs whose author identity is shown only as a stable pseudonym (no profile links). */
 const CONFESSION_SLUGS = new Set(["confessions"]);
@@ -50,7 +50,7 @@ function hash32(input: string): number {
 }
 
 /** Stable pseudonym for a masked author within one thread/reply (mirrors the RN app). */
-function anonymousDisplayName(authorId: string, seedId: string): string {
+export function anonymousDisplayName(authorId: string, seedId: string): string {
   const h = hash32(`${authorId}:${seedId}`);
   return `Anonymous ${ADJECTIVES[h % ADJECTIVES.length]} ${NOUNS[(h >> 4) % NOUNS.length]}`;
 }
@@ -149,7 +149,7 @@ function mapCircle(row: AnyRow): WebCircle {
 }
 
 /** Blocked / hidden creators for the signed-in viewer (best-effort). */
-async function loadHiddenCreators(supabase: Supa, viewerId: string): Promise<Set<string>> {
+export async function loadHiddenCreators(supabase: Supa, viewerId: string): Promise<Set<string>> {
   const hidden = new Set<string>();
   try {
     const { data } = await supabase.rpc("get_feed_exclusions", { viewer_uuid: viewerId });
@@ -166,7 +166,7 @@ async function loadHiddenCreators(supabase: Supa, viewerId: string): Promise<Set
 }
 
 /** Batch-hydrate real (non-masked) author profiles. */
-async function hydrateAuthors(supabase: Supa, ids: string[]): Promise<Map<string, AnyRow>> {
+export async function hydrateAuthors(supabase: Supa, ids: string[]): Promise<Map<string, AnyRow>> {
   const map = new Map<string, AnyRow>();
   const real = [...new Set(ids.filter((id) => id && id !== ANON_SENTINEL))];
   if (real.length === 0) return map;
@@ -307,6 +307,8 @@ async function loadCircleWallPosts(
         likeCount: num(r.like_count),
         commentCount: num(r.comment_count),
         likedByViewer: likedSet.has(String(r.id)),
+        // Circle wall cards don't surface a follow control; follow happens on the Pulse Page.
+        authorFollowedByViewer: false,
       };
     });
   } catch {

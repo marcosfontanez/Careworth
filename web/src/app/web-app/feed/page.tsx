@@ -5,6 +5,7 @@ import { getWebAppPageCopy } from "@/lib/marketing-copy/web-app";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { requireWebAppAccount } from "@/lib/web-app/account";
 import { loadWebFeed, type WebFeedTab } from "@/lib/web-app/feed-data";
+import { loadWebRail } from "@/lib/web-app/rail-data";
 import { resolveOpenInAppHref, usableExternalAppOrigin } from "@/lib/web-app-embed-policy";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,11 @@ export default async function WebAppFeedPage({
   const tab: WebFeedTab =
     tabParam === "top" ? "top" : tabParam === "following" ? "following" : "foryou";
 
-  const [locale, result] = await Promise.all([getMarketingLocale(), loadWebFeed(tab)]);
+  const [locale, result, rail] = await Promise.all([
+    getMarketingLocale(),
+    loadWebFeed(tab),
+    loadWebRail(account.id),
+  ]);
   const c = getWebAppPageCopy(locale);
 
   const openAppHref = resolveOpenInAppHref("/feed");
@@ -42,6 +47,9 @@ export default async function WebAppFeedPage({
       result={result}
       copy={c.feed}
       engagement={c.engagement}
+      shellCopy={c.shell}
+      railCircles={rail.circles}
+      railCreators={rail.creators}
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}
       currentUserId={account.id}

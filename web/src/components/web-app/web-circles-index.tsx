@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Pin, Search, Users } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
@@ -53,7 +54,9 @@ export function WebCirclesIndex({
   result: WebCirclesIndexResult;
   copy: WebAppCirclesCopy;
 }) {
-  const [query, setQuery] = useState("");
+  const searchParams = useSearchParams();
+  // Honor the chrome top-bar search (?q=) as the initial filter value.
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   const circles = useMemo(() => (result.state === "ok" ? result.circles : []), [result]);
   const featured = useMemo(() => circles.find((c) => c.isPinned) ?? null, [circles]);

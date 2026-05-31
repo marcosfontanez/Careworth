@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import type { WebAppEngagementCopy, WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppRailCircle, WebAppRailCreator } from "./web-app-chrome";
+import type { WebAppEngagementCopy, WebAppFeedCopy, WebAppShellCopy } from "@/lib/marketing-copy/web-app";
 import type { WebFeedResult, WebFeedTab } from "@/lib/web-app/feed-data";
 import { cn } from "@/lib/utils";
 
@@ -78,6 +79,9 @@ export function WebFeed({
   result,
   copy,
   engagement,
+  shellCopy,
+  railCircles = [],
+  railCreators = [],
   openAppHref,
   isExternalApp,
   currentUserId = null,
@@ -86,6 +90,9 @@ export function WebFeed({
   result: WebFeedResult;
   copy: WebAppFeedCopy;
   engagement: WebAppEngagementCopy;
+  shellCopy: WebAppShellCopy;
+  railCircles?: WebAppRailCircle[];
+  railCreators?: WebAppRailCreator[];
   openAppHref: string;
   isExternalApp: boolean;
   currentUserId?: string | null;
@@ -119,6 +126,9 @@ export function WebFeed({
             posts={result.posts}
             feedCopy={copy}
             engagement={engagement}
+            shellCopy={shellCopy}
+            railCircles={railCircles}
+            railCreators={railCreators}
             currentUserId={currentUserId}
             openAppHref={openAppHref}
             isExternalApp={isExternalApp}
@@ -126,8 +136,8 @@ export function WebFeed({
         ) : null}
       </div>
 
-      {/* Floating feed tabs */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3">
+      {/* Floating feed tabs — offset to stay centered over the video stage on xl. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 xl:pr-[21rem]">
         <div className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/45 p-1 backdrop-blur-xl">
           <Tab href={TAB_HREF.foryou} label={copy.tabForYou} active={tab === "foryou"} />
           <Tab href={TAB_HREF.following} label={copy.tabFollowing} active={tab === "following"} />

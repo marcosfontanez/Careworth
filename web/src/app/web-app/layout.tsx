@@ -23,6 +23,7 @@ export default async function WebAppLayout({ children }: { children: React.React
     <WebAppChrome
       account={account}
       copy={copy.shell}
+      engagement={copy.engagement}
       externalAppBase={usableExternalAppOrigin()}
       trendingCircles={rail.circles}
       suggestedCreators={rail.creators}
