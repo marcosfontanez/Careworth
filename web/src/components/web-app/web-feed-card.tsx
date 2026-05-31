@@ -1,39 +1,21 @@
 import Link from "next/link";
-import { Heart, MessageCircle, Play, UserRound } from "lucide-react";
+import { MessageCircle, Play, UserRound } from "lucide-react";
 
-import type { WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
 import type { WebFeedPost } from "@/lib/web-app/feed-data";
+import { formatCount, relativeTime } from "@/lib/web-app/format";
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
-  return String(n);
-}
-
-function relativeTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  const diff = Date.now() - then;
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "now";
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d`;
-  const wk = Math.floor(day / 7);
-  if (wk < 5) return `${wk}w`;
-  return new Date(iso).toLocaleDateString();
-}
+import { LikeButton } from "./like-button";
 
 export function WebFeedCard({
   post,
   copy,
+  engagement,
   currentUserId = null,
 }: {
   post: WebFeedPost;
   copy: WebAppFeedCopy;
+  engagement: WebAppEngagementCopy;
   /** Signed-in viewer id, so own-author taps route to My Pulse. */
   currentUserId?: string | null;
 }) {
@@ -121,12 +103,14 @@ export function WebFeedCard({
         </Link>
       ) : null}
 
-      {/* Footer: read-only stats + open */}
+      {/* Footer: like (interactive) + read-only comments + open */}
       <div className="flex items-center gap-4 px-4 py-3.5">
-        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Heart className="size-4" aria-hidden />
-          {formatCount(post.likeCount)}
-        </span>
+        <LikeButton
+          postId={post.id}
+          initialLiked={post.likedByViewer}
+          initialCount={post.likeCount}
+          labels={{ like: engagement.like, liked: engagement.liked, error: engagement.likeError }}
+        />
         <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
           <MessageCircle className="size-4" aria-hidden />
           {formatCount(post.commentCount)}

@@ -29,6 +29,8 @@ export type WebAppShellCopy = {
   railTips: string[];
   /** Dynamic "Trending Circles" rail card. */
   railCirclesTitle: string;
+  /** Dynamic "Suggested creators" rail card. */
+  railCreatorsTitle: string;
   railSafetyTitle: string;
   railSafetyBody: string;
   railSafetyLink: string;
@@ -50,9 +52,13 @@ export type WebAppFeedCopy = {
   title: string;
   subtitle: string;
   tabForYou: string;
+  tabFollowing: string;
   tabTop: string;
   emptyTitle: string;
   emptyBody: string;
+  /** Shown on the Following tab when the viewer follows no one (or no recent posts). */
+  followingEmptyTitle: string;
+  followingEmptyBody: string;
   errorTitle: string;
   errorBody: string;
   retry: string;
@@ -62,6 +68,18 @@ export type WebAppFeedCopy = {
   openPost: string;
   videoBadge: string;
   liveBadge: string;
+  /** Short-form video theater controls. */
+  commentsLabel: string;
+  shareLabel: string;
+  copiedLabel: string;
+  moreLabel: string;
+  soundOnLabel: string;
+  soundOffLabel: string;
+  playLabel: string;
+  pauseLabel: string;
+  nextLabel: string;
+  prevLabel: string;
+  textPostLabel: string;
 };
 
 export type WebAppLandingCopy = {
@@ -118,7 +136,14 @@ export type WebAppCirclesCopy = {
   postsLabel: string;
   indexEmptyTitle: string;
   indexEmptyBody: string;
+  /** Index browse affordances. */
+  searchPlaceholder: string;
+  searchEmpty: string;
+  viewLabel: string;
+  joinedLabel: string;
+  featuredKicker: string;
   /** Circle detail. */
+  postsSectionTitle: string;
   threadsTitle: string;
   threadsEmpty: string;
   aboutTitle: string;
@@ -143,6 +168,40 @@ export type WebAppCirclesCopy = {
   errorBody: string;
 };
 
+/** Shared engagement (follow / like) action labels. */
+export type WebAppEngagementCopy = {
+  follow: string;
+  following: string;
+  followError: string;
+  like: string;
+  liked: string;
+  likeError: string;
+};
+
+export type WebAppCreatorHubCopy = {
+  title: string;
+  subtitle: string;
+  /** Create tiles. */
+  createTitle: string;
+  uploadVideo: string;
+  goLive: string;
+  brollStudio: string;
+  clipStudio: string;
+  newPost: string;
+  createNote: string;
+  /** Analytics. */
+  analyticsTitle: string;
+  statFollowers: string;
+  statFollowing: string;
+  statPulse: string;
+  /** Uploads. */
+  uploadsTitle: string;
+  uploadsEmpty: string;
+  draftsTitle: string;
+  draftsNote: string;
+  openInApp: string;
+};
+
 export type WebAppPageCopy = {
   metaTitle: string;
   metaDescription: string;
@@ -151,6 +210,8 @@ export type WebAppPageCopy = {
   feed: WebAppFeedCopy;
   profile: WebAppProfileCopy;
   circles: WebAppCirclesCopy;
+  creatorHub: WebAppCreatorHubCopy;
+  engagement: WebAppEngagementCopy;
   landing: WebAppLandingCopy;
 };
 
@@ -181,6 +242,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
         "Tap any post to open the full view.",
       ],
       railCirclesTitle: "Trending Circles",
+      railCreatorsTitle: "Suggested creators",
       railSafetyTitle: "Healthy, respectful community",
       railSafetyBody:
         "Confessions stay anonymous, private posts stay private, and blocked accounts stay hidden — on web too.",
@@ -237,10 +299,14 @@ const copy: Record<Locale, WebAppPageCopy> = {
       title: "Your Feed",
       subtitle: "The latest from across PulseVerse.",
       tabForYou: "For You",
+      tabFollowing: "Following",
       tabTop: "Top Today",
       emptyTitle: "Your feed is warming up",
       emptyBody:
         "There’s nothing to show here yet. Follow a few creators or open the app to get started.",
+      followingEmptyTitle: "Nothing from your follows yet",
+      followingEmptyBody:
+        "Follow a few creators to see their latest here, or explore For You and Top Today.",
       errorTitle: "We couldn’t load your feed",
       errorBody:
         "Something went wrong fetching your feed. Try again in a moment, or open the full app.",
@@ -250,6 +316,17 @@ const copy: Record<Locale, WebAppPageCopy> = {
       openPost: "Open post",
       videoBadge: "Video",
       liveBadge: "Live",
+      commentsLabel: "Comments",
+      shareLabel: "Share",
+      copiedLabel: "Copied",
+      moreLabel: "More",
+      soundOnLabel: "Unmute",
+      soundOffLabel: "Mute",
+      playLabel: "Play",
+      pauseLabel: "Pause",
+      nextLabel: "Next",
+      prevLabel: "Previous",
+      textPostLabel: "Post",
     },
     profile: {
       ownerTitle: "My Pulse",
@@ -286,6 +363,12 @@ const copy: Record<Locale, WebAppPageCopy> = {
       postsLabel: "posts",
       indexEmptyTitle: "No circles yet",
       indexEmptyBody: "Circles will appear here as communities grow. Open the app to explore.",
+      searchPlaceholder: "Search circles",
+      searchEmpty: "No circles match your search.",
+      viewLabel: "View",
+      joinedLabel: "Joined",
+      featuredKicker: "Featured",
+      postsSectionTitle: "Circle posts",
       threadsTitle: "Discussions",
       threadsEmpty: "No discussions yet in this Circle.",
       aboutTitle: "About",
@@ -307,6 +390,34 @@ const copy: Record<Locale, WebAppPageCopy> = {
       unavailableBody: "This Circle can’t be shown. It may have been removed or is not available right now.",
       errorTitle: "We couldn’t load Circles",
       errorBody: "Something went wrong. Try again in a moment, or open the full app.",
+    },
+    creatorHub: {
+      title: "Creator Hub",
+      subtitle: "Create, manage, and grow your PulseVerse.",
+      createTitle: "Create",
+      uploadVideo: "Upload Video",
+      goLive: "Go Live",
+      brollStudio: "B-roll Studio",
+      clipStudio: "Clip Studio",
+      newPost: "New Post",
+      createNote: "Creation tools live in the PulseVerse app — tap any tile to continue there.",
+      analyticsTitle: "Your stats",
+      statFollowers: "Followers",
+      statFollowing: "Following",
+      statPulse: "Pulse Score",
+      uploadsTitle: "Recent uploads",
+      uploadsEmpty: "Nothing published yet. Create your first video in the app.",
+      draftsTitle: "Drafts",
+      draftsNote: "Drafts are managed in the app.",
+      openInApp: "Open in app",
+    },
+    engagement: {
+      follow: "Follow",
+      following: "Following",
+      followError: "Couldn’t update. Tap to retry.",
+      like: "Like",
+      liked: "Liked",
+      likeError: "Couldn’t update like.",
     },
     landing: {
       kicker: "PulseVerse Web",
@@ -352,6 +463,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
         "Toca cualquier publicación para abrir la vista completa.",
       ],
       railCirclesTitle: "Círculos en tendencia",
+      railCreatorsTitle: "Creadores sugeridos",
       railSafetyTitle: "Comunidad sana y respetuosa",
       railSafetyBody:
         "Las confesiones siguen siendo anónimas, las publicaciones privadas siguen privadas y las cuentas bloqueadas se ocultan — también en la web.",
@@ -408,10 +520,14 @@ const copy: Record<Locale, WebAppPageCopy> = {
       title: "Tu Feed",
       subtitle: "Lo último de todo PulseVerse.",
       tabForYou: "Para ti",
+      tabFollowing: "Siguiendo",
       tabTop: "Top de hoy",
       emptyTitle: "Tu feed se está preparando",
       emptyBody:
         "Aún no hay nada que mostrar aquí. Sigue a algunos creadores o abre la app para empezar.",
+      followingEmptyTitle: "Aún no hay nada de tus seguidos",
+      followingEmptyBody:
+        "Sigue a algunos creadores para ver lo último aquí, o explora Para ti y Top de hoy.",
       errorTitle: "No pudimos cargar tu feed",
       errorBody:
         "Algo salió mal al cargar tu feed. Inténtalo de nuevo en un momento o abre la app completa.",
@@ -421,6 +537,17 @@ const copy: Record<Locale, WebAppPageCopy> = {
       openPost: "Abrir publicación",
       videoBadge: "Vídeo",
       liveBadge: "En vivo",
+      commentsLabel: "Comentarios",
+      shareLabel: "Compartir",
+      copiedLabel: "Copiado",
+      moreLabel: "Más",
+      soundOnLabel: "Activar sonido",
+      soundOffLabel: "Silenciar",
+      playLabel: "Reproducir",
+      pauseLabel: "Pausar",
+      nextLabel: "Siguiente",
+      prevLabel: "Anterior",
+      textPostLabel: "Publicación",
     },
     profile: {
       ownerTitle: "My Pulse",
@@ -457,6 +584,12 @@ const copy: Record<Locale, WebAppPageCopy> = {
       postsLabel: "publicaciones",
       indexEmptyTitle: "Aún no hay círculos",
       indexEmptyBody: "Los círculos aparecerán aquí a medida que crezcan las comunidades. Abre la app para explorar.",
+      searchPlaceholder: "Buscar círculos",
+      searchEmpty: "Ningún círculo coincide con tu búsqueda.",
+      viewLabel: "Ver",
+      joinedLabel: "Unido",
+      featuredKicker: "Destacado",
+      postsSectionTitle: "Publicaciones del Círculo",
       threadsTitle: "Conversaciones",
       threadsEmpty: "Aún no hay conversaciones en este Círculo.",
       aboutTitle: "Acerca de",
@@ -478,6 +611,34 @@ const copy: Record<Locale, WebAppPageCopy> = {
       unavailableBody: "No se puede mostrar este Círculo. Es posible que se haya eliminado o que no esté disponible ahora mismo.",
       errorTitle: "No pudimos cargar los Círculos",
       errorBody: "Algo salió mal. Inténtalo de nuevo en un momento o abre la app completa.",
+    },
+    creatorHub: {
+      title: "Creator Hub",
+      subtitle: "Crea, gestiona y haz crecer tu PulseVerse.",
+      createTitle: "Crear",
+      uploadVideo: "Subir vídeo",
+      goLive: "Emitir en vivo",
+      brollStudio: "Estudio B-roll",
+      clipStudio: "Estudio de clips",
+      newPost: "Nueva publicación",
+      createNote: "Las herramientas de creación están en la app de PulseVerse — toca cualquier tarjeta para continuar allí.",
+      analyticsTitle: "Tus estadísticas",
+      statFollowers: "Seguidores",
+      statFollowing: "Siguiendo",
+      statPulse: "Pulse Score",
+      uploadsTitle: "Subidas recientes",
+      uploadsEmpty: "Aún no has publicado nada. Crea tu primer vídeo en la app.",
+      draftsTitle: "Borradores",
+      draftsNote: "Los borradores se gestionan en la app.",
+      openInApp: "Abrir en la app",
+    },
+    engagement: {
+      follow: "Seguir",
+      following: "Siguiendo",
+      followError: "No se pudo actualizar. Toca para reintentar.",
+      like: "Me gusta",
+      liked: "Te gusta",
+      likeError: "No se pudo actualizar el me gusta.",
     },
     landing: {
       kicker: "PulseVerse Web",

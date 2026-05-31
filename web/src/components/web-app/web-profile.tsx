@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import type { WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
 import type {
   WebProfileFrame,
   WebProfileHeader,
@@ -21,6 +21,9 @@ import type {
   WebPulseUpdate,
 } from "@/lib/web-app/profile-data";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
+
+import { FollowButton } from "./follow-button";
+import { LikeButton } from "./like-button";
 
 function ringStyle(frame: WebProfileFrame | null): React.CSSProperties {
   if (!frame) return { borderColor: "rgba(255,255,255,0.12)" };
@@ -94,14 +97,18 @@ function PulseUpdateRow({ update }: { update: WebPulseUpdate }) {
   );
 }
 
-function PostTile({ post, copy }: { post: WebProfilePost; copy: WebAppProfileCopy }) {
+function PostTile({
+  post,
+  copy,
+  engagement,
+}: {
+  post: WebProfilePost;
+  copy: WebAppProfileCopy;
+  engagement: WebAppEngagementCopy;
+}) {
   const media = post.thumbnailUrl ?? post.mediaUrl;
   return (
-    <Link
-      href={`/post/${post.id}`}
-      className="group relative flex aspect-square flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#05080f]"
-      aria-label={copy.openPost}
-    >
+    <div className="group relative aspect-[9/16] overflow-hidden rounded-2xl border border-white/10 bg-[#05080f] shadow-[0_18px_50px_-34px_rgba(0,0,0,0.95)]">
       {media ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -109,34 +116,53 @@ function PostTile({ post, copy }: { post: WebProfilePost; copy: WebAppProfileCop
             src={media}
             alt=""
             loading="lazy"
-            className="size-full object-cover transition duration-500 group-hover:scale-[1.04]"
+            className="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-[1.05]"
           />
           {post.isVideo ? (
-            <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+            <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
               <Play className="size-2.5 fill-current" aria-hidden />
               {copy.videoBadge}
             </span>
           ) : null}
         </>
       ) : (
-        <div className="flex size-full flex-col justify-between p-3">
+        <div className="absolute inset-0 flex flex-col justify-between bg-gradient-to-br from-[#101a35] to-[#0a1020] p-3">
           <ImageOff className="size-4 text-muted-foreground/60" aria-hidden />
-          <p className="text-xs leading-snug text-foreground/80 [overflow-wrap:anywhere]">
-            {post.caption?.trim() ? (post.caption.length > 120 ? `${post.caption.slice(0, 120)}…` : post.caption) : "—"}
+          <p className="text-xs leading-snug text-foreground/85 [overflow-wrap:anywhere]">
+            {post.caption?.trim() ? (post.caption.length > 140 ? `${post.caption.slice(0, 140)}…` : post.caption) : "—"}
           </p>
         </div>
       )}
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-2.5 py-2 text-[11px] font-medium text-white opacity-0 transition group-hover:opacity-100">
-        <span className="inline-flex items-center gap-1">
-          <Heart className="size-3 fill-current" aria-hidden />
-          {formatCount(post.likeCount)}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <MessageCircle className="size-3" aria-hidden />
-          {formatCount(post.commentCount)}
-        </span>
+
+      {/* Whole-tile navigation sits beneath interactive controls. */}
+      <Link href={`/post/${post.id}`} className="absolute inset-0 z-10" aria-label={copy.openPost} />
+
+      {/* Interactive like — above the navigation overlay. */}
+      <span className="absolute right-2 top-2 z-20 inline-flex rounded-full bg-black/55 px-2 py-1 text-white backdrop-blur-sm">
+        <LikeButton
+          postId={post.id}
+          initialLiked={post.likedByViewer}
+          initialCount={post.likeCount}
+          labels={{ like: engagement.like, liked: engagement.liked, error: engagement.likeError }}
+          size="sm"
+        />
       </span>
-    </Link>
+
+      {/* Caption + counts overlay (always visible on media tiles) */}
+      {media ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2.5 pb-2 pt-6">
+          {post.caption?.trim() ? (
+            <p className="line-clamp-2 text-[11px] font-medium leading-snug text-white/90 [overflow-wrap:anywhere]">
+              {post.caption}
+            </p>
+          ) : null}
+          <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-white/85">
+            <MessageCircle className="size-3" aria-hidden />
+            {formatCount(post.commentCount)}
+          </span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -157,9 +183,12 @@ export function WebProfile({
   isOwner,
   contentVisible,
   lockReason,
+  canFollow,
+  isFollowing,
   pulseUpdates,
   posts,
   copy,
+  engagement,
   openAppHref,
   isExternalApp,
 }: {
@@ -167,9 +196,12 @@ export function WebProfile({
   isOwner: boolean;
   contentVisible: boolean;
   lockReason: WebProfileLockReason;
+  canFollow: boolean;
+  isFollowing: boolean;
   pulseUpdates: WebPulseUpdate[];
   posts: WebProfilePost[];
   copy: WebAppProfileCopy;
+  engagement: WebAppEngagementCopy;
   openAppHref: string;
   isExternalApp: boolean;
 }) {
@@ -230,14 +262,27 @@ export function WebProfile({
                 {copy.editProfile}
               </a>
             ) : (
-              <a
-                href={openAppHref}
-                {...externalProps}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
-              >
-                <ExternalLink className="size-4" aria-hidden />
-                {copy.openInApp}
-              </a>
+              <>
+                {canFollow ? (
+                  <FollowButton
+                    targetUserId={profile.id}
+                    initialFollowing={isFollowing}
+                    labels={{
+                      follow: engagement.follow,
+                      following: engagement.following,
+                      error: engagement.followError,
+                    }}
+                  />
+                ) : null}
+                <a
+                  href={openAppHref}
+                  {...externalProps}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-foreground/90 transition hover:border-white/25"
+                >
+                  <ExternalLink className="size-4" aria-hidden />
+                  {copy.openInApp}
+                </a>
+              </>
             )}
           </div>
         </div>
@@ -272,9 +317,9 @@ export function WebProfile({
                 {isOwner ? copy.postsEmptyOwner : copy.postsEmptyVisitor}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                 {posts.map((post) => (
-                  <PostTile key={post.id} post={post} copy={copy} />
+                  <PostTile key={post.id} post={post} copy={copy} engagement={engagement} />
                 ))}
               </div>
             )}

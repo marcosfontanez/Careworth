@@ -2,7 +2,14 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
+import { loadLikedPostIds } from "./engagement-data";
+import type { WebFeedPost } from "./feed-data";
 import { isVideoType, toHttps } from "./format";
+
+/** Posts still rendering / failed must never surface on web. */
+const PROCESSING_BLOCK = new Set(["queued", "running", "failed"]);
+/** Only public / aliased posts are visible to other viewers. */
+const PUBLIC_PRIVACY = new Set(["public", "alias"]);
 
 /** Sentinel id the viewer-safe views emit for masked (anonymous) authors. */
 const ANON_SENTINEL = "00000000-0000-0000-0000-000000000001";
@@ -98,7 +105,13 @@ export type WebCirclesIndexResult =
 export type WebCircleDetailResult =
   | { state: "error" }
   | { state: "unavailable" }
-  | { state: "ok"; circle: WebCircle; isConfession: boolean; threads: WebCircleThread[] };
+  | {
+      state: "ok";
+      circle: WebCircle;
+      isConfession: boolean;
+      threads: WebCircleThread[];
+      wallPosts: WebFeedPost[];
+    };
 
 export type WebCircleThreadResult =
   | { state: "error" }
@@ -230,6 +243,77 @@ async function fetchCircleBySlug(supabase: Supa, slug: string): Promise<WebCircl
   return mapCircle(data as AnyRow);
 }
 
+async function loadCircleWallPosts(
+  supabase: Supa,
+  communityId: string,
+  isConfession: boolean,
+  hidden: Set<string>,
+  viewerId: string,
+): Promise<WebFeedPost[]> {
+  try {
+    const { data } = await supabase
+      .from("posts_viewer_safe")
+      .select("*")
+      .contains("communities", [communityId])
+      .order("created_at", { ascending: false })
+      .limit(18);
+
+    const rows = ((data ?? []) as AnyRow[]).filter((r) => {
+      const sched = String(r.scheduled_status ?? "live").toLowerCase();
+      if (sched !== "live") return false;
+      const proc = String(r.media_processing_status ?? "").toLowerCase().trim();
+      if (PROCESSING_BLOCK.has(proc)) return false;
+      const privacy = String(r.privacy_mode ?? "public").toLowerCase();
+      if (!PUBLIC_PRIVACY.has(privacy)) return false;
+      const creator = typeof r.creator_id === "string" ? r.creator_id : null;
+      if (creator && hidden.has(creator)) return false;
+      return true;
+    });
+
+    // Hydrate authors only for non-anonymous, non-confession posts.
+    const profiles = isConfession
+      ? new Map<string, AnyRow>()
+      : await hydrateAuthors(
+          supabase,
+          rows
+            .filter((r) => !r.is_anonymous && typeof r.creator_id === "string")
+            .map((r) => r.creator_id as string),
+        );
+
+    const likedSet = await loadLikedPostIds(supabase, viewerId, rows.map((r) => String(r.id)));
+
+    return rows.map((r) => {
+      const creatorId = typeof r.creator_id === "string" ? r.creator_id : null;
+      // Confession rooms + masked creators + flagged posts are all anonymous.
+      const anon = isConfession || Boolean(r.is_anonymous) || !creatorId || creatorId === ANON_SENTINEL;
+      const prof = !anon && creatorId ? profiles.get(creatorId) : null;
+      return {
+        id: String(r.id),
+        type: String(r.type ?? "post"),
+        caption: str(r.caption),
+        mediaUrl: toHttps(r.media_url),
+        thumbnailUrl: toHttps(r.thumbnail_url),
+        createdAt: str(r.created_at),
+        isAnonymous: anon,
+        isVideo: isVideoType(r.type),
+        author: anon
+          ? null
+          : {
+              id: creatorId,
+              displayName: str(prof?.display_name) || str(prof?.username) || "PulseVerse member",
+              username: str(prof?.username),
+              avatarUrl: toHttps(prof?.avatar_url),
+            },
+        likeCount: num(r.like_count),
+        commentCount: num(r.comment_count),
+        likedByViewer: likedSet.has(String(r.id)),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function loadCircleDetail(slug: string, viewerId: string): Promise<WebCircleDetailResult> {
   if (!isSupabaseConfigured()) return { state: "error" };
   let supabase: Supa;
@@ -243,7 +327,10 @@ export async function loadCircleDetail(slug: string, viewerId: string): Promise<
     if (!circle) return { state: "unavailable" };
     const isConf = isConfessionCircle(circle.slug);
 
-    const [{ data: threadRows, error: threadsErr }, hidden] = await Promise.all([
+    // One exclusions lookup shared across threads + wall posts.
+    const hidden = await loadHiddenCreators(supabase, viewerId);
+
+    const [{ data: threadRows, error: threadsErr }, wallPosts] = await Promise.all([
       supabase
         .from("circle_threads_viewer_safe")
         .select("*")
@@ -252,7 +339,7 @@ export async function loadCircleDetail(slug: string, viewerId: string): Promise<
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(48),
-      loadHiddenCreators(supabase, viewerId),
+      loadCircleWallPosts(supabase, circle.id, isConf, hidden, viewerId),
     ]);
     if (threadsErr) return { state: "error" };
 
@@ -287,7 +374,7 @@ export async function loadCircleDetail(slug: string, viewerId: string): Promise<
       };
     });
 
-    return { state: "ok", circle, isConfession: isConf, threads };
+    return { state: "ok", circle, isConfession: isConf, threads, wallPosts };
   } catch {
     return { state: "error" };
   }

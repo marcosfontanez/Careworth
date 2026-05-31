@@ -61,9 +61,13 @@ export default async function WebAppCircleDetailPage({
       circle={result.circle}
       isConfession={result.isConfession}
       threads={result.threads}
+      wallPosts={result.wallPosts}
       copy={c.circles}
+      feedCopy={c.feed}
+      engagement={c.engagement}
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}
+      currentUserId={account.id}
     />
   );
 }

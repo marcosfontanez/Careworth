@@ -1,26 +1,36 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, ShieldCheck, Users } from "lucide-react";
 
-import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppCirclesCopy, WebAppEngagementCopy, WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
 import type { WebCircle, WebCircleThread } from "@/lib/web-app/circles-data";
+import type { WebFeedPost } from "@/lib/web-app/feed-data";
 import { formatCount } from "@/lib/web-app/format";
 
 import { WebCircleThreadRow } from "./web-circle-thread-row";
+import { WebFeedCard } from "./web-feed-card";
 
 export function WebCircleDetail({
   circle,
   isConfession,
   threads,
+  wallPosts,
   copy,
+  feedCopy,
+  engagement,
   openAppHref,
   isExternalApp,
+  currentUserId = null,
 }: {
   circle: WebCircle;
   isConfession: boolean;
   threads: WebCircleThread[];
+  wallPosts: WebFeedPost[];
   copy: WebAppCirclesCopy;
+  feedCopy: WebAppFeedCopy;
+  engagement: WebAppEngagementCopy;
   openAppHref: string;
   isExternalApp: boolean;
+  currentUserId?: string | null;
 }) {
   const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
 
@@ -81,6 +91,26 @@ export function WebCircleDetail({
           </p>
         ) : null}
       </header>
+
+      {/* Circle posts (wall) */}
+      {wallPosts.length > 0 ? (
+        <section className="mt-6">
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
+            {copy.postsSectionTitle}
+          </h2>
+          <div className="flex flex-col gap-4">
+            {wallPosts.map((post) => (
+              <WebFeedCard
+                key={post.id}
+                post={post}
+                copy={feedCopy}
+                engagement={engagement}
+                currentUserId={currentUserId}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Threads */}
       <section className="mt-6">

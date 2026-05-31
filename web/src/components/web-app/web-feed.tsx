@@ -1,20 +1,18 @@
 import Link from "next/link";
 
-import type { WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
 import type { WebFeedResult, WebFeedTab } from "@/lib/web-app/feed-data";
 import { cn } from "@/lib/utils";
 
-import { WebFeedCard } from "./web-feed-card";
+import { WebVideoTheater } from "./web-video-theater";
 
-function Tab({
-  href,
-  label,
-  active,
-}: {
-  href: string;
-  label: string;
-  active: boolean;
-}) {
+const TAB_HREF: Record<WebFeedTab, string> = {
+  foryou: "/web-app/feed",
+  following: "/web-app/feed?tab=following",
+  top: "/web-app/feed?tab=top",
+};
+
+function Tab({ href, label, active }: { href: string; label: string; active: boolean }) {
   return (
     <Link
       href={href}
@@ -22,7 +20,7 @@ function Tab({
         "rounded-full px-4 py-1.5 text-sm font-semibold transition",
         active
           ? "bg-gradient-to-r from-primary to-accent text-white shadow-[0_0_22px_-8px_rgba(45,127,249,0.9)]"
-          : "border border-white/10 bg-white/5 text-muted-foreground hover:border-white/20 hover:text-foreground",
+          : "text-white/70 hover:text-white",
       )}
     >
       {label}
@@ -30,10 +28,56 @@ function Tab({
   );
 }
 
+function CenteredCard({
+  title,
+  body,
+  primaryHref,
+  primaryLabel,
+  openAppHref,
+  openAppLabel,
+  isExternalApp,
+}: {
+  title: string;
+  body: string;
+  primaryHref?: string;
+  primaryLabel?: string;
+  openAppHref: string;
+  openAppLabel: string;
+  isExternalApp: boolean;
+}) {
+  const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
+  return (
+    <div className="grid size-full place-items-center px-4">
+      <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.85)] p-8 text-center backdrop-blur-xl">
+        <p className="text-base font-semibold text-foreground">{title}</p>
+        <p className="mx-auto mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+        <div className="mt-5 flex items-center justify-center gap-3">
+          {primaryHref && primaryLabel ? (
+            <Link
+              href={primaryHref}
+              className="rounded-full bg-gradient-to-r from-primary to-accent px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+            >
+              {primaryLabel}
+            </Link>
+          ) : null}
+          <a
+            href={openAppHref}
+            {...externalProps}
+            className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-foreground/90 transition hover:border-white/30"
+          >
+            {openAppLabel}
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function WebFeed({
   tab,
   result,
   copy,
+  engagement,
   openAppHref,
   isExternalApp,
   currentUserId = null,
@@ -41,67 +85,55 @@ export function WebFeed({
   tab: WebFeedTab;
   result: WebFeedResult;
   copy: WebAppFeedCopy;
+  engagement: WebAppEngagementCopy;
   openAppHref: string;
   isExternalApp: boolean;
   currentUserId?: string | null;
 }) {
-  const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
-
   return (
-    <div className="mx-auto w-full max-w-[640px] px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-5">
-        <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">{copy.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
-      </header>
-
-      <div className="mb-6 flex items-center gap-2">
-        <Tab href="/web-app/feed" label={copy.tabForYou} active={tab === "foryou"} />
-        <Tab href="/web-app/feed?tab=top" label={copy.tabTop} active={tab === "top"} />
+    <div className="relative min-h-0 flex-1">
+      {/* Stage / states fill the surface */}
+      <div className="absolute inset-0">
+        {result.state === "error" ? (
+          <CenteredCard
+            title={copy.errorTitle}
+            body={copy.errorBody}
+            primaryHref={TAB_HREF[tab]}
+            primaryLabel={copy.retry}
+            openAppHref={openAppHref}
+            openAppLabel={copy.openInApp}
+            isExternalApp={isExternalApp}
+          />
+        ) : result.state === "ok" && result.posts.length === 0 ? (
+          <CenteredCard
+            title={tab === "following" ? copy.followingEmptyTitle : copy.emptyTitle}
+            body={tab === "following" ? copy.followingEmptyBody : copy.emptyBody}
+            primaryHref={tab === "following" ? "/web-app/feed" : undefined}
+            primaryLabel={tab === "following" ? copy.tabForYou : undefined}
+            openAppHref={openAppHref}
+            openAppLabel={copy.openInApp}
+            isExternalApp={isExternalApp}
+          />
+        ) : result.state === "ok" ? (
+          <WebVideoTheater
+            posts={result.posts}
+            feedCopy={copy}
+            engagement={engagement}
+            currentUserId={currentUserId}
+            openAppHref={openAppHref}
+            isExternalApp={isExternalApp}
+          />
+        ) : null}
       </div>
 
-      {result.state === "error" ? (
-        <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
-          <p className="text-base font-semibold text-foreground">{copy.errorTitle}</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            {copy.errorBody}
-          </p>
-          <div className="mt-5 flex items-center justify-center gap-3">
-            <Link
-              href={tab === "top" ? "/web-app/feed?tab=top" : "/web-app/feed"}
-              className="rounded-full bg-gradient-to-r from-primary to-accent px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110"
-            >
-              {copy.retry}
-            </Link>
-            <a
-              href={openAppHref}
-              {...externalProps}
-              className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-foreground/90 transition hover:border-white/30"
-            >
-              {copy.openInApp}
-            </a>
-          </div>
+      {/* Floating feed tabs */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3">
+        <div className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/45 p-1 backdrop-blur-xl">
+          <Tab href={TAB_HREF.foryou} label={copy.tabForYou} active={tab === "foryou"} />
+          <Tab href={TAB_HREF.following} label={copy.tabFollowing} active={tab === "following"} />
+          <Tab href={TAB_HREF.top} label={copy.tabTop} active={tab === "top"} />
         </div>
-      ) : result.state === "ok" && result.posts.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
-          <p className="text-base font-semibold text-foreground">{copy.emptyTitle}</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            {copy.emptyBody}
-          </p>
-          <a
-            href={openAppHref}
-            {...externalProps}
-            className="mt-5 inline-block rounded-full bg-gradient-to-r from-primary to-accent px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110"
-          >
-            {copy.openInApp}
-          </a>
-        </div>
-      ) : result.state === "ok" ? (
-        <div className="flex flex-col gap-5">
-          {result.posts.map((post) => (
-            <WebFeedCard key={post.id} post={post} copy={copy} currentUserId={currentUserId} />
-          ))}
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }

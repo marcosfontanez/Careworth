@@ -2,7 +2,9 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
-export type WebFeedTab = "foryou" | "top";
+import { loadLikedPostIds } from "./engagement-data";
+
+export type WebFeedTab = "foryou" | "following" | "top";
 
 export type WebFeedAuthor = {
   id: string | null;
@@ -24,6 +26,8 @@ export type WebFeedPost = {
   author: WebFeedAuthor | null;
   likeCount: number;
   commentCount: number;
+  /** Whether the signed-in viewer has liked this post. */
+  likedByViewer: boolean;
 };
 
 export type WebFeedResult =
@@ -71,25 +75,53 @@ export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
     // 1) Rank: ordered post ids from a safe, definer-protected ranker.
     let ids: string[] = [];
 
-    if (tab === "top") {
-      const { data, error } = await supabase.rpc("get_top_today_v2", {
-        feed_limit: FEED_LIMIT,
-        viewer_uuid: user.id,
-        exclude_post_ids: [],
-      });
-      if (!error && Array.isArray(data)) {
-        ids = (data as RankRow[]).map((r) => r.post_id).filter((v): v is string => Boolean(v));
-      }
-    }
+    if (tab === "following") {
+      // Following = recent posts from creators the viewer follows. RLS via
+      // posts_viewer_safe still enforces readability; an empty follow set is a
+      // clean empty state, not an error.
+      const { data: follows } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id)
+        .limit(2000);
+      const followed = [
+        ...new Set(
+          ((follows ?? []) as { following_id: string }[])
+            .map((f) => f.following_id)
+            .filter((v): v is string => Boolean(v)),
+        ),
+      ];
+      if (followed.length === 0) return { state: "ok", posts: [] };
 
-    if (ids.length === 0) {
-      const { data, error } = await supabase.rpc("get_ranked_feed_v3", {
-        viewer_id: user.id,
-        feed_limit: FEED_LIMIT,
-        exclude_post_ids: [],
-      });
+      const { data, error } = await supabase
+        .from("posts_viewer_safe")
+        .select("id, created_at")
+        .in("creator_id", followed)
+        .order("created_at", { ascending: false })
+        .limit(FEED_LIMIT);
       if (error) throw error;
-      ids = ((data as RankRow[]) ?? []).map((r) => r.post_id).filter((v): v is string => Boolean(v));
+      ids = ((data ?? []) as { id: string }[]).map((r) => r.id).filter((v): v is string => Boolean(v));
+    } else {
+      if (tab === "top") {
+        const { data, error } = await supabase.rpc("get_top_today_v2", {
+          feed_limit: FEED_LIMIT,
+          viewer_uuid: user.id,
+          exclude_post_ids: [],
+        });
+        if (!error && Array.isArray(data)) {
+          ids = (data as RankRow[]).map((r) => r.post_id).filter((v): v is string => Boolean(v));
+        }
+      }
+
+      if (ids.length === 0) {
+        const { data, error } = await supabase.rpc("get_ranked_feed_v3", {
+          viewer_id: user.id,
+          feed_limit: FEED_LIMIT,
+          exclude_post_ids: [],
+        });
+        if (error) throw error;
+        ids = ((data as RankRow[]) ?? []).map((r) => r.post_id).filter((v): v is string => Boolean(v));
+      }
     }
 
     if (ids.length === 0) return { state: "ok", posts: [] };
@@ -164,6 +196,8 @@ export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
       }
     }
 
+    const likedSet = await loadLikedPostIds(supabase, user.id, ordered.map((r) => r.id));
+
     const posts: WebFeedPost[] = ordered.map((r) => {
       const creatorId = typeof r.creator_id === "string" ? r.creator_id : null;
       // Anonymous when flagged OR when the safe view masked the creator id.
@@ -188,6 +222,7 @@ export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
             },
         likeCount: Number(r.like_count ?? 0) || 0,
         commentCount: Number(r.comment_count ?? 0) || 0,
+        likedByViewer: likedSet.has(r.id),
       };
     });
 

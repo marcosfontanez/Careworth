@@ -63,11 +63,19 @@ export type WebAppRailCircle = {
   icon: string | null;
 };
 
+export type WebAppRailCreator = {
+  id: string;
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+};
+
 export function WebAppChrome({
   account,
   copy,
   externalAppBase,
   trendingCircles = [],
+  suggestedCreators = [],
   guidelinesHref = "/community-guidelines",
   getAppHref = "/download",
   children,
@@ -78,6 +86,8 @@ export function WebAppChrome({
   externalAppBase: string | null;
   /** Safe, public circles for the right rail (empty hides the card). */
   trendingCircles?: WebAppRailCircle[];
+  /** Safe, public creator suggestions for the right rail (empty hides the card). */
+  suggestedCreators?: WebAppRailCreator[];
   guidelinesHref?: string;
   getAppHref?: string;
   children: React.ReactNode;
@@ -227,7 +237,7 @@ export function WebAppChrome({
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_-10%,rgba(20,184,166,0.08),transparent_55%),radial-gradient(ellipse_50%_40%_at_85%_30%,rgba(45,127,249,0.07),transparent_50%)]"
           />
-          <div className="relative">{children}</div>
+          <div className="relative flex min-h-full flex-col">{children}</div>
         </main>
 
         {/* Right contextual rail (static, safe) */}
@@ -248,6 +258,43 @@ export function WebAppChrome({
                         {circle.icon ?? "💬"}
                       </span>
                       <span className="truncate font-medium">{circle.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {suggestedCreators.length > 0 ? (
+            <section className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.6)] p-4 backdrop-blur-sm">
+              <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
+                {copy.railCreatorsTitle}
+              </h2>
+              <ul className="mt-3 space-y-1">
+                {suggestedCreators.map((creator) => (
+                  <li key={creator.id}>
+                    <Link
+                      href={`/web-app/user/${creator.id}`}
+                      className="flex items-center gap-2.5 rounded-xl px-2 py-2 transition hover:bg-white/5"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary/60 text-xs font-bold text-foreground/80">
+                        {creator.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={creator.avatarUrl} alt="" className="size-full object-cover" />
+                        ) : (
+                          <User className="size-4 text-muted-foreground" aria-hidden />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {creator.displayName}
+                        </span>
+                        {creator.username ? (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            @{creator.username}
+                          </span>
+                        ) : null}
+                      </span>
                     </Link>
                   </li>
                 ))}

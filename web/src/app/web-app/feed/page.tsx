@@ -27,7 +27,8 @@ export default async function WebAppFeedPage({
   const account = await requireWebAppAccount("/web-app/feed");
 
   const { tab: tabParam } = await searchParams;
-  const tab: WebFeedTab = tabParam === "top" ? "top" : "foryou";
+  const tab: WebFeedTab =
+    tabParam === "top" ? "top" : tabParam === "following" ? "following" : "foryou";
 
   const [locale, result] = await Promise.all([getMarketingLocale(), loadWebFeed(tab)]);
   const c = getWebAppPageCopy(locale);
@@ -40,6 +41,7 @@ export default async function WebAppFeedPage({
       tab={tab}
       result={result}
       copy={c.feed}
+      engagement={c.engagement}
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}
       currentUserId={account.id}

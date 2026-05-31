@@ -45,9 +45,12 @@ export default async function WebAppMyPulsePage() {
       isOwner={result.isOwner}
       contentVisible={result.contentVisible}
       lockReason={result.lockReason}
+      canFollow={result.canFollow}
+      isFollowing={result.isFollowing}
       pulseUpdates={result.pulseUpdates}
       posts={result.posts}
       copy={c.profile}
+      engagement={c.engagement}
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}
     />

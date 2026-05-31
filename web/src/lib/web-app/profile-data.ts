@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
+import { loadFollowingIds, loadLikedPostIds } from "./engagement-data";
 import { isVideoType, toHttps } from "./format";
 
 export type WebProfileFrame = {
@@ -53,6 +54,7 @@ export type WebProfilePost = {
   createdAt: string | null;
   likeCount: number;
   commentCount: number;
+  likedByViewer: boolean;
 };
 
 /** Why a profile's content is hidden even though the shell can render. */
@@ -67,6 +69,9 @@ export type WebProfileResult =
       isOwner: boolean;
       contentVisible: boolean;
       lockReason: WebProfileLockReason;
+      /** Visitor may follow this profile (not owner, content visible, not blocked). */
+      canFollow: boolean;
+      isFollowing: boolean;
       profile: WebProfileHeader;
       pulseUpdates: WebPulseUpdate[];
       posts: WebProfilePost[];
@@ -231,15 +236,19 @@ async function finalize(
       isOwner,
       contentVisible: false,
       lockReason,
+      canFollow: false,
+      isFollowing: false,
       profile,
       pulseUpdates: [],
       posts: [],
     };
   }
 
-  const [pulseUpdates, posts] = await Promise.all([
+  const canFollow = !isOwner;
+  const [pulseUpdates, posts, followingSet] = await Promise.all([
     loadPulseUpdates(supabase, targetUserId),
-    loadProfilePosts(supabase, targetUserId, isOwner),
+    loadProfilePosts(supabase, targetUserId, isOwner, viewerId),
+    canFollow ? loadFollowingIds(supabase, viewerId, [targetUserId]) : Promise.resolve(new Set<string>()),
   ]);
 
   return {
@@ -247,6 +256,8 @@ async function finalize(
     isOwner,
     contentVisible: true,
     lockReason: null,
+    canFollow,
+    isFollowing: followingSet.has(targetUserId),
     profile,
     pulseUpdates,
     posts,
@@ -285,6 +296,7 @@ async function loadProfilePosts(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   userId: string,
   isOwner: boolean,
+  viewerId: string,
 ): Promise<WebProfilePost[]> {
   try {
     const { data } = await supabase
@@ -295,7 +307,7 @@ async function loadProfilePosts(
       .limit(POSTS_LIMIT);
 
     const rows = (data ?? []) as AnyRow[];
-    const out: WebProfilePost[] = [];
+    const kept: AnyRow[] = [];
     for (const r of rows) {
       const sched = String(r.scheduled_status ?? "live").toLowerCase();
       if (sched !== "live") continue;
@@ -307,20 +319,23 @@ async function loadProfilePosts(
         const privacy = String(r.privacy_mode ?? "public").toLowerCase();
         if (!PUBLIC_PRIVACY.has(privacy)) continue;
       }
-
-      out.push({
-        id: String(r.id),
-        type: String(r.type ?? "post"),
-        caption: str(r.caption),
-        thumbnailUrl: toHttps(r.thumbnail_url),
-        mediaUrl: toHttps(r.media_url),
-        isVideo: isVideoType(r.type),
-        createdAt: str(r.created_at),
-        likeCount: num(r.like_count),
-        commentCount: num(r.comment_count),
-      });
+      kept.push(r);
     }
-    return out;
+
+    const likedSet = await loadLikedPostIds(supabase, viewerId, kept.map((r) => String(r.id)));
+
+    return kept.map((r) => ({
+      id: String(r.id),
+      type: String(r.type ?? "post"),
+      caption: str(r.caption),
+      thumbnailUrl: toHttps(r.thumbnail_url),
+      mediaUrl: toHttps(r.media_url),
+      isVideo: isVideoType(r.type),
+      createdAt: str(r.created_at),
+      likeCount: num(r.like_count),
+      commentCount: num(r.comment_count),
+      likedByViewer: likedSet.has(String(r.id)),
+    }));
   } catch {
     return [];
   }
