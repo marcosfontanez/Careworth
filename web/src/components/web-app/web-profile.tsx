@@ -1,37 +1,47 @@
-import Link from "next/link";
 import {
+  Award,
   BadgeCheck,
+  ChevronRight,
   ExternalLink,
+  GraduationCap,
   Heart,
-  ImageOff,
+  HeartPulse,
+  Hexagon,
   Lock,
   MessageCircle,
+  Moon,
+  Pencil,
   Pin,
-  Play,
+  ShieldCheck,
   Sparkles,
+  Stethoscope,
+  Trophy,
   UserRound,
+  Users,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 
 import type { WebAppEngagementCopy, WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
 import type {
   WebProfileFrame,
   WebProfileHeader,
-  WebProfilePost,
   WebProfileLockReason,
+  WebProfilePost,
   WebPulseUpdate,
 } from "@/lib/web-app/profile-data";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 
 import { FollowButton } from "./follow-button";
-import { LikeButton } from "./like-button";
+import { WebProfilePosts } from "./web-profile-posts";
 
 function ringStyle(frame: WebProfileFrame | null): React.CSSProperties {
-  if (!frame) return { borderColor: "rgba(255,255,255,0.12)" };
-  const ring = frame.ringColor ?? "#5EEAD4";
+  if (!frame) return { borderColor: "rgba(250,204,21,0.55)", boxShadow: "0 0 26px -4px rgba(250,204,21,0.45)" };
+  const ring = frame.ringColor ?? "#FACC15";
   const glow = frame.glowColor ?? ring;
   return {
     borderColor: ring,
-    boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 0 22px -2px ${glow}, inset 0 0 12px -4px ${glow}`,
+    boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 0 28px -2px ${glow}, inset 0 0 14px -4px ${glow}`,
   };
 }
 
@@ -50,7 +60,7 @@ function ProfileAvatar({ profile }: { profile: WebProfileHeader }) {
         )}
       </span>
       {profile.frame?.ringCaption ? (
-        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-300/40 bg-[rgba(20,16,8,0.9)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200 shadow-[0_0_14px_-4px_rgba(251,191,36,0.7)]">
+        <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-300/40 bg-[rgba(20,16,8,0.92)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200 shadow-[0_0_14px_-4px_rgba(251,191,36,0.7)]">
           {profile.frame.ringCaption}
         </span>
       ) : null}
@@ -58,111 +68,105 @@ function ProfileAvatar({ profile }: { profile: WebProfileHeader }) {
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="text-center">
-      <p className="text-lg font-bold text-foreground">{formatCount(value)}</p>
-      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-    </div>
-  );
-}
+const TAG_ICONS: LucideIcon[] = [Stethoscope, HeartPulse, GraduationCap, ShieldCheck, Award];
 
-function PulseUpdateRow({ update }: { update: WebPulseUpdate }) {
-  const text = update.content?.trim() || update.previewText?.trim() || "";
-  const time = relativeTime(update.createdAt);
+function IdentityChip({ tag, index }: { tag: string; index: number }) {
+  const Icon = TAG_ICONS[index % TAG_ICONS.length];
   return (
-    <li className="rounded-2xl border border-white/8 bg-white/[0.03] p-3.5">
-      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
-        {update.isPinned ? <Pin className="size-3" aria-hidden /> : <Sparkles className="size-3" aria-hidden />}
-        <span>{update.type.replace(/_/g, " ")}</span>
-        {update.mood ? <span className="text-muted-foreground">· {update.mood}</span> : null}
-        {time ? <span className="ml-auto font-normal normal-case text-muted-foreground">{time}</span> : null}
-      </div>
-      {text ? (
-        <p className="mt-1.5 text-sm leading-relaxed text-foreground/90 [overflow-wrap:anywhere]">
-          {text.length > 240 ? `${text.slice(0, 240)}…` : text}
-        </p>
-      ) : null}
-      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Heart className="size-3.5" aria-hidden />
-          {formatCount(update.likeCount)}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <MessageCircle className="size-3.5" aria-hidden />
-          {formatCount(update.commentCount)}
-        </span>
-      </div>
+    <li className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary/95">
+      <Icon className="size-3" aria-hidden />
+      {tag}
     </li>
   );
 }
 
-function PostTile({
-  post,
-  copy,
-  engagement,
-}: {
-  post: WebProfilePost;
-  copy: WebAppProfileCopy;
-  engagement: WebAppEngagementCopy;
-}) {
-  const media = post.thumbnailUrl ?? post.mediaUrl;
+function Stat({ icon: Icon, value, label }: { icon: LucideIcon; value: number; label: string }) {
   return (
-    <div className="group relative aspect-[9/16] overflow-hidden rounded-2xl border border-white/10 bg-[#05080f] shadow-[0_18px_50px_-34px_rgba(0,0,0,0.95)]">
-      {media ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={media}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-[1.05]"
-          />
-          {post.isVideo ? (
-            <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-              <Play className="size-2.5 fill-current" aria-hidden />
-              {copy.videoBadge}
-            </span>
-          ) : null}
-        </>
-      ) : (
-        <div className="absolute inset-0 flex flex-col justify-between bg-gradient-to-br from-[#101a35] to-[#0a1020] p-3">
-          <ImageOff className="size-4 text-muted-foreground/60" aria-hidden />
-          <p className="text-xs leading-snug text-foreground/85 [overflow-wrap:anywhere]">
-            {post.caption?.trim() ? (post.caption.length > 140 ? `${post.caption.slice(0, 140)}…` : post.caption) : "—"}
-          </p>
-        </div>
-      )}
-
-      {/* Whole-tile navigation sits beneath interactive controls. */}
-      <Link href={`/post/${post.id}`} className="absolute inset-0 z-10" aria-label={copy.openPost} />
-
-      {/* Interactive like — above the navigation overlay. */}
-      <span className="absolute right-2 top-2 z-20 inline-flex rounded-full bg-black/55 px-2 py-1 text-white backdrop-blur-sm">
-        <LikeButton
-          postId={post.id}
-          initialLiked={post.likedByViewer}
-          initialCount={post.likeCount}
-          labels={{ like: engagement.like, liked: engagement.liked, error: engagement.likeError }}
-          size="sm"
-        />
+    <div className="flex items-center gap-2.5">
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground">
+        <Icon className="size-4" aria-hidden />
       </span>
+      <div>
+        <p className="text-lg font-bold leading-none text-foreground">{formatCount(value)}</p>
+        <p className="mt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      </div>
+    </div>
+  );
+}
 
-      {/* Caption + counts overlay (always visible on media tiles) */}
-      {media ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-2.5 pb-2 pt-6">
-          {post.caption?.trim() ? (
-            <p className="line-clamp-2 text-[11px] font-medium leading-snug text-white/90 [overflow-wrap:anywhere]">
-              {post.caption}
-            </p>
-          ) : null}
-          <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-white/85">
-            <MessageCircle className="size-3" aria-hidden />
-            {formatCount(post.commentCount)}
+function PulseScoreBlock({
+  score,
+  tier,
+  label,
+}: {
+  score: number;
+  tier: string | null;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-amber-300/25 bg-[rgba(28,22,8,0.45)] px-4 py-2.5 shadow-[0_0_30px_-14px_rgba(251,191,36,0.7)]">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">{label}</p>
+        <p className="mt-0.5 flex items-center gap-1.5">
+          <span className="text-xl font-black leading-none text-foreground">{formatCount(score)}</span>
+          <Zap className="size-4 fill-amber-300 text-amber-300" aria-hidden />
+          {tier ? <span className="text-sm font-bold text-amber-200">{tier}</span> : null}
+        </p>
+      </div>
+      <span className="relative grid size-9 shrink-0 place-items-center">
+        <Hexagon className="size-9 fill-amber-400/20 text-amber-300/70" aria-hidden />
+        <Award className="absolute size-4 text-amber-200" aria-hidden />
+      </span>
+    </div>
+  );
+}
+
+function updateVisual(type: string): { Icon: LucideIcon; tile: string } {
+  const t = type.toLowerCase();
+  if (/(milestone|achiev|badge|reward|level)/.test(t))
+    return { Icon: Trophy, tile: "border-amber-300/30 bg-amber-400/10 text-amber-300" };
+  if (/(streak|consist|daily)/.test(t))
+    return { Icon: ShieldCheck, tile: "border-teal-300/30 bg-teal-400/10 text-teal-300" };
+  if (/(reflect|mood|journal|shift)/.test(t))
+    return { Icon: Moon, tile: "border-violet-300/30 bg-violet-400/10 text-violet-300" };
+  if (/(question|community|answer|reply)/.test(t))
+    return { Icon: Users, tile: "border-sky-300/30 bg-sky-400/10 text-sky-300" };
+  return { Icon: Sparkles, tile: "border-primary/30 bg-primary/10 text-primary" };
+}
+
+function PulseUpdateRow({ update }: { update: WebPulseUpdate }) {
+  const { Icon, tile } = updateVisual(update.type);
+  const title = update.type.replace(/_/g, " ");
+  const body = update.content?.trim() || update.previewText?.trim() || "";
+  const time = relativeTime(update.createdAt);
+  return (
+    <li className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3.5 transition hover:border-white/15">
+      <span className={`grid size-10 shrink-0 place-items-center rounded-xl border ${tile}`}>
+        {update.isPinned ? <Pin className="size-4" aria-hidden /> : <Icon className="size-4" aria-hidden />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold capitalize leading-snug text-foreground wrap-anywhere">
+            {title}
+            {update.mood ? <span className="font-normal text-muted-foreground"> · {update.mood}</span> : null}
+          </p>
+          {time ? <span className="shrink-0 text-[11px] text-muted-foreground">{time}</span> : null}
+        </div>
+        {body ? (
+          <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">{body}</p>
+        ) : null}
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Heart className="size-3.5" aria-hidden />
+            {formatCount(update.likeCount)}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <MessageCircle className="size-3.5" aria-hidden />
+            {formatCount(update.commentCount)}
           </span>
         </div>
-      ) : null}
-    </div>
+      </div>
+    </li>
   );
 }
 
@@ -210,55 +214,62 @@ export function WebProfile({
   const lockBody = lockReason === "blocked" ? copy.blockedBody : copy.privateBody;
 
   return (
-    <div className="mx-auto w-full max-w-[860px] px-4 py-6 sm:px-6 sm:py-8">
-      {/* Banner */}
-      <div className="relative mb-[-48px] h-32 overflow-hidden rounded-3xl border border-white/8 bg-gradient-to-br from-primary/25 via-[#0b1424] to-accent/20 sm:h-40">
+    <div className="mx-auto w-full max-w-[960px] px-4 py-6 sm:px-6 sm:py-8">
+      {/* ── Premium header card ─────────────────────────────────── */}
+      <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,16,30,0.9)] p-5 shadow-[0_30px_90px_-50px_rgba(0,0,0,0.95),0_0_0_1px_rgba(20,184,166,0.05)] backdrop-blur-sm sm:p-6">
+        {/* Banner / cinematic glow */}
         {profile.bannerUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.bannerUrl} alt="" className="size-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={profile.bannerUrl} alt="" className="absolute inset-0 size-full object-cover opacity-30" />
+            <span aria-hidden className="absolute inset-0 bg-[rgba(8,13,26,0.7)]" />
+          </>
         ) : null}
-      </div>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_55%_120%_at_18%_0%,rgba(20,184,166,0.22),transparent_60%),radial-gradient(ellipse_60%_120%_at_85%_30%,rgba(45,127,249,0.16),transparent_55%)]"
+        />
 
-      {/* Header card */}
-      <header className="relative rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.86)] p-5 shadow-[0_24px_70px_-40px_rgba(0,0,0,0.9)] backdrop-blur-sm sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="-mt-16 sm:-mt-20">
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start">
+          <div className="pt-1">
             <ProfileAvatar profile={profile} />
           </div>
+
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="truncate font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              <h1 className="truncate font-heading text-2xl font-black tracking-tight text-foreground sm:text-3xl">
                 {profile.displayName}
               </h1>
               {profile.isVerified ? (
-                <BadgeCheck className="size-5 shrink-0 text-sky-400" aria-label={copy.verifiedLabel} />
+                <BadgeCheck className="size-6 shrink-0 text-sky-400" aria-label={copy.verifiedLabel} />
               ) : null}
             </div>
             {profile.username ? (
               <p className="truncate text-sm text-muted-foreground">@{profile.username}</p>
             ) : null}
+
             {profile.identityTags.length > 0 ? (
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {profile.identityTags.map((tag) => (
-                  <li
-                    key={tag}
-                    className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary"
-                  >
-                    {tag}
-                  </li>
+              <ul className="mt-2.5 flex flex-wrap gap-1.5">
+                {profile.identityTags.map((tag, i) => (
+                  <IdentityChip key={tag} tag={tag} index={i} />
                 ))}
               </ul>
             ) : null}
+
+            {profile.bio?.trim() ? (
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/85 wrap-anywhere">{profile.bio}</p>
+            ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* Edit / follow */}
+          <div className="flex shrink-0 items-center gap-2 sm:ml-2">
             {isOwner ? (
               <a
                 href={openAppHref}
                 {...externalProps}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-foreground/90 transition hover:border-white/25"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-semibold text-foreground/90 transition hover:border-white/30 hover:text-foreground"
               >
-                <ExternalLink className="size-4" aria-hidden />
+                <Pencil className="size-4" aria-hidden />
                 {copy.editProfile}
               </a>
             ) : (
@@ -287,47 +298,36 @@ export function WebProfile({
           </div>
         </div>
 
-        {profile.bio?.trim() ? (
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-foreground/85 [overflow-wrap:anywhere]">
-            {profile.bio}
-          </p>
-        ) : null}
-
-        <div className="mt-5 flex items-center gap-7 border-t border-white/8 pt-4">
-          <Stat value={profile.stats.followers} label={copy.statFollowers} />
-          <Stat value={profile.stats.following} label={copy.statFollowing} />
-          <Stat value={profile.stats.pulseScore} label={profile.stats.pulseTier ?? copy.statPulse} />
+        {/* Stats strip */}
+        <div className="relative mt-5 flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-white/8 pt-4">
+          <Stat icon={Users} value={profile.stats.followers} label={copy.statFollowers} />
+          <Stat icon={UserRound} value={profile.stats.following} label={copy.statFollowing} />
+          <div className="sm:ml-auto">
+            <PulseScoreBlock
+              score={profile.stats.pulseScore}
+              tier={profile.stats.pulseTier}
+              label={copy.pulseScoreLabel}
+            />
+          </div>
         </div>
       </header>
 
-      {/* Body */}
+      {/* ── Body ────────────────────────────────────────────────── */}
       {!contentVisible ? (
         <div className="mt-6">
           <LockedCard title={lockTitle} body={lockBody} />
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
-          {/* Posts & media */}
-          <section className="order-2 lg:order-1">
-            <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              {copy.postsTitle}
-            </h2>
-            {posts.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-8 text-center text-sm text-muted-foreground backdrop-blur-sm">
-                {isOwner ? copy.postsEmptyOwner : copy.postsEmptyVisitor}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-                {posts.map((post) => (
-                  <PostTile key={post.id} post={post} copy={copy} engagement={engagement} />
-                ))}
-              </div>
-            )}
-          </section>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_330px]">
+          {/* Posts (client: grid/list toggle) */}
+          <div className="order-2 lg:order-1">
+            <WebProfilePosts posts={posts} copy={copy} engagement={engagement} isOwner={isOwner} />
+          </div>
 
           {/* Pulse updates */}
           <section className="order-1 lg:order-2">
-            <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
+            <h2 className="mb-3 flex items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground">
+              <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
               {copy.pulseUpdatesTitle}
             </h2>
             {pulseUpdates.length === 0 ? (
@@ -335,11 +335,21 @@ export function WebProfile({
                 {copy.pulseUpdatesEmpty}
               </div>
             ) : (
-              <ul className="flex flex-col gap-2.5">
-                {pulseUpdates.map((update) => (
-                  <PulseUpdateRow key={update.id} update={update} />
-                ))}
-              </ul>
+              <>
+                <ul className="flex flex-col gap-2.5">
+                  {pulseUpdates.map((update) => (
+                    <PulseUpdateRow key={update.id} update={update} />
+                  ))}
+                </ul>
+                <a
+                  href={openAppHref}
+                  {...externalProps}
+                  className="mt-3 flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-foreground/90 transition hover:border-primary/40 hover:text-foreground"
+                >
+                  {copy.viewAllUpdates}
+                  <ChevronRight className="size-4" aria-hidden />
+                </a>
+              </>
             )}
           </section>
         </div>

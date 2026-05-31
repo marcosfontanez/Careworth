@@ -12,12 +12,15 @@ export function WebFeedCard({
   copy,
   engagement,
   currentUserId = null,
+  bare = false,
 }: {
   post: WebFeedPost;
   copy: WebAppFeedCopy;
   engagement: WebAppEngagementCopy;
   /** Signed-in viewer id, so own-author taps route to My Pulse. */
   currentUserId?: string | null;
+  /** Drop the outer card chrome so the card can be nested (e.g. Circle wall post + comments). */
+  bare?: boolean;
 }) {
   const media = post.thumbnailUrl ?? post.mediaUrl;
   const showImageMedia = Boolean(media);
@@ -53,7 +56,13 @@ export function WebFeedCard({
   );
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.86)] shadow-[0_24px_70px_-36px_rgba(0,0,0,0.9),0_0_0_1px_rgba(20,184,166,0.06)] backdrop-blur-sm transition hover:border-white/15">
+    <article
+      className={
+        bare
+          ? "overflow-hidden"
+          : "overflow-hidden rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.86)] shadow-[0_24px_70px_-36px_rgba(0,0,0,0.9),0_0_0_1px_rgba(20,184,166,0.06)] backdrop-blur-sm transition hover:border-white/15"
+      }
+    >
       {/* Author row */}
       <div className="flex items-center gap-3 px-4 pt-4">
         {profileHref ? (

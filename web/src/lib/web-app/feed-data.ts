@@ -2,7 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
-import { loadFollowingIds, loadLikedPostIds } from "./engagement-data";
+import { loadBlockedUserIds, loadFollowingIds, loadLikedPostIds } from "./engagement-data";
 
 export type WebFeedTab = "foryou" | "following" | "top";
 
@@ -56,6 +56,101 @@ function toHttps(url: unknown): string | null {
 function isVideoType(type: unknown): boolean {
   const t = String(type ?? "").toLowerCase();
   return t.includes("video") || t.includes("clip") || t === "live";
+}
+
+export type WebPostResult =
+  | { state: "error" }
+  | { state: "unavailable" }
+  | { state: "ok"; post: WebFeedPost; isOwner: boolean };
+
+/**
+ * A single post for the native web post page (/web-app/post/[id]). Visibility is
+ * enforced by `posts_viewer_safe` (RLS) first; we add the same web guards used by
+ * the feed: live + not processing, public/alias (or owned by the viewer), and
+ * blocked/hidden exclusions. Anonymous authors stay masked (no profile link).
+ */
+export async function loadWebPost(postId: string, viewerId: string): Promise<WebPostResult> {
+  if (!isSupabaseConfigured() || !postId) return { state: "error" };
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch {
+    return { state: "error" };
+  }
+
+  try {
+    const { data: row, error } = await supabase
+      .from("posts_viewer_safe")
+      .select("*")
+      .eq("id", postId)
+      .maybeSingle();
+    if (error) return { state: "error" };
+    if (!row) return { state: "unavailable" };
+
+    const r = row as Record<string, unknown> & { id: string };
+    const creatorId = typeof r.creator_id === "string" ? r.creator_id : null;
+    const isOwner = creatorId != null && creatorId === viewerId;
+
+    const sched = String(r.scheduled_status ?? "live").toLowerCase();
+    if (sched !== "live") return { state: "unavailable" };
+    const proc = String(r.media_processing_status ?? "").toLowerCase().trim();
+    if (PROCESSING_BLOCK.has(proc)) return { state: "unavailable" };
+
+    const privacy = String(r.privacy_mode ?? "public").toLowerCase();
+    if (!PUBLIC_PRIVACY.has(privacy) && !isOwner) return { state: "unavailable" };
+
+    // Blocked (either direction) / hidden creators are never viewable, even by id.
+    if (creatorId && !isOwner) {
+      const blocked = await loadBlockedUserIds(supabase, viewerId);
+      if (blocked.has(creatorId)) return { state: "unavailable" };
+    }
+
+    const anon = Boolean(r.is_anonymous) || !creatorId;
+    type ProfileLite = { display_name: string | null; username: string | null; avatar_url: string | null };
+    let prof: ProfileLite | null = null;
+    if (!anon && creatorId) {
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("display_name, username, avatar_url")
+        .eq("id", creatorId)
+        .maybeSingle();
+      prof = (p as ProfileLite | null) ?? null;
+    }
+
+    const [likedSet, followingSet] = await Promise.all([
+      loadLikedPostIds(supabase, viewerId, [r.id]),
+      anon || !creatorId
+        ? Promise.resolve(new Set<string>())
+        : loadFollowingIds(supabase, viewerId, [creatorId]),
+    ]);
+
+    const post: WebFeedPost = {
+      id: r.id,
+      type: String(r.type ?? "post"),
+      caption: typeof r.caption === "string" ? r.caption : null,
+      mediaUrl: toHttps(r.media_url),
+      thumbnailUrl: toHttps(r.thumbnail_url),
+      createdAt: typeof r.created_at === "string" ? r.created_at : null,
+      isAnonymous: anon,
+      isVideo: isVideoType(r.type),
+      author: anon
+        ? null
+        : {
+            id: creatorId,
+            displayName: prof?.display_name?.trim() || prof?.username || "PulseVerse member",
+            username: prof?.username ?? null,
+            avatarUrl: toHttps(prof?.avatar_url),
+          },
+      likeCount: Number(r.like_count ?? 0) || 0,
+      commentCount: Number(r.comment_count ?? 0) || 0,
+      likedByViewer: likedSet.has(r.id),
+      authorFollowedByViewer: !anon && creatorId ? followingSet.has(creatorId) : false,
+    };
+
+    return { state: "ok", post, isOwner };
+  } catch {
+    return { state: "error" };
+  }
 }
 
 export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {

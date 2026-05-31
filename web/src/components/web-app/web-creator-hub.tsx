@@ -3,7 +3,9 @@ import {
   ChevronRight,
   Clock,
   Film,
+  Heart,
   Layers,
+  MessageCircle,
   PenLine,
   Play,
   Radio,
@@ -159,7 +161,7 @@ function RecentTile({ post, copy, openPostLabel }: { post: CreatorHubPost; copy:
 
   if (isLive) {
     return (
-      <Link href={`/post/${post.id}`} aria-label={openPostLabel}>
+      <Link href={`/web-app/post/${post.id}`} aria-label={openPostLabel}>
         {card}
       </Link>
     );
@@ -234,6 +236,19 @@ export function WebCreatorHub({
           <Stat value={formatCount(overview.recentLikes)} label={copy.statLikes} />
           <Stat value={pulseValue} label={copy.statPulse} />
         </div>
+        {overview.recentLikes > 0 || overview.recentComments > 0 ? (
+          <p className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <Heart className="size-3.5 text-rose-400/80" aria-hidden />
+              {formatCount(overview.recentLikes)} {copy.statLikes.toLowerCase()}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <MessageCircle className="size-3.5 text-[var(--accent)]" aria-hidden />
+              {formatCount(overview.recentComments)} {copy.statComments.toLowerCase()}
+            </span>
+            <span className="text-muted-foreground/70">{copy.recentEngagementNote}</span>
+          </p>
+        ) : null}
 
         {(overview.processing > 0 || overview.failed > 0) && (
           <div className="mt-3">

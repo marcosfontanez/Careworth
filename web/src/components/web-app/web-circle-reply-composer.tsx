@@ -29,6 +29,7 @@ export function WebCircleReplyComposer({
   const pathname = usePathname();
   const [value, setValue] = useState("");
   const [errored, setErrored] = useState(false);
+  const [membersOnly, setMembersOnly] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const trimmed = value.trim();
@@ -38,12 +39,19 @@ export function WebCircleReplyComposer({
   function submit() {
     if (!canSubmit) return;
     setErrored(false);
+    setMembersOnly(false);
     const body = trimmed;
     startTransition(async () => {
       const res = await createCircleReplyAction(slug, threadId, body);
       if (!res.ok) {
         if (res.reason === "auth") {
           router.push(`/login?next=${encodeURIComponent(pathname ?? `/web-app/circles/${slug}`)}`);
+          return;
+        }
+        // Membership can change between render and submit; surface a clear,
+        // non-technical prompt rather than a generic failure.
+        if (res.reason === "not_member") {
+          setMembersOnly(true);
           return;
         }
         setErrored(true);
@@ -67,6 +75,7 @@ export function WebCircleReplyComposer({
           onChange={(e) => {
             setValue(e.target.value);
             if (errored) setErrored(false);
+            if (membersOnly) setMembersOnly(false);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -94,7 +103,13 @@ export function WebCircleReplyComposer({
       </div>
       <div className="mt-1.5 flex items-center justify-between px-1">
         <span className="text-[11px] text-amber-300/90">
-          {errored ? copy.replyComposerError : pending ? copy.replyComposerPosting : ""}
+          {membersOnly
+            ? copy.replyMembersOnly
+            : errored
+              ? copy.replyComposerError
+              : pending
+                ? copy.replyComposerPosting
+                : ""}
         </span>
         <span
           className={[

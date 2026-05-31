@@ -94,6 +94,15 @@ export type HomeTrustCopy = {
   disclaimer: string;
 };
 
+export type HomeAdFilmCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  playLabel: string;
+  durationLabel: string;
+  caption: string;
+};
+
 /* ------------------------------------------------------------------------- */
 /*  Signature overview — compact 4-icon strip directly under the hero.        */
 /*  Title + 3-word kicker only. No body copy (kept on the home).              */
@@ -409,6 +418,33 @@ const trust: Record<Locale, HomeTrustCopy> = {
 };
 
 /* ------------------------------------------------------------------------- */
+/*  Ad film — the (very) unofficial PulseVerse commercial. Made to make the   */
+/*  floor laugh. Click-to-play so it costs nobody bandwidth until they want   */
+/*  the joke.                                                                  */
+/* ------------------------------------------------------------------------- */
+
+const adFilm: Record<Locale, HomeAdFilmCopy> = {
+  en: {
+    eyebrow: "From the PulseVerse cinematic universe",
+    title: "We made an ad. We could not stop laughing.",
+    description:
+      "Thirty seconds of healthcare comedy from the team building PulseVerse. No focus groups were harmed.",
+    playLabel: "Play the ad",
+    durationLabel: "0:30",
+    caption: "Best enjoyed on a break you definitely deserve.",
+  },
+  es: {
+    eyebrow: "Del universo cinematográfico de PulseVerse",
+    title: "Hicimos un anuncio. No pudimos parar de reír.",
+    description:
+      "Treinta segundos de comedia sanitaria del equipo que construye PulseVerse. Ningún grupo de enfoque resultó herido.",
+    playLabel: "Reproducir el anuncio",
+    durationLabel: "0:30",
+    caption: "Mejor disfrutado en un descanso que sin duda te mereces.",
+  },
+};
+
+/* ------------------------------------------------------------------------- */
 /*  Exports                                                                  */
 /* ------------------------------------------------------------------------- */
 
@@ -442,4 +478,8 @@ export function getHomeBordersCopy(locale: Locale): HomeBordersCopy {
 
 export function getHomeTrustCopy(locale: Locale): HomeTrustCopy {
   return trust[locale] ?? trust.en;
+}
+
+export function getHomeAdFilmCopy(locale: Locale): HomeAdFilmCopy {
+  return adFilm[locale] ?? adFilm.en;
 }

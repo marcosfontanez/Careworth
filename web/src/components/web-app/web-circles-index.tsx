@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Pin, Search, Users } from "lucide-react";
+import { ArrowRight, Compass, Pin, Search, Sparkles, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
-import type { WebCircle, WebCirclesIndexResult } from "@/lib/web-app/circles-data";
+import type { WebCircle, WebCirclesIndexResult, WebMyCircle } from "@/lib/web-app/circles-data";
 import { formatCount } from "@/lib/web-app/format";
 
 import { WebCircleCard } from "./web-circle-card";
@@ -47,11 +47,22 @@ function FeaturedCircle({ circle, copy }: { circle: WebCircle; copy: WebAppCircl
   );
 }
 
+function SectionHeading({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
+      {icon}
+      {children}
+    </h2>
+  );
+}
+
 export function WebCirclesIndex({
   result,
+  myCircles,
   copy,
 }: {
   result: WebCirclesIndexResult;
+  myCircles: WebMyCircle[];
   copy: WebAppCirclesCopy;
 }) {
   const searchParams = useSearchParams();
@@ -79,6 +90,41 @@ export function WebCirclesIndex({
         <p className="mt-1 text-sm text-muted-foreground">{copy.indexSubtitle}</p>
       </header>
 
+      {/* My Circles — the signed-in viewer's joined Circles (read-only; joining stays in-app) */}
+      <section className="mb-7">
+        <SectionHeading icon={<Sparkles className="size-3.5 text-[var(--accent)]" aria-hidden />}>
+          {copy.myCirclesTitle}
+        </SectionHeading>
+        {myCircles.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-7 text-center backdrop-blur-sm">
+            <span className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br from-primary/20 to-accent/15 text-2xl">
+              💬
+            </span>
+            <p className="text-base font-semibold text-foreground">{copy.myCirclesEmptyTitle}</p>
+            <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              {copy.myCirclesEmptyBody}
+            </p>
+            <a
+              href="#discover-circles"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-teal-400 to-sky-500 px-4 py-2 text-sm font-semibold text-[#04121f] shadow-[0_8px_24px_-10px_rgba(20,184,166,0.8)] transition hover:brightness-110"
+            >
+              <Compass className="size-4" aria-hidden />
+              {copy.exploreCirclesCta}
+            </a>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {myCircles.map((circle) => (
+              <WebCircleCard key={circle.id} circle={circle} copy={copy} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section id="discover-circles" className="scroll-mt-24">
+        <SectionHeading icon={<Compass className="size-3.5 text-[var(--accent)]" aria-hidden />}>
+          {copy.discoverTitle}
+        </SectionHeading>
       {result.state === "error" ? (
         <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
           <p className="text-base font-semibold text-foreground">{copy.errorTitle}</p>
@@ -123,6 +169,7 @@ export function WebCirclesIndex({
           )}
         </>
       )}
+      </section>
     </div>
   );
 }

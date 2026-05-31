@@ -5,7 +5,6 @@ import { getWebAppPageCopy } from "@/lib/marketing-copy/web-app";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { requireWebAppAccount } from "@/lib/web-app/account";
 import { loadWebLive } from "@/lib/web-app/live-data";
-import { usableExternalAppOrigin } from "@/lib/web-app-embed-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +23,6 @@ export default async function WebAppLivePage() {
   const c = getWebAppPageCopy(locale);
 
   const result = await loadWebLive(account.id);
-  const isExternalApp = usableExternalAppOrigin() !== null;
 
-  return <WebLive result={result} copy={c.live} isExternalApp={isExternalApp} />;
+  return <WebLive result={result} copy={c.live} />;
 }

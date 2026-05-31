@@ -278,7 +278,10 @@ export async function fetchPostCommentsAction(postId: string): Promise<WebCommen
 /** Outcome of a guarded comment create. No raw DB errors ever reach the client. */
 export type CommentCreateResult =
   | { ok: true }
-  | { ok: false; reason: "auth" | "blocked" | "unavailable" | "empty" | "too_long" | "error" };
+  | {
+      ok: false;
+      reason: "auth" | "blocked" | "unavailable" | "empty" | "too_long" | "error" | "not_member";
+    };
 
 /**
  * Create a text-only top-level comment on a post as the signed-in user. Mirrors
@@ -429,6 +432,16 @@ export async function createCircleReplyAction(
     if (String(tr.moderation_status ?? "active") !== "active" || tr.deleted_at != null) {
       return { ok: false, reason: "unavailable" };
     }
+
+    // Posting RLS requires circle membership. Check it explicitly so a non-member
+    // gets a clear "join in app" message instead of a generic insert failure.
+    const { data: membership } = await supabase
+      .from("community_members")
+      .select("user_id")
+      .eq("community_id", communityId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!membership) return { ok: false, reason: "not_member" };
 
     const isConfession = isConfessionCircle(slug);
     const threadAuthor = typeof tr.author_id === "string" ? tr.author_id : null;

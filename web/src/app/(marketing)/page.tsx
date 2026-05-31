@@ -24,6 +24,9 @@ const HomeBordersFlagship = dynamic(() =>
 const HomeTrustSection = dynamic(() =>
   import("@/components/marketing/home-trust-section").then((mod) => mod.HomeTrustSection),
 );
+const HomeAdFilm = dynamic(() =>
+  import("@/components/marketing/home-ad-film").then((mod) => mod.HomeAdFilm),
+);
 const HomeFinalCta = dynamic(() => import("@/components/marketing/home-final-cta").then((mod) => mod.HomeFinalCta));
 
 export const generateMetadata = () => generateMarketingMetadata("home");
@@ -42,6 +45,7 @@ export default async function HomePage() {
       <HomeSparksDiamonds locale={locale} />
       <HomeBordersFlagship locale={locale} />
       <HomeTrustSection locale={locale} />
+      <HomeAdFilm locale={locale} />
       <HomeFinalCta locale={locale} />
     </>
   );

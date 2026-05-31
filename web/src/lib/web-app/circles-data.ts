@@ -122,6 +122,8 @@ export type WebCircleThreadResult =
       isConfession: boolean;
       thread: WebCircleThread;
       replies: WebCircleReply[];
+      /** Whether the viewer is a member and may post a reply (RLS requires membership). */
+      canReply: boolean;
     };
 
 type AnyRow = Record<string, unknown>;
@@ -229,6 +231,30 @@ export async function loadCirclesIndex(): Promise<WebCirclesIndexResult> {
     return { state: "ok", circles: ((data ?? []) as AnyRow[]).map(mapCircle) };
   } catch {
     return { state: "error" };
+  }
+}
+
+/**
+ * Whether `viewerId` has joined `communityId`. Posting RLS on circle threads /
+ * replies requires membership (`is_member_of_community`), so the web mirrors the
+ * check up-front to show the right affordance instead of a failed insert.
+ */
+export async function isCircleMember(
+  supabase: Supa,
+  communityId: string,
+  viewerId: string,
+): Promise<boolean> {
+  if (!communityId || !viewerId) return false;
+  try {
+    const { data } = await supabase
+      .from("community_members")
+      .select("user_id")
+      .eq("community_id", communityId)
+      .eq("user_id", viewerId)
+      .maybeSingle();
+    return Boolean(data);
+  } catch {
+    return false;
   }
 }
 
@@ -417,13 +443,16 @@ export async function loadCircleThread(
     const threadAuthor = typeof tRow.author_id === "string" ? tRow.author_id : null;
     if (threadAuthor && hidden.has(threadAuthor)) return { state: "unavailable" };
 
-    const { data: replyRows } = await supabase
-      .from("circle_replies_viewer_safe")
-      .select("*")
-      .eq("thread_id", threadId)
-      .eq("moderation_status", "active")
-      .order("created_at", { ascending: true })
-      .limit(100);
+    const [{ data: replyRows }, canReply] = await Promise.all([
+      supabase
+        .from("circle_replies_viewer_safe")
+        .select("*")
+        .eq("thread_id", threadId)
+        .eq("moderation_status", "active")
+        .order("created_at", { ascending: true })
+        .limit(100),
+      isCircleMember(supabase, circle.id, viewerId),
+    ]);
 
     const filteredReplies = ((replyRows ?? []) as AnyRow[]).filter((r) => {
       const a = typeof r.author_id === "string" ? r.author_id : null;
@@ -464,8 +493,62 @@ export async function loadCircleThread(
       };
     });
 
-    return { state: "ok", circle, isConfession: isConf, thread, replies };
+    return { state: "ok", circle, isConfession: isConf, thread, replies, canReply };
   } catch {
     return { state: "error" };
+  }
+}
+
+export type WebMyCircle = WebCircle & { joinedAt: string | null };
+
+/**
+ * Circles the signed-in viewer has joined (`community_members`), most-recent
+ * first. RLS lets a user read their own membership rows; we then batch-load the
+ * community details. Deleted/hidden communities simply drop out (no row).
+ */
+export async function loadMyCircles(viewerId: string): Promise<WebMyCircle[]> {
+  if (!isSupabaseConfigured() || !viewerId) return [];
+  let supabase: Supa;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch {
+    return [];
+  }
+  try {
+    const { data: memberships, error } = await supabase
+      .from("community_members")
+      .select("community_id, joined_at")
+      .eq("user_id", viewerId)
+      .order("joined_at", { ascending: false })
+      .limit(60);
+    if (error) return [];
+
+    const order: string[] = [];
+    const joinedAt = new Map<string, string | null>();
+    for (const m of (memberships ?? []) as AnyRow[]) {
+      const id = typeof m.community_id === "string" ? m.community_id : null;
+      if (!id || joinedAt.has(id)) continue;
+      order.push(id);
+      joinedAt.set(id, str(m.joined_at));
+    }
+    if (order.length === 0) return [];
+
+    const { data: communities } = await supabase
+      .from("communities")
+      .select("id, slug, name, description, icon, member_count, post_count, featured_order")
+      .in("id", order);
+
+    const byId = new Map<string, WebCircle>();
+    for (const row of (communities ?? []) as AnyRow[]) byId.set(String(row.id), mapCircle(row));
+
+    // Preserve membership recency order; drop any community that no longer exists.
+    return order
+      .map((id) => {
+        const circle = byId.get(id);
+        return circle ? { ...circle, joinedAt: joinedAt.get(id) ?? null } : null;
+      })
+      .filter((c): c is WebMyCircle => c !== null);
+  } catch {
+    return [];
   }
 }

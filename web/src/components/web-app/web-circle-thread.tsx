@@ -77,6 +77,7 @@ export function WebCircleThreadView({
   isConfession,
   thread,
   replies,
+  canReply,
   copy,
   openAppHref,
   isExternalApp,
@@ -85,6 +86,8 @@ export function WebCircleThreadView({
   isConfession: boolean;
   thread: WebCircleThread;
   replies: WebCircleReply[];
+  /** Viewer is a member and may post a reply (posting RLS requires membership). */
+  canReply: boolean;
   copy: WebAppCirclesCopy;
   openAppHref: string;
   isExternalApp: boolean;
@@ -163,8 +166,20 @@ export function WebCircleThreadView({
           {copy.repliesTitle}
         </h2>
 
-        {/* Text-only reply composer (signed-in; route is auth-gated) */}
-        <WebCircleReplyComposer slug={circle.slug} threadId={thread.id} copy={copy} />
+        {/* Members can post a text reply (posting RLS requires membership);
+            non-members get a clear join-in-app prompt instead of a failed send. */}
+        {canReply ? (
+          <WebCircleReplyComposer slug={circle.slug} threadId={thread.id} copy={copy} />
+        ) : (
+          <a
+            href={openAppHref}
+            {...externalProps}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-foreground/90 transition hover:border-primary/40 hover:text-foreground"
+          >
+            <ExternalLink className="size-4" aria-hidden />
+            {copy.replyMembersOnly}
+          </a>
+        )}
 
         <div className="mt-5">
         {replies.length === 0 ? (

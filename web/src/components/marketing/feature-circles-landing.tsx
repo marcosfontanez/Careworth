@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { MarketingVerticalVideo } from "@/components/marketing/marketing-vertical-video";
 import {
   OrbitDots,
   PosterCaptionStrip,
@@ -85,6 +86,32 @@ export function FeatureCirclesLanding() {
               tone="blue"
             />
           </div>
+        </div>
+      </section>
+
+      {/* See Circles in action — the vertical Circles film, click-to-play */}
+      <section className="relative isolate overflow-hidden border-t border-white/5 py-20 sm:py-24">
+        <WebsiteSectionBackdrop variant="spotlight" />
+        <div className={cn(marketingGutterX, "relative")}>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className={marketingEyebrow}>See it in action</p>
+            <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              A walk through Circles.
+            </h2>
+            <p className="mt-4 text-pretty text-lg leading-relaxed text-muted-foreground">
+              Sixty seconds inside the rooms where healthcare actually talks shop — discover, join, and jump into the
+              threads that matter.
+            </p>
+          </div>
+
+          <MarketingVerticalVideo
+            src="/media/circles-ad.mp4"
+            poster="/media/circles-ad-poster.jpg"
+            playLabel="Play the Circles film"
+            durationLabel="1:00"
+            glowClassName="shadow-[0_40px_120px_-40px_rgba(45,127,249,0.5),0_0_0_1px_rgba(255,255,255,0.04)]"
+            className="mx-auto mt-12"
+          />
         </div>
       </section>
 

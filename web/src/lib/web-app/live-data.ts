@@ -40,6 +40,19 @@ export type WebLiveResult =
   | { state: "error" }
   | { state: "ok"; liveNow: WebLiveStream[]; upcoming: WebLiveStream[] };
 
+export type WebLiveStreamStatus = "live" | "scheduled" | "ended";
+
+export type WebLiveDetailResult =
+  | { state: "error" }
+  | { state: "unavailable" }
+  | {
+      state: "ok";
+      stream: WebLiveStream;
+      status: WebLiveStreamStatus;
+      /** Other streams live right now (excludes the current one). */
+      others: WebLiveStream[];
+    };
+
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v : null;
 }
@@ -60,6 +73,30 @@ function isFreshLive(row: AnyRow): boolean {
 
 const STREAM_COLS =
   "id, host_id, title, category, thumbnail_url, status, viewer_count, started_at, scheduled_for, ended_at, broadcast_started_at, host_last_seen_at";
+
+/** Map a raw `live_streams` row + hydrated host profiles to the web shape. */
+function mapStream(r: AnyRow, profiles: Map<string, AnyRow>): WebLiveStream {
+  const hostId = typeof r.host_id === "string" ? r.host_id : null;
+  const prof = hostId ? profiles.get(hostId) : null;
+  const category = str(r.category);
+  return {
+    id: String(r.id),
+    title: str(r.title) || "Live",
+    category: category && category.toLowerCase() !== "other" ? category : null,
+    thumbnailUrl: toHttps(r.thumbnail_url),
+    viewerCount: Number(r.viewer_count ?? 0) || 0,
+    startedAt: str(r.started_at) ?? str(r.broadcast_started_at),
+    scheduledFor: str(r.scheduled_for),
+    host: hostId
+      ? {
+          id: hostId,
+          displayName: str(prof?.display_name) || str(prof?.username) || "Host",
+          username: str(prof?.username),
+          avatarUrl: toHttps(prof?.avatar_url),
+        }
+      : null,
+  };
+}
 
 /**
  * Read-only Live discovery for the native web Live page. Never exposes ended /
@@ -120,33 +157,99 @@ export async function loadWebLive(viewerId: string): Promise<WebLiveResult> {
     ].filter(Boolean);
     const profiles = await hydrateAuthors(supabase, hostIds);
 
-    const toStream = (r: AnyRow): WebLiveStream => {
-      const hostId = typeof r.host_id === "string" ? r.host_id : null;
-      const prof = hostId ? profiles.get(hostId) : null;
-      const category = str(r.category);
-      return {
-        id: String(r.id),
-        title: str(r.title) || "Live",
-        category: category && category.toLowerCase() !== "other" ? category : null,
-        thumbnailUrl: toHttps(r.thumbnail_url),
-        viewerCount: Number(r.viewer_count ?? 0) || 0,
-        startedAt: str(r.started_at) ?? str(r.broadcast_started_at),
-        scheduledFor: str(r.scheduled_for),
-        host: hostId
-          ? {
-              id: hostId,
-              displayName: str(prof?.display_name) || str(prof?.username) || "Host",
-              username: str(prof?.username),
-              avatarUrl: toHttps(prof?.avatar_url),
-            }
-          : null,
-      };
+    return {
+      state: "ok",
+      liveNow: liveFiltered.map((r) => mapStream(r, profiles)),
+      upcoming: upcomingFiltered.map((r) => mapStream(r, profiles)),
     };
+  } catch {
+    return { state: "error" };
+  }
+}
+
+const OTHERS_LIMIT = 6;
+
+/**
+ * Single live stream for the native web Live detail page. Applies the same
+ * blocked/hidden/freshness rules as discovery and resolves a status the UI can
+ * branch on (live / scheduled / ended). Also returns a few other currently-live
+ * streams for the "more live now" rail. No web playback — the detail page links
+ * out to the app to watch.
+ */
+export async function loadWebLiveStream(
+  streamId: string,
+  viewerId: string,
+): Promise<WebLiveDetailResult> {
+  if (!isSupabaseConfigured() || !streamId) return { state: "error" };
+  let supabase: Supa;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch {
+    return { state: "error" };
+  }
+
+  try {
+    const [hidden, blocked] = await Promise.all([
+      loadHiddenCreators(supabase, viewerId),
+      loadBlockedUserIds(supabase, viewerId),
+    ]);
+    const excluded = (hostId: string | null): boolean =>
+      !hostId || hidden.has(hostId) || blocked.has(hostId);
+
+    const { data: row, error } = await supabase
+      .from("live_streams")
+      .select(STREAM_COLS)
+      .eq("id", streamId)
+      .maybeSingle();
+    if (error) return { state: "error" };
+    if (!row) return { state: "unavailable" };
+
+    const r = row as AnyRow;
+    const hostId = typeof r.host_id === "string" ? r.host_id : null;
+    // Blocked / hidden hosts must never be surfaced, even via a direct link.
+    if (excluded(hostId)) return { state: "unavailable" };
+
+    const rawStatus = String(r.status ?? "").toLowerCase();
+    const ended = r.ended_at != null || rawStatus === "ended";
+    let status: WebLiveStreamStatus;
+    if (ended) {
+      status = "ended";
+    } else if (rawStatus === "scheduled") {
+      status = "scheduled";
+    } else if (rawStatus === "live" && r.broadcast_started_at != null && isFreshLive(r)) {
+      status = "live";
+    } else {
+      // Live row that hasn't actually started or whose heartbeat is stale.
+      status = rawStatus === "scheduled" ? "scheduled" : "ended";
+    }
+
+    // Other live-now streams for the side rail (best-effort).
+    const { data: liveRows } = await supabase
+      .from("live_streams")
+      .select(STREAM_COLS)
+      .eq("status", "live")
+      .is("ended_at", null)
+      .not("broadcast_started_at", "is", null)
+      .order("viewer_count", { ascending: false })
+      .limit((OTHERS_LIMIT + 2) * 2);
+
+    const others = ((liveRows ?? []) as AnyRow[])
+      .filter((o) => String(o.id) !== String(r.id))
+      .filter((o) => !excluded(typeof o.host_id === "string" ? o.host_id : null))
+      .filter(isFreshLive)
+      .slice(0, OTHERS_LIMIT);
+
+    const hostIds = [
+      hostId ?? "",
+      ...others.map((o) => (typeof o.host_id === "string" ? o.host_id : "")),
+    ].filter(Boolean);
+    const profiles = await hydrateAuthors(supabase, hostIds);
 
     return {
       state: "ok",
-      liveNow: liveFiltered.map(toStream),
-      upcoming: upcomingFiltered.map(toStream),
+      stream: mapStream(r, profiles),
+      status,
+      others: others.map((o) => mapStream(o, profiles)),
     };
   } catch {
     return { state: "error" };

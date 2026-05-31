@@ -65,6 +65,7 @@ export default async function WebAppCircleThreadPage({
       isConfession={result.isConfession}
       thread={result.thread}
       replies={result.replies}
+      canReply={result.canReply}
       copy={c.circles}
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}

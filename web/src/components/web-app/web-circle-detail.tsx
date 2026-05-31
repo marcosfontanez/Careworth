@@ -7,6 +7,7 @@ import type { WebFeedPost } from "@/lib/web-app/feed-data";
 import { formatCount } from "@/lib/web-app/format";
 
 import { WebCircleThreadRow } from "./web-circle-thread-row";
+import { WebCircleWallPost } from "./web-circle-wall-post";
 import { WebFeedCard } from "./web-feed-card";
 
 export function WebCircleDetail({
@@ -100,12 +101,22 @@ export function WebCircleDetail({
           </h2>
           <div className="flex flex-col gap-4">
             {wallPosts.map((post) => (
-              <WebFeedCard
+              <WebCircleWallPost
                 key={post.id}
-                post={post}
-                copy={feedCopy}
-                engagement={engagement}
+                postId={post.id}
+                commentCount={post.commentCount}
+                toggleLabel={copy.wallCommentLabel}
+                feedCopy={feedCopy}
                 currentUserId={currentUserId}
+                card={
+                  <WebFeedCard
+                    post={post}
+                    copy={feedCopy}
+                    engagement={engagement}
+                    currentUserId={currentUserId}
+                    bare
+                  />
+                }
               />
             ))}
           </div>

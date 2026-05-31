@@ -130,9 +130,13 @@ export type WebAppProfileCopy = {
   statFollowers: string;
   statFollowing: string;
   statPulse: string;
+  pulseScoreLabel: string;
   /** Section headers. */
   pulseUpdatesTitle: string;
   pulseUpdatesEmpty: string;
+  viewAllUpdates: string;
+  gridView: string;
+  listView: string;
   postsTitle: string;
   postsEmptyOwner: string;
   postsEmptyVisitor: string;
@@ -200,6 +204,16 @@ export type WebAppCirclesCopy = {
   replyComposerPosting: string;
   replyComposerError: string;
   replyComposerLoginCta: string;
+  /** Membership-gated reply (web has no join flow yet). */
+  replyMembersOnly: string;
+  /** My Circles section. */
+  myCirclesTitle: string;
+  myCirclesEmptyTitle: string;
+  myCirclesEmptyBody: string;
+  exploreCirclesCta: string;
+  discoverTitle: string;
+  /** Wall-post comment toggle. */
+  wallCommentLabel: string;
 };
 
 /** Shared engagement (follow / like) action labels. */
@@ -237,6 +251,8 @@ export type WebAppCreatorHubCopy = {
   /** Phase 6 dashboard additions. */
   statPosts: string;
   statLikes: string;
+  statComments: string;
+  recentEngagementNote: string;
   contentStatusTitle: string;
   statusLive: string;
   statusProcessing: string;
@@ -327,6 +343,7 @@ export type WebAppLiveCopy = {
   startedLabel: string;
   scheduledLabel: string;
   joinCta: string;
+  viewLabel: string;
   hostFallback: string;
   emptyTitle: string;
   emptyBody: string;
@@ -334,6 +351,16 @@ export type WebAppLiveCopy = {
   errorBody: string;
   safetyTitle: string;
   safetyBody: string;
+  /** Live detail page (/web-app/live/[id]). */
+  watchInApp: string;
+  backToLive: string;
+  endedTitle: string;
+  endedBody: string;
+  scheduledStartsLabel: string;
+  moreLiveTitle: string;
+  detailUnavailableTitle: string;
+  detailUnavailableBody: string;
+  watchNote: string;
 };
 
 export type WebAppPageCopy = {
@@ -495,9 +522,13 @@ const copy: Record<Locale, WebAppPageCopy> = {
       statFollowers: "Followers",
       statFollowing: "Following",
       statPulse: "Pulse",
-      pulseUpdatesTitle: "Pulse updates",
+      pulseScoreLabel: "Pulse Score",
+      pulseUpdatesTitle: "Pulse Updates",
       pulseUpdatesEmpty: "No Pulse updates yet.",
-      postsTitle: "Posts & media",
+      viewAllUpdates: "View all updates",
+      gridView: "Grid view",
+      listView: "List view",
+      postsTitle: "Posts",
       postsEmptyOwner: "You haven’t posted anything yet. Create your first post in the app.",
       postsEmptyVisitor: "Nothing to show here yet.",
       privateTitle: "This profile is private",
@@ -556,6 +587,13 @@ const copy: Record<Locale, WebAppPageCopy> = {
       replyComposerPosting: "Posting…",
       replyComposerError: "Couldn’t post your reply. Try again.",
       replyComposerLoginCta: "Log in to reply",
+      replyMembersOnly: "Join this Circle in the app to reply.",
+      myCirclesTitle: "My Circles",
+      myCirclesEmptyTitle: "You haven’t joined any Circles yet.",
+      myCirclesEmptyBody: "Join Circles in the app to see them here and jump back in fast.",
+      exploreCirclesCta: "Explore Circles",
+      discoverTitle: "Discover",
+      wallCommentLabel: "Comments",
     },
     creatorHub: {
       title: "Creator Hub",
@@ -578,6 +616,8 @@ const copy: Record<Locale, WebAppPageCopy> = {
       openInApp: "Open in app",
       statPosts: "Posts",
       statLikes: "Recent likes",
+      statComments: "Recent comments",
+      recentEngagementNote: "Across your most recent posts.",
       contentStatusTitle: "Content status",
       statusLive: "Live",
       statusProcessing: "Processing",
@@ -664,6 +704,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       startedLabel: "Started",
       scheduledLabel: "Starts",
       joinCta: "Join in app",
+      viewLabel: "Watch",
       hostFallback: "Host",
       emptyTitle: "No live rooms right now",
       emptyBody: "Nobody’s live at the moment. Check back soon, or open the app to start your own.",
@@ -672,6 +713,15 @@ const copy: Record<Locale, WebAppPageCopy> = {
       safetyTitle: "Live, kept safe",
       safetyBody:
         "Streams follow the same community rules — blocked accounts stay hidden and private rooms stay private.",
+      watchInApp: "Watch in app",
+      backToLive: "All Live",
+      endedTitle: "This stream has ended",
+      endedBody: "The broadcast wrapped up. Browse who’s live now, or catch the next one in the app.",
+      scheduledStartsLabel: "Starts",
+      moreLiveTitle: "More live now",
+      detailUnavailableTitle: "Stream unavailable",
+      detailUnavailableBody: "This stream can’t be shown. It may have ended or isn’t available right now.",
+      watchNote: "Live video plays in the PulseVerse app — tap watch to jump straight into the room.",
     },
     engagement: {
       follow: "Follow",
@@ -840,9 +890,13 @@ const copy: Record<Locale, WebAppPageCopy> = {
       statFollowers: "Seguidores",
       statFollowing: "Siguiendo",
       statPulse: "Pulse",
+      pulseScoreLabel: "Pulse Score",
       pulseUpdatesTitle: "Novedades de Pulse",
       pulseUpdatesEmpty: "Aún no hay novedades de Pulse.",
-      postsTitle: "Publicaciones y contenido",
+      viewAllUpdates: "Ver todas las novedades",
+      gridView: "Vista de cuadrícula",
+      listView: "Vista de lista",
+      postsTitle: "Publicaciones",
       postsEmptyOwner: "Aún no has publicado nada. Crea tu primera publicación en la app.",
       postsEmptyVisitor: "Aún no hay nada que mostrar aquí.",
       privateTitle: "Este perfil es privado",
@@ -901,6 +955,13 @@ const copy: Record<Locale, WebAppPageCopy> = {
       replyComposerPosting: "Publicando…",
       replyComposerError: "No se pudo publicar tu respuesta. Inténtalo de nuevo.",
       replyComposerLoginCta: "Inicia sesión para responder",
+      replyMembersOnly: "Únete a este Círculo en la app para responder.",
+      myCirclesTitle: "Mis Círculos",
+      myCirclesEmptyTitle: "Aún no te has unido a ningún Círculo.",
+      myCirclesEmptyBody: "Únete a Círculos en la app para verlos aquí y volver rápido.",
+      exploreCirclesCta: "Explorar Círculos",
+      discoverTitle: "Descubrir",
+      wallCommentLabel: "Comentarios",
     },
     creatorHub: {
       title: "Creator Hub",
@@ -923,6 +984,8 @@ const copy: Record<Locale, WebAppPageCopy> = {
       openInApp: "Abrir en la app",
       statPosts: "Publicaciones",
       statLikes: "Me gusta recientes",
+      statComments: "Comentarios recientes",
+      recentEngagementNote: "En tus publicaciones más recientes.",
       contentStatusTitle: "Estado del contenido",
       statusLive: "En vivo",
       statusProcessing: "Procesando",
@@ -1009,6 +1072,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       startedLabel: "Comenzó",
       scheduledLabel: "Comienza",
       joinCta: "Unirse en la app",
+      viewLabel: "Ver",
       hostFallback: "Anfitrión",
       emptyTitle: "No hay salas en vivo ahora",
       emptyBody: "Nadie está en vivo en este momento. Vuelve pronto o abre la app para iniciar la tuya.",
@@ -1017,6 +1081,15 @@ const copy: Record<Locale, WebAppPageCopy> = {
       safetyTitle: "En vivo, con seguridad",
       safetyBody:
         "Las transmisiones siguen las mismas reglas de la comunidad: las cuentas bloqueadas permanecen ocultas y las salas privadas siguen siendo privadas.",
+      watchInApp: "Ver en la app",
+      backToLive: "Todo En vivo",
+      endedTitle: "Esta transmisión terminó",
+      endedBody: "La transmisión finalizó. Mira quién está en vivo ahora o atrapa la próxima en la app.",
+      scheduledStartsLabel: "Comienza",
+      moreLiveTitle: "Más en vivo ahora",
+      detailUnavailableTitle: "Transmisión no disponible",
+      detailUnavailableBody: "No se puede mostrar esta transmisión. Es posible que haya terminado o no esté disponible ahora.",
+      watchNote: "El video en vivo se reproduce en la app de PulseVerse: toca ver para entrar directo a la sala.",
     },
     engagement: {
       follow: "Seguir",

@@ -4,7 +4,7 @@ import { WebCirclesIndex } from "@/components/web-app/web-circles-index";
 import { getWebAppPageCopy } from "@/lib/marketing-copy/web-app";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { requireWebAppAccount } from "@/lib/web-app/account";
-import { loadCirclesIndex } from "@/lib/web-app/circles-data";
+import { loadCirclesIndex, loadMyCircles } from "@/lib/web-app/circles-data";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function WebAppCirclesPage() {
-  await requireWebAppAccount("/web-app/circles");
-  const [locale, result] = await Promise.all([getMarketingLocale(), loadCirclesIndex()]);
+  const account = await requireWebAppAccount("/web-app/circles");
+  const [locale, result, myCircles] = await Promise.all([
+    getMarketingLocale(),
+    loadCirclesIndex(),
+    loadMyCircles(account.id),
+  ]);
   const c = getWebAppPageCopy(locale);
-  return <WebCirclesIndex result={result} copy={c.circles} />;
+  return <WebCirclesIndex result={result} myCircles={myCircles} copy={c.circles} />;
 }

@@ -5,10 +5,12 @@ export function WebCircleUnavailable({
   title,
   body,
   backLabel,
+  backHref = "/web-app/circles",
 }: {
   title: string;
   body: string;
   backLabel: string;
+  backHref?: string;
 }) {
   return (
     <div className="grid min-h-full place-items-center px-4 py-10 sm:px-6">
@@ -19,7 +21,7 @@ export function WebCircleUnavailable({
         <h1 className="mt-4 font-heading text-xl font-bold tracking-tight text-foreground">{title}</h1>
         <p className="mx-auto mt-2.5 max-w-sm text-sm leading-relaxed text-muted-foreground">{body}</p>
         <Link
-          href="/web-app/circles"
+          href={backHref}
           className="mt-6 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium text-foreground/90 transition hover:border-white/30"
         >
           {backLabel}

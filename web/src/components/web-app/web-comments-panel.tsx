@@ -31,6 +31,7 @@ export function WebCommentsPanel({
   onClose,
   onRetry,
   onPosted,
+  hideClose = false,
 }: {
   copy: WebAppFeedCopy;
   state: WebCommentsState;
@@ -43,6 +44,8 @@ export function WebCommentsPanel({
   onRetry: () => void;
   /** Called after a successful comment post so the parent re-fetches. */
   onPosted: () => void;
+  /** Hide the close (X) button when the panel is embedded as a page section. */
+  hideClose?: boolean;
 }) {
   const total = state.status === "ok" ? state.total : fallbackCount;
   // The composer is only meaningful once we've confirmed the post is readable
@@ -59,14 +62,16 @@ export function WebCommentsPanel({
           {copy.commentsPanelTitle}
           <span className="text-xs font-semibold text-muted-foreground">{formatCount(total)}</span>
         </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={copy.commentsCloseLabel}
-          className="grid size-8 place-items-center rounded-full border border-white/10 bg-white/5 text-white/80 transition hover:text-white"
-        >
-          <X className="size-4" aria-hidden />
-        </button>
+        {hideClose ? null : (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={copy.commentsCloseLabel}
+            className="grid size-8 place-items-center rounded-full border border-white/10 bg-white/5 text-white/80 transition hover:text-white"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        )}
       </div>
 
       {/* Post caption summary */}

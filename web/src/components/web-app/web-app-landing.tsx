@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
   Home,
@@ -9,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { pulseverseLogoLockup } from "@/lib/design-tokens";
 import type { WebAppLandingCopy } from "@/lib/marketing-copy/web-app";
 import { cn } from "@/lib/utils";
 
@@ -39,14 +41,17 @@ export function WebAppLanding({
       />
 
       <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-10 sm:px-6 sm:py-16">
-        {/* Brand row */}
-        <Link href="/" className="flex items-center gap-2 self-start">
-          <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-base font-black text-white shadow-[0_0_18px_-4px_rgba(45,127,249,0.7)]">
-            P
-          </span>
-          <span className="font-heading text-base font-bold tracking-tight text-foreground">
-            {copy.kicker}
-          </span>
+        {/* Brand row — full PulseVerse lockup, large in the upper-left corner */}
+        <Link href="/" className="self-start" aria-label={`${copy.kicker} home`}>
+          <Image
+            src={pulseverseLogoLockup.src}
+            alt={copy.kicker}
+            width={pulseverseLogoLockup.width}
+            height={pulseverseLogoLockup.height}
+            priority
+            sizes="(max-width: 640px) 220px, 320px"
+            className="h-16 w-auto object-contain object-left sm:h-20 md:h-24"
+          />
         </Link>
 
         {/* Hero */}

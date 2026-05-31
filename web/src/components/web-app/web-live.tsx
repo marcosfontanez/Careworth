@@ -1,9 +1,9 @@
-import { Calendar, ExternalLink, Eye, Radio, ShieldCheck, UserRound } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Calendar, Eye, Radio, ShieldCheck, UserRound } from "lucide-react";
 
 import type { WebAppLiveCopy } from "@/lib/marketing-copy/web-app";
 import type { WebLiveResult, WebLiveStream } from "@/lib/web-app/live-data";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
-import { resolveOpenInAppHref } from "@/lib/web-app-embed-policy";
 
 /** Timezone-agnostic countdown for scheduled streams ("in 2h", "in 3d", "soon"). */
 function untilLabel(iso: string | null): string {
@@ -41,23 +41,12 @@ function HostRow({ host, fallback }: { host: WebLiveStream["host"]; fallback: st
   );
 }
 
-function LiveCard({
-  stream,
-  copy,
-  isExternalApp,
-}: {
-  stream: WebLiveStream;
-  copy: WebAppLiveCopy;
-  isExternalApp: boolean;
-}) {
-  const href = resolveOpenInAppHref(`/live/${stream.id}`);
-  const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
+function LiveCard({ stream, copy }: { stream: WebLiveStream; copy: WebAppLiveCopy }) {
   const started = relativeTime(stream.startedAt);
 
   return (
-    <a
-      href={href}
-      {...externalProps}
+    <Link
+      href={`/web-app/live/${stream.id}`}
       className="group flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.82)] shadow-[0_24px_70px_-44px_rgba(0,0,0,0.95)] backdrop-blur-sm transition hover:border-rose-400/40 hover:shadow-[0_24px_70px_-38px_rgba(0,0,0,0.95),0_0_34px_-16px_rgba(244,63,94,0.6)]"
     >
       <div className="relative aspect-video w-full overflow-hidden bg-[#05080f]">
@@ -101,30 +90,18 @@ function LiveCard({
           ) : null}
         </div>
         <span className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_-12px_rgba(244,63,94,0.8)] transition group-hover:brightness-110">
-          {copy.joinCta}
-          <ExternalLink className="size-3.5" aria-hidden />
+          {copy.viewLabel}
+          <ArrowRight className="size-3.5" aria-hidden />
         </span>
       </div>
-    </a>
+    </Link>
   );
 }
 
-function UpcomingCard({
-  stream,
-  copy,
-  isExternalApp,
-}: {
-  stream: WebLiveStream;
-  copy: WebAppLiveCopy;
-  isExternalApp: boolean;
-}) {
-  const href = resolveOpenInAppHref(`/live/${stream.id}`);
-  const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
-
+function UpcomingCard({ stream, copy }: { stream: WebLiveStream; copy: WebAppLiveCopy }) {
   return (
-    <a
-      href={href}
-      {...externalProps}
+    <Link
+      href={`/web-app/live/${stream.id}`}
       className="group flex items-center gap-3.5 rounded-2xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-3.5 backdrop-blur-sm transition hover:border-primary/30 hover:bg-[rgba(18,26,44,0.9)]"
     >
       <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/20 to-accent/10 text-[var(--accent)]">
@@ -143,19 +120,11 @@ function UpcomingCard({
         <span className="block text-muted-foreground">{copy.scheduledLabel}</span>
         {untilLabel(stream.scheduledFor)}
       </span>
-    </a>
+    </Link>
   );
 }
 
-export function WebLive({
-  result,
-  copy,
-  isExternalApp,
-}: {
-  result: WebLiveResult;
-  copy: WebAppLiveCopy;
-  isExternalApp: boolean;
-}) {
+export function WebLive({ result, copy }: { result: WebLiveResult; copy: WebAppLiveCopy }) {
   return (
     <div className="mx-auto w-full max-w-[940px] px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-6">
@@ -191,7 +160,7 @@ export function WebLive({
               </h2>
               <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
                 {result.liveNow.map((stream) => (
-                  <LiveCard key={stream.id} stream={stream} copy={copy} isExternalApp={isExternalApp} />
+                  <LiveCard key={stream.id} stream={stream} copy={copy} />
                 ))}
               </div>
             </section>
@@ -205,7 +174,7 @@ export function WebLive({
               </h2>
               <div className="flex flex-col gap-2.5">
                 {result.upcoming.map((stream) => (
-                  <UpcomingCard key={stream.id} stream={stream} copy={copy} isExternalApp={isExternalApp} />
+                  <UpcomingCard key={stream.id} stream={stream} copy={copy} />
                 ))}
               </div>
             </section>
