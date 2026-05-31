@@ -1,0 +1,198 @@
+import "server-only";
+
+import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
+
+export type WebFeedTab = "foryou" | "top";
+
+export type WebFeedAuthor = {
+  id: string | null;
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+};
+
+export type WebFeedPost = {
+  id: string;
+  type: string;
+  caption: string | null;
+  mediaUrl: string | null;
+  thumbnailUrl: string | null;
+  createdAt: string | null;
+  isAnonymous: boolean;
+  isVideo: boolean;
+  /** `null` for anonymous posts — never expose identity. */
+  author: WebFeedAuthor | null;
+  likeCount: number;
+  commentCount: number;
+};
+
+export type WebFeedResult =
+  | { state: "signedOut" }
+  | { state: "error" }
+  | { state: "ok"; posts: WebFeedPost[] };
+
+const FEED_LIMIT = 24;
+/** Posts still rendering / failed must never appear in the feed. */
+const PROCESSING_BLOCK = new Set(["queued", "running", "failed"]);
+/** Only public / aliased posts are feed-eligible to other viewers. */
+const PUBLIC_PRIVACY = new Set(["public", "alias"]);
+
+type RankRow = { post_id?: string | null };
+
+function toHttps(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  const s = url.trim();
+  if (!s) return null;
+  if (s.startsWith("http://")) return `https://${s.slice(7)}`;
+  return s;
+}
+
+function isVideoType(type: unknown): boolean {
+  const t = String(type ?? "").toLowerCase();
+  return t.includes("video") || t.includes("clip") || t === "live";
+}
+
+export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
+  if (!isSupabaseConfigured()) return { state: "signedOut" };
+
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch {
+    return { state: "error" };
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { state: "signedOut" };
+
+  try {
+    // 1) Rank: ordered post ids from a safe, definer-protected ranker.
+    let ids: string[] = [];
+
+    if (tab === "top") {
+      const { data, error } = await supabase.rpc("get_top_today_v2", {
+        feed_limit: FEED_LIMIT,
+        viewer_uuid: user.id,
+        exclude_post_ids: [],
+      });
+      if (!error && Array.isArray(data)) {
+        ids = (data as RankRow[]).map((r) => r.post_id).filter((v): v is string => Boolean(v));
+      }
+    }
+
+    if (ids.length === 0) {
+      const { data, error } = await supabase.rpc("get_ranked_feed_v3", {
+        viewer_id: user.id,
+        feed_limit: FEED_LIMIT,
+        exclude_post_ids: [],
+      });
+      if (error) throw error;
+      ids = ((data as RankRow[]) ?? []).map((r) => r.post_id).filter((v): v is string => Boolean(v));
+    }
+
+    if (ids.length === 0) return { state: "ok", posts: [] };
+
+    // 2) Exclusions: blocked users (both directions) + hidden creators/posts.
+    const hiddenPosts = new Set<string>();
+    const hiddenCreators = new Set<string>();
+    try {
+      const { data: ex } = await supabase.rpc("get_feed_exclusions", { viewer_uuid: user.id });
+      if (ex && typeof ex === "object") {
+        const obj = ex as { hidden_post_ids?: unknown; hidden_creator_ids?: unknown };
+        if (Array.isArray(obj.hidden_post_ids)) {
+          for (const p of obj.hidden_post_ids) if (typeof p === "string") hiddenPosts.add(p);
+        }
+        if (Array.isArray(obj.hidden_creator_ids)) {
+          for (const c of obj.hidden_creator_ids) if (typeof c === "string") hiddenCreators.add(c);
+        }
+      }
+    } catch {
+      /* exclusions are best-effort; the ranker already excludes blocks server-side */
+    }
+
+    // 3) Hydrate rows via the viewer-safe view (masks anonymous creator ids,
+    //    enforces row-level readability).
+    const { data: rows, error: rowsErr } = await supabase
+      .from("posts_viewer_safe")
+      .select("*")
+      .in("id", ids);
+    if (rowsErr) throw rowsErr;
+
+    type SafeRow = Record<string, unknown> & { id: string };
+    const byId = new Map<string, SafeRow>();
+    for (const r of (rows ?? []) as SafeRow[]) byId.set(r.id, r);
+
+    // 4) Re-apply rank order + privacy / processing / exclusion filters.
+    const ordered: SafeRow[] = [];
+    for (const id of ids) {
+      const r = byId.get(id);
+      if (!r) continue;
+      if (hiddenPosts.has(r.id)) continue;
+      const creatorId = typeof r.creator_id === "string" ? r.creator_id : null;
+      if (creatorId && hiddenCreators.has(creatorId)) continue;
+
+      const sched = String(r.scheduled_status ?? "live").toLowerCase();
+      if (sched !== "live") continue;
+
+      const proc = String(r.media_processing_status ?? "").toLowerCase().trim();
+      if (PROCESSING_BLOCK.has(proc)) continue;
+
+      const privacy = String(r.privacy_mode ?? "public").toLowerCase();
+      if (!PUBLIC_PRIVACY.has(privacy)) continue;
+
+      ordered.push(r);
+    }
+
+    // 5) Hydrate authors for non-anonymous posts only.
+    const creatorIds = [
+      ...new Set(
+        ordered
+          .filter((r) => !r.is_anonymous && typeof r.creator_id === "string")
+          .map((r) => r.creator_id as string),
+      ),
+    ];
+    const profiles = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
+    if (creatorIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name, username, avatar_url")
+        .in("id", creatorIds);
+      for (const p of (profs ?? []) as { id: string; display_name: string | null; username: string | null; avatar_url: string | null }[]) {
+        profiles.set(p.id, p);
+      }
+    }
+
+    const posts: WebFeedPost[] = ordered.map((r) => {
+      const creatorId = typeof r.creator_id === "string" ? r.creator_id : null;
+      // Anonymous when flagged OR when the safe view masked the creator id.
+      const anon = Boolean(r.is_anonymous) || !creatorId;
+      const prof = !anon && creatorId ? profiles.get(creatorId) : null;
+      return {
+        id: r.id,
+        type: String(r.type ?? "post"),
+        caption: typeof r.caption === "string" ? r.caption : null,
+        mediaUrl: toHttps(r.media_url),
+        thumbnailUrl: toHttps(r.thumbnail_url),
+        createdAt: typeof r.created_at === "string" ? r.created_at : null,
+        isAnonymous: anon,
+        isVideo: isVideoType(r.type),
+        author: anon
+          ? null
+          : {
+              id: creatorId,
+              displayName: prof?.display_name?.trim() || prof?.username || "PulseVerse member",
+              username: prof?.username ?? null,
+              avatarUrl: toHttps(prof?.avatar_url),
+            },
+        likeCount: Number(r.like_count ?? 0) || 0,
+        commentCount: Number(r.comment_count ?? 0) || 0,
+      };
+    });
+
+    return { state: "ok", posts };
+  } catch {
+    return { state: "error" };
+  }
+}
