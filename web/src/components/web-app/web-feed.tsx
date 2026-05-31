@@ -36,12 +36,14 @@ export function WebFeed({
   copy,
   openAppHref,
   isExternalApp,
+  currentUserId = null,
 }: {
   tab: WebFeedTab;
   result: WebFeedResult;
   copy: WebAppFeedCopy;
   openAppHref: string;
   isExternalApp: boolean;
+  currentUserId?: string | null;
 }) {
   const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
 
@@ -96,7 +98,7 @@ export function WebFeed({
       ) : result.state === "ok" ? (
         <div className="flex flex-col gap-5">
           {result.posts.map((post) => (
-            <WebFeedCard key={post.id} post={post} copy={copy} />
+            <WebFeedCard key={post.id} post={post} copy={copy} currentUserId={currentUserId} />
           ))}
         </div>
       ) : null}

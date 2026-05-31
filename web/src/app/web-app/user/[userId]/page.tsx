@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { WebProfile } from "@/components/web-app/web-profile";
 import { WebProfileUnavailable } from "@/components/web-app/web-profile-unavailable";
@@ -10,23 +11,43 @@ import { resolveOpenInAppHref, usableExternalAppOrigin } from "@/lib/web-app-emb
 
 export const dynamic = "force-dynamic";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getMarketingLocale();
   const c = getWebAppPageCopy(locale);
   return {
-    title: `${c.profile.ownerTitle} · ${c.metaTitle}`,
+    title: `${c.metaTitle}`,
     robots: { index: false, follow: false },
   };
 }
 
-export default async function WebAppMyPulsePage() {
-  const account = await requireWebAppAccount("/web-app/my-pulse");
-  const [locale, result] = await Promise.all([
-    getMarketingLocale(),
-    loadWebProfile(account.id, account.id),
-  ]);
+export default async function WebAppUserProfilePage({
+  params,
+}: {
+  params: Promise<{ userId: string }>;
+}) {
+  const { userId } = await params;
+  const account = await requireWebAppAccount(`/web-app/user/${userId}`);
+  const locale = await getMarketingLocale();
   const c = getWebAppPageCopy(locale);
-  const openAppHref = resolveOpenInAppHref("/my-pulse");
+
+  // Own profile → canonical My Pulse route.
+  if (userId === account.id) redirect("/web-app/my-pulse");
+
+  // Anonymous sentinel / malformed ids must never resolve to a real profile.
+  if (!UUID_RE.test(userId)) {
+    return (
+      <WebProfileUnavailable
+        title={c.profile.unavailableTitle}
+        body={c.profile.unavailableBody}
+        goToFeedLabel={c.profile.goToFeed}
+      />
+    );
+  }
+
+  const result = await loadWebProfile(userId, account.id);
+  const openAppHref = resolveOpenInAppHref(`/profile/${userId}`);
   const isExternalApp = usableExternalAppOrigin() !== null;
 
   if (result.state !== "ok") {

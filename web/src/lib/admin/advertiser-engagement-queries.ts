@@ -376,7 +376,7 @@ export async function loadAdvertiserEngagementPayload(
     topSpecialties = suppressSmallCohorts(topSpecialties, cohortMinCount);
 
     const rolesRaw = (profilesRoleRes.data ?? []).map((r) => String((r as { role?: string }).role ?? "").trim() || "(blank)");
-    let roleMix = suppressSmallCohorts(tallyMap(rolesRaw, 40), cohortMinCount);
+    const roleMix = suppressSmallCohorts(tallyMap(rolesRaw, 40), cohortMinCount);
 
     const postViewsSumSample = (postsViewsRes.data ?? []).reduce((s, row) => s + Number((row as { view_count?: number }).view_count ?? 0), 0);
 

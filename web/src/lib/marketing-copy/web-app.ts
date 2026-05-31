@@ -27,6 +27,8 @@ export type WebAppShellCopy = {
   /** Right contextual rail. */
   railTitle: string;
   railTips: string[];
+  /** Dynamic "Trending Circles" rail card. */
+  railCirclesTitle: string;
   railSafetyTitle: string;
   railSafetyBody: string;
   railSafetyLink: string;
@@ -74,12 +76,81 @@ export type WebAppLandingCopy = {
   features: { title: string; body: string }[];
 };
 
+/** Native My Pulse / public Pulse Page copy. */
+export type WebAppProfileCopy = {
+  ownerTitle: string;
+  ownerSubtitle: string;
+  /** Stat strip labels. */
+  statFollowers: string;
+  statFollowing: string;
+  statPulse: string;
+  /** Section headers. */
+  pulseUpdatesTitle: string;
+  pulseUpdatesEmpty: string;
+  postsTitle: string;
+  postsEmptyOwner: string;
+  postsEmptyVisitor: string;
+  /** Read-only / locked states. */
+  privateTitle: string;
+  privateBody: string;
+  blockedTitle: string;
+  blockedBody: string;
+  unavailableTitle: string;
+  unavailableBody: string;
+  /** Affordances. */
+  editProfile: string;
+  openInApp: string;
+  backToFeed: string;
+  goToFeed: string;
+  openPost: string;
+  videoBadge: string;
+  verifiedLabel: string;
+  errorTitle: string;
+  errorBody: string;
+};
+
+/** Native Circles read views copy. */
+export type WebAppCirclesCopy = {
+  indexTitle: string;
+  indexSubtitle: string;
+  pinnedLabel: string;
+  membersLabel: string;
+  postsLabel: string;
+  indexEmptyTitle: string;
+  indexEmptyBody: string;
+  /** Circle detail. */
+  threadsTitle: string;
+  threadsEmpty: string;
+  aboutTitle: string;
+  /** Thread detail. */
+  repliesTitle: string;
+  repliesEmpty: string;
+  anonymousLabel: string;
+  confessionLabel: string;
+  confessionNote: string;
+  /** Affordances + posting deferral. */
+  openInApp: string;
+  postInApp: string;
+  replyInApp: string;
+  joinInApp: string;
+  backToCircles: string;
+  backToCircle: string;
+  goToFeed: string;
+  openThread: string;
+  unavailableTitle: string;
+  unavailableBody: string;
+  errorTitle: string;
+  errorBody: string;
+};
+
 export type WebAppPageCopy = {
   metaTitle: string;
   metaDescription: string;
   shell: WebAppShellCopy;
   comingSoon: Record<Exclude<WebAppNavKey, "feed">, WebAppComingSoonCopy>;
   feed: WebAppFeedCopy;
+  profile: WebAppProfileCopy;
+  circles: WebAppCirclesCopy;
   landing: WebAppLandingCopy;
 };
 
@@ -109,6 +180,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
         "Everything stays in sync with the PulseVerse mobile app on your account.",
         "Tap any post to open the full view.",
       ],
+      railCirclesTitle: "Trending Circles",
       railSafetyTitle: "Healthy, respectful community",
       railSafetyBody:
         "Confessions stay anonymous, private posts stay private, and blocked accounts stay hidden — on web too.",
@@ -179,6 +251,63 @@ const copy: Record<Locale, WebAppPageCopy> = {
       videoBadge: "Video",
       liveBadge: "Live",
     },
+    profile: {
+      ownerTitle: "My Pulse",
+      ownerSubtitle: "Your profile, updates, and media.",
+      statFollowers: "Followers",
+      statFollowing: "Following",
+      statPulse: "Pulse",
+      pulseUpdatesTitle: "Pulse updates",
+      pulseUpdatesEmpty: "No Pulse updates yet.",
+      postsTitle: "Posts & media",
+      postsEmptyOwner: "You haven’t posted anything yet. Create your first post in the app.",
+      postsEmptyVisitor: "Nothing to show here yet.",
+      privateTitle: "This profile is private",
+      privateBody: "This member keeps their posts and updates private.",
+      blockedTitle: "Content hidden",
+      blockedBody: "You’ve blocked this member, so their posts and updates are hidden here.",
+      unavailableTitle: "User unavailable",
+      unavailableBody: "This profile can’t be shown. It may have been removed or is not available right now.",
+      editProfile: "Edit in app",
+      openInApp: "Open in app",
+      backToFeed: "Back to Feed",
+      goToFeed: "Go to Feed",
+      openPost: "Open post",
+      videoBadge: "Video",
+      verifiedLabel: "Verified",
+      errorTitle: "We couldn’t load this profile",
+      errorBody: "Something went wrong. Try again in a moment, or open the full app.",
+    },
+    circles: {
+      indexTitle: "Circles",
+      indexSubtitle: "Communities and conversations across PulseVerse.",
+      pinnedLabel: "Pinned",
+      membersLabel: "members",
+      postsLabel: "posts",
+      indexEmptyTitle: "No circles yet",
+      indexEmptyBody: "Circles will appear here as communities grow. Open the app to explore.",
+      threadsTitle: "Discussions",
+      threadsEmpty: "No discussions yet in this Circle.",
+      aboutTitle: "About",
+      repliesTitle: "Replies",
+      repliesEmpty: "No replies yet.",
+      anonymousLabel: "Anonymous",
+      confessionLabel: "Confession",
+      confessionNote:
+        "Confessions are anonymous. Identities are hidden from other members on web too.",
+      openInApp: "Open in app",
+      postInApp: "Post in app",
+      replyInApp: "Reply in app",
+      joinInApp: "Join in app",
+      backToCircles: "All Circles",
+      backToCircle: "Back to Circle",
+      goToFeed: "Go to Feed",
+      openThread: "Open thread",
+      unavailableTitle: "Circle unavailable",
+      unavailableBody: "This Circle can’t be shown. It may have been removed or is not available right now.",
+      errorTitle: "We couldn’t load Circles",
+      errorBody: "Something went wrong. Try again in a moment, or open the full app.",
+    },
     landing: {
       kicker: "PulseVerse Web",
       title: "Your PulseVerse, right in the browser",
@@ -222,6 +351,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
         "Todo se mantiene sincronizado con la app móvil de PulseVerse en tu cuenta.",
         "Toca cualquier publicación para abrir la vista completa.",
       ],
+      railCirclesTitle: "Círculos en tendencia",
       railSafetyTitle: "Comunidad sana y respetuosa",
       railSafetyBody:
         "Las confesiones siguen siendo anónimas, las publicaciones privadas siguen privadas y las cuentas bloqueadas se ocultan — también en la web.",
@@ -291,6 +421,63 @@ const copy: Record<Locale, WebAppPageCopy> = {
       openPost: "Abrir publicación",
       videoBadge: "Vídeo",
       liveBadge: "En vivo",
+    },
+    profile: {
+      ownerTitle: "My Pulse",
+      ownerSubtitle: "Tu perfil, novedades y contenido.",
+      statFollowers: "Seguidores",
+      statFollowing: "Siguiendo",
+      statPulse: "Pulse",
+      pulseUpdatesTitle: "Novedades de Pulse",
+      pulseUpdatesEmpty: "Aún no hay novedades de Pulse.",
+      postsTitle: "Publicaciones y contenido",
+      postsEmptyOwner: "Aún no has publicado nada. Crea tu primera publicación en la app.",
+      postsEmptyVisitor: "Aún no hay nada que mostrar aquí.",
+      privateTitle: "Este perfil es privado",
+      privateBody: "Este miembro mantiene sus publicaciones y novedades en privado.",
+      blockedTitle: "Contenido oculto",
+      blockedBody: "Has bloqueado a este miembro, así que sus publicaciones y novedades están ocultas aquí.",
+      unavailableTitle: "Usuario no disponible",
+      unavailableBody: "No se puede mostrar este perfil. Es posible que se haya eliminado o que no esté disponible ahora mismo.",
+      editProfile: "Editar en la app",
+      openInApp: "Abrir en la app",
+      backToFeed: "Volver al Feed",
+      goToFeed: "Ir al Feed",
+      openPost: "Abrir publicación",
+      videoBadge: "Vídeo",
+      verifiedLabel: "Verificado",
+      errorTitle: "No pudimos cargar este perfil",
+      errorBody: "Algo salió mal. Inténtalo de nuevo en un momento o abre la app completa.",
+    },
+    circles: {
+      indexTitle: "Círculos",
+      indexSubtitle: "Comunidades y conversaciones en todo PulseVerse.",
+      pinnedLabel: "Fijado",
+      membersLabel: "miembros",
+      postsLabel: "publicaciones",
+      indexEmptyTitle: "Aún no hay círculos",
+      indexEmptyBody: "Los círculos aparecerán aquí a medida que crezcan las comunidades. Abre la app para explorar.",
+      threadsTitle: "Conversaciones",
+      threadsEmpty: "Aún no hay conversaciones en este Círculo.",
+      aboutTitle: "Acerca de",
+      repliesTitle: "Respuestas",
+      repliesEmpty: "Aún no hay respuestas.",
+      anonymousLabel: "Anónimo",
+      confessionLabel: "Confesión",
+      confessionNote:
+        "Las confesiones son anónimas. Las identidades se ocultan a los demás miembros también en la web.",
+      openInApp: "Abrir en la app",
+      postInApp: "Publicar en la app",
+      replyInApp: "Responder en la app",
+      joinInApp: "Unirse en la app",
+      backToCircles: "Todos los Círculos",
+      backToCircle: "Volver al Círculo",
+      goToFeed: "Ir al Feed",
+      openThread: "Abrir conversación",
+      unavailableTitle: "Círculo no disponible",
+      unavailableBody: "No se puede mostrar este Círculo. Es posible que se haya eliminado o que no esté disponible ahora mismo.",
+      errorTitle: "No pudimos cargar los Círculos",
+      errorBody: "Algo salió mal. Inténtalo de nuevo en un momento o abre la app completa.",
     },
     landing: {
       kicker: "PulseVerse Web",

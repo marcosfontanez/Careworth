@@ -24,7 +24,7 @@ export default async function WebAppFeedPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  await requireWebAppAccount("/web-app/feed");
+  const account = await requireWebAppAccount("/web-app/feed");
 
   const { tab: tabParam } = await searchParams;
   const tab: WebFeedTab = tabParam === "top" ? "top" : "foryou";
@@ -42,6 +42,7 @@ export default async function WebAppFeedPage({
       copy={c.feed}
       openAppHref={openAppHref}
       isExternalApp={isExternalApp}
+      currentUserId={account.id}
     />
   );
 }

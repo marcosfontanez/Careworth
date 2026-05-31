@@ -57,10 +57,17 @@ type Account = {
   avatarUrl: string | null;
 };
 
+export type WebAppRailCircle = {
+  slug: string;
+  name: string;
+  icon: string | null;
+};
+
 export function WebAppChrome({
   account,
   copy,
   externalAppBase,
+  trendingCircles = [],
   guidelinesHref = "/community-guidelines",
   getAppHref = "/download",
   children,
@@ -69,6 +76,8 @@ export function WebAppChrome({
   copy: WebAppShellCopy;
   /** Usable external Expo export origin, or null when not configured. */
   externalAppBase: string | null;
+  /** Safe, public circles for the right rail (empty hides the card). */
+  trendingCircles?: WebAppRailCircle[];
   guidelinesHref?: string;
   getAppHref?: string;
   children: React.ReactNode;
@@ -223,6 +232,29 @@ export function WebAppChrome({
 
         {/* Right contextual rail (static, safe) */}
         <aside className="hidden w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-white/8 bg-[rgba(8,14,28,0.4)] p-4 xl:flex">
+          {trendingCircles.length > 0 ? (
+            <section className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.6)] p-4 backdrop-blur-sm">
+              <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
+                {copy.railCirclesTitle}
+              </h2>
+              <ul className="mt-3 space-y-1">
+                {trendingCircles.map((circle) => (
+                  <li key={circle.slug}>
+                    <Link
+                      href={`/web-app/circles/${encodeURIComponent(circle.slug)}`}
+                      className="flex items-center gap-2.5 rounded-xl px-2 py-2 text-sm text-foreground/90 transition hover:bg-white/5"
+                    >
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-base">
+                        {circle.icon ?? "💬"}
+                      </span>
+                      <span className="truncate font-medium">{circle.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.6)] p-4 backdrop-blur-sm">
             <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
               {copy.railTitle}
