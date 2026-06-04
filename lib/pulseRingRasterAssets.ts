@@ -1,7 +1,16 @@
 import type { ImageSourcePropType } from 'react-native';
 
+import {
+  CLASS_OF_2026_BORDER_ASSET,
+  CLASS_OF_2026_INNER_OPENING_FRAC,
+  PULSE_CLASS_OF_2026_FRAME_SLUG,
+  SHOP_SLUGS_CLASS_OF_2026,
+  isClassOf2026FrameSlug,
+} from '@/lib/borders/premiumBorderConfig';
 import type { ShopItemRow } from '@/lib/shop/types';
 import type { PulseAvatarFrame } from '@/types';
+
+export { PULSE_CLASS_OF_2026_FRAME_SLUG, isClassOf2026FrameSlug };
 
 /**
  * Bundled podium / Solstice ring PNGs: the inner transparent opening diameter is ~52–57% of the
@@ -149,6 +158,12 @@ export function shopItemBundledRasterPreview(
       innerOpeningFrac: RASTER_EMERALD_RENEWAL_MAY_2026_INNER_OPENING_FRAC,
     };
   }
+  if (SHOP_SLUGS_CLASS_OF_2026.has(slug) || SHOP_SLUGS_CLASS_OF_2026.has(slugNorm)) {
+    return {
+      source: CLASS_OF_2026_BORDER_ASSET,
+      innerOpeningFrac: CLASS_OF_2026_INNER_OPENING_FRAC,
+    };
+  }
   const meta = item.metadata as { pulse_frame_slug?: string } | null | undefined;
   if (meta?.pulse_frame_slug === PULSE_BETA_FRAME_SLUG) {
     return { source: BETA_TESTER_BORDER, innerOpeningFrac: RASTER_BETA_TESTER_INNER_OPENING_FRAC };
@@ -178,6 +193,12 @@ export function shopItemBundledRasterPreview(
     return {
       source: EMERALD_RENEWAL_MAY_2026_BORDER,
       innerOpeningFrac: RASTER_EMERALD_RENEWAL_MAY_2026_INNER_OPENING_FRAC,
+    };
+  }
+  if (meta?.pulse_frame_slug === PULSE_CLASS_OF_2026_FRAME_SLUG) {
+    return {
+      source: CLASS_OF_2026_BORDER_ASSET,
+      innerOpeningFrac: CLASS_OF_2026_INNER_OPENING_FRAC,
     };
   }
   return null;
@@ -220,10 +241,26 @@ export function resolvePulseRingRaster(frame: {
       innerOpeningFrac: RASTER_EMERALD_RENEWAL_MAY_2026_INNER_OPENING_FRAC,
     };
   }
+  if (frame.slug === PULSE_CLASS_OF_2026_FRAME_SLUG) {
+    return {
+      source: CLASS_OF_2026_BORDER_ASSET,
+      innerOpeningFrac: CLASS_OF_2026_INNER_OPENING_FRAC,
+    };
+  }
   return {
     source: podiumPulseRingSource(frame.prizeTier),
     innerOpeningFrac: podiumTierInnerOpeningFrac(frame.prizeTier),
   };
+}
+
+/** Pulse Shop row for the Class of 2026 graduation flagship border. */
+export function shopItemIsClassOf2026(item: ShopItemRow | null | undefined): boolean {
+  if (!item || item.type !== 'border') return false;
+  const meta = item.metadata as { pulse_frame_slug?: string } | null | undefined;
+  if (meta?.pulse_frame_slug === PULSE_CLASS_OF_2026_FRAME_SLUG) return true;
+  const s = String(item.slug ?? '').trim().toLowerCase();
+  const n = s.replace(/-/g, '_');
+  return SHOP_SLUGS_CLASS_OF_2026.has(s) || SHOP_SLUGS_CLASS_OF_2026.has(n);
 }
 
 /** Equipped frame: procedural Emerald Renewal motion (EKG + sparkles). */

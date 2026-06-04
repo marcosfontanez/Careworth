@@ -6,7 +6,7 @@ import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { timeAgo } from '@/utils/format';
-import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { isAnonymousConfessionCircle, anonymousDisplayName } from '@/lib/anonymousCircle';
 import { CIRCLE_REPLY_REMOVED_TOMBSTONE } from '@/lib/circleModeration';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { CommentRichText } from '@/components/ui/CommentRichText';
@@ -42,9 +42,12 @@ export function CircleReplyItem({ reply, circleSlug, threadId, onReport, canMode
 
   const displayName = useMemo(() => {
     if (!reply) return 'Member';
-    if (isAnonRoom) return author.displayName || 'Anonymous';
+    // Anonymous rooms NEVER expose the real name — stable per-thread pseudonym.
+    if (isAnonRoom) {
+      return anonymousDisplayName(reply.authorId ?? author.id ?? '', threadId ?? '');
+    }
     return author.displayName;
-  }, [isAnonRoom, reply, author.displayName]);
+  }, [isAnonRoom, reply, author.id, author.displayName, threadId]);
 
   if (!reply) {
     return null;

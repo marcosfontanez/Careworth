@@ -29,7 +29,7 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, adminConsole: true }),
       });
       let data: { ok?: boolean; error?: string; code?: string | null } = {};
       try {
@@ -38,6 +38,15 @@ export function AdminLoginForm({ nextPath }: { nextPath: string }) {
         /* ignore */
       }
       if (!res.ok) {
+        if (res.status === 403) {
+          setError(
+            typeof data.error === "string"
+              ? data.error
+              : "This account is not authorized for the admin console.",
+          );
+          setLoading(false);
+          return;
+        }
         if (res.status === 503) {
           setError(
             process.env.NODE_ENV === "production"

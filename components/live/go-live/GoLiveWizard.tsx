@@ -27,6 +27,9 @@ import type { StreamCategory } from '@/types';
 import { PV_LIVE_MODE_TAG_PREFIX, type LiveModeType } from '@/types/liveHub';
 import { liveStreamHref } from '@/lib/navigation/liveRoutes';
 import { analytics } from '@/lib/analytics';
+import { isLiveKitVideoReady } from '@/lib/liveKitConfig';
+import { isExpoGo } from '@/lib/expoRuntime';
+import { videoProvider } from '@/services/live/videoProvider';
 import {
   checkLiveBroadcastPermissions,
   missingPermissionLabel,
@@ -237,6 +240,26 @@ export function GoLiveWizard() {
     }
     if (!mode) return;
 
+    if (!isLiveKitVideoReady()) {
+      if (isExpoGo()) {
+        Alert.alert(
+          'Preview app required',
+          'Live camera streaming does not run in Expo Go. Install the PulseVerse preview build from TestFlight, then try Go Live again.',
+        );
+      } else if (videoProvider.id !== 'livekit') {
+        Alert.alert(
+          'Live video unavailable',
+          'This app build is missing live video configuration. Install the latest PulseVerse preview build, then try again.',
+        );
+      } else {
+        Alert.alert(
+          'Live video unavailable',
+          'Live video could not start on this device. Check camera and microphone permissions, then try again.',
+        );
+      }
+      return;
+    }
+
     setCreating(true);
     try {
       const stream = await streamsLiveService.createStream({
@@ -434,7 +457,7 @@ export function GoLiveWizard() {
                 <RowToggle label="Enable Q&A queue" value={learnQna} onChange={setLearnQna} />
                 <RowToggle label="Enable polls" value={learnPolls} onChange={setLearnPolls} />
                 <Text style={styles.hint}>
-                  Resources attachments — TODO: link Supabase Storage handouts.
+                  Attach handouts and links from your session resources after you go live.
                 </Text>
               </>
             ) : null}
@@ -443,7 +466,7 @@ export function GoLiveWizard() {
               <>
                 <Text style={styles.label}>Product queue</Text>
                 <Text style={styles.hint}>
-                  TODO: bind `shop_live_product_sets` — mock SKUs ship from discovery demos only.
+                  Add products from Pulse Shop before you go live — viewers can browse while you stream.
                 </Text>
                 <RowToggle label="Live deal timer (demo)" value={liveDeal} onChange={setLiveDeal} />
                 <RowToggle label="Giveaway (demo)" value={giveaway} onChange={setGiveaway} />
@@ -530,10 +553,6 @@ export function GoLiveWizard() {
                 Go Live unlocks after camera and microphone access are granted.
               </Text>
             ) : null}
-
-            <Text style={styles.disclaimer}>
-              Mobile broadcast uses LiveKit on development / EAS builds (not Expo Go). Chat, gifts, polls stay on Supabase.
-            </Text>
 
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep(2)}>
@@ -783,12 +802,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark.text,
   },
   startText: { ...typography.button, fontSize: 16, fontWeight: '800', color: colors.dark.text },
-
-  disclaimer: {
-    ...typography.bodySmall,
-    color: colors.dark.textMuted,
-    textAlign: 'center',
-    marginVertical: spacing.md,
-    lineHeight: 18,
-  },
 });

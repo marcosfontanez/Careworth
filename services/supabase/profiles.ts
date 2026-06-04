@@ -1,10 +1,52 @@
+import { Platform } from 'react-native';
 import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
-import { supabase } from '@/lib/supabase';
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '@/lib/supabase';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
-import type { UserProfile } from '@/types';
+import type { PulseAvatarFrame, UserProfile } from '@/types';
+/**
+ * Explicit profile column list. We select columns by name (never `*`) so that
+ * `role_admin` is NEVER returned to normal authenticated/anon profile reads —
+ * migration 247 revokes the column grant, so a `*` read would now error.
+ * push_token / push_token_updated_at were removed in migration 243.
+ * Keep this in sync with public.profiles.
+ */
+export const PROFILE_COLUMNS =
+  'avatar_url, banner_url, bio, brand_kit, city, created_at, default_allow_clip_downloads, default_allow_remix, default_allow_viewer_clips, display_name, first_name, follower_count, following_count, hide_pulse_music_player_on_my_page, id, identity_tags, is_creator, is_verified, last_name, like_count, post_count, preferred_locale, privacy_mode, product_digest_email, profile_song_artist, profile_song_artwork_url, profile_song_title, profile_song_url, pulse_score_current, pulse_tier, role, selected_pulse_avatar_frame_id, shift_preference, specialty, state, terms_and_privacy_accepted_at, total_shares, updated_at, username, years_experience';
+
 export const PROFILE_SELECT_WITH_AVATAR_FRAME =
-  '*, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)';
+  `${PROFILE_COLUMNS}, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)`;
+
+/** Public catalog columns for a single equipped-frame lookup (no admin fields). */
+export const PULSE_FRAME_PUBLIC_COLUMNS =
+  'id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption';
+
+/** Per-attempt ceiling for a single profile row fetch (embeds / tunnel can stall). */
+const PROFILE_FETCH_TIMEOUT_MS = 12_000;
+
+/**
+ * Race a Supabase query builder against a timeout so a single hung request
+ * can't block profile hydration indefinitely. Rejects on timeout so callers
+ * can fall back to a cheaper query.
+ */
+export function withProfileTimeout<T>(builder: PromiseLike<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('profile fetch timed out')),
+      PROFILE_FETCH_TIMEOUT_MS,
+    );
+    Promise.resolve(builder).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 function rowToProfile(row: any): UserProfile {
   const dn =
@@ -78,6 +120,108 @@ function rowToProfile(row: any): UserProfile {
   };
 }
 
+async function fetchPulseFrameById(frameId: string): Promise<PulseAvatarFrame | null | undefined> {
+  const { data, error } = await withProfileTimeout(
+    supabase.from('pulse_avatar_frames').select(PULSE_FRAME_PUBLIC_COLUMNS).eq('id', frameId).maybeSingle(),
+  );
+  if (error || !data) return undefined;
+  return mapPulseAvatarFrameEmbed(data) ?? null;
+}
+
+async function fetchPulseFrameByIdWithAccessToken(
+  frameId: string,
+  accessToken: string,
+): Promise<PulseAvatarFrame | null | undefined> {
+  const token = accessToken.trim();
+  if (!token || !SUPABASE_URL || SUPABASE_URL.includes('invalid.localhost')) return undefined;
+
+  const select = encodeURIComponent(PULSE_FRAME_PUBLIC_COLUMNS);
+  const url =
+    `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/pulse_avatar_frames` +
+    `?id=eq.${encodeURIComponent(frameId)}&select=${select}`;
+
+  const fetchRow = fetch(url, {
+    method: 'GET',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.pgrst.object+json',
+    },
+  }).then(async (res) => {
+    if (!res.ok) return undefined;
+    return mapPulseAvatarFrameEmbed(await res.json()) ?? null;
+  });
+
+  try {
+    return await withProfileTimeout(fetchRow);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Plain profile reads (native perf path) omit the PostgREST embed. When
+ * `selected_pulse_avatar_frame_id` is set, load the catalog row so My Pulse /
+ * feed avatars can render shop borders like Class of 2026.
+ */
+export async function enrichProfileEquippedFrame(
+  profile: UserProfile,
+  accessToken?: string | null,
+): Promise<UserProfile> {
+  if (profile.pulseAvatarFrame !== undefined) return profile;
+  const frameId = profile.selectedPulseAvatarFrameId;
+  if (!frameId) return { ...profile, pulseAvatarFrame: null };
+
+  const frame = accessToken
+    ? await fetchPulseFrameByIdWithAccessToken(frameId, accessToken)
+    : await fetchPulseFrameById(frameId);
+  if (frame === undefined) return profile;
+  return { ...profile, pulseAvatarFrame: frame };
+}
+
+/**
+ * Read the signed-in user's profile row using an access token we already hold from
+ * `getSession()` — bypasses Supabase Auth's exclusive token lock, which on cold boot
+ * can block `supabase.from('profiles')` for 15–20s while JWT refresh runs.
+ */
+export async function getByIdWithAccessToken(
+  id: string,
+  accessToken: string,
+): Promise<UserProfile | null> {
+  const token = accessToken.trim();
+  if (!token || !SUPABASE_URL || SUPABASE_URL.includes('invalid.localhost')) return null;
+
+  const select = encodeURIComponent(PROFILE_COLUMNS);
+  const url =
+    `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles` +
+    `?id=eq.${encodeURIComponent(id)}&select=${select}`;
+
+  const fetchRow = fetch(url, {
+    method: 'GET',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.pgrst.object+json',
+    },
+  }).then(async (res) => {
+    if (!res.ok) {
+      if (__DEV__) {
+        console.warn('[profiles] bootstrap row fetch failed', res.status, await res.text().catch(() => ''));
+      }
+      return null;
+    }
+    return rowToProfile(await res.json());
+  });
+
+  try {
+    const profile = await withProfileTimeout(fetchRow);
+    if (!profile) return null;
+    return enrichProfileEquippedFrame(profile, token);
+  } catch {
+    return null;
+  }
+}
+
 export const profilesService = {
   async getByUsername(handle: string): Promise<UserProfile | null> {
     const h = handle.replace(/^@/, '').trim().toLowerCase();
@@ -92,14 +236,28 @@ export const profilesService = {
   },
 
   async getById(id: string): Promise<UserProfile | null> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
-      .eq('id', id)
-      .single();
+    const fetchWith = async (select: string): Promise<UserProfile | null> => {
+      const { data, error } = await withProfileTimeout(
+        supabase.from('profiles').select(select).eq('id', id).single(),
+      );
+      if (error || !data) return null;
+      return rowToProfile(data);
+    };
 
-    if (error || !data) return null;
-    return rowToProfile(data);
+    const preferPlainFirst = Platform.OS !== 'web';
+    const tryOrder = preferPlainFirst
+      ? [PROFILE_COLUMNS, PROFILE_SELECT_WITH_AVATAR_FRAME]
+      : [PROFILE_SELECT_WITH_AVATAR_FRAME, PROFILE_COLUMNS];
+
+    for (const select of tryOrder) {
+      try {
+        const profile = await fetchWith(select);
+        if (profile) return enrichProfileEquippedFrame(profile);
+      } catch {
+        /* timed out — try next select shape */
+      }
+    }
+    return null;
   },
 
   async update(id: string, updates: Partial<{
@@ -133,7 +291,8 @@ export const profilesService = {
     const { data, error } = await qb
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select()
+      // Explicit columns (never `*`): role_admin is not client-readable (migration 247).
+      .select(PROFILE_COLUMNS)
       .single();
 
     if (error) throw error;

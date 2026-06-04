@@ -15,8 +15,8 @@ export async function setAppealStatus(
   } = await supabase.auth.getUser();
   if (!user?.id) return { ok: false, error: "Not signed in" };
 
-  const { data: profile } = await supabase.from("profiles").select("role_admin").eq("id", user.id).maybeSingle();
-  if (!profile?.role_admin) return { ok: false, error: "Forbidden" };
+  const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
+  if (isAdmin !== true) return { ok: false, error: "Forbidden" };
 
   const { error } = await supabase.from("content_appeals").update({ status: nextStatus }).eq("id", appealId);
 

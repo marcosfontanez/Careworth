@@ -198,27 +198,26 @@ export async function loadWebFeed(tab: WebFeedTab): Promise<WebFeedResult> {
         .limit(FEED_LIMIT);
       if (error) throw error;
       ids = ((data ?? []) as { id: string }[]).map((r) => r.id).filter((v): v is string => Boolean(v));
+    } else if (tab === "top") {
+      // Top = Top Today only. If it's empty we return an empty result so the UI
+      // can show a "nothing trending yet" state — we must NOT silently fall back
+      // to the personalized For You ranker under a "Top" label.
+      const { data, error } = await supabase.rpc("get_top_today_v2", {
+        feed_limit: FEED_LIMIT,
+        viewer_uuid: user.id,
+        exclude_post_ids: [],
+      });
+      if (!error && Array.isArray(data)) {
+        ids = (data as RankRow[]).map((r) => r.post_id).filter((v): v is string => Boolean(v));
+      }
     } else {
-      if (tab === "top") {
-        const { data, error } = await supabase.rpc("get_top_today_v2", {
-          feed_limit: FEED_LIMIT,
-          viewer_uuid: user.id,
-          exclude_post_ids: [],
-        });
-        if (!error && Array.isArray(data)) {
-          ids = (data as RankRow[]).map((r) => r.post_id).filter((v): v is string => Boolean(v));
-        }
-      }
-
-      if (ids.length === 0) {
-        const { data, error } = await supabase.rpc("get_ranked_feed_v3", {
-          viewer_id: user.id,
-          feed_limit: FEED_LIMIT,
-          exclude_post_ids: [],
-        });
-        if (error) throw error;
-        ids = ((data as RankRow[]) ?? []).map((r) => r.post_id).filter((v): v is string => Boolean(v));
-      }
+      const { data, error } = await supabase.rpc("get_ranked_feed_v3", {
+        viewer_id: user.id,
+        feed_limit: FEED_LIMIT,
+        exclude_post_ids: [],
+      });
+      if (error) throw error;
+      ids = ((data as RankRow[]) ?? []).map((r) => r.post_id).filter((v): v is string => Boolean(v));
     }
 
     if (ids.length === 0) return { state: "ok", posts: [] };

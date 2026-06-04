@@ -27,10 +27,7 @@ import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
 import { communityKeys } from '@/lib/queryKeys';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
-import { loadBrandKit, saveBrandKit, type BrandKit, withAlpha } from '@/lib/brandKit';
 import { tintForUri, type PaletteKey } from '@/lib/colorAnalysis';
-import { MOOD_PRESETS, type MoodPreset, type MoodPresetId } from '@/lib/moodPresets';
-import { appendHashtag } from '@/lib/hashtagStudio';
 import { parseHashtagsFromText, syncHashtagsToString, HASHTAG_MAX } from '@/lib/hashtags';
 import { HashtagInput } from '@/components/create/HashtagInput';
 import type { SeriesSelection } from '@/lib/seriesMode';
@@ -40,12 +37,10 @@ import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { EducationModeToggle, type EducationCitation } from '@/components/create/EducationModeToggle';
 import { SeriesModePicker } from '@/components/create/SeriesModePicker';
 import { SchedulePostPicker } from '@/components/create/SchedulePostPicker';
-import { BrandKitEditor } from '@/components/create/BrandKitEditor';
 import { CarouselColorMatch } from '@/components/create/CarouselColorMatch';
 import { PhotoFramePicker } from '@/components/create/PhotoFramePicker';
 import { PhotoFrameOverlay } from '@/components/create/PhotoFrameOverlay';
 import { BeforeAfterPreview, BeforeAfterToggle } from '@/components/create/BeforeAfterEditor';
-import { MoodPresetPicker } from '@/components/create/MoodPresetPicker';
 import { SmartCoverHint } from '@/components/create/SmartCoverHint';
 import { LayoutTemplatePicker, type PhotoLayoutPreset } from '@/components/create/LayoutTemplatePicker';
 import { PreviewOnlyCallout } from '@/components/create/PreviewOnlyCallout';
@@ -56,7 +51,6 @@ const MAX_IMAGES = 10;
 
 const PHOTO_LAYOUT_IDS = new Set<string>(['carousel', 'filmstrip', 'grid2', 'stack', 'row3']);
 const PHOTO_FRAME_IDS = new Set<string>(PHOTO_FRAMES.map((f) => f.id));
-const MOOD_IDS = new Set<string>(MOOD_PRESETS.map((p) => p.id));
 
 function buildSourcesBlock(citations: EducationCitation[]): string {
   if (citations.length === 0) return '';
@@ -88,12 +82,9 @@ export default function CreateImageScreen() {
   const [commentsOn, setCommentsOn] = useState(true);
   const carouselRef = useRef<ScrollView>(null);
 
-  const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
-  const [brandKitOpen, setBrandKitOpen] = useState(false);
   const [colorMatchOn, setColorMatchOn] = useState(false);
   const [colorPalette, setColorPalette] = useState<PaletteKey>('brand');
   const [photoFrame, setPhotoFrame] = useState<PhotoFrameId>('none');
-  const [moodId, setMoodId] = useState<MoodPresetId | null>(null);
   const [beforeAfter, setBeforeAfter] = useState(false);
   const [phiAck, setPhiAck] = useState(false);
   const [educationOn, setEducationOn] = useState(false);
@@ -101,14 +92,8 @@ export default function CreateImageScreen() {
   const [seriesSelection, setSeriesSelection] = useState<SeriesSelection | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [layoutPreset, setLayoutPreset] = useState<PhotoLayoutPreset>('carousel');
-  const [brandBackdrop, setBrandBackdrop] = useState(false);
   /** Avoid autosave / clearDraft races before `loadDraft('image')` finishes. */
   const [draftBootstrapped, setDraftBootstrapped] = useState(false);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    loadBrandKit(user.id).then(setBrandKit);
-  }, [user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,12 +135,8 @@ export default function CreateImageScreen() {
         if (lp && PHOTO_LAYOUT_IDS.has(lp)) setLayoutPreset(lp as PhotoLayoutPreset);
         const pf = draft.imagePhotoFrame;
         if (pf && PHOTO_FRAME_IDS.has(pf)) setPhotoFrame(pf as PhotoFrameId);
-        if (typeof draft.imageBrandBackdrop === 'boolean') setBrandBackdrop(draft.imageBrandBackdrop);
         if (typeof draft.imageColorMatch === 'boolean') setColorMatchOn(draft.imageColorMatch);
         if (typeof draft.imageBeforeAfter === 'boolean') setBeforeAfter(draft.imageBeforeAfter);
-        const mid = draft.imageMoodId;
-        if (mid === null) setMoodId(null);
-        else if (typeof mid === 'string' && MOOD_IDS.has(mid)) setMoodId(mid as MoodPresetId);
         if (draft.privacyPhoto === 'public' || draft.privacyPhoto === 'followers') {
           setPrivacy(draft.privacyPhoto);
         }
@@ -178,10 +159,8 @@ export default function CreateImageScreen() {
     if (seriesSelection) return true;
     if (layoutPreset !== 'carousel') return true;
     if (photoFrame !== 'none') return true;
-    if (brandBackdrop) return true;
     if (colorMatchOn) return true;
     if (beforeAfter) return true;
-    if (moodId) return true;
     return false;
   }, [
     caption,
@@ -196,10 +175,8 @@ export default function CreateImageScreen() {
     seriesSelection,
     layoutPreset,
     photoFrame,
-    brandBackdrop,
     colorMatchOn,
     beforeAfter,
-    moodId,
   ]);
 
   const unsavedLeaveRef = useRef(hasComposerDraft);
@@ -217,10 +194,8 @@ export default function CreateImageScreen() {
       educationOnDraft: educationOn,
       imageLayoutPreset: layoutPreset,
       imagePhotoFrame: photoFrame,
-      imageBrandBackdrop: brandBackdrop,
       imageColorMatch: colorMatchOn,
       imageBeforeAfter: beforeAfter,
-      imageMoodId: moodId,
     };
     if (scheduledAt) payload.scheduledAtIso = scheduledAt.toISOString();
     if (citations.length > 0) payload.educationCitationsDraft = citations;
@@ -238,10 +213,8 @@ export default function CreateImageScreen() {
     citations,
     layoutPreset,
     photoFrame,
-    brandBackdrop,
     colorMatchOn,
     beforeAfter,
-    moodId,
   ]);
 
   useEffect(() => {
@@ -396,17 +369,6 @@ export default function CreateImageScreen() {
     toast.show('Moved best-resolution photo to cover', 'success');
   };
 
-  const applyMood = (preset: MoodPreset | null) => {
-    if (!preset) {
-      setMoodId(null);
-      return;
-    }
-    setMoodId(preset.id);
-    preset.suggestedHashtags.forEach((t) => {
-      setHashtags((h) => appendHashtag(h, t));
-    });
-  };
-
   const handlePost = async () => {
     if (!caption.trim() && images.length === 0) {
       toast.show('Add a photo or caption', 'error');
@@ -502,7 +464,6 @@ export default function CreateImageScreen() {
         series_total: seriesSelection?.seriesTotal,
         scheduled_at: scheduleIso,
         scheduled_status: scheduleIso ? 'scheduled' : 'live',
-        mood_preset: moodId ?? undefined,
         comments_disabled: !commentsOn || undefined,
       });
 
@@ -545,16 +506,6 @@ export default function CreateImageScreen() {
         }}
       />
 
-      <BrandKitEditor
-        visible={brandKitOpen}
-        initial={brandKit ?? {}}
-        onClose={() => setBrandKitOpen(false)}
-        onSave={async (next) => {
-          setBrandKit(next);
-          if (user?.id) await saveBrandKit(user.id, next);
-        }}
-      />
-
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color={colors.dark.text} />
@@ -587,28 +538,13 @@ export default function CreateImageScreen() {
               title="Preview only — feed shows plain photos"
               body="Frames, layout guides, color-match tints, and brand backdrop are composer previews. Followers see standard carousel images until feed rendering adds these treatments."
             />
-            <View
-            style={[
-              brandBackdrop && brandKit?.primary
-                ? {
-                    backgroundColor: withAlpha(brandKit.scrubs ?? brandKit.primary, 0.22),
-                    borderRadius: 14,
-                    padding: 8,
-                  }
-                : null,
-            ]}
-          >
+            <View>
             {layoutPreset === 'grid2' ? (
               <View style={{ width: SLIDE_W, alignSelf: 'center', marginBottom: 8 }}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' }}>
                   {images.slice(0, 4).map((item, index) => {
                     const cell = (SLIDE_W - 8) / 2;
-                    const tint =
-                      colorMatchOn && brandKit
-                        ? withAlpha(brandKit.scrubs ?? brandKit.primary ?? '#14B8A6', 0.12)
-                        : colorMatchOn
-                          ? tintForUri(item.uri, colorPalette)
-                          : undefined;
+                    const tint = colorMatchOn ? tintForUri(item.uri, colorPalette) : undefined;
                     return (
                       <View
                         key={`${item.uri}|grid${index}`}
@@ -640,12 +576,7 @@ export default function CreateImageScreen() {
                 <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'space-between' }}>
                   {images.slice(0, 3).map((item, index) => {
                     const cell = (SLIDE_W - 12) / 3;
-                    const tint =
-                      colorMatchOn && brandKit
-                        ? withAlpha(brandKit.scrubs ?? brandKit.primary ?? '#14B8A6', 0.12)
-                        : colorMatchOn
-                          ? tintForUri(item.uri, colorPalette)
-                          : undefined;
+                    const tint = colorMatchOn ? tintForUri(item.uri, colorPalette) : undefined;
                     return (
                       <View
                         key={`${item.uri}|row3${index}`}
@@ -685,12 +616,7 @@ export default function CreateImageScreen() {
               }}
             >
               {images.map((item, index) => {
-                const tint =
-                  colorMatchOn && brandKit
-                    ? withAlpha(brandKit.scrubs ?? brandKit.primary ?? '#14B8A6', 0.12)
-                    : colorMatchOn
-                      ? tintForUri(item.uri, colorPalette)
-                      : undefined;
+                const tint = colorMatchOn ? tintForUri(item.uri, colorPalette) : undefined;
                 return (
                   <View key={`${item.uri}|${item.fileName ?? index}`} style={styles.imageSlide}>
                     <Image source={{ uri: item.uri }} style={styles.slideImage} resizeMode="cover" />

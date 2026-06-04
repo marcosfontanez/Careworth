@@ -9,10 +9,12 @@ export const MARKETING_SEGMENT_LABELS: Record<string, string> = {
   contact: "Contact",
   communities: "Circles",
   "community-guidelines": "Community guidelines",
+  compare: "Compare",
   download: "Download",
   faq: "FAQ",
   features: "Features",
   feed: "Feed",
+  for: "For professionals",
   circles: "Circles",
   live: "Live",
   "pulse-page": "Pulse Page",
@@ -23,6 +25,15 @@ export const MARKETING_SEGMENT_LABELS: Record<string, string> = {
   support: "Support",
   terms: "Terms",
   trust: "Trust & safety",
+  // Answer-page slugs (compare + for) — readable breadcrumb leaves.
+  "pulseverse-vs-tiktok": "PulseVerse vs TikTok",
+  "pulseverse-vs-instagram": "PulseVerse vs Instagram",
+  "pulseverse-vs-facebook-groups": "PulseVerse vs Facebook groups",
+  "pulseverse-vs-doximity": "PulseVerse vs Doximity",
+  nurses: "Nurses",
+  doctors: "Doctors",
+  "medical-students": "Medical students",
+  "healthcare-workers": "Healthcare workers",
 };
 
 export type BreadcrumbItem = { name: string; href: string; linkable?: boolean };

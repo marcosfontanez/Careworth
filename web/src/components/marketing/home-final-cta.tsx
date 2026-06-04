@@ -1,12 +1,9 @@
-import { ArrowRight } from "lucide-react";
-
 import { BetaAccessButtons } from "@/components/marketing/beta-access-buttons";
-import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
+import { MarketingPrimaryCta, MarketingSecondaryCta } from "@/components/marketing/marketing-cta";
 import { PosterFrame, SplitFeatureRow } from "@/components/marketing/website-visuals";
-import { Button } from "@/components/ui/button";
 import type { Locale } from "@/lib/i18n";
 import { getHomeCtaCopy } from "@/lib/marketing-copy/home";
-import { marketingGutterX } from "@/lib/ui-classes";
+import { marketingGradientFrame, marketingGradientFrameInner, marketingGutterX } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,16 +12,10 @@ import { cn } from "@/lib/utils";
 export function HomeFinalCta({ locale }: { locale: Locale }) {
   const c = getHomeCtaCopy(locale);
   return (
-    <section className="relative isolate py-16 sm:py-20">
+    <section className="relative isolate py-12 sm:py-16">
       <div className={marketingGutterX}>
-        <div
-          className={cn(
-            "relative overflow-hidden rounded-[1.75rem] p-px",
-            "bg-linear-to-r from-[#0c1f4a] via-primary to-[#00a8cc]",
-            "shadow-[0_30px_90px_-24px_rgba(45,127,249,0.55)]",
-          )}
-        >
-          <div className="relative overflow-hidden rounded-[calc(1.75rem-1px)] bg-[rgba(5,10,20,0.93)] px-8 py-14 sm:px-14 sm:py-16">
+        <div className={marketingGradientFrame}>
+          <div className={cn(marketingGradientFrameInner, "px-6 py-10 sm:px-12 sm:py-14")}>
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0 opacity-50"
@@ -42,31 +33,13 @@ export function HomeFinalCta({ locale }: { locale: Locale }) {
                 <p className="mx-auto mt-3 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg lg:mx-0">
                   {c.description}
                 </p>
-                <div className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
-                  <Button
-                    size="lg"
-                    className="h-12 rounded-full bg-white px-8 font-semibold text-[#050a14] shadow-[0_12px_40px_-10px_rgba(255,255,255,0.45)] hover:bg-white/95"
-                    asChild
-                  >
-                    <MarketingDestinationLink
-                      href="/download"
-                      className="inline-flex items-center gap-2"
-                      analyticsSource="home_bottom_primary"
-                    >
-                      {c.primaryLabel}
-                      <ArrowRight className="h-5 w-5" aria-hidden />
-                    </MarketingDestinationLink>
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-12 rounded-full border-white/25 bg-transparent px-7 font-semibold text-foreground hover:bg-white/6"
-                    asChild
-                  >
-                    <MarketingDestinationLink href="/contact" analyticsSource="home_bottom_secondary">
-                      {c.secondaryLabel}
-                    </MarketingDestinationLink>
-                  </Button>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:justify-start">
+                  <MarketingPrimaryCta href="/download" analyticsSource="home_bottom_primary">
+                    {c.primaryLabel}
+                  </MarketingPrimaryCta>
+                  <MarketingSecondaryCta href="/contact" analyticsSource="home_bottom_secondary">
+                    {c.secondaryLabel}
+                  </MarketingSecondaryCta>
                 </div>
                 <BetaAccessButtons
                   locale={locale}

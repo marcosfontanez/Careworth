@@ -4,27 +4,30 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 
 type Props = {
-  /** Current timeline clip exists — required before picking cutaways. */
+  /** Current timeline clip exists — required before queueing more clips. */
   hasPrimaryVideo: boolean;
-  /** Number of gallery clips queued after the main upload (B-roll path only). */
-  queuedCutaways: number;
+  /** Number of gallery clips queued after the main upload. */
+  queuedClips: number;
   onOpenPicker: () => void;
 };
 
 /**
- * B-roll in Advanced tools: queues cutaways after the main clip for a single post + server concat (`creator_media_jobs` broll).
+ * Combine Clips (formerly mislabeled "B-roll"): queues extra clips after the main
+ * clip for a single post + server concat (`creator_media_jobs`). This is sequential
+ * joining, NOT true B-roll/cutaway compositing — that lives in B-roll Studio.
  */
-export function BrollInsertCard({ hasPrimaryVideo, queuedCutaways, onOpenPicker }: Props) {
+export function CombineClipsCard({ hasPrimaryVideo, queuedClips, onOpenPicker }: Props) {
   return (
     <View style={styles.wrap}>
-      <Ionicons name="film-outline" size={22} color={colors.primary.gold} />
+      <Ionicons name="git-merge-outline" size={22} color={colors.primary.teal} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.title}>B-roll cutaways</Text>
+        <Text style={styles.title}>Combine clips</Text>
         <Text style={styles.sub}>
-          One post: main story first in the file, then your cutaways concatenated on the server (ffmpeg worker). Tap Post once from the composer when the queue is ready — same pipeline as multi-part series.
+          Join multiple clips into one video. Your main clip plays first, then the clips you add are
+          joined onto the end and rendered into a single post on the server.
         </Text>
-        {queuedCutaways > 0 ? (
-          <Text style={styles.queued}>{queuedCutaways} cutaway{queuedCutaways === 1 ? '' : 's'} queued</Text>
+        {queuedClips > 0 ? (
+          <Text style={styles.queued}>{queuedClips} clip{queuedClips === 1 ? '' : 's'} queued</Text>
         ) : null}
         <TouchableOpacity
           style={[styles.cta, !hasPrimaryVideo && styles.ctaDisabled]}
@@ -33,7 +36,7 @@ export function BrollInsertCard({ hasPrimaryVideo, queuedCutaways, onOpenPicker 
           disabled={!hasPrimaryVideo}
         >
           <Ionicons name="add-circle-outline" size={18} color={hasPrimaryVideo ? '#fff' : colors.dark.textMuted} />
-          <Text style={[styles.ctaText, !hasPrimaryVideo && styles.ctaTextDisabled]}>Pick B-roll clips</Text>
+          <Text style={[styles.ctaText, !hasPrimaryVideo && styles.ctaTextDisabled]}>Pick clips to combine</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -46,9 +49,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: colors.primary.gold + '14',
+    backgroundColor: colors.primary.teal + '14',
     borderWidth: 1,
-    borderColor: colors.primary.gold + '44',
+    borderColor: colors.primary.teal + '44',
   },
   title: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
   sub: { fontSize: 11, color: colors.dark.textMuted, marginTop: 4, lineHeight: 15 },

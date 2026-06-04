@@ -22,9 +22,9 @@ export type HomeFeatureShowcaseCopy = {
 
 const copy: Record<Locale, HomeFeatureShowcaseCopy> = {
   en: {
-    eyebrow: "Platform map",
+    eyebrow: "Platform",
     title: "Six surfaces. One account.",
-    subtitle: "Tap any surface to dive in — the rest of the page covers the headliners.",
+    subtitle: "Explore the full platform on Features — or join the beta.",
     explore: "Explore",
     liveLabel: "Live",
     cards: {
@@ -44,9 +44,9 @@ const copy: Record<Locale, HomeFeatureShowcaseCopy> = {
     ],
   },
   es: {
-    eyebrow: "Mapa de la plataforma",
+    eyebrow: "Plataforma",
     title: "Seis superficies. Una cuenta.",
-    subtitle: "Toca cualquier superficie para entrar — el resto de la página cubre las protagonistas.",
+    subtitle: "Explora todo en Funciones — o entra directo a la beta.",
     explore: "Explorar",
     liveLabel: "En vivo",
     cards: {

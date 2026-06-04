@@ -37,9 +37,8 @@ import { composerDockPadding } from '@/lib/keyboardAware';
 import { getCircleAccent } from '@/lib/circleAccents';
 import { COMMENT_MAX_LENGTH } from '@/constants';
 import { pickCoverForSession } from '@/lib/coverAbRotation';
-import { resolveFeedGradeLookId } from '@/lib/moodPresets';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
-import { tintForLook } from '@/lib/videoFilters';
+import { resolveFeedGradeLookId, tintForLook } from '@/lib/videoFilters';
 import { storageService } from '@/lib/storage';
 import { resolvePostViewerHref } from '@/lib/postViewerRoute';
 import { getThreadListWindow } from '@/lib/feedVideoListWindow';
@@ -82,8 +81,8 @@ function CommentsMediaHeader({
   );
 
   const gradeLookId = useMemo(
-    () => resolveFeedGradeLookId({ videoLookId: post.videoLookId, moodPreset: post.moodPreset }),
-    [post.videoLookId, post.moodPreset],
+    () => resolveFeedGradeLookId({ videoLookId: post.videoLookId }),
+    [post.videoLookId],
   );
   const gradeTint = useMemo(
     () => (gradeLookId ? tintForLook(gradeLookId) : null),

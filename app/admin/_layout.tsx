@@ -19,13 +19,9 @@ export default function AdminLayout() {
           router.replace('/auth/login');
           return;
         }
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role_admin')
-          .eq('id', user.id)
-          .single() as { data: { role_admin: boolean } | null };
+        const { data: isAdmin } = await supabase.rpc('current_user_role_admin');
 
-        if (profile?.role_admin) {
+        if (isAdmin === true) {
           setAuthorized(true);
         } else {
           if (router.canGoBack()) router.back();

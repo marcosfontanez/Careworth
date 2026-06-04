@@ -57,6 +57,24 @@ export type WebProfilePost = {
   likedByViewer: boolean;
 };
 
+/** One tile in the Media Hub (a feed/circle post the user created or saved). */
+export type WebMediaItem = {
+  key: string;
+  postId: string;
+  thumbnailUrl: string | null;
+  isVideo: boolean;
+  caption: string | null;
+  likeCount: number;
+};
+
+/** Media Hub library, split into the same three tabs as the native app. */
+export type WebProfileMedia = {
+  videos: WebMediaItem[];
+  photos: WebMediaItem[];
+  /** Owner-only (saved posts are private); empty for visitors. */
+  favorites: WebMediaItem[];
+};
+
 /** Why a profile's content is hidden even though the shell can render. */
 export type WebProfileLockReason = "private" | "blocked" | null;
 
@@ -75,6 +93,7 @@ export type WebProfileResult =
       profile: WebProfileHeader;
       pulseUpdates: WebPulseUpdate[];
       posts: WebProfilePost[];
+      media: WebProfileMedia;
     };
 
 const POSTS_LIMIT = 30;
@@ -86,6 +105,12 @@ const PUBLIC_PRIVACY = new Set(["public", "alias"]);
 
 const FRAME_EMBED =
   "pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(slug, label, prize_tier, ring_color, glow_color, ring_caption)";
+
+// Explicit profile column list (excludes role_admin so signed-out/anon profile
+// reads never carry the staff flag). push_token columns were removed in
+// migration 243. Keep in sync with public.profiles.
+const PROFILE_COLUMNS =
+  "avatar_url, banner_url, bio, brand_kit, city, created_at, default_allow_clip_downloads, default_allow_remix, default_allow_viewer_clips, display_name, first_name, follower_count, following_count, hide_pulse_music_player_on_my_page, id, identity_tags, is_creator, is_verified, last_name, like_count, post_count, preferred_locale, privacy_mode, product_digest_email, profile_song_artist, profile_song_artwork_url, profile_song_title, profile_song_url, pulse_score_current, pulse_tier, role, selected_pulse_avatar_frame_id, shift_preference, specialty, state, terms_and_privacy_accepted_at, total_shares, updated_at, username, years_experience";
 
 type AnyRow = Record<string, unknown>;
 
@@ -157,13 +182,13 @@ export async function loadWebProfile(
   try {
     const { data: profileRow, error: profileErr } = await supabase
       .from("profiles")
-      .select(`*, ${FRAME_EMBED}`)
+      .select(`${PROFILE_COLUMNS}, ${FRAME_EMBED}`)
       .eq("id", targetUserId)
       .maybeSingle();
 
     if (profileErr) {
       // The embed can fail on schema drift — retry without it before giving up.
-      const fallback = await supabase.from("profiles").select("*").eq("id", targetUserId).maybeSingle();
+      const fallback = await supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", targetUserId).maybeSingle();
       if (fallback.error) return { state: "error" };
       if (!fallback.data) return { state: "unavailable" };
       return finalize(supabase, mapHeader(fallback.data as AnyRow), isOwner, viewerId, targetUserId);
@@ -241,15 +266,23 @@ async function finalize(
       profile,
       pulseUpdates: [],
       posts: [],
+      media: { videos: [], photos: [], favorites: [] },
     };
   }
 
   const canFollow = !isOwner;
-  const [pulseUpdates, posts, followingSet] = await Promise.all([
+  const [pulseUpdates, posts, favorites, followingSet] = await Promise.all([
     loadPulseUpdates(supabase, targetUserId),
     loadProfilePosts(supabase, targetUserId, isOwner, viewerId),
+    // Saved posts are private — only the owner's Favorites tab is populated.
+    isOwner ? loadFavorites(supabase, targetUserId) : Promise.resolve<WebMediaItem[]>([]),
     canFollow ? loadFollowingIds(supabase, viewerId, [targetUserId]) : Promise.resolve(new Set<string>()),
   ]);
+
+  // Split the user's own feed/circle posts into the Videos and Photos tabs,
+  // mirroring the native Media Hub (which keys off post.type).
+  const videos = posts.filter((p) => p.isVideo).map(mediaItemFromPost);
+  const photos = posts.filter((p) => !p.isVideo && p.type === "image").map(mediaItemFromPost);
 
   return {
     state: "ok",
@@ -261,7 +294,69 @@ async function finalize(
     profile,
     pulseUpdates,
     posts,
+    media: { videos, photos, favorites },
   };
+}
+
+/** Project a profile post into a Media Hub tile. */
+function mediaItemFromPost(p: WebProfilePost): WebMediaItem {
+  return {
+    key: `post:${p.id}`,
+    postId: p.id,
+    thumbnailUrl: p.thumbnailUrl ?? p.mediaUrl,
+    isVideo: p.isVideo,
+    caption: p.caption,
+    likeCount: p.likeCount,
+  };
+}
+
+/**
+ * Owner's saved posts → Media Hub Favorites tab. `saved_posts` is RLS-scoped to
+ * the owner; we then re-read the actual rows through `posts_viewer_safe` so only
+ * still-live, non-processing posts surface (mirrors the native Favorites grid).
+ */
+async function loadFavorites(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+): Promise<WebMediaItem[]> {
+  try {
+    const { data: saved } = await supabase
+      .from("saved_posts")
+      .select("post_id, saved_at")
+      .eq("user_id", userId)
+      .order("saved_at", { ascending: false })
+      .limit(40);
+    const order = ((saved ?? []) as AnyRow[])
+      .map((r) => (typeof r.post_id === "string" ? r.post_id : null))
+      .filter((id): id is string => Boolean(id));
+    if (order.length === 0) return [];
+
+    const { data: postRows } = await supabase
+      .from("posts_viewer_safe")
+      .select("id, type, caption, thumbnail_url, media_url, like_count, scheduled_status, media_processing_status")
+      .in("id", order);
+
+    const byId = new Map<string, WebMediaItem>();
+    for (const r of (postRows ?? []) as AnyRow[]) {
+      const sched = String(r.scheduled_status ?? "live").toLowerCase();
+      if (sched !== "live") continue;
+      const proc = String(r.media_processing_status ?? "").toLowerCase().trim();
+      if (PROCESSING_BLOCK.has(proc)) continue;
+      const id = String(r.id);
+      byId.set(id, {
+        key: `fav:${id}`,
+        postId: id,
+        thumbnailUrl: toHttps(r.thumbnail_url) ?? toHttps(r.media_url),
+        isVideo: isVideoType(r.type),
+        caption: str(r.caption),
+        likeCount: num(r.like_count),
+      });
+    }
+    // Preserve saved-at order; drop any post no longer visible.
+    return order.map((id) => byId.get(id)).filter((m): m is WebMediaItem => Boolean(m));
+  } catch {
+    return [];
+  }
 }
 
 async function loadPulseUpdates(

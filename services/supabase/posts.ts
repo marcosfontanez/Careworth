@@ -218,7 +218,6 @@ function rowToPost(row: any): Post {
     scheduledAt: row.scheduled_at ?? undefined,
     scheduledStatus: row.scheduled_status != null ? String(row.scheduled_status) : undefined,
     coverAltUrl: normalizeMediaUrl(row.cover_alt_url),
-    moodPreset: row.mood_preset?.trim() || undefined,
     ...(videoLook ? { videoLookId: videoLook } : {}),
     videoOverlayText: typeof row.video_overlay_text === 'string'
       ? row.video_overlay_text.trim() || undefined
@@ -327,7 +326,6 @@ const POST_SELECT = [
   'scheduled_at',
   'scheduled_status',
   'cover_alt_url',
-  'mood_preset',
   'video_look_id',
   // On-video sticker text (rendered as <Text> overlay on the feed video)
   'video_overlay_text',
@@ -344,7 +342,7 @@ const POST_SELECT = [
   // push tokens, role_admin flag, etc. to the client.
   // Joined creator profile — explicit FK hint required since migration 213 added
   // posts.source_creator_id → profiles (second relationship).
-  'profiles!posts_creator_id_fkey(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  'profiles!posts_creator_id_fkey(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /**
@@ -393,7 +391,6 @@ const POST_SELECT_FEED = [
   'scheduled_at',
   'scheduled_status',
   'cover_alt_url',
-  'mood_preset',
   'video_look_id',
   'video_overlay_text',
   'video_overlay_style',
@@ -404,7 +401,7 @@ const POST_SELECT_FEED = [
   'media_processing_status',
   'media_processing_job_id',
   'media_processing_error',
-  'profiles!posts_creator_id_fkey(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, brand_kit, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
+  'profiles!posts_creator_id_fkey(id, display_name, first_name, last_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, selected_pulse_avatar_frame_id, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption))',
 ].join(', ');
 
 /** Loads posts and preserves caller id order (PostgREST `.in()` order is undefined). */
@@ -569,12 +566,8 @@ async function profilePostsReadableForViewer(
     if (block !== 'none') return false;
 
     if (owner.privacy_mode === 'private') {
-      const { data: viewer } = await supabase
-        .from('profiles')
-        .select('role_admin')
-        .eq('id', viewerId)
-        .maybeSingle();
-      return Boolean(viewer?.role_admin);
+      const { data: isAdmin } = await supabase.rpc('current_user_role_admin');
+      return Boolean(isAdmin);
     }
     return true;
   }
@@ -1001,7 +994,7 @@ async function runTopTodayFeed(viewerId?: string | null): Promise<Post[]> {
      + viewer-aware exclusions when signed in. */
   try {
     const v2 = await supabase.rpc('get_top_today_v2', {
-      viewer_uuid: viewerId ?? null,
+      viewer_uuid: viewerId ?? undefined,
       feed_limit: 50,
       exclude_post_ids: [] as string[],
     });
@@ -1400,7 +1393,15 @@ export const postsService = {
     const hydrated = await hydratePostRowsWithProfiles(data ?? []);
     let posts = hydrated.map(rowToPost);
     if (viewerId && viewerId !== profileUserId) {
-      posts = posts.filter((p) => !p.isAnonymous && postIsLiveForPublicSurface(p));
+      // Visitors never see another creator's still-processing / failed server-render
+      // posts (stitch/broll/video_composition) — those carry a provisional/un-composited
+      // media_url until the worker patches. Owners still see them (with a placeholder).
+      posts = posts.filter((p) => {
+        if (p.isAnonymous || !postIsLiveForPublicSurface(p)) return false;
+        const proc = (p.mediaProcessingStatus ?? '').trim().toLowerCase();
+        if (proc === 'queued' || proc === 'running' || proc === 'failed') return false;
+        return true;
+      });
     }
     return finalizePostsForViewer(posts, viewerId);
   },
@@ -1632,7 +1633,6 @@ export const postsService = {
     scheduled_at?: string | null;
     scheduled_status?: 'live' | 'scheduled' | 'sending' | 'failed' | 'cancelled' | null;
     cover_alt_url?: string | null;
-    mood_preset?: string | null;
     /** Read-side color grade on feed video (migration 162). */
     video_look_id?: string | null;
     additional_media?: string[] | null;
@@ -1692,7 +1692,6 @@ export const postsService = {
       scheduled_at: scheduledAtIn,
       scheduled_status: scheduledStatusIn,
       cover_alt_url: coverAltUrlIn,
-      mood_preset: moodPresetIn,
       video_look_id: videoLookIdIn,
       additional_media: additionalMediaIn,
       video_overlay_text: videoOverlayTextIn,
@@ -1781,8 +1780,6 @@ export const postsService = {
     }
     const cau = typeof coverAltUrlIn === 'string' ? coverAltUrlIn.trim() : '';
     if (cau) extensionPayload.cover_alt_url = cau;
-    const mp = typeof moodPresetIn === 'string' ? moodPresetIn.trim() : '';
-    if (mp) extensionPayload.mood_preset = mp;
     if (Array.isArray(additionalMediaIn) && additionalMediaIn.length) {
       insertPayload.additional_media = additionalMediaIn;
     }
@@ -1962,7 +1959,7 @@ export const postsService = {
   async getSavedPosts(userId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from('saved_posts')
-      .select('post_id, posts(*, profiles!posts_creator_id_fkey(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
+      .select('post_id, posts(*, profiles!posts_creator_id_fkey(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current))')
       .eq('user_id', userId)
       .order('saved_at', { ascending: false });
 
@@ -1978,7 +1975,7 @@ export const postsService = {
   async getLikedPosts(userId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from('post_likes')
-      .select('created_at, posts(*, profiles!posts_creator_id_fkey(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit))')
+      .select('created_at, posts(*, profiles!posts_creator_id_fkey(id, display_name, avatar_url, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 

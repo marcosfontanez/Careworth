@@ -22,21 +22,21 @@ export type HomeCtaCopy = {
 
 const hero: Record<Locale, HomeHeroCopy> = {
   en: {
-    eyebrow: "Healthcare's first social home",
+    eyebrow: "Built for healthcare professionals",
     headline: "Healthcare culture has a home.",
     subhead:
-      "Verified clinicians, students, and creators — together in one place.",
-    primaryCta: "Join PulseVerse",
+      "Designed for clinicians, students, and creators — join the beta.",
+    primaryCta: "Join the beta",
     secondaryCta: "See it in the browser",
     posterTag: "Live product render",
     posterCaption: "Login · Profile · Circles · Creator Hub",
   },
   es: {
-    eyebrow: "El primer hogar social de la salud",
+    eyebrow: "Hecho para profesionales de la salud",
     headline: "La cultura sanitaria tiene un hogar.",
     subhead:
-      "Clínicos, estudiantes y creadores verificados — en un mismo lugar.",
-    primaryCta: "Unirte a PulseVerse",
+      "Diseñado para clínicos, estudiantes y creadores — únete a la beta.",
+    primaryCta: "Unirte a la beta",
     secondaryCta: "Verla en el navegador",
     posterTag: "Renderizado real",
     posterCaption: "Login · Perfil · Circles · Creator Hub",
@@ -46,16 +46,16 @@ const hero: Record<Locale, HomeHeroCopy> = {
 const bottomCta: Record<Locale, HomeCtaCopy> = {
   en: {
     title: "Make it your Pulse.",
-    description: "Join the clinicians, students, and creators already inside.",
-    primaryLabel: "Join PulseVerse",
+    description: "Join our early healthcare community — clinicians, students, and creators shaping PulseVerse.",
+    primaryLabel: "Join the beta",
     secondaryLabel: "Partner with us",
     ecosystemHeroAlt:
       "PulseVerse marketing hero: central My Pulse phone with floating panels for Borders, Circles, Creator Live, Pulse Shop, and Live & Connect, plus Join PulseVerse call-to-action.",
   },
   es: {
     title: "Hazlo tu Pulse.",
-    description: "Únete a los clínicos, estudiantes y creadores que ya están dentro.",
-    primaryLabel: "Unirte a PulseVerse",
+    description: "Únete a nuestra comunidad sanitaria inicial — clínicos, estudiantes y creadores que dan forma a PulseVerse.",
+    primaryLabel: "Unirte a la beta",
     secondaryLabel: "Aliarte con nosotros",
     ecosystemHeroAlt:
       "Hero de PulseVerse: teléfono central My Pulse con paneles flotantes Borders, Circles, Creator Live, Pulse Shop y Live & Connect, más llamada a unirse.",

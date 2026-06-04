@@ -56,6 +56,15 @@ export default function Index() {
     rootIndexRedirectIfNeeded(router, next);
   }, [routeKey, gate, router]);
 
+  /** One silent retry on slow cold starts (Expo Go / tunnel) before asking the user to tap Retry. */
+  useEffect(() => {
+    if (gate !== 'profile_unavailable') return;
+    const t = setTimeout(() => {
+      void refreshProfile();
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [gate, refreshProfile]);
+
   if (gate === 'profile_unavailable') {
     return (
       <View style={styles.blocked}>

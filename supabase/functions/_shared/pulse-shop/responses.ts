@@ -15,6 +15,7 @@ export type PulseShopErrorCode =
   | "INSUFFICIENT_SPARKS"
   | "INVALID_RECIPIENT"
   | "SELF_GIFT_NOT_ALLOWED"
+  | "GIFT_BLOCKED"
   | "NOT_ALLOWED"
   | "UNKNOWN";
 
@@ -77,6 +78,7 @@ function errorToStatus(code: PulseShopErrorCode): number {
     case "INSUFFICIENT_SPARKS":
     case "INVALID_RECIPIENT":
     case "SELF_GIFT_NOT_ALLOWED":
+    case "GIFT_BLOCKED":
     case "NOT_ALLOWED":
     case "FULFILLMENT_FAILED":
       return 422;
@@ -107,6 +109,7 @@ export function mapRpcException(e: { message?: string; code?: string; details?: 
   if (msg.includes("duplicate_border")) return "DUPLICATE_PURCHASE";
   if (msg.includes("invalid_recipient")) return "INVALID_RECIPIENT";
   if (msg.includes("self_gift_not_allowed")) return "SELF_GIFT_NOT_ALLOWED";
+  if (msg.includes("gift_blocked")) return "GIFT_BLOCKED";
   if (msg.includes("invalid_receipt")) return "INVALID_RECEIPT";
   if (msg.includes("item_not_active") || msg.includes("gift_not_found")) return "ITEM_INACTIVE";
   if (msg.includes("not_allowed")) return "NOT_ALLOWED";

@@ -298,6 +298,23 @@ export function withSupabaseImageTransform(
 }
 
 /**
+ * Reverse of {@link withSupabaseImageTransform}: turn a `render/image/public/…`
+ * transform URL back into the plain `object/public/…` URL (stripping transform
+ * query params). Use as a fallback when image transformations are unavailable
+ * (e.g. project not on a transform-capable plan) so the original object still
+ * loads. Returns the input untouched when it isn't a render URL.
+ */
+export function rawPublicUrlFromTransform(url: string | null | undefined): string {
+  const raw = (url ?? '').trim();
+  if (!raw) return '';
+  const idx = raw.indexOf(RENDER_IMAGE_MARKER);
+  if (idx === -1) return raw;
+  const origin = raw.slice(0, idx);
+  const pathOnly = raw.slice(idx + RENDER_IMAGE_MARKER.length).split('?')[0];
+  return `${origin}${PUBLIC_OBJECT_MARKER}${pathOnly}`;
+}
+
+/**
  * Convenience wrapper for square avatars. Pass the on-screen pixel size you
  * want and we'll render at 2× density so it stays crisp on Retina displays
  * without overshooting bandwidth.

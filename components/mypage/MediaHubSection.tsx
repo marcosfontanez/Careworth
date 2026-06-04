@@ -433,6 +433,10 @@ function MediaThumbCard({
 }) {
   const isVideo = item.kind === 'post' && item.post.type === 'video';
   const isPulsePic = item.kind === 'pulse-pic';
+  const processing =
+    item.kind === 'post' ? (item.post.mediaProcessingStatus ?? '').trim().toLowerCase() : '';
+  const isRendering = processing === 'queued' || processing === 'running';
+  const renderFailed = processing === 'failed';
 
   return (
     <TouchableOpacity
@@ -461,10 +465,23 @@ function MediaThumbCard({
         pointerEvents="none"
       />
 
-      {isVideo ? (
+      {isVideo && !isRendering && !renderFailed ? (
         <View style={styles.playOverlay} pointerEvents="none">
           <View style={styles.playCircle}>
             <Ionicons name="play" size={14} color="#FFF" />
+          </View>
+        </View>
+      ) : null}
+
+      {isRendering || renderFailed ? (
+        <View style={styles.processingOverlay} pointerEvents="none">
+          <View style={[styles.processingChip, renderFailed && styles.processingChipFailed]}>
+            <Ionicons
+              name={renderFailed ? 'alert-circle' : 'sync'}
+              size={12}
+              color="#FFF"
+            />
+            <Text style={styles.processingText}>{renderFailed ? 'Failed' : 'Processing'}</Text>
           </View>
         </View>
       ) : null}
@@ -726,6 +743,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  processingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(34,211,238,0.92)',
+  },
+  processingChipFailed: {
+    backgroundColor: 'rgba(239,68,68,0.92)',
+  },
+  processingText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
   kindBadge: {
     position: 'absolute',
     bottom: 6,

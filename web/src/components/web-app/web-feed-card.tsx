@@ -85,7 +85,7 @@ export function WebFeedCard({
       {/* Media */}
       {showImageMedia ? (
         <Link
-          href={`/post/${post.id}`}
+          href={`/web-app/post/${post.id}`}
           className="group relative mt-3 block aspect-[4/5] w-full overflow-hidden bg-[#05080f] sm:aspect-video"
           aria-label={copy.openPost}
         >
@@ -125,7 +125,7 @@ export function WebFeedCard({
           {formatCount(post.commentCount)}
         </span>
         <Link
-          href={`/post/${post.id}`}
+          href={`/web-app/post/${post.id}`}
           className="ml-auto rounded-full border border-white/12 px-3.5 py-1.5 text-xs font-semibold text-foreground/90 transition hover:border-white/25 hover:text-foreground"
         >
           {copy.openPost}

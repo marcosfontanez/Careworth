@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { isReactNativeCompressorLinked } from '@/lib/compressorAvailability';
 
 /**
@@ -43,6 +44,10 @@ export async function makeVideoThumbnail(
   uri: string,
   atSec?: number,
 ): Promise<string | null> {
+  // expo-video-thumbnails / react-native-compressor have no web support; the
+  // server generates the poster for the feed card from the uploaded file.
+  if (Platform.OS === 'web') return null;
+
   const timeMs =
     typeof atSec === 'number' && Number.isFinite(atSec) && atSec >= 0
       ? Math.max(0, atSec * 1000)

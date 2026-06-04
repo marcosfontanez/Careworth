@@ -1,7 +1,6 @@
-import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
-import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
+import { MarketingPrimaryCta, MarketingSecondaryLink } from "@/components/marketing/marketing-cta";
 import {
   OrbitDots,
   PosterCaptionStrip,
@@ -9,16 +8,15 @@ import {
   SpotlightBeam,
   WebsiteSectionBackdrop,
 } from "@/components/marketing/website-visuals";
-import { Button } from "@/components/ui/button";
 import { getHomeHeroCopy } from "@/lib/marketing-copy/home";
-import { marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingGutterX } from "@/lib/ui-classes";
 import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function HeroSection({ locale }: { locale: Locale }) {
   const t = getHomeHeroCopy(locale);
   return (
-    <section className="relative isolate overflow-hidden pt-14 pb-24 sm:pt-20 sm:pb-32 lg:pb-36">
+    <section className="relative isolate overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-20 lg:pb-24">
       <WebsiteSectionBackdrop variant="deep" />
       <div
         aria-hidden
@@ -49,35 +47,11 @@ export function HeroSection({ locale }: { locale: Locale }) {
             <p className="mt-5 max-w-md text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
               {t.subhead}
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button
-                size="lg"
-                className={cn(
-                  "h-12 rounded-full px-8 text-base font-semibold",
-                  "bg-primary text-primary-foreground hover:bg-primary/90",
-                  shadowPrimaryCta,
-                )}
-                asChild
-              >
-                <MarketingDestinationLink
-                  href="/download"
-                  analyticsSource="hero_primary"
-                  className="inline-flex items-center gap-2"
-                >
-                  {t.primaryCta}
-                  <ArrowRight className="h-5 w-5" aria-hidden />
-                </MarketingDestinationLink>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 rounded-full border-white/15 bg-white/3 px-7 text-base font-semibold text-foreground hover:bg-white/7"
-                asChild
-              >
-                <Link href="/web-app" className="inline-flex items-center gap-2">
-                  {t.secondaryCta}
-                </Link>
-              </Button>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <MarketingPrimaryCta href="/download" analyticsSource="hero_primary">
+                {t.primaryCta}
+              </MarketingPrimaryCta>
+              <MarketingSecondaryLink href="/web-app">{t.secondaryCta}</MarketingSecondaryLink>
             </div>
           </div>
 

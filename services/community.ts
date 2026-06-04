@@ -41,6 +41,15 @@ export const communityService = {
     return communitiesService.toggleJoin(user.id, communityId, options);
   },
 
+  /** Authoritative membership check for the signed-in user (bypasses cached joined-ids). */
+  async isMember(communityId: string): Promise<boolean> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    return communitiesService.isMember(user.id, communityId);
+  },
+
   async setCirclePostAlerts(communityId: string, enabled: boolean): Promise<void> {
     const {
       data: { user },

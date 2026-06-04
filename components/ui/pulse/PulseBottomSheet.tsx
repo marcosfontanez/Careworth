@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -24,6 +25,8 @@ import {
 } from '@/lib/theme/pulseTheme';
 import { PulseIconButton } from './PulseIconButton';
 
+const WINDOW_HEIGHT = Dimensions.get('window').height;
+
 type Props = {
   visible: boolean;
   onClose: () => void;
@@ -32,6 +35,8 @@ type Props = {
   maxHeightRatio?: number;
   style?: StyleProp<ViewStyle>;
   scrollable?: boolean;
+  /** Reserve vertical space for composer/footer content (live chat input, poll actions). */
+  composerSheet?: boolean;
 };
 
 /** Premium glass bottom sheet — rounded top, header, close, safe-area. */
@@ -43,8 +48,13 @@ export function PulseBottomSheet({
   maxHeightRatio = 0.72,
   style,
   scrollable = false,
+  composerSheet = false,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const sheetMaxHeight = Math.round(WINDOW_HEIGHT * maxHeightRatio);
+  const sheetMinHeight = composerSheet
+    ? Math.min(sheetMaxHeight, Math.max(360, Math.round(WINDOW_HEIGHT * 0.48)))
+    : Math.min(sheetMaxHeight, Math.max(280, Math.round(sheetMaxHeight * 0.55)));
 
   const body = scrollable ? (
     <ScrollView
@@ -71,7 +81,8 @@ export function PulseBottomSheet({
               styles.sheet,
               pulseShadows.sheet,
               {
-                maxHeight: `${Math.round(maxHeightRatio * 100)}%`,
+                maxHeight: sheetMaxHeight,
+                minHeight: sheetMinHeight,
                 paddingBottom: insets.bottom + pulseSpacing.md,
               },
               style,
@@ -93,7 +104,7 @@ export function PulseBottomSheet({
                 <PulseIconButton icon="close" onPress={onClose} accessibilityLabel="Close" size="sm" tone="ghost" />
               </View>
             )}
-            <View style={styles.body}>{body}</View>
+            <View style={[styles.body, composerSheet && styles.bodyComposer]}>{body}</View>
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -108,7 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     zIndex: pulseZIndex.sheet,
   },
-  keyboardWrap: { justifyContent: 'flex-end' },
+  keyboardWrap: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: pulseRadius.sheet,
     borderTopRightRadius: pulseRadius.sheet,
@@ -117,6 +128,7 @@ const styles = StyleSheet.create({
     borderColor: pulseColors.borderStrong,
     overflow: 'hidden',
     backgroundColor: pulseColors.glassStrong,
+    flexDirection: 'column',
   },
   topVeil: {
     position: 'absolute',
@@ -148,6 +160,7 @@ const styles = StyleSheet.create({
     paddingBottom: pulseSpacing.xs,
   },
   title: { ...pulseTypography.sectionTitle, flex: 1 },
-  body: { paddingHorizontal: pulseSpacing.lg },
-  scrollContent: { paddingBottom: pulseSpacing.lg, gap: pulseSpacing.md },
+  body: { paddingHorizontal: pulseSpacing.lg, flex: 1, minHeight: 0 },
+  bodyComposer: { paddingBottom: pulseSpacing.xs },
+  scrollContent: { paddingBottom: pulseSpacing.lg, gap: pulseSpacing.md, flexGrow: 1 },
 });

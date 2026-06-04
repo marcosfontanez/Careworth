@@ -1,5 +1,4 @@
 import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
-import type { BrandKit } from '@/lib/brandKit';
 import type { VideoLookId } from '@/lib/videoFilters';
 
 export type Role =
@@ -441,8 +440,6 @@ export interface CreatorSummary {
   city: string;
   state: string;
   isVerified: boolean;
-  /** From `profiles.brand_kit` when set — feed watermark / overlays. */
-  brandKit?: BrandKit;
   /** Denormalized Pulse Score v2 tier (see migration 059). */
   pulseTier?: string;
   pulseScoreCurrent?: number;
@@ -531,7 +528,6 @@ export interface Post {
   /** `live` = visible in public feeds; `scheduled` = queued until dispatcher runs */
   scheduledStatus?: string;
   coverAltUrl?: string;
-  moodPreset?: string;
   /** Composer color-grade chip — feed overlays matching tint (not burned into MP4). */
   videoLookId?: VideoLookId;
   /**

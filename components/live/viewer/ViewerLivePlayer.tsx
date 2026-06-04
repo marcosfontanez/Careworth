@@ -356,7 +356,13 @@ export function ViewerLivePlayer({
         onDone={() => setGiftOverlay(null)}
       />
 
-      <LiveBottomSheet visible={chatSheetOpen} onClose={() => setChatSheetOpen(false)} title="Live chat" maxHeightRatio={0.62}>
+      <LiveBottomSheet
+        visible={chatSheetOpen}
+        onClose={() => setChatSheetOpen(false)}
+        title="Live chat"
+        maxHeightRatio={0.72}
+        composerSheet
+      >
         <LiveChatPanel
           messages={messages}
           pinned={pinned}
@@ -374,7 +380,8 @@ export function ViewerLivePlayer({
           }}
           chatBlocked={chatBlocked}
           chatSending={chatSending}
-          listHeight={240}
+          fillAvailable
+          inSheet
         />
       </LiveBottomSheet>
 
@@ -408,7 +415,13 @@ export function ViewerLivePlayer({
         ) : null}
       </LiveBottomSheet>
 
-      <LiveBottomSheet visible={pollSheetOpen && !!activePoll} onClose={() => setPollSheetOpen(false)} title="Live poll" maxHeightRatio={0.44}>
+      <LiveBottomSheet
+        visible={pollSheetOpen && !!activePoll}
+        onClose={() => setPollSheetOpen(false)}
+        title="Live poll"
+        maxHeightRatio={0.68}
+        scrollable
+      >
         {activePoll ? (
           <PollWidget
             poll={activePoll}
@@ -416,7 +429,6 @@ export function ViewerLivePlayer({
             hasVoted={hasVotedPoll}
             votedOptionId={votedOptionId}
             votingDisabled={pollVoting}
-            compact
           />
         ) : null}
       </LiveBottomSheet>

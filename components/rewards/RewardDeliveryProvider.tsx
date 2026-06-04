@@ -20,7 +20,7 @@ import { shopQueriesService } from '@/services/shop/shopQueries';
 import { analytics } from '@/lib/analytics';
 
 export function RewardDeliveryProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const uid = user?.id ?? null;
   const qc = useQueryClient();
 
@@ -45,7 +45,7 @@ export function RewardDeliveryProvider({ children }: { children: React.ReactNode
   const pendingQuery = useQuery({
     queryKey: rewardDeliveryKeys.pendingList(uid),
     queryFn: () => rewardDeliveriesService.listPending(),
-    enabled: Boolean(isAuthenticated && uid),
+    enabled: Boolean(isAuthenticated && uid && !isLoading),
     staleTime: 12_000,
     /** Keep polling during Pulse Month — only pause while our reveal modal owns the screen. */
     refetchInterval: rewardDeliveryBlocking ? false : 22_000,

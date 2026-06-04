@@ -209,6 +209,24 @@ export const communitiesService = {
     }
   },
 
+  /** Authoritative single-row membership check (independent of the cached joined-ids list). */
+  async isMember(userId: string, communityId: string): Promise<boolean> {
+    const uid = (userId ?? '').trim();
+    const cid = (communityId ?? '').trim();
+    if (!uid || !cid) return false;
+    const { data, error } = await supabase
+      .from('community_members')
+      .select('id')
+      .eq('user_id', uid)
+      .eq('community_id', cid)
+      .maybeSingle();
+    if (error) {
+      if (__DEV__) console.warn('[communitiesService.isMember]', error.message);
+      return false;
+    }
+    return !!data;
+  },
+
   /** null = not a member */
   async getMemberNotifyNewPosts(userId: string, communityId: string): Promise<boolean | null> {
     const { data, error } = await supabase

@@ -40,7 +40,7 @@ import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
 import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 import { composerDockPadding } from '@/lib/keyboardAware';
 import { CommentRichText } from '@/components/ui/CommentRichText';
-import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { isAnonymousConfessionCircle, anonymousDisplayName } from '@/lib/anonymousCircle';
 import { CIRCLE_THREAD_REMOVED_MESSAGE, CIRCLE_PENDING_REVIEW_MESSAGE } from '@/lib/circleModeration';
 import { getCircleAccent } from '@/lib/circleAccents';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
@@ -232,7 +232,10 @@ export default function CircleThreadDetailScreen() {
     };
 
   const isAnonRoom = isAnonymousConfessionCircle(slug);
-  const threadDisplayName = isAnonRoom ? author.displayName || 'Anonymous' : author.displayName;
+  // Anonymous rooms NEVER expose the real name — stable per-thread pseudonym.
+  const threadDisplayName = isAnonRoom
+    ? anonymousDisplayName(thread.authorId, thread.id)
+    : author.displayName;
 
   const accent = community?.accentColor ?? colors.primary.teal;
   const composerAccent = useMemo(

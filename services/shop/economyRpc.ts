@@ -26,7 +26,8 @@ export function rpcEconomySendCreatorGift(params: {
   p_creator_user_id: string;
   p_gift_item_id: string;
   p_context_type: 'live' | 'post' | 'profile';
-  p_context_id: string;
+  // SQL param is a uuid — pass null (not '') when there is no context id.
+  p_context_id: string | null;
   p_idempotency_key: string;
 }) {
   return supabase.rpc('economy_send_creator_gift', params);

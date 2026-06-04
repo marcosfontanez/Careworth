@@ -89,9 +89,10 @@ LiveKit egress recording (Edge Function: livekit-egress)
    npx supabase secrets set LIVEKIT_URL=wss://YOUR_PROJECT.livekit.cloud
    npx supabase secrets set LIVEKIT_API_KEY=xxxxxxxx
    npx supabase secrets set LIVEKIT_API_SECRET=xxxxxxxx
-   npx supabase secrets set SUPABASE_S3_ACCESS_KEY_ID=xxxxxxxx
-   npx supabase secrets set SUPABASE_S3_SECRET_ACCESS_KEY=xxxxxxxx
-   Optional: LIVE_RECORDINGS_BUCKET=live-recordings, SUPABASE_S3_ENDPOINT, SUPABASE_S3_REGION=us-east-1
+   npx supabase secrets set STORAGE_S3_ACCESS_KEY_ID=xxxxxxxx
+   npx supabase secrets set STORAGE_S3_SECRET_ACCESS_KEY=xxxxxxxx
+   Optional: LIVE_RECORDINGS_BUCKET=live-recordings, STORAGE_S3_REGION=us-east-1
+   (Do not use SUPABASE_* secret names — reserved by Supabase. Endpoint auto-derived from SUPABASE_URL.)
 
 4) Deploy (JWT verification ON — default):
    npx supabase functions deploy livekit-egress

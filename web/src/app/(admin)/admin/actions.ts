@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { resolveStaffAccess } from "@/lib/admin/resolve-staff-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function signInAdmin(formData: FormData) {
@@ -31,7 +32,6 @@ export async function signInAdmin(formData: FormData) {
     redirect("/admin/login?error=auth");
   }
 
-  // Ensure auth cookies are written before redirect (important for subsequent server actions).
   await supabase.auth.getSession();
 
   const {
@@ -42,13 +42,10 @@ export async function signInAdmin(formData: FormData) {
     redirect("/admin/login?error=auth");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role_admin")
-    .eq("id", user.id)
-    .maybeSingle();
+  const hasStaffAccess = await resolveStaffAccess(supabase, user.id);
 
-  if (!profile?.role_admin) {
+  if (!hasStaffAccess) {
+    console.warn("[signInAdmin] staff check failed for user", user.id);
     await supabase.auth.signOut();
     redirect("/admin/login?error=forbidden");
   }

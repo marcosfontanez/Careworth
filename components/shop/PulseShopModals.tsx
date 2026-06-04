@@ -529,9 +529,9 @@ export function BorderGiftRecipientModal({
                             idx === suggestions.length - 1 && styles.handleSuggestionRowLast,
                           ]}
                         >
-                          {u.avatar_url ? (
+                          {u.avatarUrl ? (
                             <Image
-                              source={{ uri: u.avatar_url }}
+                              source={{ uri: u.avatarUrl }}
                               style={styles.handleSuggestionAvatarImg}
                               {...pulseImageListThumbProps}
                             />
@@ -542,7 +542,7 @@ export function BorderGiftRecipientModal({
                           )}
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={styles.handleSuggestionName} numberOfLines={1}>
-                              {(u.display_name ?? '').trim() || u.username || 'Pulse creator'}
+                              {(u.displayName ?? '').trim() || u.username || 'Pulse creator'}
                             </Text>
                             <Text style={styles.handleSuggestionHandle} numberOfLines={1}>
                               {u.username ? `@${u.username}` : ''}

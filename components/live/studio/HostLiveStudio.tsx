@@ -532,7 +532,13 @@ export function HostLiveStudio({
         onRefreshHealth={onRefreshHealth}
       />
 
-      <LiveBottomSheet visible={chatSheetOpen} onClose={() => setChatSheetOpen(false)} title="Live chat">
+      <LiveBottomSheet
+        visible={chatSheetOpen}
+        onClose={() => setChatSheetOpen(false)}
+        title="Live chat"
+        maxHeightRatio={0.72}
+        composerSheet
+      >
         <LiveChatPanel
           messages={messages}
           pinned={pinned}
@@ -550,7 +556,8 @@ export function HostLiveStudio({
           onLaunchPoll={onCreatePoll}
           chatBlocked={chatBlocked}
           chatSending={chatSending}
-          listHeight={260}
+          fillAvailable
+          inSheet
         />
       </LiveBottomSheet>
 
@@ -558,7 +565,8 @@ export function HostLiveStudio({
         visible={pollSheetOpen && !!activePoll}
         onClose={() => setPollSheetOpen(false)}
         title="Live poll"
-        maxHeightRatio={0.5}
+        maxHeightRatio={0.68}
+        scrollable
       >
         {activePoll ? (
           <LivePollPanel

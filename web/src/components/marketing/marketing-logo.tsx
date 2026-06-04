@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { site, pulseverseLogoLockup } from "@/lib/design-tokens";
+import { marketingFocusRing } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 type Variant = "nav" | "footer" | "admin";
@@ -15,7 +16,7 @@ export function MarketingLogo({ className, variant = "nav" }: { className?: stri
   return (
     <Link
       href="/"
-      className={cn("inline-flex shrink-0 items-center", className)}
+      className={cn("inline-flex shrink-0 items-center", marketingFocusRing, "rounded-md", className)}
       aria-label={`${site.name} home`}
     >
       <Image

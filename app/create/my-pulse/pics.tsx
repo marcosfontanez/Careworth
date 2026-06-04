@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Redirect, useRouter } from 'expo-router';
+import { openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -201,7 +202,7 @@ export default function MyPulsePicsScreen() {
           queryKey: profileUpdateKeys.forUser(user.id),
         });
       showToast('Photos added to My Pulse', 'success');
-      router.replace('/(tabs)/my-pulse');
+      openMyPulse(router, { replace: true });
     },
     onError: (e: any) => {
       showToast(e?.message ?? 'Could not post', 'error');

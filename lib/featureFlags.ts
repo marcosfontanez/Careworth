@@ -39,6 +39,51 @@ export interface FeatureFlags {
    */
   creatorHubCombineClips: boolean;
   /**
+   * **B-roll Studio** — true cutaway compositing (server ffmpeg overlay with a
+   * time range), distinct from the sequential "Combine clips" concat. V1 is
+   * Cutaway Mode only. Default **OFF in production** until the worker
+   * `video_composition` pipeline passes QA; ON in dev/staff. Override via
+   * `EXPO_PUBLIC_CREATOR_BROLL_STUDIO=1` or the admin toggle.
+   */
+  creatorBrollStudio: boolean;
+  /**
+   * Picture-in-picture / floating overlay mode for B-roll Studio (Phase 2).
+   * Adds preset position/size overlays alongside V1 cutaway mode. Default
+   * **OFF in production** until QA passes; **ON in dev/staff**. Override via
+   * `EXPO_PUBLIC_CREATOR_OVERLAY_PIP=1`/`0` or the admin toggle.
+   */
+  creatorOverlayPip: boolean;
+  /**
+   * Green Screen (chroma key) recorder/compositor. Future phase — not implemented.
+   * Default **OFF everywhere** until a reliable chromakey pipeline ships and
+   * passes QA. Override via `EXPO_PUBLIC_RECORDER_GREEN_SCREEN=1`.
+   */
+  recorderGreenScreen: boolean;
+  /**
+   * **Green Screen Studio** (B-roll Studio Phase 3) — manual chroma key that
+   * composites a keyed foreground video over an image/video background, rendered
+   * server-side via the `video_composition` worker. Default **OFF in production**
+   * until QA passes; **ON in dev/staff**. Override via
+   * `EXPO_PUBLIC_CREATOR_GREEN_SCREEN_STUDIO=1`/`0` or the admin toggle.
+   */
+  creatorGreenScreenStudio: boolean;
+  /**
+   * **Cutout / Crop Overlay** mode for B-roll Studio (Phase 4) — crop a rectangular
+   * region from a source clip and overlay it (NOT AI subject cutout). Rendered via
+   * the `video_composition` worker. Default **OFF in production** until QA passes;
+   * **ON in dev/staff**. Override via `EXPO_PUBLIC_CREATOR_CUTOUT_OVERLAY=1`/`0`
+   * or the admin toggle.
+   */
+  creatorCutoutOverlay: boolean;
+  /**
+   * **Creator Template Studio** (B-roll Studio Phase 4) — guided preset workflows
+   * (Storytime, Reaction, Green Screen Explainer, Tutorial, Before/After) that open
+   * the existing tools with defaults applied. No new render pipeline. Default
+   * **OFF in production** until QA passes; **ON in dev/staff**. Override via
+   * `EXPO_PUBLIC_CREATOR_TEMPLATE_STUDIO=1`/`0` or the admin toggle.
+   */
+  creatorTemplateStudio: boolean;
+  /**
    * Surface the **Co-create** quick pill on the Creator Hub. The flow can
    * freeze the app when `collab_projects` migration 096 is not applied on the
    * connected Supabase project — the project-list query never resolves, the
@@ -121,10 +166,8 @@ function defaultLiveStreaming(): boolean {
 function defaultLiveDiscoveryDemos(): boolean {
   const raw = process.env.EXPO_PUBLIC_LIVE_DISCOVERY_DEMOS?.trim().toLowerCase();
   if (raw === '1' || raw === 'true' || raw === 'yes') return true;
-  if (raw === '0' || raw === 'false' || raw === 'no') return false;
-  // Never merge demo streams in release builds unless explicitly enabled.
-  if (isProductionReleaseBuild()) return false;
-  return typeof __DEV__ !== 'undefined' && __DEV__;
+  // Launch default: real DB streams only. Opt in with EXPO_PUBLIC_LIVE_DISCOVERY_DEMOS=1 for screenshots.
+  return false;
 }
 
 function defaultLiveFeedInjection(): boolean {
@@ -177,6 +220,74 @@ export function defaultCircleVideoPosting(): boolean {
 /** Creator Hub → Combine clips tile. Default OFF in release until merge QA ships. */
 export function defaultCreatorHubCombineClips(): boolean {
   const raw = process.env.EXPO_PUBLIC_CREATOR_HUB_COMBINE_CLIPS?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/** B-roll Studio (cutaway compositing). Default OFF in release until video_composition QA ships. */
+export function defaultCreatorBrollStudio(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_BROLL_STUDIO?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/**
+ * PiP / floating overlay mode for B-roll Studio (Phase 2). OFF in production
+ * release builds until QA passes; ON in dev/staff for QA. Override via
+ * `EXPO_PUBLIC_CREATOR_OVERLAY_PIP=1`/`0` or the admin toggle.
+ */
+export function defaultCreatorOverlayPip(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_OVERLAY_PIP?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/** Green Screen (chroma key) recorder. Default OFF everywhere until functional + QA'd. */
+export function defaultRecorderGreenScreen(): boolean {
+  const raw = process.env.EXPO_PUBLIC_RECORDER_GREEN_SCREEN?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  return false;
+}
+
+/**
+ * Green Screen Studio (Phase 3). OFF in production release until QA passes;
+ * ON in dev/staff. Override via `EXPO_PUBLIC_CREATOR_GREEN_SCREEN_STUDIO=1`/`0`
+ * or the admin toggle.
+ */
+export function defaultCreatorGreenScreenStudio(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_GREEN_SCREEN_STUDIO?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/**
+ * Cutout / Crop Overlay (Phase 4). OFF in production release until QA passes;
+ * ON in dev/staff. Override via `EXPO_PUBLIC_CREATOR_CUTOUT_OVERLAY=1`/`0`
+ * or the admin toggle.
+ */
+export function defaultCreatorCutoutOverlay(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_CUTOUT_OVERLAY?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  if (isProductionReleaseBuild()) return false;
+  return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
+/**
+ * Creator Template Studio (Phase 4). OFF in production release until QA passes;
+ * ON in dev/staff. Override via `EXPO_PUBLIC_CREATOR_TEMPLATE_STUDIO=1`/`0`
+ * or the admin toggle.
+ */
+export function defaultCreatorTemplateStudio(): boolean {
+  const raw = process.env.EXPO_PUBLIC_CREATOR_TEMPLATE_STUDIO?.trim().toLowerCase();
   if (raw === '1' || raw === 'true' || raw === 'yes') return true;
   if (raw === '0' || raw === 'false' || raw === 'no') return false;
   if (isProductionReleaseBuild()) return false;
@@ -240,6 +351,12 @@ const DEFAULT_FLAGS: FeatureFlags = {
   feedVideoRemixAdvanced: defaultFeedVideoRemixAdvanced(),
   circleVideoPosting: defaultCircleVideoPosting(),
   creatorHubCombineClips: defaultCreatorHubCombineClips(),
+  creatorBrollStudio: defaultCreatorBrollStudio(),
+  creatorOverlayPip: defaultCreatorOverlayPip(),
+  recorderGreenScreen: defaultRecorderGreenScreen(),
+  creatorGreenScreenStudio: defaultCreatorGreenScreenStudio(),
+  creatorCutoutOverlay: defaultCreatorCutoutOverlay(),
+  creatorTemplateStudio: defaultCreatorTemplateStudio(),
   creatorHubCoCreate: defaultCreatorHubCoCreate(),
   creatorHubFeedDiscussion: defaultCreatorHubFeedDiscussion(),
   recorderEffects: defaultRecorderEffects(),

@@ -17,8 +17,13 @@ const faqTitles: Record<Locale, { title: string; description: string }> = {
   es: { title: "Preguntas frecuentes", description: "Respuestas rápidas para profes que valoran PulseVerse." },
 };
 
-export default async function FaqPage() {
+export default async function FaqPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const locale = await getMarketingLocale();
+  const { q } = await searchParams;
   const items = getMarketingFaqItems(locale);
   const head = faqTitles[locale];
 
@@ -27,7 +32,7 @@ export default async function FaqPage() {
       <AppJsonLd data={faqPageSchema(items)} />
       <SectionHeader title={head.title} description={head.description} />
       <div className={cn("mt-10 rounded-2xl border border-white/10 p-4 ring-1 ring-white/4 sm:p-6", marketingCardMuted)}>
-        <FaqAccordion items={items} />
+        <FaqAccordion items={items} highlightQuery={q} />
       </div>
     </MarketingPageShell>
   );

@@ -1461,6 +1461,9 @@ export async function loadMarketingContactMessages(options?: {
 export async function loadAdminLeadOwnerOptions(): Promise<{ id: string; label: string }[]> {
   if (!isSupabaseConfigured()) return [];
   try {
+    // Uses the service-role admin-data client (bypasses the role_admin column
+    // grant revoked from `authenticated` in migration 247). This loader is
+    // already admin-gated by the admin proxy; service role is server-only.
     const supabase = await createAdminDataSupabaseClient();
     const { data, error } = await supabase
       .from("profiles")

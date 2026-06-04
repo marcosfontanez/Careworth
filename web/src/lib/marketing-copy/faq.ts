@@ -75,6 +75,22 @@ const en: MarketingFaqItem[] = [
     q: "How do Circles differ from generic forums?",
     a: "Circles are healthcare-native topic spaces with moderated, high-signal threads — connected to Pulse Page and easy to repost into My Pulse — without old-school forum energy.",
   },
+  {
+    q: "Is PulseVerse free?",
+    a: "Yes. PulseVerse is free to download and use on iOS (TestFlight beta) and Android (Google Play open testing).",
+  },
+  {
+    q: "Is there a free social app for nurses?",
+    a: "Yes — PulseVerse is a free social app built for nurses and the wider healthcare community to share short videos, connect, and join moderated communities. See pulseverse.app/for/nurses.",
+  },
+  {
+    q: "What is a good TikTok or Instagram alternative for healthcare workers?",
+    a: "PulseVerse is a free, healthcare-only alternative — short videos and updates with clinical-culture moderation instead of a general-audience feed. See pulseverse.app/compare.",
+  },
+  {
+    q: "Is there a social app for doctors or medical students?",
+    a: "Yes. PulseVerse welcomes physicians, residents, and medical and nursing students. See pulseverse.app/for/doctors and pulseverse.app/for/medical-students.",
+  },
 ];
 
 const es: MarketingFaqItem[] = [
@@ -149,6 +165,22 @@ const es: MarketingFaqItem[] = [
   {
     q: "¿En qué se diferencian Circles de foros genéricos?",
     a: "Circles son espacios temáticos propios de la salud, con hilos moderados y de alta señal, enlaces a Pulse Page y fácil republicación a My Pulse — sin la dinámica de foros antiguos.",
+  },
+  {
+    q: "¿PulseVerse es gratis?",
+    a: "Sí. PulseVerse es gratis para descargar y usar en iOS (beta de TestFlight) y Android (prueba abierta de Google Play).",
+  },
+  {
+    q: "¿Hay una app social gratis para enfermeras?",
+    a: "Sí — PulseVerse es una app social gratuita para enfermeras y la comunidad sanitaria: comparte vídeos cortos, conecta y únete a comunidades moderadas. Ver pulseverse.app/for/nurses.",
+  },
+  {
+    q: "¿Cuál es una buena alternativa a TikTok o Instagram para sanitarios?",
+    a: "PulseVerse es una alternativa gratuita y solo sanitaria: vídeos cortos y novedades con moderación de cultura clínica en lugar de un feed de audiencia general. Ver pulseverse.app/compare.",
+  },
+  {
+    q: "¿Hay una app social para médicos o estudiantes de medicina?",
+    a: "Sí. PulseVerse da la bienvenida a médicos, residentes y estudiantes de medicina y enfermería. Ver pulseverse.app/for/doctors y pulseverse.app/for/medical-students.",
   },
 ];
 

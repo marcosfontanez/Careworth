@@ -1,8 +1,7 @@
 /**
  * Shared visual presets for the camera capture screen, the post-capture
  * editor preview, and read-side feed tint ({@link tintForLook} on `VideoFeedPost`).
- * When `posts.video_look_id` is unset, the feed may still apply the mood preset’s
- * bundled `look` (see `lib/moodPresets`) so photo posts match composer vibe.
+ * The feed tint comes solely from the persisted `posts.video_look_id` color grade.
  * Fullscreen stills (`app/image-viewer`) accept optional `grade=` (resolved look id) for parity when opened from post detail.
  *
  * Tints are color-grading style washes; effect entries are darker / vignette-style.
@@ -65,4 +64,14 @@ export function normalizeVideoLookId(raw: unknown): VideoLookId | undefined {
 
 export function looksByKind(kind: VideoLookKind): VideoLook[] {
   return VIDEO_LOOKS.filter((f) => f.kind === kind);
+}
+
+/**
+ * Feed / detail tint: the persisted color grade id, or undefined when unset / `none`.
+ */
+export function resolveFeedGradeLookId(input: {
+  videoLookId?: VideoLookId | null;
+}): VideoLookId | undefined {
+  const id = input.videoLookId;
+  return id && id !== 'none' ? id : undefined;
 }

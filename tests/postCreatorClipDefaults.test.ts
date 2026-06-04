@@ -24,7 +24,7 @@ describe('clipDefaultsFromProfile', () => {
     expect(clipDefaultsFromProfile(null)).toEqual({
       defaultAllowViewerClips: true,
       defaultAllowRemix: true,
-      defaultAllowClipDownloads: false,
+      defaultAllowClipDownloads: true,
     });
   });
 });
@@ -33,14 +33,14 @@ describe('initialPostClipSettings', () => {
   const openDefaults = {
     defaultAllowViewerClips: true,
     defaultAllowRemix: true,
-    defaultAllowClipDownloads: false,
+    defaultAllowClipDownloads: true,
   };
 
   it('inherits profile defaults for public uploads', () => {
     expect(initialPostClipSettings('public', openDefaults)).toEqual({
       allowViewerClips: true,
       allowRemix: true,
-      allowClipDownloads: false,
+      allowClipDownloads: true,
     });
   });
 

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { resolveStaffAccess } from "@/lib/admin/resolve-staff-access";
 import { getSupabaseUrlAndAnon } from "@/lib/supabase/public-env";
 import { supabaseSsrCookieOptions } from "@/lib/supabase/ssr-cookie-options";
 
@@ -32,6 +33,11 @@ export async function POST(request: NextRequest) {
     typeof body === "object" && body !== null && "password" in body
       ? String((body as { password: unknown }).password)
       : "";
+  const adminConsole =
+    typeof body === "object" &&
+    body !== null &&
+    "adminConsole" in body &&
+    (body as { adminConsole: unknown }).adminConsole === true;
 
   if (!email || !password) {
     return NextResponse.json({ error: "Enter both email and password." }, { status: 400 });
@@ -67,6 +73,26 @@ export async function POST(request: NextRequest) {
       { error: error.message, code: error.code ?? null },
       { status: 401 },
     );
+  }
+
+  if (adminConsole) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Session could not be established." }, { status: 401 });
+    }
+    const isStaff = await resolveStaffAccess(supabase, user.id);
+    if (!isStaff) {
+      await supabase.auth.signOut();
+      return NextResponse.json(
+        {
+          error: "This account is not authorized for the admin console.",
+          code: "admin_forbidden",
+        },
+        { status: 403 },
+      );
+    }
   }
 
   return jsonResponse;

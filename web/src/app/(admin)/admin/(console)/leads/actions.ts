@@ -18,8 +18,8 @@ async function requireStaffGate(): Promise<
       data: { user },
     } = await supabase.auth.getUser();
     if (!user?.id) return { ok: false };
-    const { data: profile } = await supabase.from("profiles").select("role_admin").eq("id", user.id).maybeSingle();
-    if (!profile?.role_admin) return { ok: false };
+    const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
+    if (isAdmin !== true) return { ok: false };
     return { ok: true, supabase, staffId: user.id };
   } catch {
     return { ok: false };

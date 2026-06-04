@@ -27,14 +27,14 @@ type LinkId = (typeof linkDefs)[number]["id"];
 
 const labels: Record<Locale, Record<LinkId, string>> = {
   en: {
-    features: "Features",
-    webApp: "Web app",
+    features: "Product",
+    webApp: "Web Beta",
     support: "Support",
     advertisers: "Advertisers",
   },
   es: {
-    features: "Funciones",
-    webApp: "App web",
+    features: "Producto",
+    webApp: "Web Beta",
     support: "Ayuda",
     advertisers: "Anunciantes",
   },
@@ -65,19 +65,19 @@ export type MarketingNavStrings = {
 
 const navStrings: Record<Locale, MarketingNavStrings> = {
   en: {
-    logIn: "Log in",
-    join: "Join PulseVerse",
+    logIn: "Sign in",
+    join: "Join Beta",
     menuLabel: "Menu",
     myPulse: "My Pulse",
-    staffPortal: "Staff",
+    staffPortal: "Staff portal",
     signOut: "Sign out",
   },
   es: {
     logIn: "Iniciar sesión",
-    join: "Unirte a PulseVerse",
+    join: "Unirte a la beta",
     menuLabel: "Menú",
     myPulse: "My Pulse",
-    staffPortal: "Personal",
+    staffPortal: "Portal staff",
     signOut: "Cerrar sesión",
   },
 };

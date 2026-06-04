@@ -5574,6 +5574,27 @@ export type Database = {
           },
         ]
       }
+      user_push_tokens: {
+        Row: {
+          platform: string | null
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          platform?: string | null
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          platform?: string | null
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_inventory: {
         Row: {
           acquired_at: string
@@ -6884,7 +6905,7 @@ export type Database = {
       economy_release_pending_diamonds: { Args: never; Returns: number }
       economy_send_creator_gift: {
         Args: {
-          p_context_id: string
+          p_context_id?: string | null
           p_context_type: string
           p_creator_user_id: string
           p_gift_item_id: string
@@ -7063,6 +7084,25 @@ export type Database = {
           user_id: string
           username: string
         }[]
+      }
+      admin_list_profiles: {
+        Args: { p_search?: string | null; p_admins_only?: boolean; p_limit?: number }
+        Returns: {
+          id: string
+          display_name: string
+          username: string | null
+          avatar_url: string | null
+          role: string
+          is_verified: boolean
+          role_admin: boolean
+          created_at: string
+          post_count: number
+          follower_count: number
+        }[]
+      }
+      current_user_role_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
       get_top_today: {
         Args: { feed_limit?: number }
@@ -7274,9 +7314,10 @@ export type Database = {
         Returns: boolean
       }
       search_hashtags: {
-        Args: { p_limit?: number; p_term: string }
+        Args: { p_limit?: number; p_prefix: string }
         Returns: {
           tag: string
+          usage_count: number
         }[]
       }
       search_sound_library: {

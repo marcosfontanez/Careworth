@@ -72,6 +72,16 @@ function AppShell() {
     if (!isLoading) void SplashScreen.hideAsync().catch(() => {});
   }, [isLoading]);
 
+  /**
+   * JWT auto-refresh competes with profile hydrate for Supabase Auth's single token lock.
+   * Start it only after the profile row unlocks routing so cold boot is not a 18s queue.
+   */
+  useEffect(() => {
+    if (isLoading) return;
+    const detachAuthRefresh = attachSupabaseAuthAutoRefreshToAppState();
+    return () => detachAuthRefresh();
+  }, [isLoading]);
+
   useEffect(() => {
     /**
      * Cache restore is now deferred via `InteractionManager.runAfterInteractions`
@@ -192,11 +202,13 @@ function AppShell() {
   );
 
   useEffect(() => {
-    if (!user) {
-      analytics.setUser(null);
-      realtime.unsubscribeAll();
+    if (!user || isLoading) {
+      if (!user) {
+        analytics.setUser(null);
+        realtime.unsubscribeAll();
+      }
       return () => {
-        analytics.flush();
+        if (!user) analytics.flush();
       };
     }
 
@@ -292,7 +304,7 @@ function AppShell() {
       realtime.unsubscribe(`notifications:${uid}`);
       analytics.flush();
     };
-  }, [user]);
+  }, [user, isLoading]);
 
   return (
     <>
@@ -344,11 +356,6 @@ function AppShell() {
 }
 
 export default function RootLayout() {
-  useEffect(() => {
-    const detachAuthRefresh = attachSupabaseAuthAutoRefreshToAppState();
-    return () => detachAuthRefresh();
-  }, []);
-
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.dark.bg }}>
       <ErrorBoundary>

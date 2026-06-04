@@ -16,8 +16,8 @@ async function requireStaffId(): Promise<string | null> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user?.id) return null;
-    const { data: profile } = await supabase.from("profiles").select("role_admin").eq("id", user.id).maybeSingle();
-    if (!profile?.role_admin) return null;
+    const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
+    if (isAdmin !== true) return null;
     return user.id;
   } catch {
     return null;

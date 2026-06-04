@@ -42,6 +42,7 @@ import { heroCategoryLabel } from '@/components/live/hub/liveHubHeroCategory';
 import { LiveHubSkeleton } from '@/components/live/hub/LiveHubSkeleton';
 import { HappeningNowEmptyState } from '@/components/live/hub/HappeningNowEmptyState';
 import { filterActiveLiveStreams, useLiveDiscoveryStaleTick } from '@/lib/live/activeLiveStreams';
+import { isDemoLiveStreamId } from '@/lib/liveDemoStreams';
 import { useLiveHubRealtimeRefresh } from '@/hooks/useLiveHubRealtimeRefresh';
 import { useToast } from '@/components/ui/Toast';
 import type { LiveStream } from '@/types';
@@ -76,7 +77,7 @@ function LivePrelaunchPlaceholder() {
           <EmptyState
             icon="radio-outline"
             title="Live unavailable"
-            subtitle="Live streaming requires EXPO_PUBLIC_LIVEKIT_URL on your production EAS build. Until LiveKit is configured, the Live tab stays hidden in release builds."
+            subtitle="Live streaming isn&apos;t available in this build yet. Check back after the next app update."
             accent={colors.status.live}
             ctaLabel="Back to Feed"
             onCtaPress={() => router.replace('/(tabs)/feed')}
@@ -117,25 +118,33 @@ function LiveHubScreen() {
 
   const staleTick = useLiveDiscoveryStaleTick();
 
-  const happeningNow = useMemo(
-    () => filterActiveLiveStreams(data?.happeningNow ?? []),
-    [data?.happeningNow, staleTick],
-  );
+  const happeningNow = useMemo(() => {
+    const rows = filterActiveLiveStreams(data?.happeningNow ?? []).filter(
+      (s) => !isDemoLiveStreamId(s.id),
+    );
+    return rows;
+  }, [data?.happeningNow, staleTick]);
 
-  const trendingLive = useMemo(
-    () => filterActiveLiveStreams(data?.trending ?? []),
-    [data?.trending, staleTick],
-  );
+  const trendingLive = useMemo(() => {
+    const rows = filterActiveLiveStreams(data?.trending ?? []).filter(
+      (s) => !isDemoLiveStreamId(s.id),
+    );
+    return rows;
+  }, [data?.trending, staleTick]);
 
-  const shopLiveDeals = useMemo(
-    () => filterActiveLiveStreams(data?.shopLiveDeals ?? []),
-    [data?.shopLiveDeals, staleTick],
-  );
+  const shopLiveDeals = useMemo(() => {
+    const rows = filterActiveLiveStreams(data?.shopLiveDeals ?? []).filter(
+      (s) => !isDemoLiveStreamId(s.id),
+    );
+    return rows;
+  }, [data?.shopLiveDeals, staleTick]);
 
-  const circleLives = useMemo(
-    () => filterActiveLiveStreams(data?.circleLives ?? []),
-    [data?.circleLives, staleTick],
-  );
+  const circleLives = useMemo(() => {
+    const rows = filterActiveLiveStreams(data?.circleLives ?? []).filter(
+      (s) => !isDemoLiveStreamId(s.id),
+    );
+    return rows;
+  }, [data?.circleLives, staleTick]);
 
   useFocusEffect(
     useCallback(() => {

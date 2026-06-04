@@ -36,6 +36,28 @@ export async function getBlockRelationship(
   return 'none';
 }
 
+/**
+ * All user ids in a block relationship with `viewerId` in EITHER direction
+ * (viewer blocked them, or they blocked viewer). Used to filter blocked actors
+ * out of feeds / notifications client-side.
+ */
+export async function getBlockedUserIdsBothWays(viewerId: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!viewerId) return out;
+  const { data, error } = await supabase
+    .from('blocked_users')
+    .select('blocker_id, blocked_id')
+    .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`);
+  if (error || !data) return out;
+  for (const row of data) {
+    const blocker = String((row as { blocker_id: string }).blocker_id);
+    const blocked = String((row as { blocked_id: string }).blocked_id);
+    if (blocker !== viewerId) out.add(blocker);
+    if (blocked !== viewerId) out.add(blocked);
+  }
+  return out;
+}
+
 /** Insert a row into `blocked_users` (idempotent on duplicate). */
 export async function blockUser(blockerId: string, blockedId: string): Promise<void> {
   if (!blockerId || !blockedId || blockerId === blockedId) return;

@@ -30,7 +30,6 @@ export interface PulseScorePreviewInput {
   hasShiftContext: boolean;
   hasSeries: boolean;
   hookScore: number;       // 0-100 from coachHook
-  brandKitApplied: boolean;
 }
 
 export function previewPulseScore(input: PulseScorePreviewInput): PulseScorePreview {
@@ -108,10 +107,6 @@ export function previewPulseScore(input: PulseScorePreviewInput): PulseScorePrev
   if (input.hasSeries) {
     score += 3;
     reasons.push('Part of a series (+3)');
-  }
-  if (input.brandKitApplied) {
-    score += 2;
-    reasons.push('Brand kit applied (+2)');
   }
 
   score = Math.max(0, Math.min(100, score));

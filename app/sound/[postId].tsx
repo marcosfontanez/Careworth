@@ -13,8 +13,7 @@ import { useToast } from '@/components/ui/Toast';
 import { colors, layout, spacing, typography } from '@/theme';
 import { postKeys } from '@/lib/queryKeys';
 import { resolvePostViewerHref } from '@/lib/postViewerRoute';
-import { resolveFeedGradeLookId } from '@/lib/moodPresets';
-import { tintForLook } from '@/lib/videoFilters';
+import { resolveFeedGradeLookId, tintForLook } from '@/lib/videoFilters';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
 import type { Post } from '@/types';
 
@@ -81,10 +80,7 @@ export default function SoundDetailScreen() {
 
   const renderRemix = (item: Post) => {
     const tUri = item.thumbnailUrl?.trim() || item.mediaUrl?.trim();
-    const rLook = resolveFeedGradeLookId({
-      videoLookId: item.videoLookId,
-      moodPreset: item.moodPreset,
-    });
+    const rLook = resolveFeedGradeLookId({ videoLookId: item.videoLookId });
     const rTint = rLook ? tintForLook(rLook) : null;
     return (
       <TouchableOpacity
@@ -124,10 +120,7 @@ export default function SoundDetailScreen() {
 
   const heroGradeTint = useMemo(() => {
     if (!source) return null;
-    const id = resolveFeedGradeLookId({
-      videoLookId: source.videoLookId,
-      moodPreset: source.moodPreset,
-    });
+    const id = resolveFeedGradeLookId({ videoLookId: source.videoLookId });
     return id ? tintForLook(id) : null;
   }, [source]);
 

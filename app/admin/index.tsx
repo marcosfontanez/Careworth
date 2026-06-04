@@ -206,15 +206,13 @@ export default function AdminPanel() {
           setReports(enriched);
         }
       } else if (tab === 'users') {
-        let query = supabase
-          .from('profiles')
-          .select('id, display_name, avatar_url, role, is_verified, role_admin, created_at, post_count, follower_count')
-          .order('created_at', { ascending: false })
-          .limit(200);
-        if (userSearch.trim()) {
-          query = query.ilike('display_name', `%${userSearch.trim()}%`);
-        }
-        const { data, error: usersErr } = await query;
+        // role_admin is no longer client-readable on profiles (migration 247);
+        // the staff-gated RPC returns it after verifying the caller is admin.
+        const { data, error: usersErr } = await supabase.rpc('admin_list_profiles', {
+          p_search: userSearch.trim() || null,
+          p_admins_only: false,
+          p_limit: 200,
+        });
         if (usersErr) {
           toast.show(usersErr.message ?? 'Could not load users', 'error');
           setUsers([]);
@@ -1316,6 +1314,12 @@ export default function AdminPanel() {
                   flag="circleVideoPosting"
                 />
                 <FlagToggle label="Creator Hub: Combine clips tile" flag="creatorHubCombineClips" />
+                <FlagToggle label="B-roll Studio (cutaway compositing)" flag="creatorBrollStudio" />
+                <FlagToggle label="B-roll Studio: PiP / floating overlay (Phase 2)" flag="creatorOverlayPip" />
+                <FlagToggle label="Green Screen (chroma key recorder — not built)" flag="recorderGreenScreen" />
+                <FlagToggle label="B-roll Studio: Green Screen (Phase 3)" flag="creatorGreenScreenStudio" />
+                <FlagToggle label="B-roll Studio: Cutout / Crop Overlay (Phase 4)" flag="creatorCutoutOverlay" />
+                <FlagToggle label="Creator Template Studio (Phase 4)" flag="creatorTemplateStudio" />
                 <FlagToggle label="Creator Hub: Co-create pill" flag="creatorHubCoCreate" />
                 <FlagToggle label="Creator Hub: Feed discussion tile" flag="creatorHubFeedDiscussion" />
                 <FlagToggle label="Recorder: filters & effects rail" flag="recorderEffects" />

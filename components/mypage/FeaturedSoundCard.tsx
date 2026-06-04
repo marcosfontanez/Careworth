@@ -384,7 +384,7 @@ export function FeaturedSoundCard({
     if (streamable && audioModuleMissing) {
       Alert.alert(
         'In-app playback unavailable',
-        'Your dev client build doesn\'t include the audio module. Rebuild the dev client (`npx expo run:ios` or an EAS dev build) to enable Current Vibe playback. The song picker will still work.',
+        'Audio preview isn\u2019t available on this device. You can still pick a song for your vibe.',
       );
       return;
     }

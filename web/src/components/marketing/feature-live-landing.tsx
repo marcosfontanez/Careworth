@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { marketingGutterX, marketingCardMuted, shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingCardMuted, marketingFocusRing, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import {
   liveFeaturedSessions,
@@ -28,11 +28,8 @@ export function FeatureLiveLanding() {
         <div className={cn(marketingGutterX, "relative grid items-center gap-14 lg:grid-cols-2")}>
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.15em] text-violet-200">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
-              </span>
-              Live
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400/80" />
+              Live · Preview
             </p>
             <h1 className="mt-6 text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
               Go live with the{" "}
@@ -42,13 +39,13 @@ export function FeatureLiveLanding() {
               world.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Discover what&apos;s live right now — Featured Live, Top Live Now, Rising Lives, and browse by topic — with
+              Discover how Live works in PulseVerse — Featured Live, Top Live Now, Rising Lives, and browse by topic — with
               HD video, respectful chat, Q&amp;A, and RSVP push alerts when hosts you follow go live.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
                 <Link href="/download" className="inline-flex items-center gap-2">
-                  Go live now
+                  Get the app to go Live
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -61,7 +58,7 @@ export function FeatureLiveLanding() {
                 { icon: Video, label: "HD video & audio" },
                 { icon: MessageSquare, label: "Live chat & Q&A" },
                 { icon: Radio, label: "RSVP go-live alerts" },
-                { icon: Users, label: "Real-time viewer count" },
+                { icon: Users, label: "Moderated live chat" },
               ].map(({ icon: Icon, label }) => (
                 <span key={label} className="flex items-center gap-2">
                   <Icon className="h-4 w-4 text-primary" />
@@ -72,6 +69,9 @@ export function FeatureLiveLanding() {
           </div>
 
           <div className="relative">
+            <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-left">
+              Illustrative UI preview — not live sessions
+            </p>
             <div className="rounded-2xl border border-white/10 bg-[rgba(5,10,20,0.85)] p-1 shadow-[0_24px_80px_-24px_rgba(45,127,249,0.35)] ring-1 ring-primary/20 backdrop-blur-md">
               <div className="relative aspect-video overflow-hidden rounded-xl bg-linear-to-br from-slate-900 to-slate-950">
                 <div className="absolute inset-0 flex items-center justify-center text-center">
@@ -79,15 +79,15 @@ export function FeatureLiveLanding() {
                     <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
                       <Radio className="h-7 w-7 text-[var(--accent)]" />
                     </div>
-                    <p className="mt-3 text-sm font-semibold text-foreground">Live preview</p>
-                    <p className="text-xs text-muted-foreground">Dr. Arjun Patel · critical care</p>
+                    <p className="mt-3 text-sm font-semibold text-foreground">Demo preview</p>
+                    <p className="text-xs text-muted-foreground">Sample host · critical care</p>
                   </div>
                 </div>
                 <div className="absolute left-3 top-3 flex items-center gap-2 rounded-md bg-red-600 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-                  Live
+                  Demo
                 </div>
                 <div className="absolute right-3 top-3 rounded-md bg-black/50 px-2 py-1 text-[10px] font-medium text-white">
-                  1.2K watching
+                  Preview UI
                 </div>
                 <div className="absolute bottom-0 inset-x-0 flex items-center justify-between gap-2 border-t border-white/10 bg-black/40 px-3 py-2 text-[10px] text-muted-foreground">
                   <span>Mic · Cam · Share · Participants · Chat</span>
@@ -112,9 +112,19 @@ export function FeatureLiveLanding() {
 
       <section className={cn(marketingGutterX, "pb-12")}>
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Featured Live</h2>
-          <Link href="/download" className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
-            View all Live
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">Featured Live</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Illustrative demo cards — not active broadcasts</p>
+          </div>
+          <Link
+            href="/download"
+            className={cn(
+              "inline-flex items-center gap-1 text-sm font-semibold text-primary",
+              marketingFocusRing,
+              "rounded-sm",
+            )}
+          >
+            Get the app to go Live
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -136,18 +146,18 @@ export function FeatureLiveLanding() {
                   ))}
                 </div>
                 <div className="absolute left-3 top-3">
-                  <span className="rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                    Live
+                  <span className="rounded-md bg-violet-600/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Demo
                   </span>
                 </div>
                 <div className="absolute bottom-3 right-3 rounded-md bg-black/55 px-2 py-0.5 text-[10px] text-white">
-                  {s.viewers} viewers
+                  Preview UI
                 </div>
               </div>
               <div className="p-4">
                 <p className="font-semibold text-foreground">{s.title}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {s.host} · {s.specialty}
+                  Sample host · {s.specialty}
                 </p>
               </div>
             </div>
@@ -162,15 +172,15 @@ export function FeatureLiveLanding() {
               <Flame className="h-4 w-4 text-orange-400" />
               Top Live Now
             </h3>
+            <p className="mt-2 text-xs text-muted-foreground">Demo ranking — illustrative UI only</p>
             <ol className="mt-4 space-y-4">
               {liveTopNow.map((row) => (
                 <li key={row.rank} className="flex gap-3 text-sm">
                   <span className="font-mono text-xs text-muted-foreground">{row.rank}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-foreground">{row.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{row.host}</p>
+                    <p className="truncate text-xs text-muted-foreground">Sample host</p>
                   </div>
-                  <span className="shrink-0 text-xs text-orange-300/90">{row.viewers}</span>
                 </li>
               ))}
             </ol>
@@ -181,16 +191,15 @@ export function FeatureLiveLanding() {
               <Flame className="h-4 w-4 text-[var(--accent)]" />
               Rising Lives
             </h3>
-            <p className="mt-2 text-xs text-muted-foreground">Momentum streams gaining audience right now.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Demo momentum list — illustrative UI only</p>
             <ol className="mt-4 space-y-4">
               {liveRisingLives.map((row, idx) => (
                 <li key={row.title} className="flex gap-3 text-sm">
                   <span className="font-mono text-xs text-muted-foreground">{idx + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-foreground">{row.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{row.host}</p>
+                    <p className="truncate text-xs text-muted-foreground">Sample host</p>
                   </div>
-                  <span className="shrink-0 text-xs text-emerald-300/90">{row.viewers}</span>
                 </li>
               ))}
             </ol>
@@ -198,7 +207,7 @@ export function FeatureLiveLanding() {
 
           <div className={cn("rounded-2xl p-6", marketingCardMuted)}>
             <h3 className="text-sm font-semibold text-foreground">Browse by Topic</h3>
-            <p className="mt-2 text-xs text-muted-foreground">Jump into the conversations that match your practice.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Illustrative topic tiles — demo UI only</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {liveTopicBrowse.map((c) => (
                 <div
@@ -231,7 +240,7 @@ export function FeatureLiveLanding() {
 
         <div className="mt-14 flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-white/10 bg-white/3 px-6 py-8 sm:gap-10">
           {[
-            { bold: "Live now", sub: "Featured, Top Live, Rising, and topic browse in the app" },
+            { bold: "Live in the app", sub: "Featured, Top Live, Rising, and topic browse when you sign in" },
             { bold: "Remind Me", sub: "Push + in-app alert when a scheduled host goes live" },
             { bold: "Host tools", sub: "Polls, Q&A, gifts, pin/remove chat, and stream health" },
             { bold: "Clip highlights", sub: "When recording is enabled — mark moments and publish clips" },

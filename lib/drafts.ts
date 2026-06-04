@@ -39,10 +39,8 @@ export interface DraftData {
   educationCitationsDraft?: Array<{ label: string; url: string; doi?: string; lastReviewed?: string }>;
   imageLayoutPreset?: string;
   imagePhotoFrame?: string;
-  imageBrandBackdrop?: boolean;
   imageColorMatch?: boolean;
   imageBeforeAfter?: boolean;
-  imageMoodId?: string | null;
 }
 
 export async function saveDraft(type: string, data: DraftData): Promise<void> {
@@ -116,10 +114,8 @@ export function draftDataHasContent(data: DraftData | null | undefined): boolean
     data.scheduledAtIso?.trim() ||
     data.educationOnDraft === true ||
     (data.educationCitationsDraft?.length ?? 0) > 0 ||
-    data.imageMoodId != null ||
     data.imageBeforeAfter === true ||
     data.imageColorMatch === true ||
-    data.imageBrandBackdrop === true ||
     (data.imagePhotoFrame?.trim() && data.imagePhotoFrame !== 'none') ||
     (data.imageLayoutPreset?.trim() && data.imageLayoutPreset !== 'carousel')
   );

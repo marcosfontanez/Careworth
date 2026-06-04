@@ -34,12 +34,12 @@ const COPY: Record<
     confirmCta: 'Queue series',
   },
   broll: {
-    title: 'B-roll cutaways',
+    title: 'Combine clips',
     lede:
-      'Queue your main story plus cutaways — PulseVerse creates one post and concatenates A-roll then B-roll into a single MP4 on the server. Tap Post once and wait for “Clips combined”; requires the media worker.',
-    mainLabel: 'A-roll (main story)',
-    extraLabel: (idx) => `B-roll ${idx + 1}`,
-    confirmCta: 'Queue cutaways',
+      'Join multiple clips into one video — PulseVerse creates one post and joins your main clip then the added clips into a single MP4 on the server. Tap Post once and wait for “Clips combined”; requires the media worker.',
+    mainLabel: 'Main clip',
+    extraLabel: (idx) => `Clip ${idx + 2}`,
+    confirmCta: 'Queue clips',
   },
 };
 

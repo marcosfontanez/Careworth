@@ -1,13 +1,12 @@
 import type { CreatorSummary } from '@/types';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
-import { brandKitFromProfileColumn } from '@/lib/brandKit';
 
 /**
  * Columns that satisfy {@link profileRowToCreatorSummary} (plus frame embed).
  * Use inside `author:author_id(<this>)` and similar `profiles` FK selects.
  */
 export const PROFILE_SELECT_CREATOR_SUMMARY_BASE =
-  'id, display_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current, brand_kit';
+  'id, display_name, username, avatar_url, identity_tags, role, specialty, city, state, is_verified, pulse_tier, pulse_score_current';
 
 /** Must match `profiles.selected_pulse_avatar_frame_id` FK hint. */
 export const PROFILE_SELECT_PULSE_AVATAR_FRAME_EMBED =
@@ -54,8 +53,6 @@ export function profileRowToCreatorSummary(row: any): CreatorSummary {
       ? undefined
       : mapPulseAvatarFrameEmbed(pulseRaw) ?? null;
 
-  const brandKit = brandKitFromProfileColumn(base.brand_kit);
-
   return {
     id: base.id,
     displayName: base.display_name ?? 'Unknown',
@@ -71,7 +68,6 @@ export function profileRowToCreatorSummary(row: any): CreatorSummary {
     city: base.city ?? '',
     state: base.state ?? '',
     isVerified: Boolean(base.is_verified),
-    ...(brandKit ? { brandKit } : {}),
     // Denormalized Pulse Score v2 fields (migration 059). Defaulting
     // to 'murmur' / 0 keeps every downstream consumer type-safe
     // without forcing callers to handle null tiers.

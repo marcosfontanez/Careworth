@@ -17,8 +17,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Valid-looking placeholders keep the client constructible when env is misconfigured;
  * `getSession()` still resolves and auth UI can load instead of hanging forever.
  */
-const resolvedUrl = supabaseUrl || 'https://invalid.localhost.supabase.co';
-const resolvedKey = supabaseAnonKey || 'invalid-anon-key';
+export const SUPABASE_URL = supabaseUrl || 'https://invalid.localhost.supabase.co';
+export const SUPABASE_ANON_KEY = supabaseAnonKey || 'invalid-anon-key';
+
+const resolvedUrl = SUPABASE_URL;
+const resolvedKey = SUPABASE_ANON_KEY;
 
 export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {
   auth: {

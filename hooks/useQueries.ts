@@ -94,10 +94,10 @@ export function useLikedPostIds(userId?: string) {
 }
 
 /** Paged feed: first page uses full ranked/chronological merge; later pages chronological tail. */
-export function useFeedInfinite(type: FeedType, userId?: string) {
+export function useFeedInfinite(type: FeedType, userId?: string, authReady = true) {
   return useInfiniteQuery({
     queryKey: feedKeys.infinitePage(type, userId),
-    enabled: !!userId,
+    enabled: !!userId && authReady,
     initialPageParam: undefined as undefined | { cursor: string; seenIds: string[] },
     queryFn: async ({ pageParam }) => {
       if (!pageParam) {

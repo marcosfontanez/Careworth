@@ -65,7 +65,7 @@ export function VideoPublishSuccessSheet({
             ) : !scheduled ? (
               <PulseButton label="View in Feed" onPress={onViewFeed} fullWidth />
             ) : null}
-            {pinnedToMyPulse && onViewMyPulse ? (
+            {onViewMyPulse ? (
               <PulseButton label="View on My Pulse" onPress={onViewMyPulse} variant="secondary" fullWidth />
             ) : null}
             {circleName && onOpenCircle ? (

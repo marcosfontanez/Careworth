@@ -29,11 +29,118 @@ export interface CreatorMediaBrollInput {
   target_post_id?: string;
 }
 
+/** Floating overlay (PiP) position preset on the 1080x1920 canvas. */
+export type CreatorMediaOverlayPosition =
+  | 'topRight'
+  | 'topLeft'
+  | 'bottomRight'
+  | 'bottomLeft'
+  | 'center';
+
+/** Floating overlay (PiP) size preset (fraction of canvas width). */
+export type CreatorMediaOverlaySize = 'small' | 'medium' | 'large';
+
+/** Cutout crop region preset (rectangle of the source frame to keep). */
+export type CreatorMediaCropPreset = 'full' | 'left' | 'right' | 'top' | 'bottom' | 'center';
+
+/** Cutout crop spec. V1 uses `mode: 'preset'`; rect fields reserved for Phase 4.1. */
+export interface CreatorMediaCrop {
+  mode: 'preset' | 'rect';
+  preset?: CreatorMediaCropPreset;
+  x?: number | null;
+  y?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+/**
+ * Compositing (`kind: 'video_composition'`) — B-roll Studio.
+ * - `type: 'cutaway'` (V1): the layer covers the main video full-screen for its
+ *   [timelineStart, timelineEnd] window.
+ * - `type: 'pip'` (Phase 2, gated by `creatorOverlayPip`): the main video stays
+ *   full-screen and the layer floats on top, scaled to a size preset and placed
+ *   at a position preset, only during its window.
+ * Built with an ffmpeg filtergraph (NOT concat). The worker re-validates everything.
+ */
+export interface CreatorMediaCompositionLayer {
+  type: 'cutaway' | 'pip' | 'cutout';
+  path: string;
+  /** Seconds into the source B-roll clip to start using. */
+  trimStart: number;
+  /** Seconds into the source B-roll clip to stop using. */
+  trimEnd: number;
+  /** Seconds into the MAIN video where this layer begins showing. */
+  timelineStart: number;
+  /** Seconds into the MAIN video where this layer stops showing. */
+  timelineEnd: number;
+  /** Scaling behavior for the canvas / overlay box. */
+  fit?: 'cover';
+  /** muted = main audio only; broll_only = main muted during segment; both = mixed during segment. */
+  audioMode?: 'muted' | 'both' | 'broll_only';
+  audioVolume?: number;
+  /** PiP/cutout only — floating position preset (default `topRight`). */
+  position?: CreatorMediaOverlayPosition;
+  /** PiP/cutout only — floating size preset (default `medium`). */
+  size?: CreatorMediaOverlaySize;
+  /** Cutout only — which rectangle of the source frame to keep before overlaying. */
+  crop?: CreatorMediaCrop;
+  /** Reserved for future freeform placement. Null for preset-based layers. */
+  x?: number | null;
+  y?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface CreatorMediaCompositionInput {
+  bucket?: string;
+  canvas?: { width: number; height: number; fps: number };
+  main: { path: string; audioVolume?: number; durationSeconds?: number };
+  layers: CreatorMediaCompositionLayer[];
+  outputPath?: string;
+  target_post_id?: string;
+}
+
+/**
+ * Green Screen Studio (`kind: 'video_composition'`, Phase 3) — manual chroma key.
+ * Detected by the worker when `input.greenScreen` is present (instead of `main`/`layers`).
+ * Keys a foreground video and composites it over an image/video background.
+ */
+export interface CreatorMediaGreenScreen {
+  /** Foreground video (the keyed subject). Must be `<uid>/...`. */
+  foregroundPath: string;
+  /** Background image or video. Must be `<uid>/...`. */
+  backgroundPath: string;
+  backgroundType: 'video' | 'image';
+  /** Hex key color, e.g. `0x00ff00` (standard green). */
+  keyColor?: string;
+  /** 0..1 — how aggressively similar colors are removed (maps to chromakey similarity). */
+  strength?: number;
+  /** 0..1 — edge blend/softness (maps to chromakey blend). */
+  edgeSoftness?: number;
+  /** 0..1 — reserved for spill reduction (Phase 3 accepts but may not apply). */
+  spillReduction?: number;
+  /** foreground = my sound only; background = background sound only; both = mixed. */
+  audioMode?: 'foreground' | 'background' | 'both';
+  foregroundVolume?: number;
+  backgroundVolume?: number;
+  /** Best-effort foreground duration (seconds) for server bounds. */
+  foregroundDurationSeconds?: number;
+}
+
+export interface CreatorMediaGreenScreenInput {
+  bucket?: string;
+  canvas?: { width: number; height: number; fps: number };
+  greenScreen: CreatorMediaGreenScreen;
+  outputPath?: string;
+  target_post_id?: string;
+}
+
 export type CreatorMediaJobKind =
   | 'trim'
   | 'timelapse'
   | 'stitch'
   | 'broll'
+  | 'video_composition'
   | 'pitch_shift'
   | 'background_matte'
   | 'face_blur'

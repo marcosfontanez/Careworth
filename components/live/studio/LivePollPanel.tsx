@@ -45,7 +45,6 @@ export function LivePollPanel({
         hasVoted={hasVoted}
         votedOptionId={votedOptionId}
         votingDisabled={pollVoting}
-        compact
       />
       <TouchableOpacity onPress={onEndPoll} style={styles.endBtn} activeOpacity={0.8}>
         <Ionicons name="stop-outline" size={14} color={colors.dark.textSecondary} />
@@ -56,7 +55,7 @@ export function LivePollPanel({
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 12 },
+  wrap: { gap: 16, paddingBottom: 8 },
   emptyWrap: { alignItems: 'center', paddingVertical: 20, gap: 8 },
   emptyTitle: { ...typography.h3, fontSize: 16, color: colors.neutral.white },
   emptyMeta: { ...typography.bodySmall, color: colors.dark.textMuted, textAlign: 'center' },

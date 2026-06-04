@@ -59,7 +59,12 @@ export default function CreateConfessionScreen() {
         caption: content.trim(),
         is_anonymous: true,
         privacy_mode: 'alias',
-        communities: ['shift-confessions'],
+        // No community tag. The previous `['shift-confessions']` was a slug, not
+        // a community UUID — the posts INSERT RLS casts each entry to uuid
+        // (`user_is_member_of_all_post_communities`), so a slug threw
+        // "invalid input syntax for type uuid" and every post failed. This is a
+        // feed-level anonymous confession (For You), not a Circle wall post, so
+        // it carries no community; an empty list passes the membership check.
         feed_type_eligible: ['forYou'],
         comments_disabled: !commentsOn || undefined,
       });

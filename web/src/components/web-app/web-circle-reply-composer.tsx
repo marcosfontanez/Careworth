@@ -30,6 +30,7 @@ export function WebCircleReplyComposer({
   const [value, setValue] = useState("");
   const [errored, setErrored] = useState(false);
   const [membersOnly, setMembersOnly] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const trimmed = value.trim();
@@ -40,6 +41,7 @@ export function WebCircleReplyComposer({
     if (!canSubmit) return;
     setErrored(false);
     setMembersOnly(false);
+    setBlocked(false);
     const body = trimmed;
     startTransition(async () => {
       const res = await createCircleReplyAction(slug, threadId, body);
@@ -52,6 +54,10 @@ export function WebCircleReplyComposer({
         // non-technical prompt rather than a generic failure.
         if (res.reason === "not_member") {
           setMembersOnly(true);
+          return;
+        }
+        if (res.reason === "blocked") {
+          setBlocked(true);
           return;
         }
         setErrored(true);
@@ -76,6 +82,7 @@ export function WebCircleReplyComposer({
             setValue(e.target.value);
             if (errored) setErrored(false);
             if (membersOnly) setMembersOnly(false);
+            if (blocked) setBlocked(false);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -105,11 +112,13 @@ export function WebCircleReplyComposer({
         <span className="text-[11px] text-amber-300/90">
           {membersOnly
             ? copy.replyMembersOnly
-            : errored
-              ? copy.replyComposerError
-              : pending
-                ? copy.replyComposerPosting
-                : ""}
+            : blocked
+              ? copy.replyBlocked
+              : errored
+                ? copy.replyComposerError
+                : pending
+                  ? copy.replyComposerPosting
+                  : ""}
         </span>
         <span
           className={[

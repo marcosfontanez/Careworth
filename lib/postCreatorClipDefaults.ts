@@ -22,7 +22,7 @@ export function clipDefaultsFromProfile(
   return {
     defaultAllowViewerClips: profile?.defaultAllowViewerClips ?? true,
     defaultAllowRemix: profile?.defaultAllowRemix ?? true,
-    defaultAllowClipDownloads: profile?.defaultAllowClipDownloads ?? false,
+    defaultAllowClipDownloads: profile?.defaultAllowClipDownloads ?? true,
   };
 }
 

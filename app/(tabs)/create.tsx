@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -97,12 +97,27 @@ export default function CreateScreen() {
    * affordance. See `defaultCreatorHub*` in `lib/featureFlags.ts` for defaults.
    *   - `creatorHubFeedDiscussion`  → "Feed discussion" tile  (issue #4, hide for beta)
    *   - `creatorHubCombineClips`    → "Combine clips" + B-roll alt link  (issue #5)
-   *   - `creatorHubCoCreate`        → "Co-create" pill  (issue #6 freezes the app)
    */
   const showFeedDiscussion = useFeatureFlags((s) => s.creatorHubFeedDiscussion);
   const showCombineClips = useFeatureFlags((s) => s.creatorHubCombineClips);
-  const showCoCreate = useFeatureFlags((s) => s.creatorHubCoCreate);
+  const showBrollStudio = useFeatureFlags((s) => s.creatorBrollStudio);
+  // Green Screen + Cutout are now modes inside B-roll Studio (no separate tiles).
+  // Their flags only adjust the unified tile's subtitle copy.
+  const showOverlayMode = useFeatureFlags((s) => s.creatorOverlayPip);
+  const showGreenScreenMode = useFeatureFlags((s) => s.creatorGreenScreenStudio);
+  const showCutoutMode = useFeatureFlags((s) => s.creatorCutoutOverlay);
+  const showTemplateStudio = useFeatureFlags((s) => s.creatorTemplateStudio);
   const hubFocused = useIsFocused();
+
+  const brollStudioSubtitle = useMemo(() => {
+    const modes = ['Cutaways'];
+    if (showOverlayMode) modes.push('overlays');
+    if (showGreenScreenMode) modes.push('green screen');
+    if (showCutoutMode) modes.push('cutouts');
+    if (modes.length === 1) return 'Add cutaway clips over your main video';
+    if (modes.length === 2) return `${modes[0]} and ${modes[1]}`;
+    return `${modes.slice(0, -1).join(', ')}, and ${modes[modes.length - 1]}`;
+  }, [showOverlayMode, showGreenScreenMode, showCutoutMode]);
 
   const [videoDraft, setVideoDraft] = useState(false);
   const [imageDraft, setImageDraft] = useState(false);
@@ -194,7 +209,7 @@ export default function CreateScreen() {
             leading={<CreatorHubSectionLeading icon="film-outline" accent={pulseverse.hubTilePurple} />}
             kicker="Create"
             title="Start creating"
-            subtitle="Record or upload, add photos, start a feed discussion, or combine clips for multi-part / B-roll merges. Thumbnails, schedules, and extra polish live under Advanced on the video screen."
+            subtitle="Record or upload, add photos, start a feed discussion, or combine clips into one merged post. Thumbnails, schedules, and extra polish live under Advanced on the video screen."
           />
           <View style={styles.hubPanel}>
             <CreatorHubGlassBackdrop borderRadius={borderRadius['2xl']} blurIntensity={44} />
@@ -314,22 +329,68 @@ export default function CreateScreen() {
                       </View>
                       <View style={styles.tileText}>
                         <Text style={styles.tileTitle}>Combine clips</Text>
-                        <Text style={styles.tileSub}>Multi-part series or B-roll · one post, merged on the server</Text>
+                        <Text style={styles.tileSub}>Join multiple clips into one video · merged on the server</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
                     </View>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.hubStitchAltLink}
-                    activeOpacity={0.82}
-                    onPress={() => router.push('/create/video?openStitch=broll' as any)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Start combine flow as B-roll queue"
-                  >
-                    <Text style={styles.hubStitchAltLinkText}>Prefer B-roll first? Start here →</Text>
-                  </TouchableOpacity>
                 </>
+              ) : null}
+
+              {showBrollStudio ? (
+                <TouchableOpacity
+                  style={styles.photoTile}
+                  activeOpacity={0.88}
+                  onPress={() => router.push('/create/broll-studio' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open B-roll Studio"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <CreatorHubTileTopSheen accent={pulseverse.storeAccent} radius={borderRadius.card} />
+                  <View style={styles.tileForeground}>
+                    <View
+                      style={[
+                        styles.tileIcon,
+                        { backgroundColor: 'rgba(231,201,117,0.14)', borderWidth: 1, borderColor: 'rgba(231,201,117,0.30)' },
+                      ]}
+                    >
+                      <Ionicons name="film-outline" size={26} color={pulseverse.storeAccent} />
+                    </View>
+                    <View style={styles.tileText}>
+                      <Text style={styles.tileTitle}>B-roll Studio</Text>
+                      <Text style={styles.tileSub}>{brollStudioSubtitle}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+
+              {showTemplateStudio ? (
+                <TouchableOpacity
+                  style={styles.photoTile}
+                  activeOpacity={0.88}
+                  onPress={() => router.push('/create/templates' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open Creator Templates"
+                >
+                  <CreatorHubGlassBackdrop borderRadius={borderRadius.card} blurIntensity={28} />
+                  <CreatorHubTileTopSheen accent={colors.primary.teal} radius={borderRadius.card} />
+                  <View style={styles.tileForeground}>
+                    <View
+                      style={[
+                        styles.tileIcon,
+                        { backgroundColor: 'rgba(25,211,197,0.14)', borderWidth: 1, borderColor: 'rgba(25,211,197,0.30)' },
+                      ]}
+                    >
+                      <Ionicons name="grid-outline" size={26} color={colors.primary.teal} />
+                    </View>
+                    <View style={styles.tileText}>
+                      <Text style={styles.tileTitle}>Templates</Text>
+                      <Text style={styles.tileSub}>Start with a polished creator layout</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                  </View>
+                </TouchableOpacity>
               ) : null}
 
               <View style={styles.quickRow}>
@@ -369,23 +430,6 @@ export default function CreateScreen() {
                     <Text style={styles.quickPillText}>Scheduled</Text>
                   </View>
                 </TouchableOpacity>
-
-                {showCoCreate ? (
-                  <TouchableOpacity
-                    style={styles.quickPill}
-                    activeOpacity={0.85}
-                    onPress={() => router.push('/create/collab' as any)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Co-create hub"
-                  >
-                    <CreatorHubGlassBackdrop borderRadius={borderRadius.lg} blurIntensity={22} />
-                    <CreatorHubTileTopSheen accent={colors.status.invite} radius={borderRadius.lg} height={4} />
-                    <View style={styles.quickPillInner}>
-                      <Ionicons name="people-outline" size={18} color={colors.status.invite} />
-                      <Text style={styles.quickPillText}>Co-create</Text>
-                    </View>
-                  </TouchableOpacity>
-                ) : null}
               </View>
 
               {liveStreaming ? (
@@ -651,18 +695,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.dark.textMuted,
     marginTop: 4,
-  },
-  hubStitchAltLink: {
-    alignSelf: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-    marginTop: -2,
-  },
-  hubStitchAltLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: pulseverse.electricSoft,
-    letterSpacing: -0.1,
   },
   quickRow: {
     flexDirection: 'row',

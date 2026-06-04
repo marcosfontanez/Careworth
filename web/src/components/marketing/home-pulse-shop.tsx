@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
 /**
  * Pulse Shop spotlight — one flagship mobile render.
  *
+ * Inactive on the homepage (removed in homepage cleanup). Kept for optional re-mount.
+ * Secondary CTA points to /features#creator-economy — not removed homepage anchors.
+ *
  * We previously showed two posters side-by-side; both marketing assets reused
  * the same Featured Border / Emerald Renewal hero, so the pair read as
  * duplicate UI. A single tall phone frame reads cleaner and still shows
@@ -69,7 +72,7 @@ export function HomePulseShop({ locale }: { locale: Locale }) {
             className="h-11 rounded-full border-white/15 bg-white/3 px-6 font-semibold hover:bg-white/7"
             asChild
           >
-            <Link href="/#sparks-and-diamonds">{c.ctaSecondary}</Link>
+            <Link href="/features#creator-economy">{c.ctaSecondary}</Link>
           </Button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, LayoutGrid, ShoppingBag, Sparkles, Video } from "lucide-react";
 
-import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
+import { MarketingPrimaryCta, MarketingSecondaryCta } from "@/components/marketing/marketing-cta";
 import { CtaSection } from "@/components/marketing/cta-section";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { SectionHeader } from "@/components/marketing/section-header";
@@ -13,14 +13,15 @@ import {
   SpotlightBeam,
   WebsiteSectionBackdrop,
 } from "@/components/marketing/website-visuals";
-import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  marketingCardInteractive,
   marketingEyebrow,
+  marketingFocusRing,
+  marketingGradientFrame,
+  marketingGradientFrameInner,
   marketingGutterX,
+  marketingSection,
   marketingSectionTitle,
-  shadowPrimaryCta,
+  marketingSurfaceTile,
 } from "@/lib/ui-classes";
 import { getFeaturesHubCopy } from "@/lib/marketing-copy/features-hub";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
@@ -38,31 +39,28 @@ export default async function FeaturesHubPage() {
   return (
     <>
       <MarketingPageShell breadcrumbPath="/features">
-        <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-linear-to-br from-card/90 via-background to-primary/[0.07] px-6 py-12 sm:px-10 sm:py-14">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/15 blur-3xl" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-pv-electric/10 blur-3xl" aria-hidden />
-          <SectionHeader
-            className="relative mx-0 max-w-3xl text-left"
-            eyebrow={copy.intro.eyebrow}
-            title={copy.intro.title}
-            description={copy.intro.description}
-          />
-          <div className="relative mt-8 flex flex-wrap gap-3">
-            <Button asChild className={cn("bg-primary text-primary-foreground", shadowPrimaryCta)}>
-              <MarketingDestinationLink href="/download" analyticsSource="features_hub_join">
+        <div className={cn(marketingGradientFrame, "scroll-mt-24")}>
+          <div className={cn(marketingGradientFrameInner, "relative px-6 py-10 sm:px-10 sm:py-12")}>
+            <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/15 blur-3xl" aria-hidden />
+            <SectionHeader
+              className="relative mx-0 max-w-3xl text-left"
+              eyebrow={copy.intro.eyebrow}
+              title={copy.intro.title}
+              description={copy.intro.description}
+            />
+            <div className="relative mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <MarketingPrimaryCta href="/download" analyticsSource="features_hub_join">
                 {copy.join}
-              </MarketingDestinationLink>
-            </Button>
-            <Button asChild variant="outline" className="border-border/80 bg-card/40">
-              <MarketingDestinationLink href="/contact" analyticsSource="features_hub_partner">
+              </MarketingPrimaryCta>
+              <MarketingSecondaryCta href="/contact" analyticsSource="features_hub_partner">
                 {copy.partner}
-              </MarketingDestinationLink>
-            </Button>
+              </MarketingSecondaryCta>
+            </div>
           </div>
         </div>
       </MarketingPageShell>
 
-      <section id="creator-hub-visual" className="relative isolate overflow-hidden border-y border-white/5 py-20 sm:py-24">
+      <section id="creator-hub-visual" className={cn(marketingSection, "overflow-hidden")}>
         <WebsiteSectionBackdrop variant="deep" />
         <div className={cn(marketingGutterX, "relative")}>
           <PremiumSectionHeader
@@ -100,25 +98,26 @@ export default async function FeaturesHubPage() {
           </div>
           <h2 className={cn(marketingSectionTitle, "mt-2")}>{copy.allSurfacesTitle}</h2>
           <p className="mt-2 max-w-2xl leading-relaxed text-muted-foreground">{copy.allSurfacesBody}</p>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {copy.grid.map((l) => (
-              <Link key={l.href} href={l.href} className="group">
-                <Card className={cn("h-full", marketingCardInteractive)}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between text-xl">
-                      {l.title}
-                      <ArrowRight className="h-4 w-4 text-primary opacity-0 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" />
-                    </CardTitle>
-                    <CardDescription className="text-base leading-relaxed">{l.desc}</CardDescription>
-                  </CardHeader>
-                </Card>
+              <Link key={l.href} href={l.href} className={cn("group block h-full", marketingFocusRing, "rounded-2xl")}>
+                <article className={cn("flex h-full flex-col justify-between p-5", marketingSurfaceTile)}>
+                  <div>
+                    <h3 className="font-heading text-lg font-semibold tracking-tight text-foreground">{l.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{l.desc}</p>
+                  </div>
+                  <ArrowRight
+                    className="mt-4 h-4 w-4 text-primary opacity-70 transition group-hover:translate-x-0.5 group-hover:opacity-100"
+                    aria-hidden
+                  />
+                </article>
               </Link>
             ))}
           </div>
         </div>
       </MarketingPageShell>
 
-      <section id="creator-economy" className="scroll-mt-28 border-t border-white/5 py-20 sm:py-24">
+      <section id="creator-economy" className={cn(marketingSection, "scroll-mt-28")}>
         <WebsiteSectionBackdrop variant="soft" />
         <div className={marketingGutterX}>
           <PremiumSectionHeader
@@ -132,7 +131,7 @@ export default async function FeaturesHubPage() {
               return (
                 <article
                   key={block.title}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-6 ring-1 ring-white/4 backdrop-blur-md"
+                  className={cn("relative overflow-hidden p-6", marketingSurfaceTile)}
                 >
                   <div
                     aria-hidden
@@ -157,28 +156,28 @@ export default async function FeaturesHubPage() {
               );
             })}
           </div>
-          <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-muted-foreground">
+          <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-muted-foreground">
             {locale === "es" ? (
               <>
-                Más detalle sobre Sparks & Diamonds y Borders está en la{" "}
-                <Link href="/#sparks-and-diamonds" className="font-medium text-primary underline-offset-4 hover:underline">
-                  sección de economía en la página principal
+                Más sobre Sparks, Diamonds y Borders en{" "}
+                <Link href="/features#creator-economy" className="font-medium text-sky-300 underline-offset-4 hover:underline">
+                  economía de creador
                 </Link>{" "}
-                y en el{" "}
-                <Link href="/#borders" className="font-medium text-primary underline-offset-4 hover:underline">
-                  destacado de Borders
+                y en{" "}
+                <Link href="/download" className="font-medium text-sky-300 underline-offset-4 hover:underline">
+                  descargar la app
                 </Link>
                 .
               </>
             ) : (
               <>
-                Deep dives for Sparks & Diamonds and Borders live on the{" "}
-                <Link href="/#sparks-and-diamonds" className="font-medium text-primary underline-offset-4 hover:underline">
-                  homepage economy section
+                More on Sparks, Diamonds, and Borders in the{" "}
+                <Link href="/features#creator-economy" className="font-medium text-sky-300 underline-offset-4 hover:underline">
+                  creator economy section
                 </Link>{" "}
-                and{" "}
-                <Link href="/#borders" className="font-medium text-primary underline-offset-4 hover:underline">
-                  Borders flagship
+                and on{" "}
+                <Link href="/download" className="font-medium text-sky-300 underline-offset-4 hover:underline">
+                  Get the app
                 </Link>
                 .
               </>

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { Locale } from "@/lib/i18n";
 import { getDownloadPageCopy } from "@/lib/marketing-copy/download";
 import { getAndroidOpenTestingUrl, getIosTestflightUrl } from "@/lib/site-constants";
-import { shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingCtaPrimaryClasses, marketingCtaSecondaryClasses } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 type BetaAccessButtonsProps = {
@@ -29,20 +29,20 @@ export function BetaAccessButtons({
   const androidUrl = getAndroidOpenTestingUrl();
 
   return (
-    <div className={cn("flex flex-wrap justify-center gap-3", className)}>
+    <div className={cn("flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center", className)}>
       {showRequestInvite ? (
-        <Button size="lg" className={cn("bg-primary text-primary-foreground", shadowPrimaryCta)} asChild>
+        <Button size="lg" className={marketingCtaPrimaryClasses} asChild>
           <MarketingDestinationLink href="/contact" analyticsSource={requestInviteAnalyticsSource}>
             {t.requestInvite}
           </MarketingDestinationLink>
         </Button>
       ) : null}
-      <Button size="lg" variant="outline" className="border-white/15 bg-white/3" asChild>
+      <Button size="lg" variant="outline" className={marketingCtaSecondaryClasses} asChild>
         <a href={iosUrl} target="_blank" rel="noopener noreferrer">
           {t.iosBetaCta}
         </a>
       </Button>
-      <Button size="lg" variant="outline" className="border-white/15 bg-white/3" asChild>
+      <Button size="lg" variant="outline" className={marketingCtaSecondaryClasses} asChild>
         <a href={androidUrl} target="_blank" rel="noopener noreferrer">
           {t.androidBetaCta}
         </a>

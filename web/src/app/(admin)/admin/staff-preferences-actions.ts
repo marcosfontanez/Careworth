@@ -34,13 +34,9 @@ export async function updateStaffPreferences(
     return { error: "Not signed in." };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role_admin")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
 
-  if (!profile?.role_admin) {
+  if (isAdmin !== true) {
     return { error: "Forbidden." };
   }
 

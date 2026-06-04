@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
+import { openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,7 +49,7 @@ export default function MyPulseTextUpdateScreen() {
     onSuccess: async () => {
       if (user?.id) await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
       showToast('Text update added to My Pulse', 'success');
-      router.replace('/(tabs)/my-pulse');
+      openMyPulse(router, { replace: true });
     },
   });
 

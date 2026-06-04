@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { Locale } from "@/lib/i18n";
 import { getMarketingCenterLinks, getMarketingNavStrings } from "@/lib/marketing-copy/nav";
-import { marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
+import { marketingCtaPrimaryClasses, marketingFocusRing, marketingGutterX } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 export type MarketingAccountChip = {
@@ -34,6 +34,7 @@ function NavLink({
       href={href}
       className={cn(
         "relative shrink-0 whitespace-nowrap px-1.5 py-2 text-sm font-medium transition-colors",
+        marketingFocusRing,
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -62,7 +63,7 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
     <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.92)] backdrop-blur-xl">
       <div
         className={cn(
-          "flex min-h-22 items-center gap-3 py-2 sm:min-h-24 sm:gap-4 lg:gap-5",
+          "flex min-h-16 items-center gap-2 py-2 sm:min-h-20 sm:gap-3 lg:gap-5",
           marketingGutterX,
         )}
       >
@@ -82,7 +83,11 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
           {account ? (
             <Link
               href="/me"
-              className="hidden max-w-26 truncate text-sm font-semibold text-foreground hover:text-primary md:inline md:max-w-36 xl:max-w-44"
+              className={cn(
+                "hidden max-w-26 truncate text-sm font-semibold text-foreground hover:text-primary md:inline md:max-w-36 xl:max-w-44",
+                marketingFocusRing,
+                "rounded-sm",
+              )}
               title={meLabel}
             >
               {meLabel}
@@ -95,34 +100,30 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
               </Button>
             </form>
           ) : (
-            <Button variant="ghost" size="sm" className="hidden shrink-0 px-2 text-muted-foreground sm:inline-flex" asChild>
-              <Link href="/login">{strings.logIn}</Link>
+            <Button variant="ghost" size="sm" className="hidden shrink-0 px-2 text-muted-foreground md:inline-flex" asChild>
+              <Link href="/login" className={marketingFocusRing}>
+                {strings.logIn}
+              </Link>
             </Button>
           )}
-          <Link
-            href="/admin/login"
-            className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground hover:text-foreground sm:inline"
-          >
-            {strings.staffPortal}
-          </Link>
           <Button
             size="sm"
-            className={cn(
-              "hidden rounded-full px-5 font-semibold sm:inline-flex",
-              "bg-primary text-primary-foreground hover:bg-primary/90",
-              shadowPrimaryCta,
-            )}
+            className={cn("shrink-0", marketingCtaPrimaryClasses, "h-10 px-4 sm:h-11 sm:px-5")}
             asChild
           >
-            <MarketingDestinationLink href="/download" analyticsSource="nav_desktop_join" className="inline-flex items-center gap-2">
-              {strings.join}
+            <MarketingDestinationLink href="/download" analyticsSource="nav_desktop_join" className="inline-flex items-center gap-1.5">
+              <span className="hidden sm:inline">{strings.join}</span>
+              <span className="sm:hidden">Beta</span>
               <ArrowRight className="h-4 w-4" aria-hidden />
             </MarketingDestinationLink>
           </Button>
           <div className="lg:hidden">
             <Sheet>
               <SheetTrigger
-                className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground outline-none hover:bg-secondary"
+                className={cn(
+                  "inline-flex size-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary",
+                  marketingFocusRing,
+                )}
               >
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">{strings.menuLabel}</span>
@@ -133,20 +134,32 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
                     <Link
                       key={item.href}
                       href={item.href}
-                      className="rounded-lg px-3 py-2.5 text-base font-medium text-foreground hover:bg-secondary"
+                      className={cn(
+                        "rounded-lg px-3 py-2.5 text-base font-medium text-foreground hover:bg-secondary",
+                        marketingFocusRing,
+                      )}
                     >
                       {item.label}
                     </Link>
                   ))}
                   {account ? (
                     <>
-                      <Link href="/me" className="rounded-lg px-3 py-2.5 text-base font-medium text-foreground hover:bg-secondary">
+                      <Link
+                        href="/me"
+                        className={cn(
+                          "rounded-lg px-3 py-2.5 text-base font-medium text-foreground hover:bg-secondary",
+                          marketingFocusRing,
+                        )}
+                      >
                         {strings.myPulse}
                       </Link>
                       <form action={signOutUser}>
                         <button
                           type="submit"
-                          className="w-full rounded-lg px-3 py-2.5 text-left text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          className={cn(
+                            "w-full rounded-lg px-3 py-2.5 text-left text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
+                            marketingFocusRing,
+                          )}
                         >
                           {strings.signOut}
                         </button>
@@ -155,18 +168,15 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
                   ) : (
                     <Link
                       href="/login"
-                      className="rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      className={cn(
+                        "rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
+                        marketingFocusRing,
+                      )}
                     >
                       {strings.logIn}
                     </Link>
                   )}
-                  <Link
-                    href="/admin/login"
-                    className="rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  >
-                    {strings.staffPortal}
-                  </Link>
-                  <Button className="mt-4 w-full rounded-full bg-primary font-semibold" asChild>
+                  <Button className={cn("mt-2 w-full", marketingCtaPrimaryClasses)} asChild>
                     <MarketingDestinationLink href="/download" analyticsSource="nav_mobile_join">
                       {strings.join}
                     </MarketingDestinationLink>

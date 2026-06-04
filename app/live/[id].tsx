@@ -56,6 +56,8 @@ import { useToast } from '@/components/ui/Toast';
 import { KeyboardAwareRoot } from '@/components/ui/KeyboardAwareRoot';
 import { isSeedStream } from '@/lib/liveSeedStreams';
 import { isDemoLiveStreamId } from '@/lib/liveDemoStreams';
+import { isExpoGo } from '@/lib/expoRuntime';
+import { isLiveKitVideoReady } from '@/lib/liveKitConfig';
 import { DemoLiveViewer } from '@/components/live/demo';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { STREAM_CHAT_MAX_LENGTH } from '@/constants';
@@ -70,7 +72,6 @@ import type {
   StreamGiftLeaderboard,
 } from '@/types';
 import { videoProvider } from '@/services/live/videoProvider';
-import { isExpoGo } from '@/lib/expoRuntime';
 
 /** Loaded only when real LiveKit video is shown — keeps Expo Go from requiring WebRTC native code at bundle parse time. */
 const LiveKitStageLazy = lazy(() =>
@@ -120,6 +121,9 @@ function StreamViewerEntry() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const streamId = id ?? '';
   if (streamId && isSeedStream({ id: streamId })) {
+    return <Redirect href="/(tabs)/live" />;
+  }
+  if (streamId && isDemoLiveStreamId(streamId) && !isFeatureEnabled('liveDiscoveryDemos')) {
     return <Redirect href="/(tabs)/live" />;
   }
   if (streamId && isDemoLiveStreamId(streamId)) {
@@ -1119,7 +1123,7 @@ function StreamViewerScreenContent() {
         await queryClient.invalidateQueries({ queryKey: ['stream', streamId] });
         await queryClient.invalidateQueries({ queryKey: ['streams', 'live'] });
         await queryClient.invalidateQueries({ queryKey: ['liveHub'] });
-        showToast('Live on the hub — poster preview only until you use a dev build + LiveKit.', 'success');
+        showToast('You\u2019re live — viewers can chat while video connects.', 'success');
       }
     } finally {
       setDemoContinuing(false);
@@ -1855,7 +1859,7 @@ function StreamViewerScreenContent() {
         {showLiveKitLayer ? (
           <Suspense fallback={<View style={[styles.streamBg, { backgroundColor: '#020617' }]} />}>
             <LiveKitStageLazy
-              key={lkSessionKey}
+              key={`${streamId}:${lkSessionKey}`}
               serverUrl={lkServerUrl!}
               token={lkToken!}
               role={isHost ? 'host' : 'viewer'}
@@ -1972,23 +1976,35 @@ function StreamViewerScreenContent() {
 
       {isHost && streamIsLive && preparingBroadcast && !liveKitEnabled ? (
         <View style={styles.mockLiveKitBanner}>
-          <Text style={styles.scheduledHostTitle}>Real camera isn\u2019t available here</Text>
+          <Text style={styles.scheduledHostTitle}>
+            {isExpoGo() ? 'Use the preview app to go live' : 'Live camera isn\u2019t available'}
+          </Text>
           <Text style={styles.scheduledHostMeta}>
             {isExpoGo()
-              ? 'Expo Go can\u2019t run LiveKit (native WebRTC). Use an EAS development build on a device, then set EXPO_PUBLIC_LIVEKIT_URL in .env.'
-              : process.env.EXPO_PUBLIC_LIVEKIT_URL?.trim()
-                ? 'EXPO_PUBLIC_LIVEKIT_URL must start with wss:// — fix .env and restart Metro.'
-                : 'Add EXPO_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud to .env, restart Metro, and use a development build (not Expo Go).'}
+              ? 'Expo Go cannot run live camera streams. End this session, install the PulseVerse preview build from TestFlight, and start again.'
+              : isLiveKitVideoReady()
+                ? 'We couldn\u2019t connect your camera yet. Check permissions, then end and restart the stream.'
+                : 'This build is missing live video setup. End the stream, install the latest preview build, and try again.'}
           </Text>
-          <TouchableOpacity
-            style={[styles.promoteBtn, demoContinuing && { opacity: 0.7 }]}
-            disabled={demoContinuing}
-            onPress={continuePosterOnlyDemo}
-          >
-            <Text style={styles.promoteBtnTxt}>
-              {demoContinuing ? 'Starting\u2026' : 'Continue with poster only (hub + chat)'}
-            </Text>
-          </TouchableOpacity>
+          {__DEV__ ? (
+            <TouchableOpacity
+              style={[styles.promoteBtn, demoContinuing && { opacity: 0.7 }]}
+              disabled={demoContinuing}
+              onPress={continuePosterOnlyDemo}
+            >
+              <Text style={styles.promoteBtnTxt}>
+                {demoContinuing ? 'Starting\u2026' : 'Dev only: continue without camera'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.promoteBtn, endingStream && { opacity: 0.7 }]}
+              disabled={endingStream}
+              onPress={() => void handleEndStream()}
+            >
+              <Text style={styles.promoteBtnTxt}>{endingStream ? 'Ending\u2026' : 'End session'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : null}
 

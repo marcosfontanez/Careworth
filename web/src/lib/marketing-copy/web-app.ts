@@ -140,6 +140,23 @@ export type WebAppProfileCopy = {
   postsTitle: string;
   postsEmptyOwner: string;
   postsEmptyVisitor: string;
+  /** My Pulse rolling feed (mirrors the native "My Pulse" section). */
+  myPulseKicker: string;
+  myPulseSubtitleOwner: string;
+  myPulseSubtitleVisitor: string;
+  /** Media Hub (videos / favorites / photos library). */
+  mediaHubKicker: string;
+  mediaHubTitle: string;
+  mediaHubSubtitleOwner: string;
+  mediaHubSubtitleVisitor: string;
+  mediaTabVideos: string;
+  mediaTabFavorites: string;
+  mediaTabPhotos: string;
+  mediaEmptyVideosOwner: string;
+  mediaEmptyVideosVisitor: string;
+  mediaEmptyPhotosOwner: string;
+  mediaEmptyPhotosVisitor: string;
+  mediaEmptyFavorites: string;
   /** Read-only / locked states. */
   privateTitle: string;
   privateBody: string;
@@ -206,6 +223,8 @@ export type WebAppCirclesCopy = {
   replyComposerLoginCta: string;
   /** Membership-gated reply (web has no join flow yet). */
   replyMembersOnly: string;
+  /** Reply blocked because of a block relationship with the thread author. */
+  replyBlocked: string;
   /** Native web join / leave (unlocks replying). */
   joinToReplyTitle: string;
   joinToReplyBody: string;
@@ -390,11 +409,11 @@ export type WebAppPageCopy = {
 
 const copy: Record<Locale, WebAppPageCopy> = {
   en: {
-    metaTitle: "PulseVerse Web",
+    metaTitle: "PulseVerse Web · Beta",
     metaDescription:
-      "PulseVerse Web — your feed, circles, live, My Pulse, and Creator Hub in a clean, responsive browser experience. Sign in to pick up where you left off.",
+      "PulseVerse Web beta — browse Feed, Circles, Live, My Pulse, Creator Hub, and Notifications in your browser. Sign in with your PulseVerse account; rich creation and Settings still work best in the mobile app.",
     shell: {
-      wordmark: "PulseVerse",
+      wordmark: "PulseVerse Web",
       createLabel: "Create",
       searchPlaceholder: "Search PulseVerse",
       viewAll: "View all",
@@ -411,11 +430,11 @@ const copy: Record<Locale, WebAppPageCopy> = {
         notifications: "Notifications",
         settings: "Settings",
       },
-      railTitle: "On PulseVerse Web",
+      railTitle: "PulseVerse Web · Beta",
       railTips: [
-        "Browse your Feed right here — more surfaces are coming to the web soon.",
-        "Everything stays in sync with the PulseVerse mobile app on your account.",
-        "Tap any post to open the full view.",
+        "Feed, Circles, Live, My Pulse, Creator Hub, and Notifications work in this browser preview today.",
+        "Video upload, Live broadcasting, and full account Settings still work best in the mobile app.",
+        "Everything stays in sync with your PulseVerse account on iOS and Android.",
       ],
       railCirclesTitle: "Trending Circles",
       railCreatorsTitle: "Suggested creators",
@@ -429,37 +448,37 @@ const copy: Record<Locale, WebAppPageCopy> = {
     },
     comingSoon: {
       circles: {
-        badge: "Coming soon to web",
-        title: "Circles is coming to the web",
-        body: "Threads, replies, and communities are getting a desktop home. For now, open Circles in the app — your privacy rules carry over.",
+        badge: "Available on web beta",
+        title: "Circles on PulseVerse Web",
+        body: "Browse communities, threads, and replies in your browser. Join and post with the same privacy rules as the mobile app.",
         openInApp: "Open Circles in app",
         goToFeed: "Go to Feed",
       },
       live: {
-        badge: "Coming soon to web",
-        title: "Live is coming to the web",
-        body: "Live rooms and replays will stream here soon. For now, catch them in the PulseVerse app.",
+        badge: "Available on web beta",
+        title: "Live on PulseVerse Web",
+        body: "See who is live and open rooms from the browser. Watching and hosting still work best in the mobile app.",
         openInApp: "Open Live in app",
         goToFeed: "Go to Feed",
       },
       myPulse: {
-        badge: "Coming soon to web",
-        title: "My Pulse is coming to the web",
-        body: "Your profile, posts, and media will have a polished desktop page soon. For now, view your Pulse in the app.",
+        badge: "Available on web beta",
+        title: "My Pulse on PulseVerse Web",
+        body: "Your profile, updates, and Media Hub are available in the browser beta today.",
         openInApp: "Open My Pulse in app",
         goToFeed: "Go to Feed",
       },
       creatorHub: {
-        badge: "Coming soon to web",
-        title: "Creator Hub is coming to the web",
-        body: "Creating, publishing, and managing content from the desktop is on the way. For now, create in the PulseVerse app.",
+        badge: "Available on web beta",
+        title: "Creator Hub on PulseVerse Web",
+        body: "Dashboard and text posting work on web. Rich video, B-roll, and go-live tools remain in the mobile app.",
         openInApp: "Open Creator Hub in app",
         goToFeed: "Go to Feed",
       },
       notifications: {
-        badge: "Coming soon to web",
-        title: "Notifications are coming to the web",
-        body: "Your activity and mentions will appear here soon. For now, check notifications in the app.",
+        badge: "Available on web beta",
+        title: "Notifications on PulseVerse Web",
+        body: "Recent activity across your posts, Circles, and follows is available in the browser beta today.",
         openInApp: "Open Notifications in app",
         goToFeed: "Go to Feed",
       },
@@ -531,7 +550,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       statFollowing: "Following",
       statPulse: "Pulse",
       pulseScoreLabel: "Pulse Score",
-      pulseUpdatesTitle: "Pulse Updates",
+      pulseUpdatesTitle: "My Pulse",
       pulseUpdatesEmpty: "No Pulse updates yet.",
       viewAllUpdates: "View all updates",
       gridView: "Grid view",
@@ -539,6 +558,21 @@ const copy: Record<Locale, WebAppPageCopy> = {
       postsTitle: "Posts",
       postsEmptyOwner: "You haven’t posted anything yet. Create your first post in the app.",
       postsEmptyVisitor: "Nothing to show here yet.",
+      myPulseKicker: "Activity",
+      myPulseSubtitleOwner: "Your latest 5 updates. Always fresh.",
+      myPulseSubtitleVisitor: "Their latest 5 updates. Always fresh.",
+      mediaHubKicker: "Library",
+      mediaHubTitle: "Media Hub",
+      mediaHubSubtitleOwner: "Your videos, saves, and photos in one place.",
+      mediaHubSubtitleVisitor: "Videos, favorites, and photos they share.",
+      mediaTabVideos: "Videos",
+      mediaTabFavorites: "Favorites",
+      mediaTabPhotos: "Photos",
+      mediaEmptyVideosOwner: "No videos yet. Share a clip in the app and it shows up here.",
+      mediaEmptyVideosVisitor: "No videos to show yet.",
+      mediaEmptyPhotosOwner: "No photos yet. Add a photo post or Pics update in the app.",
+      mediaEmptyPhotosVisitor: "No photos to show yet.",
+      mediaEmptyFavorites: "No favorites saved. Tap the bookmark on any post to save it here.",
       privateTitle: "This profile is private",
       privateBody: "This member keeps their posts and updates private.",
       blockedTitle: "Content hidden",
@@ -596,6 +630,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       replyComposerError: "Couldn’t post your reply. Try again.",
       replyComposerLoginCta: "Log in to reply",
       replyMembersOnly: "Join this Circle to reply.",
+      replyBlocked: "You can’t reply to this thread because of a block.",
       joinToReplyTitle: "Join to reply",
       joinToReplyBody: "Join this Circle to post your reply. You can leave anytime.",
       joinCta: "Join Circle",
@@ -747,29 +782,41 @@ const copy: Record<Locale, WebAppPageCopy> = {
       likeError: "Couldn’t update like.",
     },
     landing: {
-      kicker: "PulseVerse Web",
-      title: "Your PulseVerse, right in the browser",
+      kicker: "PulseVerse Web · Beta",
+      title: "PulseVerse in your browser — beta preview",
       subtitle:
-        "Your Feed in a clean, responsive web experience — with Circles, Live, My Pulse, and the Creator Hub arriving soon. No phone required.",
-      loginCta: "Log in to PulseVerse Web",
+        "Sign in to browse Feed, Circles, Live, My Pulse, Creator Hub, and Notifications on the web. Video creation, Live broadcasting, and account Settings still work best in the mobile app.",
+      loginCta: "Log in to PulseVerse Web beta",
       getAppCta: "Get the mobile app",
-      ctaNote: "Sign in with your PulseVerse email. New here? Create your account in the mobile app.",
+      ctaNote: "Sign in with your PulseVerse email. New here? Create your account in the mobile app first.",
       features: [
-        { title: "Feed", body: "Scroll videos and posts in a comfortable, readable column built for the desktop." },
-        { title: "Circles", body: "Join the conversation — threads, replies, and communities with the same privacy rules you trust." },
-        { title: "Live", body: "Catch live rooms and replays without missing a beat." },
-        { title: "My Pulse", body: "Your profile, posts, and media — a polished page that’s yours." },
-        { title: "Creator Hub", body: "Create, publish, and manage your content from a focused workspace." },
-        { title: "Always in sync", body: "Everything mirrors your mobile app instantly across every device." },
+        { title: "Feed", body: "Scroll videos and posts in a desktop-friendly column — available now on web." },
+        {
+          title: "Circles",
+          body: "Browse communities, threads, and replies with the same privacy rules — available now on web.",
+        },
+        {
+          title: "Live",
+          body: "See who is live and open rooms from the browser — watching and hosting still work best in the app.",
+        },
+        { title: "My Pulse", body: "Your profile, updates, and Media Hub — available now on web." },
+        {
+          title: "Creator Hub",
+          body: "Dashboard and text posting on web; rich video, B-roll, and go-live tools in the app.",
+        },
+        {
+          title: "Browser + app sync",
+          body: "The same account across web beta and mobile. Settings on web are still coming soon.",
+        },
       ],
     },
   },
   es: {
-    metaTitle: "PulseVerse Web",
+    metaTitle: "PulseVerse Web · Beta",
     metaDescription:
-      "PulseVerse Web — tu feed, círculos, en vivo, My Pulse y Creator Hub en una experiencia web limpia y adaptable. Inicia sesión y continúa donde lo dejaste.",
+      "PulseVerse Web beta — explora Feed, Círculos, En vivo, My Pulse, Creator Hub y Notificaciones en el navegador. Inicia sesión con tu cuenta; la creación avanzada y Ajustes funcionan mejor en la app móvil.",
     shell: {
-      wordmark: "PulseVerse",
+      wordmark: "PulseVerse Web",
       createLabel: "Crear",
       searchPlaceholder: "Buscar en PulseVerse",
       viewAll: "Ver todo",
@@ -786,11 +833,11 @@ const copy: Record<Locale, WebAppPageCopy> = {
         notifications: "Notificaciones",
         settings: "Ajustes",
       },
-      railTitle: "En PulseVerse Web",
+      railTitle: "PulseVerse Web · Beta",
       railTips: [
-        "Explora tu Feed aquí mismo — pronto llegarán más secciones a la web.",
-        "Todo se mantiene sincronizado con la app móvil de PulseVerse en tu cuenta.",
-        "Toca cualquier publicación para abrir la vista completa.",
+        "Feed, Círculos, En vivo, My Pulse, Creator Hub y Notificaciones funcionan hoy en esta vista previa del navegador.",
+        "Subir vídeo, emitir en vivo y los Ajustes completos de cuenta funcionan mejor en la app móvil.",
+        "Todo se mantiene sincronizado con tu cuenta de PulseVerse en iOS y Android.",
       ],
       railCirclesTitle: "Círculos en tendencia",
       railCreatorsTitle: "Creadores sugeridos",
@@ -804,37 +851,37 @@ const copy: Record<Locale, WebAppPageCopy> = {
     },
     comingSoon: {
       circles: {
-        badge: "Pronto en la web",
-        title: "Círculos llegará pronto a la web",
-        body: "Los hilos, respuestas y comunidades tendrán su espacio en el escritorio. Por ahora, abre Círculos en la app — tus reglas de privacidad se mantienen.",
+        badge: "Disponible en la web beta",
+        title: "Círculos en PulseVerse Web",
+        body: "Explora comunidades, hilos y respuestas en el navegador. Únete y publica con las mismas reglas de privacidad que en la app móvil.",
         openInApp: "Abrir Círculos en la app",
         goToFeed: "Ir al Feed",
       },
       live: {
-        badge: "Pronto en la web",
-        title: "En vivo llegará pronto a la web",
-        body: "Las salas en vivo y repeticiones se transmitirán aquí pronto. Por ahora, míralas en la app de PulseVerse.",
+        badge: "Disponible en la web beta",
+        title: "En vivo en PulseVerse Web",
+        body: "Mira quién está en vivo y abre salas desde el navegador. Ver y emitir funcionan mejor en la app móvil.",
         openInApp: "Abrir En vivo en la app",
         goToFeed: "Ir al Feed",
       },
       myPulse: {
-        badge: "Pronto en la web",
-        title: "My Pulse llegará pronto a la web",
-        body: "Tu perfil, publicaciones y contenido tendrán una página pulida en el escritorio. Por ahora, mira tu Pulse en la app.",
+        badge: "Disponible en la web beta",
+        title: "My Pulse en PulseVerse Web",
+        body: "Tu perfil, novedades y Media Hub están disponibles hoy en la beta del navegador.",
         openInApp: "Abrir My Pulse en la app",
         goToFeed: "Ir al Feed",
       },
       creatorHub: {
-        badge: "Pronto en la web",
-        title: "Creator Hub llegará pronto a la web",
-        body: "Crear, publicar y gestionar contenido desde el escritorio está en camino. Por ahora, crea en la app de PulseVerse.",
+        badge: "Disponible en la web beta",
+        title: "Creator Hub en PulseVerse Web",
+        body: "El panel y las publicaciones de texto funcionan en la web. Vídeo avanzado, B-roll y herramientas en vivo siguen en la app móvil.",
         openInApp: "Abrir Creator Hub en la app",
         goToFeed: "Ir al Feed",
       },
       notifications: {
-        badge: "Pronto en la web",
-        title: "Las notificaciones llegarán pronto a la web",
-        body: "Tu actividad y menciones aparecerán aquí pronto. Por ahora, revisa las notificaciones en la app.",
+        badge: "Disponible en la web beta",
+        title: "Notificaciones en PulseVerse Web",
+        body: "La actividad reciente en tus publicaciones, Círculos y seguidores está disponible hoy en la beta del navegador.",
         openInApp: "Abrir Notificaciones en la app",
         goToFeed: "Ir al Feed",
       },
@@ -906,7 +953,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       statFollowing: "Siguiendo",
       statPulse: "Pulse",
       pulseScoreLabel: "Pulse Score",
-      pulseUpdatesTitle: "Novedades de Pulse",
+      pulseUpdatesTitle: "Mi Pulse",
       pulseUpdatesEmpty: "Aún no hay novedades de Pulse.",
       viewAllUpdates: "Ver todas las novedades",
       gridView: "Vista de cuadrícula",
@@ -914,6 +961,21 @@ const copy: Record<Locale, WebAppPageCopy> = {
       postsTitle: "Publicaciones",
       postsEmptyOwner: "Aún no has publicado nada. Crea tu primera publicación en la app.",
       postsEmptyVisitor: "Aún no hay nada que mostrar aquí.",
+      myPulseKicker: "Actividad",
+      myPulseSubtitleOwner: "Tus últimas 5 novedades. Siempre frescas.",
+      myPulseSubtitleVisitor: "Sus últimas 5 novedades. Siempre frescas.",
+      mediaHubKicker: "Biblioteca",
+      mediaHubTitle: "Centro multimedia",
+      mediaHubSubtitleOwner: "Tus videos, guardados y fotos en un solo lugar.",
+      mediaHubSubtitleVisitor: "Videos, favoritos y fotos que comparte.",
+      mediaTabVideos: "Videos",
+      mediaTabFavorites: "Favoritos",
+      mediaTabPhotos: "Fotos",
+      mediaEmptyVideosOwner: "Aún no hay videos. Comparte un clip en la app y aparecerá aquí.",
+      mediaEmptyVideosVisitor: "Aún no hay videos para mostrar.",
+      mediaEmptyPhotosOwner: "Aún no hay fotos. Agrega una publicación con foto o una novedad de Fotos en la app.",
+      mediaEmptyPhotosVisitor: "Aún no hay fotos para mostrar.",
+      mediaEmptyFavorites: "No has guardado favoritos. Toca el marcador en cualquier publicación para guardarlo aquí.",
       privateTitle: "Este perfil es privado",
       privateBody: "Este miembro mantiene sus publicaciones y novedades en privado.",
       blockedTitle: "Contenido oculto",
@@ -971,6 +1033,7 @@ const copy: Record<Locale, WebAppPageCopy> = {
       replyComposerError: "No se pudo publicar tu respuesta. Inténtalo de nuevo.",
       replyComposerLoginCta: "Inicia sesión para responder",
       replyMembersOnly: "Únete a este Círculo para responder.",
+      replyBlocked: "No puedes responder a este hilo debido a un bloqueo.",
       joinToReplyTitle: "Únete para responder",
       joinToReplyBody: "Únete a este Círculo para publicar tu respuesta. Puedes salir cuando quieras.",
       joinCta: "Unirme al Círculo",
@@ -1122,20 +1185,32 @@ const copy: Record<Locale, WebAppPageCopy> = {
       likeError: "No se pudo actualizar el me gusta.",
     },
     landing: {
-      kicker: "PulseVerse Web",
-      title: "Tu PulseVerse, directo en el navegador",
+      kicker: "PulseVerse Web · Beta",
+      title: "PulseVerse en tu navegador — vista previa beta",
       subtitle:
-        "Tu Feed en una experiencia web limpia y adaptable — con Círculos, En vivo, My Pulse y el Creator Hub llegando pronto. Sin necesidad del móvil.",
-      loginCta: "Iniciar sesión en PulseVerse Web",
+        "Inicia sesión para explorar Feed, Círculos, En vivo, My Pulse, Creator Hub y Notificaciones en la web. La creación de vídeo, emitir en vivo y los Ajustes de cuenta funcionan mejor en la app móvil.",
+      loginCta: "Iniciar sesión en PulseVerse Web beta",
       getAppCta: "Obtener la app móvil",
-      ctaNote: "Inicia sesión con tu correo de PulseVerse. ¿Nuevo aquí? Crea tu cuenta en la app móvil.",
+      ctaNote: "Inicia sesión con tu correo de PulseVerse. ¿Nuevo aquí? Crea tu cuenta primero en la app móvil.",
       features: [
-        { title: "Feed", body: "Desliza vídeos y publicaciones en una columna cómoda pensada para el escritorio." },
-        { title: "Círculos", body: "Únete a la conversación — hilos, respuestas y comunidades con las mismas reglas de privacidad." },
-        { title: "En vivo", body: "Disfruta de salas en vivo y repeticiones sin perderte nada." },
-        { title: "My Pulse", body: "Tu perfil, publicaciones y contenido — una página pulida que es tuya." },
-        { title: "Creator Hub", body: "Crea, publica y gestiona tu contenido desde un espacio enfocado." },
-        { title: "Siempre sincronizado", body: "Todo refleja tu app móvil al instante en todos tus dispositivos." },
+        { title: "Feed", body: "Desliza vídeos y publicaciones en una columna para escritorio — disponible ya en la web." },
+        {
+          title: "Círculos",
+          body: "Explora comunidades, hilos y respuestas con las mismas reglas de privacidad — disponible ya en la web.",
+        },
+        {
+          title: "En vivo",
+          body: "Mira quién está en vivo y abre salas desde el navegador — ver y emitir funcionan mejor en la app.",
+        },
+        { title: "My Pulse", body: "Tu perfil, novedades y Media Hub — disponible ya en la web." },
+        {
+          title: "Creator Hub",
+          body: "Panel y publicaciones de texto en la web; vídeo avanzado, B-roll y herramientas en vivo en la app.",
+        },
+        {
+          title: "Navegador + app sincronizados",
+          body: "La misma cuenta en la beta web y el móvil. Los Ajustes en la web llegarán pronto.",
+        },
       ],
     },
   },

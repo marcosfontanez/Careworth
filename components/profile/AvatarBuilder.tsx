@@ -13,12 +13,21 @@ import {
   useProfileCustomization,
   DICEBEAR_STYLES, DICEBEAR_BG_COLORS, buildDiceBearUrl,
 } from '@/store/useProfileCustomization';
-import { rasterRingOuterBoxSide, resolvePulseRingRaster, isEmeraldRenewalMay2026PulseFrameSlug } from '@/lib/pulseRingRasterAssets';
+import {
+  rasterRingOuterBoxSide,
+  resolvePulseRingRaster,
+  isEmeraldRenewalMay2026PulseFrameSlug,
+  isClassOf2026FrameSlug,
+} from '@/lib/pulseRingRasterAssets';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { coerceCssColor } from '@/lib/coerceCssColor';
 import type { AvatarType, PulseAvatarFrame } from '@/types';
 import type { PrizeFireworksTier } from './GoldFireworksBurst';
 import { EmeraldRenewalRingMotion } from '@/components/profile/EmeraldRenewalRingMotion';
+import {
+  PremiumBorderOverlay,
+  usePremiumOverlayActive,
+} from '@/components/profile/PremiumAnimatedProfileBorder';
 
 const AVATAR_TYPES: { key: AvatarType; label: string; icon: string }[] = [
   { key: 'illustrated', label: 'Illustrated', icon: 'sparkles' },
@@ -138,6 +147,15 @@ export function AvatarDisplay({
   const captionFont = Math.max(5, Math.min(9, Math.round(size * 0.092)));
   const showEmeraldRenewalMotion = Boolean(
     useRasterRing && size >= 22 && pulseFrame && isEmeraldRenewalMay2026PulseFrameSlug(pulseFrame.slug),
+  );
+  /**
+   * Class of 2026 graduation celebration overlay. Performance: only the larger
+   * surfaces (profile / preview / featured) animate — feed, comments, and compact
+   * lists stay static via {@link usePremiumOverlayActive}'s box-size gate.
+   */
+  const classOf2026OverlayActive = usePremiumOverlayActive({ box: outerBox });
+  const showClassOf2026Motion = Boolean(
+    useRasterRing && pulseFrame && isClassOf2026FrameSlug(pulseFrame.slug) && classOf2026OverlayActive,
   );
   const burstTier: PrizeFireworksTier | null = prizeTierToFireworksTier(pulseFrame?.prizeTier);
   const showRasterGoldFireworks = Boolean(
@@ -285,6 +303,21 @@ export function AvatarDisplay({
         ) : null}
         {showEmeraldRenewalMotion ? (
           <EmeraldRenewalRingMotion ringDiameter={outerBox} active />
+        ) : null}
+        {showClassOf2026Motion ? (
+          <View
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: outerBox,
+              height: outerBox,
+              zIndex: 6,
+            }}
+            pointerEvents="none"
+          >
+            <PremiumBorderOverlay box={outerBox} premiumType="classOf2026" />
+          </View>
         ) : null}
         {showRasterGoldFireworks && pulseFrame ? (
           <GoldFireworksBurst

@@ -4,7 +4,13 @@ import { getPublicSiteUrl } from "@/lib/site-url";
 
 const ORG_ID = `${getPublicSiteUrl()}#organization`;
 const SITE_ID = `${getPublicSiteUrl()}#website`;
+const APP_ID = `${getPublicSiteUrl()}#app`;
 
+/**
+ * Site-wide entity graph. Includes a MobileApplication node so AI answer
+ * engines (ChatGPT, Perplexity, Gemini) can resolve PulseVerse as a real,
+ * free social app for healthcare workers — not just a generic website.
+ */
 export function organizationAndWebsiteGraph(): Record<string, unknown> {
   const url = getPublicSiteUrl();
   return {
@@ -17,6 +23,10 @@ export function organizationAndWebsiteGraph(): Record<string, unknown> {
         url,
         description: site.description,
         logo: `${url}/opengraph-image`,
+        sameAs: [
+          "https://apps.apple.com/app/pulseverse",
+          "https://play.google.com/store/apps/details?id=app.pulseverse",
+        ],
       },
       {
         "@type": "WebSite",
@@ -24,6 +34,27 @@ export function organizationAndWebsiteGraph(): Record<string, unknown> {
         name: site.name,
         url,
         description: site.description,
+        publisher: { "@id": ORG_ID },
+      },
+      {
+        "@type": "MobileApplication",
+        "@id": APP_ID,
+        name: site.name,
+        url,
+        applicationCategory: "SocialNetworkingApplication",
+        applicationSubCategory: "Healthcare social network",
+        operatingSystem: "iOS, Android",
+        description:
+          "PulseVerse is a free social app for healthcare workers — nurses, doctors, and medical students — to share short videos, post updates, and join moderated communities called Circles.",
+        audience: {
+          "@type": "Audience",
+          audienceType: "Healthcare professionals (nurses, doctors, medical students)",
+        },
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+        },
         publisher: { "@id": ORG_ID },
       },
     ],

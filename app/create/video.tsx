@@ -49,14 +49,12 @@ import { compressVideoIfTooLarge, VIDEO_UPLOAD_MAX_LONG_EDGE } from '@/lib/video
 import { webVideoNeedsReencode } from '@/lib/webVideoCompression';
 import { queryClient } from '@/lib/queryClient';
 import { invalidatePostRelatedQueries } from '@/lib/invalidatePostQueries';
+import { useFeatureFlags } from '@/lib/featureFlags';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
 import { consumePendingVideoCapture } from '@/lib/pendingVideoCapture';
 import { makeVideoThumbnail, probeVideoFile } from '@/lib/videoMetadata';
 import { tintForLook, VIDEO_LOOKS, type VideoLookId } from '@/lib/videoFilters';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
-import { loadBrandKit, saveBrandKit, type BrandKit } from '@/lib/brandKit';
-import type { MoodPreset, MoodPresetId } from '@/lib/moodPresets';
-import { appendHashtag } from '@/lib/hashtagStudio';
 import { parseHashtagsFromText, syncHashtagsToString, HASHTAG_MAX } from '@/lib/hashtags';
 import { HashtagInput } from '@/components/create/HashtagInput';
 import { startNewSeries, type SeriesSelection } from '@/lib/seriesMode';
@@ -74,8 +72,6 @@ import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { EducationModeToggle, type EducationCitation } from '@/components/create/EducationModeToggle';
 import { SeriesModePicker } from '@/components/create/SeriesModePicker';
 import { SchedulePostPicker } from '@/components/create/SchedulePostPicker';
-import { BrandKitEditor } from '@/components/create/BrandKitEditor';
-import { MoodPresetPicker } from '@/components/create/MoodPresetPicker';
 import { ThumbnailStudio } from '@/components/create/ThumbnailStudio';
 import { WaveformTimeline } from '@/components/create/WaveformTimeline';
 import { ClipSplitterModal } from '@/components/create/ClipSplitterModal';
@@ -84,7 +80,7 @@ import { SpeedRampEditor } from '@/components/create/SpeedRampEditor';
 import { SmartTrimCard } from '@/components/create/SmartTrimCard';
 import { PreviewOnlyCallout } from '@/components/create/PreviewOnlyCallout';
 import { VideoHygieneCard } from '@/components/create/VideoHygieneCard';
-import { BrollInsertCard } from '@/components/create/BrollInsertCard';
+import { CombineClipsCard } from '@/components/create/CombineClipsCard';
 import { CoCreateRoadmapCard } from '@/components/create/CoCreateRoadmapCard';
 import Slider from '@react-native-community/slider';
 
@@ -136,7 +132,6 @@ function ComposableVideoPreview({
   containerHeight,
   previewMuted = true,
   previewVolume = 0,
-  brandKit,
 }: {
   uri: string;
   playbackRate: number;
@@ -149,7 +144,6 @@ function ComposableVideoPreview({
   /** When false, play original audio (e.g. hear your upload while picking a separate sound). */
   previewMuted?: boolean;
   previewVolume?: number;
-  brandKit?: BrandKit | null;
 }) {
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
@@ -189,7 +183,7 @@ function ComposableVideoPreview({
         containerWidth={containerWidth}
         containerHeight={containerHeight}
       />
-      <VideoBrandWatermark brandKit={brandKit} compact position="bottom-center" edgeOffset={10} variant="subtle" />
+      <VideoBrandWatermark compact position="bottom-center" edgeOffset={10} variant="subtle" />
     </>
   );
 }
@@ -206,7 +200,6 @@ function ComposableVideoPreviewFrozen({
   overlayStyle,
   containerWidth,
   containerHeight,
-  brandKit,
 }: {
   posterUri: string | null;
   filter: FilterPreset;
@@ -214,7 +207,6 @@ function ComposableVideoPreviewFrozen({
   overlayStyle: VideoOverlayStyle;
   containerWidth: number;
   containerHeight: number;
-  brandKit?: BrandKit | null;
 }) {
   const tint = tintForLook(filter);
   /** onLayout-measured text size — needed to anchor the visual center of the
@@ -263,7 +255,7 @@ function ComposableVideoPreviewFrozen({
           </Text>
         </View>
       ) : null}
-      <VideoBrandWatermark brandKit={brandKit} compact position="bottom-center" edgeOffset={10} variant="subtle" />
+      <VideoBrandWatermark compact position="bottom-center" edgeOffset={10} variant="subtle" />
     </>
   );
 }
@@ -271,6 +263,7 @@ function ComposableVideoPreviewFrozen({
 export default function CreateVideoScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const showBrollStudio = useFeatureFlags((s) => s.creatorBrollStudio);
   const {
     mode,
     soundPostId: soundPostIdRaw,
@@ -333,7 +326,7 @@ export default function CreateVideoScreen() {
   const clipProfileDefaults = useMemo(() => clipDefaultsFromProfile(profile), [profile]);
   const [allowViewerClips, setAllowViewerClips] = useState(true);
   const [allowRemix, setAllowRemix] = useState(true);
-  const [allowClipDownloads, setAllowClipDownloads] = useState(false);
+  const [allowClipDownloads, setAllowClipDownloads] = useState(true);
 
   useEffect(() => {
     const next = initialPostClipSettings(privacy, clipProfileDefaults);
@@ -389,14 +382,11 @@ export default function CreateVideoScreen() {
   /** Avoid auto midpoint overwriting restored draft anchor for borrowed sounds. */
   const soundAnchorInitDoneRef = useRef(false);
 
-  const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
-  const [brandKitOpen, setBrandKitOpen] = useState(false);
   const [phiAck, setPhiAck] = useState(false);
   const [educationOn, setEducationOn] = useState(false);
   const [citations, setCitations] = useState<EducationCitation[]>([]);
   const [seriesSelection, setSeriesSelection] = useState<SeriesSelection | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
-  const [moodId, setMoodId] = useState<MoodPresetId | null>(null);
   const [originalAudioOn, setOriginalAudioOn] = useState(false);
   /** 0–1 preview mix for embedded track when not using a borrowed sound (upload is unchanged). */
   const [originalAudioMix, setOriginalAudioMix] = useState(1);
@@ -701,11 +691,6 @@ export default function CreateVideoScreen() {
   }, [soundPostIdTrim, media?.duration]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    loadBrandKit(user.id).then(setBrandKit);
-  }, [user?.id]);
-
-  useEffect(() => {
     setCustomCoverUri(null);
     setCoverAltUri(null);
   }, [media?.uri]);
@@ -715,21 +700,6 @@ export default function CreateVideoScreen() {
     [caption, overlayLine, hashtags, soundTitle],
   );
   const phiSev = highestSeverity(phiFindings);
-
-  const applyMoodPreset = (preset: MoodPreset | null) => {
-    if (!preset) {
-      setMoodId(null);
-      return;
-    }
-    setMoodId(preset.id);
-    setFilterPreset(preset.look);
-    preset.suggestedHashtags.forEach((t) => {
-      setHashtags((h) => appendHashtag(h, t));
-    });
-    if (preset.suggestedSoundTitle && !soundPostIdTrim) {
-      setSoundTitle(preset.suggestedSoundTitle.slice(0, 60));
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -975,7 +945,7 @@ export default function CreateVideoScreen() {
   const handleMergeDuetMux = useCallback(async () => {
     if (!user?.id || !media || !duetParentPost?.mediaUrl?.trim() || duetMuxBusy || posting) return;
     if (!isVideoExportConfigured()) {
-      toast.show('Export service not configured (EXPO_PUBLIC_VIDEO_EXPORT_URL)', 'info');
+      toast.show('Video merge isn\u2019t available right now. Try again later.', 'info');
       return;
     }
     setDuetMuxBusy(true);
@@ -1058,7 +1028,6 @@ export default function CreateVideoScreen() {
     setCitations([]);
     setSeriesSelection(null);
     setScheduledAt(null);
-    setMoodId(null);
     setOriginalAudioOn(false);
     setOriginalAudioMix(1);
     setCustomCoverUri(null);
@@ -1077,7 +1046,6 @@ export default function CreateVideoScreen() {
     setTrimEnd(null);
     setSoundAnchorSec(null);
     setAdvancedCreatorOpen(false);
-    setBrandKitOpen(false);
     setAndroidFreezeComposerPreview(false);
     setComposerPreviewPosterUri(null);
     soundAnchorInitDoneRef.current = false;
@@ -1124,10 +1092,7 @@ export default function CreateVideoScreen() {
     setPublishSuccess(null);
     clearComposerContent();
     void clearDraft('video');
-    if (user?.id) {
-      void loadBrandKit(user.id).then(setBrandKit);
-    }
-  }, [clearComposerContent, user?.id]);
+  }, [clearComposerContent]);
 
   const handlePost = async () => {
     /**
@@ -1346,7 +1311,6 @@ export default function CreateVideoScreen() {
             scheduled_at: null,
             scheduled_status: 'live',
             cover_alt_url: coverAltRemoteStitch,
-            mood_preset: moodId ?? undefined,
             video_look_id: filterPreset !== 'none' ? filterPreset : undefined,
             video_overlay_text: overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
             video_overlay_style: overlayLine.trim() ? serializeOverlayStyle(overlayStyle) : null,
@@ -1601,7 +1565,6 @@ export default function CreateVideoScreen() {
         scheduled_at: scheduleIso,
         scheduled_status: scheduleIso ? 'scheduled' : 'live',
         cover_alt_url: coverAltRemote,
-        mood_preset: moodId ?? undefined,
         video_look_id: postType === 'video' && filterPreset !== 'none' ? filterPreset : undefined,
         video_overlay_text:
           postType === 'video' && overlayLine.trim() ? overlayLine.trim().slice(0, 80) : null,
@@ -1700,16 +1663,6 @@ export default function CreateVideoScreen() {
         }}
       />
 
-      <BrandKitEditor
-        visible={brandKitOpen}
-        initial={brandKit ?? {}}
-        onClose={() => setBrandKitOpen(false)}
-        onSave={async (next) => {
-          setBrandKit(next);
-          if (user?.id) await saveBrandKit(user.id, next);
-        }}
-      />
-
       {media ? (
         <ThumbnailStudio
           visible={thumbStudioOpen}
@@ -1754,7 +1707,7 @@ export default function CreateVideoScreen() {
           });
           const msg =
             stitchVariant === 'broll'
-              ? `${clips.length} B-roll clip(s) queued — tap Post once to combine with your main clip.`
+              ? `${clips.length} clip(s) queued — tap Post once to combine with your main clip.`
               : `${clips.length} clip(s) queued — tap Post once to combine into one video.`;
           toast.show(msg, 'success');
         }}
@@ -1833,12 +1786,12 @@ export default function CreateVideoScreen() {
           <Text style={styles.clipQueueBannerText}>
             <Text>
               {clipQueueVariant === 'broll'
-                ? `${followUpClips.length} B-roll clip(s) queued — tap Post once to upload and combine into one video (server job).`
+                ? `${followUpClips.length} clip(s) queued — tap Post once to upload and combine into one video (server job).`
                 : `${followUpClips.length} follow-up clip(s) queued — tap Post once to combine all parts into one video.`}
             </Text>
             {'\n'}
             <Text style={styles.clipQueueBannerSub}>
-              Requires ffmpeg worker (`scripts/creator-media-worker.mjs`). Main feeds hide the post until combining finishes.
+              Your clips upload first, then combine into one post. This can take a minute after you tap Post.
             </Text>
           </Text>
           <TouchableOpacity
@@ -1907,7 +1860,6 @@ export default function CreateVideoScreen() {
                   overlayStyle={overlayStyle}
                   containerWidth={previewSize.w}
                   containerHeight={previewSize.h}
-                  brandKit={brandKit}
                 />
               ) : (
                 <ComposableVideoPreview
@@ -1922,7 +1874,6 @@ export default function CreateVideoScreen() {
                   containerHeight={previewSize.h}
                   previewMuted={Boolean(soundPostIdTrim) || !originalAudioOn}
                   previewVolume={originalAudioOn && !soundPostIdTrim ? originalAudioMix : 0}
-                  brandKit={brandKit}
                 />
               )}
             {durationStr ? (
@@ -2297,8 +2248,8 @@ export default function CreateVideoScreen() {
                 setStitchOpen(true);
               }}
             >
-              <Ionicons name="film-outline" size={18} color={colors.primary.gold} />
-              <Text style={styles.combineChipText}>B-roll</Text>
+              <Ionicons name="git-merge-outline" size={18} color={colors.primary.teal} />
+              <Text style={styles.combineChipText}>Combine clips</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -2311,7 +2262,7 @@ export default function CreateVideoScreen() {
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={styles.advancedToggleTitle}>Advanced creator tools</Text>
             <Text style={styles.advancedToggleSub}>
-              Looks, hygiene, thumbnails, scheduling & citations. Combine clips uses Multi-part / B-roll above. Color grade ships to the feed; speed ramp is preview-only here.
+              Looks, hygiene, thumbnails, scheduling & citations. Combine clips lives above. Color grade ships to the feed; speed ramp is preview-only here.
             </Text>
           </View>
           <Ionicons
@@ -2327,9 +2278,9 @@ export default function CreateVideoScreen() {
               <View style={styles.proPanel}>
                 <Text style={styles.proLabel}>Looks, audio preview & media tools (preview-only polish)</Text>
                 <VideoHygieneCard />
-                <BrollInsertCard
+                <CombineClipsCard
                   hasPrimaryVideo={!!media}
-                  queuedCutaways={clipQueueVariant === 'broll' ? followUpClips.length : 0}
+                  queuedClips={clipQueueVariant === 'broll' ? followUpClips.length : 0}
                   onOpenPicker={() => {
                     if (!media) {
                       toast.show('Add a video first', 'info');
@@ -2339,6 +2290,22 @@ export default function CreateVideoScreen() {
                     setStitchOpen(true);
                   }}
                 />
+                {showBrollStudio ? (
+                  <TouchableOpacity
+                    style={styles.brollStudioCard}
+                    activeOpacity={0.85}
+                    onPress={() => router.push('/create/broll-studio' as never)}
+                  >
+                    <Ionicons name="film-outline" size={22} color={colors.primary.gold} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.brollStudioTitle}>B-roll Studio</Text>
+                      <Text style={styles.brollStudioSub}>
+                        True cutaways — overlay clips over your main video for a chosen moment. Opens a guided editor.
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.dark.textMuted} />
+                  </TouchableOpacity>
+                ) : null}
                 <CoCreateRoadmapCard />
                 <Text style={styles.aspectHint}>Vertical 9:16 looks best in the feed — preview is cropped to fill.</Text>
                 <Text style={styles.proSub}>Preview playback speed (does not change the uploaded file yet)</Text>
@@ -2478,16 +2445,7 @@ export default function CreateVideoScreen() {
             ) : null}
 
             <View style={styles.proPanel}>
-              <Text style={styles.proLabel}>Brand, mood & scheduling</Text>
-              <TouchableOpacity
-                style={styles.secondaryFullBtn}
-                onPress={() => setBrandKitOpen(true)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="color-wand-outline" size={18} color={colors.primary.teal} />
-                <Text style={styles.secondaryFullBtnText}>Brand kit</Text>
-              </TouchableOpacity>
-              <MoodPresetPicker selected={moodId} onSelect={applyMoodPreset} />
+              <Text style={styles.proLabel}>Education & scheduling</Text>
               <View style={{ gap: 10 }}>
                 <EducationModeToggle
                   enabled={educationOn}
@@ -2726,6 +2684,19 @@ const styles = StyleSheet.create({
     borderColor: colors.dark.border,
   },
   combineChipText: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
+
+  brollStudioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.primary.gold + '14',
+    borderWidth: 1,
+    borderColor: colors.primary.gold + '44',
+  },
+  brollStudioTitle: { fontSize: 13, fontWeight: '800', color: colors.dark.text },
+  brollStudioSub: { fontSize: 11, color: colors.dark.textMuted, marginTop: 4, lineHeight: 15 },
 
   advancedToggle: {
     flexDirection: 'row',

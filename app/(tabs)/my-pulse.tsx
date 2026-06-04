@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, InteractionManager } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,15 +31,50 @@ export default function MyPulseTabScreen() {
   const [contentReady, setContentReady] = useState(false);
   /** True while the manual "Try again" retry is fetching the profile. */
   const [retrying, setRetrying] = useState(false);
+  /** Profile fetched directly by this screen when the global auth hydrate failed/stalled. */
+  const [localProfile, setLocalProfile] = useState<typeof authProfile>(null);
+  /** True while the self-heal direct fetch is in flight. */
+  const [localFetching, setLocalFetching] = useState(false);
 
   const handleRetryProfile = useCallback(async () => {
     setRetrying(true);
     try {
       await refreshProfile();
+      // If the global hydrate is still struggling, grab the row directly so
+      // the screen can recover without waiting on the heavy auth path.
+      if (postsOwnerId) {
+        const row = await profilesService.getById(postsOwnerId);
+        if (row) setLocalProfile(row);
+      }
     } finally {
       setRetrying(false);
     }
-  }, [refreshProfile]);
+  }, [refreshProfile, postsOwnerId]);
+
+  // Self-heal: when we have a session user but the global auth hydrate hasn't
+  // produced a profile (it timed out / stalled), fetch the row directly. This
+  // decouples My Pulse from the heavy, timeout-prone auth hydrate so the page
+  // loads even when satellite queries or the avatar-frame embed are slow.
+  useEffect(() => {
+    if (!postsOwnerId) return;
+    if (authProfile || storeUser || localProfile) return;
+    if (localFetching) return;
+    let cancelled = false;
+    setLocalFetching(true);
+    (async () => {
+      try {
+        const row = await profilesService.getById(postsOwnerId);
+        if (!cancelled && row) setLocalProfile(row);
+      } catch {
+        /* getById already falls back internally; nothing more to do */
+      } finally {
+        if (!cancelled) setLocalFetching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [postsOwnerId, authProfile, storeUser, localProfile, localFetching]);
 
   const refreshStatsOnFocus = useCallback(async () => {
     if (!postsOwnerId) return;
@@ -55,6 +90,8 @@ export default function MyPulseTabScreen() {
         pulseScoreCurrent: row.pulseScoreCurrent,
         pulseTier: row.pulseTier,
         profileShareCount: row.profileShareCount,
+        selectedPulseAvatarFrameId: row.selectedPulseAvatarFrameId,
+        pulseAvatarFrame: row.pulseAvatarFrame,
       });
     } catch {
       /* non-fatal — stat strip keeps last cached values */
@@ -67,6 +104,12 @@ export default function MyPulseTabScreen() {
       const task = InteractionManager.runAfterInteractions(() => {
         if (!cancelled) setContentReady(true);
       });
+      // Failsafe: `runAfterInteractions` can never fire on web if a looping
+      // animation (e.g. the loading heart) keeps an interaction handle open.
+      // Guarantee the gate flips so the screen can't get stuck on the spinner.
+      const readyTimer = setTimeout(() => {
+        if (!cancelled) setContentReady(true);
+      }, 400);
 
       if (postsOwnerId) {
         const refreshTask = InteractionManager.runAfterInteractions(() => {
@@ -78,6 +121,7 @@ export default function MyPulseTabScreen() {
           cancelled = true;
           task.cancel?.();
           refreshTask.cancel?.();
+          clearTimeout(readyTimer);
           setContentReady(false);
         };
       }
@@ -85,6 +129,7 @@ export default function MyPulseTabScreen() {
       return () => {
         cancelled = true;
         task.cancel?.();
+        clearTimeout(readyTimer);
         setContentReady(false);
       };
     }, [postsOwnerId, queryClient, refreshStatsOnFocus]),
@@ -107,13 +152,14 @@ export default function MyPulseTabScreen() {
     );
   }
 
-  const user = authProfile ?? storeUser;
+  const user = authProfile ?? storeUser ?? localProfile;
 
   if (!user) {
     // Auth is still hydrating the profile — show the spinner. But once hydrate
     // has finished (`authLoading === false`) with no profile, the fetch timed
-    // out; surface a retry instead of an endless spinner.
-    if (authLoading || retrying) {
+    // out; surface a retry instead of an endless spinner. The self-heal direct
+    // fetch (`localFetching`) is also treated as a loading state.
+    if (authLoading || retrying || localFetching) {
       return <LoadingState />;
     }
     return (

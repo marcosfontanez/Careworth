@@ -38,7 +38,11 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <MarketingAuthHashRedirect />
       <AppJsonLd data={organizationAndWebsiteGraph()} />
       <MarketingNav locale={locale} account={account} />
-      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 outline-none bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(45,127,249,0.08),transparent_55%)]"
+      >
         {children}
       </main>
       <MarketingFooter locale={locale} />

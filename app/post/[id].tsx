@@ -34,8 +34,7 @@ import { commentService } from '@/services/comment';
 import { useToast } from '@/components/ui/Toast';
 import { colors, borderRadius } from '@/theme';
 import { pulseImageFeedHeroProps } from '@/lib/pulseImage';
-import { resolveFeedGradeLookId } from '@/lib/moodPresets';
-import { tintForLook, type VideoLookId } from '@/lib/videoFilters';
+import { resolveFeedGradeLookId, tintForLook, type VideoLookId } from '@/lib/videoFilters';
 import { COMMENT_DELETED_TOMBSTONE, COMMENT_MAX_LENGTH } from '@/constants';
 import { CaptionWithMentions } from '@/components/ui/CaptionWithMentions';
 import { CommentRichText } from '@/components/ui/CommentRichText';
@@ -64,6 +63,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { analytics } from '@/lib/analytics';
 import { pickCoverForSession } from '@/lib/coverAbRotation';
 import { trySignedUrlFromPostMediaPublicUrl, storageService, avatarThumb } from '@/lib/storage';
+import { ResilientFullImage } from '@/components/ui/ResilientFullImage';
 import type { Comment, PostReactionKind } from '@/types';
 import * as ImagePicker from 'expo-image-picker';
 import { CommentReactionStrip } from '@/components/comments/CommentReactionStrip';
@@ -302,7 +302,7 @@ export default function PostDetailScreen() {
 
   const detailGradeLookId = useMemo(() => {
     if (!post) return undefined;
-    return resolveFeedGradeLookId({ videoLookId: post.videoLookId, moodPreset: post.moodPreset });
+    return resolveFeedGradeLookId({ videoLookId: post.videoLookId });
   }, [post]);
 
   const detailGradeTint = useMemo(
@@ -766,18 +766,17 @@ export default function PostDetailScreen() {
               style={[styles.mediaWrapBase, { height: imageMediaHeight }]}
             >
               <View style={styles.media}>
-                <Image
-                  source={{ uri: previewUri }}
+                <ResilientFullImage
+                  uri={previewUri ?? ''}
                   style={StyleSheet.absoluteFillObject}
                   contentFit="contain"
-                  transition={120}
+                  imageProps={{ ...pulseImageFeedHeroProps, transition: 120 }}
                   onLoad={(e) => {
                     const s = e.source;
                     const w = typeof s?.width === 'number' ? s.width : 0;
                     const h = typeof s?.height === 'number' ? s.height : 0;
                     if (w > 0 && h > 0) setImageAspect(w / h);
                   }}
-                  {...pulseImageFeedHeroProps}
                 />
                 {detailGradeTint ? (
                   <View

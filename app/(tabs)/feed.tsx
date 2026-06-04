@@ -71,7 +71,7 @@ export default function FeedScreen() {
   const isFocused = useIsFocused();
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const toast = useToast();
   const feedTab = useAppStore((s) => s.feedTab);
   const setFeedTab = useAppStore((s) => s.setFeedTab);
@@ -103,7 +103,7 @@ export default function FeedScreen() {
     hasNextPage,
     isFetchingNextPage,
     error: feedError,
-  } = useFeedInfinite(feedTab, user?.id);
+  } = useFeedInfinite(feedTab, user?.id, !authLoading);
 
   /**
    * Refresh when returning to Feed so new posts appear — but skip if we already
@@ -113,7 +113,7 @@ export default function FeedScreen() {
    */
   useFocusEffect(
     useCallback(() => {
-      const minStaleMs = 25_000;
+      const minStaleMs = 60_000;
       if (feedInfData && Date.now() - dataUpdatedAt < minStaleMs) return;
       void refetch();
     }, [refetch, feedInfData, dataUpdatedAt]),

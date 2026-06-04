@@ -25,6 +25,8 @@ export type SupportCenterCopy = {
   heroTitleAccent: string;
   searchPlaceholder: string;
   searchButton: string;
+  searchResultsTitle: string;
+  searchNoResults: string;
   popularLabel: string;
   popularLinks: { href: string; label: string }[];
   sectionHelpTitle: string;
@@ -45,7 +47,7 @@ function cardsEn(supportEmail: string): SupportContactCard[] {
   return [
     { title: "Contact support", body: "Priority threads for trust & safety and access issues.", href: "/contact", cta: "Contact us" },
     { title: "Email us", body: supportEmail, href: `mailto:${supportEmail}`, cta: "Send an email" },
-    { title: "Response time", body: "We typically respond within 24–48 business hours.", href: "/faq", badge: "24–48h avg.", cta: "Contact us" },
+    { title: "Response time", body: "We typically respond within 24–48 business hours.", href: "/contact", badge: "24–48h avg.", cta: "Contact us" },
   ];
 }
 
@@ -53,7 +55,7 @@ function cardsEs(supportEmail: string): SupportContactCard[] {
   return [
     { title: "Contactar soporte", body: "Hilos prioritarios para confianza, seguridad y acceso.", href: "/contact", cta: "Contactar" },
     { title: "Escríbenos", body: supportEmail, href: `mailto:${supportEmail}`, cta: "Enviar correo" },
-    { title: "Tiempo de respuesta", body: "Solemos responder en 24–48 h laborables.", href: "/faq", badge: "24–48 h media", cta: "Contactar" },
+    { title: "Tiempo de respuesta", body: "Solemos responder en 24–48 h laborables.", href: "/contact", badge: "24–48 h media", cta: "Contactar" },
   ];
 }
 
@@ -76,7 +78,9 @@ export function getSupportCenterCopy(
       heroTitleAccent: "PulseVerse.",
       searchPlaceholder: "Buscar artículos de ayuda…",
       searchButton: "Buscar",
-      popularLabel: "Popular:",
+      searchResultsTitle: "Resultados de búsqueda",
+      searchNoResults: "No hay temas que coincidan. Prueba FAQ o contacta con soporte.",
+      popularLabel: "Temas populares:",
       popularLinks: [
         { href: "/download#beta", label: "Descargar app" },
         { href: "/faq", label: "Cuenta" },
@@ -141,7 +145,9 @@ export function getSupportCenterCopy(
     heroTitleAccent: "PulseVerse.",
     searchPlaceholder: "Search help articles…",
     searchButton: "Search",
-    popularLabel: "Popular:",
+    searchResultsTitle: "Search results",
+    searchNoResults: "No help topics match. Try FAQ or contact support.",
+    popularLabel: "Popular support topics:",
     popularLinks: [
       { href: "/download#beta", label: "Download app" },
       { href: "/faq", label: "Account settings" },

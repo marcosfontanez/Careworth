@@ -25,7 +25,8 @@ export function normalizeCircleSlug(slug: string): string {
 
 export function isConfessionCircle(slug: string | null | undefined): boolean {
   if (!slug) return false;
-  return CONFESSION_SLUGS.has(slug.trim().toLowerCase());
+  // Normalize first so the legacy `shift-confessions` slug masks identities too.
+  return CONFESSION_SLUGS.has(normalizeCircleSlug(slug));
 }
 
 const ADJECTIVES = [

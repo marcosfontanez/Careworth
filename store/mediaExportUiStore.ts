@@ -76,7 +76,7 @@ export const useMediaExportUiStore = create<State>((set, get) => ({
       headline: 'Download Complete',
       detail: savedToPhotos
         ? 'Saved to Photos.'
-        : 'Saved to your app cache. Build a development build to auto-save into Photos.',
+        : 'Saved to your app files. Open Share to save a copy to Photos.',
       progress: 1,
       successLocalUri: localUri,
       successSavedToPhotos: savedToPhotos,

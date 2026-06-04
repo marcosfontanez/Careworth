@@ -7,7 +7,7 @@ import { PosterFrame } from "@/components/marketing/website-visuals";
 import { getDownloadPageCopy } from "@/lib/marketing-copy/download";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
-import { marketingCardMuted, marketingInlineLink } from "@/lib/ui-classes";
+import { marketingElevatedFrame, marketingFocusRing, marketingInlineLink } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 export const generateMetadata = () => generateMarketingMetadata("download");
@@ -22,7 +22,7 @@ export default async function DownloadPage() {
         <SectionHeader eyebrow={t.eyebrow} title={t.title} description={t.description} />
       </div>
 
-      <div className="mt-10">
+      <div className="mt-8 sm:mt-10">
         <PosterFrame
           src="/marketing/marketing-download-early-access.png"
           alt={t.earlyAccessHeroAlt}
@@ -36,7 +36,7 @@ export default async function DownloadPage() {
         />
       </div>
 
-      <div className={cn("mx-auto mt-12 max-w-2xl rounded-2xl p-8", marketingCardMuted)}>
+      <div className={cn("mx-auto mt-10 max-w-2xl rounded-2xl p-6 sm:p-8", marketingElevatedFrame)}>
         <BetaAccessButtons locale={locale} showRequestInvite className="justify-center" />
 
         <div className="mt-10 border-t border-white/10 pt-8">
@@ -48,7 +48,7 @@ export default async function DownloadPage() {
           </ol>
           <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
             {t.faqHintBefore}{" "}
-            <Link href="/faq" className={marketingInlineLink}>
+            <Link href="/faq" className={cn(marketingInlineLink, marketingFocusRing, "rounded-sm")}>
               {t.faqLinkLabel}
             </Link>{" "}
             {t.faqHintAfter}

@@ -1,5 +1,6 @@
 import type { Router } from 'expo-router';
 import { ANONYMOUS_PUBLIC_CREATOR_ID } from '@/lib/postViewerPrivacy';
+import { useToast } from '@/components/ui/Toast';
 
 /**
  * Canonical navigation helpers for the Pulse Page / My Pulse Page.
@@ -43,6 +44,11 @@ export function isNavigablePulseUserId(userId: string | null | undefined): boole
   return true;
 }
 
+/** Whether an id is the anonymous/confession placeholder (vs. genuinely missing). */
+function isAnonymousPlaceholder(userId: string | null | undefined): boolean {
+  return (userId ?? '').trim() === ANONYMOUS_PUBLIC_CREATOR_ID;
+}
+
 function buildQuery(opts?: PulsePageNavOptions): string {
   if (!opts) return '';
   const params: string[] = [];
@@ -64,7 +70,14 @@ export function openPulsePage(
   userId: string | null | undefined,
   opts?: PulsePageNavOptions,
 ): boolean {
-  if (!isNavigablePulseUserId(userId)) return false;
+  if (!isNavigablePulseUserId(userId)) {
+    // Tapping an anonymous/confession identity tells the user why nothing
+    // opens. Genuinely missing ids stay silent (nothing meaningful to say).
+    if (isAnonymousPlaceholder(userId)) {
+      useToast.getState().show('Anonymous — no profile', 'info');
+    }
+    return false;
+  }
   const href = `/profile/${encodeURIComponent((userId as string).trim())}${buildQuery(opts)}`;
   if (opts?.replace) {
     router.replace(href as never);

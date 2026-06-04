@@ -64,24 +64,8 @@ export async function updateSupabaseSession(request: NextRequest) {
       redirectUrl.searchParams.set("next", pathname);
       return NextResponse.redirect(redirectUrl);
     }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role_admin")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!profile?.role_admin) {
-      await supabase.auth.signOut();
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/admin/login";
-      redirectUrl.searchParams.set("error", "forbidden");
-      const redirectResponse = NextResponse.redirect(redirectUrl);
-      response.cookies.getAll().forEach((c) => {
-        redirectResponse.cookies.set(c.name, c.value);
-      });
-      return redirectResponse;
-    }
+    // Staff role is enforced in admin/(console)/layout.tsx (Node runtime + service role).
+    // Edge middleware cannot rely on SUPABASE_SERVICE_ROLE_KEY or RPC timing here.
   }
 
   return response;

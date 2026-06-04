@@ -90,7 +90,7 @@ export function WebCirclesIndex({
         <p className="mt-1 text-sm text-muted-foreground">{copy.indexSubtitle}</p>
       </header>
 
-      {/* My Circles — the signed-in viewer's joined Circles (read-only; joining stays in-app) */}
+      {/* My Circles — the signed-in viewer's joined Circles. Join/leave + thread replies work on web. */}
       <section className="mb-7">
         <SectionHeading icon={<Sparkles className="size-3.5 text-[var(--accent)]" aria-hidden />}>
           {copy.myCirclesTitle}

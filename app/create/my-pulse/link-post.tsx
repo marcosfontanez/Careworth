@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
+import { openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -95,7 +96,7 @@ export default function MyPulseLinkPostScreen() {
         await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
       }
       showToast('Clip pinned on My Pulse', 'success');
-      router.replace('/(tabs)/my-pulse');
+      openMyPulse(router, { replace: true });
     },
     onError: (err: Error) => {
       showToast(err.message || 'Could not pin clip — try again.', 'error');

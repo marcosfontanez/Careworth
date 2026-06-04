@@ -134,13 +134,14 @@ Deno.serve(async (req) => {
       p_stream_id: streamId,
     });
     if (joinErr) {
+      // Fail closed: if we cannot authoritatively confirm the viewer may join,
+      // do NOT mint a token off a heuristic. A transient check failure must not
+      // grant access to a private/ended/not-broadcasting room.
       console.error("[livekit-token] live_stream_viewer_joinable", joinErr.message);
-      if (status !== "live") {
-        return json({ error: "Stream is not live", code: "not_live" }, 403);
-      }
-      if (!row.broadcast_started_at) {
-        return json({ error: "Broadcast has not started yet", code: "not_broadcasting" }, 403);
-      }
+      return json(
+        { error: "Stream availability check failed", code: "joinable_check_failed" },
+        503,
+      );
     } else if (joinable && typeof joinable === "object" && joinable.ok === false) {
       const reason = String((joinable as { reason?: string }).reason ?? "unavailable");
       if (reason === "ended") {

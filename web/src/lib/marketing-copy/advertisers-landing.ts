@@ -1,7 +1,15 @@
 import type { Locale } from "@/lib/i18n";
 
 export type AdvertisersDiff = { title: string; body: string };
-export type AdvertisersAudience = { title: string; count: string; body: string; tint: string };
+export type AdvertisersAudience = {
+  title: string;
+  /** Trust label beside the stat (e.g. Audience opportunity). */
+  statLabel: string;
+  count: string;
+  body: string;
+  tint: string;
+};
+export type AdvertisersScaleStat = { label: string; value: string };
 export type AdvertisersPlacement = { title: string; body: string };
 export type AdvertisersDrive = { title: string; body: string };
 export type AdvertisersSolution = { title: string };
@@ -33,15 +41,18 @@ export type AdvertisersLandingCopy = {
     disclaimer: string;
     imageAlt: string;
     posterTag: string;
+    visualDisclaimer: string;
   };
   whyEyebrow: string;
   whyTitle: string;
   differentiation: readonly AdvertisersDiff[];
   whyFooter: string;
   audiencesTitle: string;
+  audiencesDisclaimer: string;
   audiences: readonly AdvertisersAudience[];
   scaleEyebrow: string;
-  scaleStats: readonly string[];
+  scaleDisclaimer: string;
+  scaleStats: readonly AdvertisersScaleStat[];
   drivesTitle: string;
   driveEngagement: readonly AdvertisersDrive[];
   placementsEyebrow: string;
@@ -72,25 +83,29 @@ export type AdvertisersLandingCopy = {
 const enAudiences: AdvertisersLandingCopy["audiences"] = [
   {
     title: "Nurses",
-    count: "450K+ professionals",
+    statLabel: "Audience opportunity",
+    count: "Bedside & shift-culture segments (modeled)",
     body: "Shift culture, floor humor, and education that respects the bedside.",
     tint: "from-sky-500/20 to-blue-900/40",
   },
   {
     title: "Physicians & APPs",
-    count: "280K+ professionals",
+    statLabel: "Audience opportunity",
+    count: "Specialty-depth segments (modeled)",
     body: "Specialty depth, debate, and live teaching without generic noise.",
     tint: "from-primary/25 to-slate-900/50",
   },
   {
     title: "Pharmacists",
-    count: "110K+ professionals",
+    statLabel: "Audience opportunity",
+    count: "Medication & adherence segments (modeled)",
     body: "Drug information, adherence stories, and collaborative care threads.",
     tint: "from-emerald-500/20 to-slate-900/45",
   },
   {
     title: "Allied health",
-    count: "120K+ professionals",
+    statLabel: "Audience opportunity",
+    count: "Imaging, lab, therapy & ops (modeled)",
     body: "Imaging, lab, therapy, and operations — the whole care team.",
     tint: "from-violet-500/20 to-slate-900/45",
   },
@@ -105,14 +120,14 @@ const en: AdvertisersLandingCopy = {
     ctaMediaKit: "Request media kit",
     ctaPartnerships: "Talk to partnerships",
     ecosystemImageAlt:
-      "PulseVerse advertiser ecosystem mockup: sponsored border, live lower-third, branded feed on phone, partner drop frame, and campaign analytics with trusted brand marks.",
+      "Illustrative PulseVerse advertiser ecosystem mockup: sponsored border, live lower-third, branded feed on phone, partner drop frame, and campaign analytics — concept UI only.",
     ecosystemPosterTag: "Surfaces overview",
   },
   preview: {
     feedLabel: "Feed preview",
     sponsoredLine: "Sponsored insight card {n} · cards / clips / live",
     liveLabel: "Live placement",
-    lowerThird: "Brand lower-third · verified host",
+    lowerThird: "Brand lower-third · host label (preview UI)",
   },
   whyEyebrow: "Why healthcare brands start here",
   whyTitle: "A credible media-kit entry — built for HCP attention, not generic impressions.",
@@ -135,15 +150,19 @@ const en: AdvertisersLandingCopy = {
     },
   ],
   whyFooter:
-    "Placements span the surfaces clinicians already trust: Feed cards, Pulse Page frames, Live sponsorships with moderator review, and Circles headers where specialty culture concentrates — with audience segmentation language that respects role, specialty, and shift context.",
-  audiencesTitle: "Premium access to healthcare's most influential audiences.",
+    "Placements span the surfaces built for clinician attention: Feed cards, Pulse Page frames, Live sponsorships with moderator review, and Circles headers where specialty culture concentrates — with audience segmentation language that respects role, specialty, and shift context.",
+  audiencesTitle: "Healthcare audience segments we can build campaigns around.",
+  audiencesDisclaimer:
+    "Directional planning estimates — not verified PulseVerse platform metrics. Verified reach, segment definitions, and rate cards are provided under NDA by partnerships.",
   audiences: enAudiences,
-  scaleEyebrow: "Scale",
+  scaleEyebrow: "Illustrative launch model",
+  scaleDisclaimer:
+    "Pilot campaign examples and directional planning estimates — not current verified platform traction.",
   scaleStats: [
-    "850K+ healthcare professionals",
-    "190+ countries",
-    "25K+ active Circles",
-    "3.7K+ Live sessions hosted",
+    { label: "Directional planning estimate", value: "Modeled HCP reach at scale" },
+    { label: "Directional planning estimate", value: "Multi-market expansion roadmap" },
+    { label: "Illustrative launch model", value: "Community surfaces (Circles) at scale" },
+    { label: "Pilot campaign example", value: "Live programming volume in launch scenarios" },
   ],
   drivesTitle: "What drives engagement",
   driveEngagement: [
@@ -168,13 +187,15 @@ const en: AdvertisersLandingCopy = {
     disclaimer:
       "Illustrative concepts only. Partner Drop Borders availability, specs, and labeling follow policy and inventory — confirm with partnerships before referencing in external materials.",
     imageAlt:
-      "Partner Drop border concepts for FIGS, Crocs, Hoka, Dansko, Nike, and Eko — collectible profile frames with rarity tiers on dark neon-glass cards.",
-    posterTag: "Concept renders",
+      "Concept-only Partner Drop profile border frames with rarity tiers on dark neon-glass cards — fictional partner styles, not live inventory.",
+    posterTag: "Concept only",
+    visualDisclaimer:
+      "Concept-only visuals — fictional partner styles; not live inventory or real brand partnerships.",
   },
-  safeEyebrow: "Brand safe · clinician trusted",
+  safeEyebrow: "Brand safe · professional context",
   safeTitle: "Your brand next to content that passes the ward-room test.",
   safetyChecks: [
-    "100% professional community",
+    "Professional-audience positioning (not consumer social)",
     "Human content moderation",
     "No DTC pharma spam lanes",
     "Transparent placement labels",
@@ -250,14 +271,14 @@ const es: AdvertisersLandingCopy = {
     ctaMediaKit: "Solicitar media kit",
     ctaPartnerships: "Hablar con alianzas",
     ecosystemImageAlt:
-      "Mockup del ecosistema publicitario PulseVerse: borde patrocinado, lower-third en vivo, feed de marca en móvil, marco partner drop y analítica de campaña.",
+      "Mockup ilustrativo del ecosistema publicitario PulseVerse: borde patrocinado, lower-third en vivo, feed de marca en móvil, marco partner drop y analítica de campaña — solo UI conceptual.",
     ecosystemPosterTag: "Panorama de superficies",
   },
   preview: {
     feedLabel: "Vista previa del Feed",
     sponsoredLine: "Tarjeta patrocinada {n} · tarjetas / clips / live",
     liveLabel: "Ubicación en Live",
-    lowerThird: "Tercio inferior de marca · anfitrión verificado",
+    lowerThird: "Tercio inferior de marca · etiqueta de anfitrión (vista previa)",
   },
   whyEyebrow: "Por qué las marcas sanitarias empiezan aquí",
   whyTitle: "Una entrada creíble al media kit — pensada para la atención del profesional sanitario, no para impresiones genéricas.",
@@ -280,20 +301,48 @@ const es: AdvertisersLandingCopy = {
     },
   ],
   whyFooter:
-    "Las ubicaciones cubren las superficies en las que ya confían los clínicos: tarjetas en Feed, marcos en Pulse Page, patrocinios en Live con revisión de moderador y cabeceras en Circles donde se concentra la cultura por especialidad — con lenguaje de segmentación que respeta rol, especialidad y turno.",
-  audiencesTitle: "Acceso premium a las audiencias sanitarias más influyentes.",
+    "Las ubicaciones cubren las superficies pensadas para la atención clínica: tarjetas en Feed, marcos en Pulse Page, patrocinios en Live con revisión de moderador y cabeceras en Circles donde se concentra la cultura por especialidad — con lenguaje de segmentación que respeta rol, especialidad y turno.",
+  audiencesTitle: "Segmentos de audiencia sanitaria sobre los que podemos diseñar campañas.",
+  audiencesDisclaimer:
+    "Estimaciones direccionales de planificación — no métricas verificadas de la plataforma PulseVerse. Alcance verificado, definiciones de segmento y tarifas se proporcionan bajo NDA por alianzas.",
   audiences: [
-    { ...enAudiences[0]!, title: "Enfermería", count: "450K+ profesionales", body: "Cultura de turno, humor de planta y formación que respeta el lado de la cama." },
-    { ...enAudiences[1]!, title: "Médicos y APP", count: "280K+ profesionales", body: "Profundidad de especialidad, debate y docencia en vivo sin ruido genérico." },
-    { ...enAudiences[2]!, title: "Farmacia", count: "110K+ profesionales", body: "Información sobre fármacos, historias de adherencia e hilos de cuidado colaborativo." },
-    { ...enAudiences[3]!, title: "Profesiones aliadas", count: "120K+ profesionales", body: "Imagen, laboratorio, terapia y operaciones — todo el equipo asistencial." },
+    {
+      ...enAudiences[0]!,
+      title: "Enfermería",
+      statLabel: "Oportunidad de audiencia",
+      count: "Segmentos de planta y turno (modelado)",
+      body: "Cultura de turno, humor de planta y formación que respeta el lado de la cama.",
+    },
+    {
+      ...enAudiences[1]!,
+      title: "Médicos y APP",
+      statLabel: "Oportunidad de audiencia",
+      count: "Segmentos por especialidad (modelado)",
+      body: "Profundidad de especialidad, debate y docencia en vivo sin ruido genérico.",
+    },
+    {
+      ...enAudiences[2]!,
+      title: "Farmacia",
+      statLabel: "Oportunidad de audiencia",
+      count: "Segmentos de medicación y adherencia (modelado)",
+      body: "Información sobre fármacos, historias de adherencia e hilos de cuidado colaborativo.",
+    },
+    {
+      ...enAudiences[3]!,
+      title: "Profesiones aliadas",
+      statLabel: "Oportunidad de audiencia",
+      count: "Imagen, lab, terapia y ops (modelado)",
+      body: "Imagen, laboratorio, terapia y operaciones — todo el equipo asistencial.",
+    },
   ],
-  scaleEyebrow: "Escala",
+  scaleEyebrow: "Modelo ilustrativo de lanzamiento",
+  scaleDisclaimer:
+    "Ejemplos de campaña piloto y estimaciones direccionales — no tracción verificada actual de la plataforma.",
   scaleStats: [
-    "850K+ profesionales de la salud",
-    "190+ países",
-    "25K+ Circles activos",
-    "3.7K+ sesiones Live alojadas",
+    { label: "Estimación direccional de planificación", value: "Alcance HCP modelado a escala" },
+    { label: "Estimación direccional de planificación", value: "Hoja de ruta multi-mercado" },
+    { label: "Modelo ilustrativo de lanzamiento", value: "Superficies comunitarias (Circles) a escala" },
+    { label: "Ejemplo de campaña piloto", value: "Volumen de programación Live en escenarios de lanzamiento" },
   ],
   drivesTitle: "Qué impulsa el compromiso",
   driveEngagement: [
@@ -318,13 +367,15 @@ const es: AdvertisersLandingCopy = {
     disclaimer:
       "Solo ilustrativo. Disponibilidad, especificaciones y etiquetado de Partner Drop Borders siguen política e inventario — confirma con alianzas antes de citarlo en materiales externos.",
     imageAlt:
-      "Conceptos Partner Drop para FIGS, Crocs, Hoka, Dansko, Nike y Eko — marcos de perfil coleccionables con rareza sobre tarjetas neon-glass oscuras.",
-    posterTag: "Renders conceptuales",
+      "Marcos de perfil Partner Drop solo conceptuales con rareza sobre tarjetas neon-glass oscuras — estilos de socio ficticios, no inventario en vivo.",
+    posterTag: "Solo concepto",
+    visualDisclaimer:
+      "Visuales solo conceptuales — estilos de socio ficticios; no inventario en vivo ni alianzas de marca reales.",
   },
-  safeEyebrow: "Marca segura · confianza clínica",
+  safeEyebrow: "Marca segura · contexto profesional",
   safeTitle: "Tu marca junto a contenido que supera la prueba del vestuario.",
   safetyChecks: [
-    "Comunidad 100 % profesional",
+    "Posicionamiento de audiencia profesional (no red de consumo)",
     "Moderación humana del contenido",
     "Sin carriles de spam pharma DTC",
     "Etiquetas transparentes de ubicación",

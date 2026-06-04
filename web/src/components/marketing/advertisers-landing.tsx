@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   BarChart2,
   Check,
   Globe,
@@ -14,13 +13,16 @@ import {
 } from "lucide-react";
 
 import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
-import { Button } from "@/components/ui/button";
-import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
+import { MarketingPrimaryCta, MarketingSecondaryCta } from "@/components/marketing/marketing-cta";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { PosterFrame } from "@/components/marketing/website-visuals";
 import type { Locale } from "@/lib/i18n";
 import { getAdvertisersLandingCopy } from "@/lib/marketing-copy/advertisers-landing";
-import { marketingCardMuted, marketingEyebrow, marketingGutterX, shadowPrimaryCta } from "@/lib/ui-classes";
+import {
+  marketingEyebrow,
+  marketingGutterX,
+  marketingSurfaceTile,
+} from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 const placementIcons = [LayoutPanelTop, Users, Video, Radio] as const;
@@ -46,22 +48,19 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
               </span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">{c.hero.body}</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild className={cn("h-12 rounded-full px-7 font-semibold", shadowPrimaryCta, "bg-primary text-primary-foreground")}>
-                <MarketingDestinationLink
-                  href="/contact?topic=media-kit"
-                  analyticsSource="advertisers_hero_media_kit"
-                  className="inline-flex items-center gap-2"
-                >
-                  {c.hero.ctaMediaKit}
-                  <ArrowRight className="h-4 w-4" />
-                </MarketingDestinationLink>
-              </Button>
-              <Button asChild variant="outline" className="h-12 rounded-full border-white/15 bg-white/4 px-7 font-semibold">
-                <MarketingDestinationLink href="/contact?topic=partnerships" analyticsSource="advertisers_hero_partnerships">
-                  {c.hero.ctaPartnerships}
-                </MarketingDestinationLink>
-              </Button>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <MarketingPrimaryCta
+                href="/contact?topic=media-kit"
+                analyticsSource="advertisers_hero_media_kit"
+              >
+                {c.hero.ctaMediaKit}
+              </MarketingPrimaryCta>
+              <MarketingSecondaryCta
+                href="/contact?topic=partnerships"
+                analyticsSource="advertisers_hero_partnerships"
+              >
+                {c.hero.ctaPartnerships}
+              </MarketingSecondaryCta>
             </div>
           </div>
           <div className="relative">
@@ -87,7 +86,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
         <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.whyTitle}</h2>
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           {c.differentiation.map((d) => (
-            <div key={d.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
+            <div key={d.title} className={cn("rounded-2xl p-6", marketingSurfaceTile)}>
               <p className="text-sm font-semibold text-foreground">{d.title}</p>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d.body}</p>
             </div>
@@ -98,6 +97,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
 
       <MarketingPageShell className="py-0! pb-6">
         <h2 className="max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.audiencesTitle}</h2>
+        <p className="mt-3 max-w-3xl text-xs leading-relaxed text-muted-foreground">{c.audiencesDisclaimer}</p>
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {c.audiences.map((a) => (
             <div
@@ -111,28 +111,35 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
               <div className="flex flex-1 flex-col p-5">
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--accent)]">{a.title}</p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{a.body}</p>
-                <p className="mt-auto pt-4 text-lg font-bold text-foreground">{a.count}</p>
+                <div className="mt-auto pt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{a.statLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{a.count}</p>
+                </div>
               </div>
             </div>
           ))}
         </div>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-2">
-          <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
+          <div className={cn("rounded-2xl p-6 sm:p-8", marketingSurfaceTile)}>
             <p className={marketingEyebrow}>{c.scaleEyebrow}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{c.scaleDisclaimer}</p>
             <div className="mt-6 grid gap-6 sm:grid-cols-2">
-              {c.scaleStats.map((label, i) => {
+              {c.scaleStats.map((stat, i) => {
                 const Icon = scaleIcons[i] ?? Users;
                 return (
-                  <div key={label} className="flex gap-3">
+                  <div key={`${stat.label}-${stat.value}`} className="flex gap-3">
                     <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                    <p className="text-sm font-medium text-foreground">{label}</p>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                      <p className="mt-0.5 text-sm font-medium text-foreground">{stat.value}</p>
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
-          <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
+          <div className={cn("rounded-2xl p-6 sm:p-8", marketingSurfaceTile)}>
             <h3 className="text-lg font-bold text-foreground">{c.drivesTitle}</h3>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
               {c.driveEngagement.map((d, i) => {
@@ -160,7 +167,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             {c.placements.map((p, i) => {
               const Icon = placementIcons[i] ?? LayoutPanelTop;
               return (
-                <div key={p.title} className={cn("rounded-2xl p-5", marketingCardMuted)}>
+                <div key={p.title} className={cn("rounded-2xl p-5", marketingSurfaceTile)}>
                   <div className="mb-12 aspect-4/3 rounded-xl border border-dashed border-white/15 bg-white/2" />
                   <Icon className="h-5 w-5 text-primary" />
                   <p className="mt-3 font-semibold text-foreground">{p.title}</p>
@@ -175,6 +182,9 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
           <p className={marketingEyebrow}>{c.partnerDropBorders.eyebrow}</p>
           <h2 className="mt-2 max-w-3xl text-2xl font-bold text-foreground sm:text-3xl">{c.partnerDropBorders.title}</h2>
           <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">{c.partnerDropBorders.body}</p>
+          <p className="mt-4 max-w-3xl rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+            {c.partnerDropBorders.visualDisclaimer}
+          </p>
           <div className="mt-10">
             <PosterFrame
               src="/marketing/marketing-partner-drop-concepts.png"
@@ -189,7 +199,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
           </div>
         </div>
 
-        <div className={cn("mt-16 grid gap-8 rounded-2xl border border-[var(--accent)]/25 bg-[rgba(12,21,36,0.65)] p-8 lg:grid-cols-2 lg:items-center", marketingCardMuted)}>
+        <div className={cn("mt-16 grid gap-8 rounded-2xl border border-[var(--accent)]/25 bg-[rgba(12,21,36,0.65)] p-6 sm:p-8 lg:grid-cols-2 lg:items-center", marketingSurfaceTile)}>
           <div>
             <p className={marketingEyebrow}>{c.safeEyebrow}</p>
             <h2 className="mt-3 text-2xl font-bold text-foreground">{c.safeTitle}</h2>
@@ -210,7 +220,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
         </div>
 
         <div className="mt-16 grid gap-8 lg:grid-cols-2 lg:items-start">
-          <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
+          <div className={cn("rounded-2xl p-6 sm:p-8", marketingSurfaceTile)}>
             <p className={marketingEyebrow}>{c.partnerSheet.eyebrow}</p>
             <h2 className="mt-3 text-2xl font-bold text-foreground">{c.partnerSheet.title}</h2>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{c.partnerSheet.intro}</p>
@@ -227,7 +237,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             </ul>
           </div>
           <div className="space-y-4">
-            <div className={cn("rounded-2xl p-8", marketingCardMuted)}>
+            <div className={cn("rounded-2xl p-6 sm:p-8", marketingSurfaceTile)}>
               <h3 className="text-lg font-bold text-foreground">{c.partnerSheet.reportingTitle}</h3>
               <ul className="mt-5 space-y-4">
                 {c.partnerSheet.reporting.map((item) => (
@@ -250,7 +260,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
             {c.solutions.map((s, i) => {
               const Icon = solutionIcons[i] ?? Megaphone;
               return (
-                <div key={s.title} className={cn("rounded-2xl p-5 text-center", marketingCardMuted)}>
+                <div key={s.title} className={cn("rounded-2xl p-5 text-center", marketingSurfaceTile)}>
                   <Icon className="mx-auto h-6 w-6 text-primary" />
                   <p className="mt-3 text-sm font-semibold text-foreground">{s.title}</p>
                 </div>

@@ -2,7 +2,8 @@ import { supabase } from '@/lib/supabase';
 import { parsePostMediaStoragePath, resolveFeedClipSourceMediaUrl } from '@/lib/feedClipStorage';
 import { buildFeedClipPublishPayload } from '@/lib/feedClipPublish';
 import { STORAGE_BUCKETS } from '@/lib/storage';
-import { postsService, enqueueCreatorMediaJob } from '@/services/supabase';
+import { postsService } from '@/services/supabase/posts';
+import { enqueueCreatorMediaJob } from '@/services/supabase/creatorMediaJobs';
 import type { Post } from '@/types';
 
 export type FeedClipPublishResult =

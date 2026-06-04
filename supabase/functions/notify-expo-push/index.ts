@@ -1,8 +1,9 @@
 // Deploy: npx supabase functions deploy notify-expo-push --no-verify-jwt
 //
 // Intended caller: Supabase Database Webhook on `public.notifications` INSERT (or your worker).
-// Sends one Expo push using `profiles.push_token` and deep-link `data` the app already understands
-// (see `lib/notifications.ts`).
+// Sends one Expo push using `user_push_tokens.token` and deep-link `data` the app already understands
+// (see `lib/notifications.ts`). Skips pushes from blocked actors and replaces
+// UGC-bearing bodies (comments/replies) with safe generic copy.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -26,6 +27,22 @@ function isCircleThreadPush(
   );
 }
 
+// Notification types whose pre-rendered `message` may embed raw user-generated
+// content (comment/reply body, post caption). Push notifications go to the OS
+// shade/lock screen, so we replace the body with safe generic copy for these.
+const UGC_BODY_BY_TYPE: Record<string, string> = {
+  comment: "New comment on your post",
+  reply: "Someone replied to you",
+  circle_thread_reply: "New reply in your circle thread",
+  circle_new_post: "New post in your circle",
+  circle_post_digest: "New activity in your circles",
+};
+
+function safePushBody(type: string, fallbackMessage: string): string {
+  const safe = UGC_BODY_BY_TYPE[type];
+  return (safe ?? fallbackMessage).slice(0, 178);
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -38,8 +55,13 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Fail closed: the webhook secret is REQUIRED. Without it, an unauthenticated
+  // caller could trigger pushes / probe for valid user ids.
   const webhookSecret = Deno.env.get("NOTIFY_PUSH_WEBHOOK_SECRET");
-  if (webhookSecret && req.headers.get("x-webhook-secret") !== webhookSecret) {
+  if (!webhookSecret) {
+    return json({ error: "push webhook secret not configured" }, 503);
+  }
+  if (req.headers.get("x-webhook-secret") !== webhookSecret) {
     return json({ error: "unauthorized" }, 401);
   }
 
@@ -69,13 +91,31 @@ Deno.serve(async (req) => {
   const site = (Deno.env.get("PUBLIC_SITE_URL") ?? "https://pulseverse.app").replace(/\/$/, "");
 
   const supabase = createClient(supabaseUrl, secretKey);
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("push_token")
-    .eq("id", userId)
+
+  // Do not push notifications originating from a user the recipient has blocked
+  // (or who has blocked the recipient). The notification row may already exist;
+  // the push is the part that surfaces blocked-user content on the lock screen.
+  const actorId = (record.actor_id as string | null | undefined)?.trim();
+  if (actorId && actorId !== userId) {
+    const { data: blocks } = await supabase
+      .from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(
+        `and(blocker_id.eq.${userId},blocked_id.eq.${actorId}),and(blocker_id.eq.${actorId},blocked_id.eq.${userId})`,
+      )
+      .limit(1);
+    if (blocks && blocks.length > 0) {
+      return json({ ok: true, skipped: "blocked actor" });
+    }
+  }
+
+  const { data: tokenRow } = await supabase
+    .from("user_push_tokens")
+    .select("token")
+    .eq("user_id", userId)
     .maybeSingle();
 
-  const expoToken = profile?.push_token?.trim();
+  const expoToken = (tokenRow?.token as string | undefined)?.trim();
   if (!expoToken) {
     return json({ ok: true, skipped: "no push token" });
   }
@@ -200,7 +240,7 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       to: expoToken,
       title: "PulseVerse",
-      body: message.slice(0, 178),
+      body: safePushBody(type, message),
       data,
       sound: "default",
       priority: "high",

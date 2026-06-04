@@ -7,6 +7,8 @@ export function shopErrorHint(code: string, isBorderGift = false): string {
         : 'You already own this border.';
     case 'SELF_GIFT_NOT_ALLOWED':
       return 'You can’t gift a border to yourself.';
+    case 'GIFT_BLOCKED':
+      return 'You can’t send a gift to this user.';
     case 'INVALID_RECIPIENT':
       return 'We couldn’t find that @handle.';
     case 'INVALID_GIFT_CONTEXT':

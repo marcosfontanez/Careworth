@@ -4,9 +4,10 @@
 // Secrets (Dashboard → Edge Functions → Secrets):
 //   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET  — same as livekit-token
 //   LIVE_RECORDINGS_BUCKET                             — default live-recordings
-//   SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_SECRET_ACCESS_KEY — Storage S3 keys
-//   SUPABASE_S3_ENDPOINT                               — optional; derived from SUPABASE_URL if omitted
-//   SUPABASE_S3_REGION                               — optional; default us-east-1
+//   STORAGE_S3_ACCESS_KEY_ID, STORAGE_S3_SECRET_ACCESS_KEY — from Project Settings → Storage → S3 Connection
+//   STORAGE_S3_ENDPOINT                                — optional; derived from SUPABASE_URL if omitted
+//   STORAGE_S3_REGION                                  — optional; default us-east-1
+//   (Do not use SUPABASE_* names — Supabase reserves that prefix for built-in secrets.)
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -53,8 +54,13 @@ function livekitHttpHost(lkUrl: string): string {
   return trimmed;
 }
 
+function storageS3Env(name: string): string | null {
+  return Deno.env.get(name)?.trim() || null;
+}
+
 function supabaseS3Endpoint(supabaseUrl: string): string {
-  const explicit = Deno.env.get("SUPABASE_S3_ENDPOINT")?.trim();
+  const explicit =
+    storageS3Env("STORAGE_S3_ENDPOINT") ?? storageS3Env("SUPABASE_S3_ENDPOINT");
   if (explicit) return explicit.replace(/\/$/, "");
 
   try {
@@ -217,9 +223,13 @@ Deno.serve(async (req) => {
     const lkKey = Deno.env.get("LIVEKIT_API_KEY")?.trim();
     const lkSecret = Deno.env.get("LIVEKIT_API_SECRET")?.trim();
     const bucket = Deno.env.get("LIVE_RECORDINGS_BUCKET")?.trim() || "live-recordings";
-    const s3AccessKey = Deno.env.get("SUPABASE_S3_ACCESS_KEY_ID")?.trim();
-    const s3Secret = Deno.env.get("SUPABASE_S3_SECRET_ACCESS_KEY")?.trim();
-    const s3Region = Deno.env.get("SUPABASE_S3_REGION")?.trim() || "us-east-1";
+    const s3AccessKey =
+      storageS3Env("STORAGE_S3_ACCESS_KEY_ID") ?? storageS3Env("SUPABASE_S3_ACCESS_KEY_ID");
+    const s3Secret =
+      storageS3Env("STORAGE_S3_SECRET_ACCESS_KEY") ??
+      storageS3Env("SUPABASE_S3_SECRET_ACCESS_KEY");
+    const s3Region =
+      storageS3Env("STORAGE_S3_REGION") ?? storageS3Env("SUPABASE_S3_REGION") ?? "us-east-1";
     const s3Endpoint = supabaseS3Endpoint(supabaseUrl);
 
     if (!lkUrl || !lkKey || !lkSecret) {

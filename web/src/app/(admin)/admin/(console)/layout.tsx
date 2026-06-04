@@ -1,5 +1,6 @@
 import { AdminConsoleShell } from "@/components/admin/admin-console-shell";
 import { loadAdminNotificationDigest, loadSystemHealthSnapshot } from "@/lib/admin/queries";
+import { requireAdminSession } from "@/lib/admin/require-admin-session";
 import { getAdminStaffHeader } from "@/lib/admin/session";
 import type { AdminHealthStrip } from "@/types/admin-health";
 
@@ -17,6 +18,8 @@ function buildHealthStrip(rows: Awaited<ReturnType<typeof loadSystemHealthSnapsh
 }
 
 export default async function AdminConsoleLayout({ children }: { children: React.ReactNode }) {
+  await requireAdminSession();
+
   const [notifications, staff, healthRows] = await Promise.all([
     loadAdminNotificationDigest(),
     getAdminStaffHeader(),

@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
 /**
  * Sparks & Diamonds — economy explainer (poster-led).
  *
+ * Inactive on the homepage (removed in homepage cleanup). Kept for optional re-mount.
+ * Secondary CTA points to /features#creator-economy — not removed homepage anchors.
+ *
  * The infographic itself carries the full breakdown (what Sparks are, what
  * Diamonds are, the Send→Earn loop, Diamond tiers, KYC). Section copy is
  * intentionally minimal — eyebrow + title + one context line + two CTAs —
@@ -73,7 +76,7 @@ export function HomeSparksDiamonds({ locale }: { locale: Locale }) {
             className="h-11 rounded-full border-white/15 bg-white/3 px-6 font-semibold hover:bg-white/7"
             asChild
           >
-            <Link href="/#pulse-shop">{c.ctaSecondary}</Link>
+            <Link href="/features#creator-economy">{c.ctaSecondary}</Link>
           </Button>
         </div>
       </div>

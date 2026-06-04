@@ -1,14 +1,31 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const motionEnter = "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 motion-safe:fill-mode-both";
 
-export function FaqAccordion({ items }: { items: readonly { q: string; a: string }[] }) {
+function findHighlightIndex(items: readonly { q: string; a: string }[], highlightQuery?: string | null): number {
+  const normalized = highlightQuery?.trim().toLowerCase();
+  if (!normalized) return -1;
+  const exact = items.findIndex((item) => item.q.toLowerCase() === normalized);
+  if (exact >= 0) return exact;
+  return items.findIndex(
+    (item) => item.q.toLowerCase().includes(normalized) || item.a.toLowerCase().includes(normalized),
+  );
+}
+
+export function FaqAccordion({
+  items,
+  highlightQuery,
+}: {
+  items: readonly { q: string; a: string }[];
+  highlightQuery?: string | null;
+}) {
   const baseId = useId();
-  const [open, setOpen] = useState<number | null>(null);
+  const highlightIndex = useMemo(() => findHighlightIndex(items, highlightQuery), [highlightQuery, items]);
+  const [open, setOpen] = useState<number | null>(highlightIndex >= 0 ? highlightIndex : null);
 
   return (
     <ul className="divide-y divide-border rounded-2xl border border-border bg-card/40">

@@ -3,10 +3,13 @@
 # builder disk pressure (often reported as vague "Install dependencies" errors).
 
 # Next.js app — not part of the Expo native binary; .next alone can be 1GB+.
-web/
+# Leading slash anchors to repo root: WITHOUT it, the unanchored "web/" also
+# excludes nested dirs like lib/web/ (mobile code), which breaks the JS bundle
+# phase on EAS ("Unable to resolve module @/lib/web/...").
+/web/
 
 # Fly worker — not bundled into the mobile app.
-export-worker/
+/export-worker/
 
 # Local web export scratch output.
 dist-web-test/

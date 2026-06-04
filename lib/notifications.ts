@@ -101,18 +101,20 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
 export async function savePushToken(userId: string, token: string) {
   try {
-    await supabase.from('profiles').update({
-      push_token: token,
-      push_token_updated_at: new Date().toISOString(),
-    }).eq('id', userId);
+    await supabase.from('user_push_tokens').upsert(
+      {
+        user_id: userId,
+        token,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
   } catch {}
 }
 
 export async function clearPushToken(userId: string) {
   try {
-    await supabase.from('profiles').update({
-      push_token: null,
-    }).eq('id', userId);
+    await supabase.from('user_push_tokens').delete().eq('user_id', userId);
   } catch {}
 }
 

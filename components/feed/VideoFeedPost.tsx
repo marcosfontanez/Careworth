@@ -27,7 +27,6 @@ import { feedCreatorHandleOnly } from '@/lib/feedCreatorIdentityLine';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Post } from '@/types';
-import { getMoodPreset, resolveFeedGradeLookId } from '@/lib/moodPresets';
 import {
   DEFAULT_OVERLAY_STYLE,
   computeOverlayTopLeft,
@@ -46,7 +45,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { DuetParentPreview } from '@/components/feed/DuetParentPreview';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
 import { SendCreatorGiftTray } from '@/components/shop/SendCreatorGiftTray';
-import { tintForLook, type VideoLookId } from '@/lib/videoFilters';
+import { resolveFeedGradeLookId, tintForLook, type VideoLookId } from '@/lib/videoFilters';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SCRUB_HIT_SLOP = 24;
@@ -236,10 +235,9 @@ function VideoFeedPostInner({
     setCarouselIndex(0);
   }, [post.id]);
 
-  const moodPresetResolved = useMemo(() => getMoodPreset(post.moodPreset), [post.moodPreset]);
   const gradeLookId = useMemo(
-    () => resolveFeedGradeLookId({ videoLookId: post.videoLookId, moodPreset: post.moodPreset }),
-    [post.videoLookId, post.moodPreset],
+    () => resolveFeedGradeLookId({ videoLookId: post.videoLookId }),
+    [post.videoLookId],
   );
   const feedGradeTint = useMemo(
     () => (gradeLookId ? tintForLook(gradeLookId) : null),
@@ -416,10 +414,10 @@ function VideoFeedPostInner({
               style={[styles.mediaProcessingFailedBanner, { top: tabFeedEmbedded ? 40 : 52 }]}
               pointerEvents="none"
               accessibilityRole="alert"
-              accessibilityLabel="Clip combine failed; viewers may only see the first clip."
+              accessibilityLabel="Video processing failed; only you can see this post. Your original clip is showing."
             >
               <Text style={styles.mediaProcessingFailedText}>
-                Combine failed — viewers may only see your first clip. Post again or remove this from your profile.
+                Processing failed — only you can see this. Your original video is showing while the edit didn’t finish. Repost to try again, or remove this from your profile.
               </Text>
             </View>
           ) : null}
@@ -589,7 +587,7 @@ function VideoFeedPostInner({
           </View>
         )}
 
-        {(post.isEducation || seriesLabel || moodPresetResolved) ? (
+        {(post.isEducation || seriesLabel) ? (
           <View style={styles.creatorMetaChips}>
             {post.isEducation ? (
               <View style={styles.metaChip}>
@@ -601,14 +599,6 @@ function VideoFeedPostInner({
               <View style={styles.metaChip}>
                 <Ionicons name="layers-outline" size={12} color={colors.onVideo.emphasis} />
                 <Text style={styles.metaChipText}>{seriesLabel}</Text>
-              </View>
-            ) : null}
-            {moodPresetResolved ? (
-              <View style={styles.metaChip}>
-                <Text style={styles.metaChipEmoji}>{moodPresetResolved.emoji}</Text>
-                <Text style={styles.metaChipText} numberOfLines={1}>
-                  {moodPresetResolved.label}
-                </Text>
               </View>
             ) : null}
             {post.isEducation && post.educationCitations?.length ? (
@@ -768,8 +758,7 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     pc.specialty !== nc.specialty ||
     pc.city !== nc.city ||
     pc.state !== nc.state ||
-    pc.isVerified !== nc.isVerified ||
-    JSON.stringify(pc.brandKit ?? null) !== JSON.stringify(nc.brandKit ?? null)
+    pc.isVerified !== nc.isVerified
   ) {
     return false;
   }
@@ -794,7 +783,6 @@ function videoFeedPostPropsEqual(prev: Props, next: Props): boolean {
     p.seriesPart !== n.seriesPart ||
     p.seriesTotal !== n.seriesTotal ||
     p.seriesId !== n.seriesId ||
-    p.moodPreset !== n.moodPreset ||
     (p.additionalMedia ?? []).join('\0') !== (n.additionalMedia ?? []).join('\0') ||
     p.audioReference !== n.audioReference ||
     p.soundTitle !== n.soundTitle ||

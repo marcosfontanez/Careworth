@@ -37,14 +37,10 @@ export async function requireAdminSupabaseForModeration(): Promise<
     };
   }
 
-  const { data: profile } = await userClient
-    .from("profiles")
-    .select("role_admin")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: isAdmin } = await userClient.rpc("current_user_role_admin");
 
-  if (!profile?.role_admin) {
-    return { ok: false, error: "Not authorized for moderation (profile.role_admin is false)." };
+  if (isAdmin !== true) {
+    return { ok: false, error: "Not authorized for moderation (not a staff account)." };
   }
 
   if (process.env.SUPABASE_SERVICE_ROLE_KEY) {

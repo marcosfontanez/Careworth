@@ -26,8 +26,8 @@ type Props = {
   variant?: 'hero' | 'compact';
 };
 
-export const FEATURED_LIVE_HERO_HEIGHT = 448;
-export const FEATURED_LIVE_COMPACT_HEIGHT = 340;
+export const FEATURED_LIVE_HERO_HEIGHT = 420;
+export const FEATURED_LIVE_COMPACT_HEIGHT = 320;
 
 const HERO_HEIGHTS = { hero: FEATURED_LIVE_HERO_HEIGHT, compact: FEATURED_LIVE_COMPACT_HEIGHT } as const;
 
@@ -118,12 +118,12 @@ export function FeaturedLiveCard({
             <LiveHeroPlaceholder />
           )}
           <LinearGradient
-            colors={['rgba(7, 17, 31, 0.05)', 'rgba(7, 17, 31, 0.35)', 'rgba(7, 17, 31, 0.98)']}
-            locations={[0, 0.42, 1]}
+            colors={['rgba(7, 17, 31, 0.08)', 'rgba(7, 17, 31, 0.55)', 'rgba(7, 17, 31, 0.98)']}
+            locations={[0, 0.38, 1]}
             style={StyleSheet.absoluteFill}
           />
           <LinearGradient
-            colors={[...pulseGradients.premium]}
+            colors={['rgba(56,189,248,0.14)', 'rgba(236,72,153,0.08)', 'transparent']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.accentVeil}
@@ -145,7 +145,7 @@ export function FeaturedLiveCard({
           <LiveViewerBadge count={Number.isFinite(stream.viewerCount) ? stream.viewerCount : 0} />
         </View>
 
-        <View style={styles.bottom}>
+        <View style={styles.bottomPanel}>
           {tagChips.length > 0 ? (
             <View style={styles.tagRow}>
               {tagChips.map((tag, index) => (
@@ -170,15 +170,18 @@ export function FeaturedLiveCard({
             </Text>
           ) : null}
 
-          <View style={styles.identityRow}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} {...pulseImageListThumbProps} />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarInitials}>{hostInitials(stream)}</Text>
-              </View>
-            )}
+          <View style={styles.hostHeroRow}>
+            <View style={styles.avatarRing}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatar} {...pulseImageListThumbProps} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitials}>{hostInitials(stream)}</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.identityText}>
+              <Text style={styles.hostEyebrow}>Hosted by</Text>
               <Text style={styles.name} numberOfLines={1}>
                 {hostName}
               </Text>
@@ -194,9 +197,10 @@ export function FeaturedLiveCard({
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
+            <Ionicons name="play-circle" size={20} color={pulseColors.onAccent} />
             <Text style={styles.ctaText}>Join Live</Text>
             <View style={styles.ctaIconWrap}>
-              <Ionicons name="play" size={12} color={pulseColors.onAccent} />
+              <Ionicons name="arrow-forward" size={14} color={pulseColors.teal} />
             </View>
           </LinearGradient>
         </View>
@@ -225,7 +229,6 @@ const styles = StyleSheet.create({
   },
   inner: {
     flex: 1,
-    justifyContent: 'space-between',
   },
   media: {
     ...StyleSheet.absoluteFillObject,
@@ -236,6 +239,10 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.96, transform: [{ scale: 0.992 }] },
   topRow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
@@ -271,9 +278,16 @@ const styles = StyleSheet.create({
     color: colors.primary.gold,
     letterSpacing: 0.2,
   },
-  bottom: {
-    padding: spacing.lg,
+  bottomPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.xl,
     zIndex: 2,
+    backgroundColor: 'transparent',
   },
   tagRow: {
     flexDirection: 'row',
@@ -300,11 +314,14 @@ const styles = StyleSheet.create({
   categoryChip: { marginBottom: spacing.sm },
   title: {
     ...typography.h1,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
-    color: pulseColors.text,
-    letterSpacing: -0.5,
-    lineHeight: 30,
+    color: '#F8FAFC',
+    letterSpacing: -0.4,
+    lineHeight: 28,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   description: {
     ...typography.body,
@@ -314,77 +331,94 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
     lineHeight: 19,
   },
-  identityRow: {
+  hostHeroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
+    gap: spacing.md,
     marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(8,14,28,0.62)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.22)',
+  },
+  avatarRing: {
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'rgba(56,189,248,0.55)',
+    backgroundColor: 'rgba(15,23,42,0.85)',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(56,189,248,0.22)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(56,189,248,0.45)',
   },
   avatarInitials: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '800',
     color: '#E0F2FE',
   },
   identityText: { flex: 1, minWidth: 0 },
+  hostEyebrow: {
+    ...typography.caption,
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(125,211,252,0.85)',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
   name: {
     ...typography.subtitle,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#F1F5F9',
-    letterSpacing: -0.1,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -0.2,
   },
   context: {
     ...typography.caption,
     fontSize: 12,
-    color: 'rgba(248,250,252,0.62)',
-    marginTop: 2,
+    color: 'rgba(248,250,252,0.72)',
+    marginTop: 3,
   },
   ctaGradient: {
-    marginTop: spacing.md + 2,
-    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-    paddingLeft: spacing.lg,
-    paddingRight: 7,
-    paddingVertical: 11,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: borderRadius.xl,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.22)',
-    shadowColor: '#EC4899',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: '#38BDF8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    elevation: 8,
   },
   ctaText: {
     ...typography.button,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '800',
     color: pulseColors.onAccent,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
   ctaIconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',

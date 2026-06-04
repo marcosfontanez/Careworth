@@ -136,7 +136,7 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   advertisers: {
     title: "Advertisers",
-    description: `Reach verified healthcare audiences across Feed, Pulse Page, Live, and Circles — brand-safe placements on ${site.name}.`,
+    description: `Healthcare audience partnerships across Feed, Pulse Page, Live, and Circles — brand-safe placements and directional planning on ${site.name}.`,
     ogTitle: "Advertisers",
     ogDescription: `Healthcare advertising on ${site.name}.`,
     keywords: ["healthcare advertising", "HCP marketing", "medical brand safety", "clinical audience"],
@@ -279,7 +279,7 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   advertisers: {
     title: "Anunciantes",
-    description: `Llega a audiencias sanitarias verificadas en Feed, Pulse Page, Live y Circles — ubicaciones seguras para marca en ${site.name}.`,
+    description: `Alianzas con audiencias sanitarias en Feed, Pulse Page, Live y Circles — ubicaciones seguras para marca y planificación direccional en ${site.name}.`,
     ogTitle: "Anunciantes",
     ogDescription: `Publicidad sanitaria en ${site.name}.`,
     keywords: [

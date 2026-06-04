@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter, useSegments } from 'expo-router';
+import { openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -276,7 +277,7 @@ export function PulseMonthCelebrationGate() {
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       await closeAndMark();
-      router.push('/(tabs)/my-pulse');
+      openMyPulse(router);
     } catch (e) {
       console.warn('[PulseMonthCelebrationGate] postToMyPulse', e);
       Alert.alert('Could not post', 'Something went wrong. Try again in a moment.');

@@ -21,14 +21,14 @@ import type {
   WebProfileFrame,
   WebProfileHeader,
   WebProfileLockReason,
-  WebProfilePost,
+  WebProfileMedia,
   WebPulseUpdate,
 } from "@/lib/web-app/profile-data";
 import { cn } from "@/lib/utils";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 
 import { FollowButton } from "./follow-button";
-import { WebProfilePosts } from "./web-profile-posts";
+import { WebMediaHub } from "./web-media-hub";
 
 /* ── Shared glass shell (mirrors native MyPulseGlassPanel) ───────────── */
 function GlassPanel({
@@ -233,7 +233,7 @@ export function WebProfile({
   canFollow,
   isFollowing,
   pulseUpdates,
-  posts,
+  media,
   copy,
   engagement,
   openAppHref,
@@ -246,7 +246,7 @@ export function WebProfile({
   canFollow: boolean;
   isFollowing: boolean;
   pulseUpdates: WebPulseUpdate[];
-  posts: WebProfilePost[];
+  media: WebProfileMedia;
   copy: WebAppProfileCopy;
   engagement: WebAppEngagementCopy;
   openAppHref: string;
@@ -361,13 +361,29 @@ export function WebProfile({
         <LockedCard title={lockTitle} body={lockBody} />
       ) : (
         <>
-          {/* Pulse Updates */}
+          {/* My Pulse — latest 5 rolling feed */}
           <GlassPanel className="p-4 sm:p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
-              <h2 className="font-heading text-base font-bold tracking-tight text-foreground">
-                {copy.pulseUpdatesTitle}
-              </h2>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-teal-300/80">
+                  {copy.myPulseKicker}
+                </span>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
+                  <h2 className="font-heading text-base font-bold tracking-tight text-foreground">
+                    {copy.pulseUpdatesTitle}
+                  </h2>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {isOwner ? copy.myPulseSubtitleOwner : copy.myPulseSubtitleVisitor}
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-baseline gap-0.5 rounded-full border border-teal-400/35 bg-teal-400/12 px-2.5 py-1">
+                <span className="text-sm font-extrabold tabular-nums text-teal-300">
+                  {Math.min(pulseUpdates.length, 5)}
+                </span>
+                <span className="text-[11px] font-bold tabular-nums text-teal-300/65">/5</span>
+              </span>
             </div>
             {pulseUpdates.length === 0 ? (
               <p className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 text-center text-sm text-muted-foreground">
@@ -392,9 +408,9 @@ export function WebProfile({
             )}
           </GlassPanel>
 
-          {/* Posts / Media */}
+          {/* Media Hub — videos / favorites / photos library */}
           <GlassPanel className="p-4 sm:p-5">
-            <WebProfilePosts posts={posts} copy={copy} engagement={engagement} isOwner={isOwner} />
+            <WebMediaHub media={media} copy={copy} isOwner={isOwner} />
           </GlassPanel>
         </>
       )}

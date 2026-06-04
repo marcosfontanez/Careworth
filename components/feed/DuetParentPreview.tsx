@@ -10,8 +10,7 @@ import { colors, typography } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { trySignedUrlFromPostMediaPublicUrl } from '@/lib/storage';
 import type { DuetLayoutMode } from '@/lib/duetLayoutMode';
-import { resolveFeedGradeLookId } from '@/lib/moodPresets';
-import { tintForLook, type VideoLookId } from '@/lib/videoFilters';
+import { resolveFeedGradeLookId, tintForLook, type VideoLookId } from '@/lib/videoFilters';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const STRIP_W = Math.round(SCREEN_W * 0.34);
@@ -215,10 +214,7 @@ export function DuetParentPreview({
 
   const parentGradeLookId = useMemo(() => {
     if (!parent) return undefined;
-    return resolveFeedGradeLookId({
-      videoLookId: parent.videoLookId,
-      moodPreset: parent.moodPreset,
-    });
+    return resolveFeedGradeLookId({ videoLookId: parent.videoLookId });
   }, [parent]);
 
   const parentGradeTint = useMemo(

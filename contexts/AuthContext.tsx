@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { signInWithOAuthNative } from '@/lib/oauthNative';
 import { signInWithAppleAdaptive } from '@/lib/appleAuthNative';
@@ -9,7 +9,14 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { useProfileCustomization } from '@/store/useProfileCustomization';
 import { useAppStore } from '@/store/useAppStore';
-import { PROFILE_SELECT_WITH_AVATAR_FRAME, profilesService } from '@/services/supabase/profiles';
+import {
+  enrichProfileEquippedFrame,
+  getByIdWithAccessToken,
+  PROFILE_COLUMNS,
+  PROFILE_SELECT_WITH_AVATAR_FRAME,
+  profilesService,
+  withProfileTimeout,
+} from '@/services/supabase/profiles';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
 import { validateServerAuthSession } from '@/lib/authSessionGuard';
 import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
@@ -49,17 +56,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 /**
  * `app/index.tsx` stays on a blank shell while `isLoading` is true. Login uses
  * `onAuthStateChange`, which had no timeout — a stuck PostgREST call could leave
- * hydration pending forever. Cold boot only had a 12s failsafe on `getSession`.
+ * hydration pending forever. Cold boot failsafe must not drop the loading gate while a
+ * signed-in profile hydrate is still in flight (see effect below).
  */
 const PROFILE_HYDRATE_TIMEOUT_MS = 18_000;
 
-/**
- * After the critical `profiles` row loads, bound how long we wait on the parallel
- * badge / community / follows / saved bundle. A pathological `saved_posts` or `follows`
- * scan should not erase the whole profile when the outer {@link PROFILE_HYDRATE_TIMEOUT_MS}
- * race fires — we prefer a usable profile with empty side lists until the user refreshes.
- */
-const PROFILE_SATELLITE_BUDGET_MS = 12_000;
+/** Satellites (follows, communities, …) defer until after the profile row unlocks the UI. */
+const PROFILE_SATELLITE_DEFER_MS = 2_000;
+const PROFILE_SATELLITE_BUDGET_MS = 8_000;
+
+/** Never show the index "profile unavailable" card while a hydrate pass is still running. */
+const PROFILE_HYDRATE_FAILSAFE_MS = 22_000;
 
 async function fetchProfileWithTimeout(
   fetchProfile: (userId: string) => Promise<UserProfile | null>,
@@ -91,8 +98,7 @@ async function fetchProfileWithTimeout(
 /**
  * Full hydrate with a lightweight self-healing fallback.
  *
- * If the bounded full hydrate (profile row + follows/saved/community satellite
- * reads) times out and returns null, fetch ONLY the `profiles` row via
+ * If the bounded hydrate (profile row only — satellites run in the background) times out,
  * {@link profilesService.getById}. That single read almost always succeeds even
  * when the satellite bundle is slow, so the app lands on a usable profile (with
  * empty side lists until the next refresh) instead of a stuck loading gate or
@@ -101,9 +107,24 @@ async function fetchProfileWithTimeout(
 async function hydrateProfileWithFallback(
   fetchProfile: (userId: string) => Promise<UserProfile | null>,
   userId: string,
+  accessToken?: string | null,
 ): Promise<UserProfile | null> {
+  if (accessToken) {
+    const boot = await getByIdWithAccessToken(userId, accessToken);
+    if (boot) {
+      if (__DEV__) console.log('[auth] profile loaded via access-token bootstrap (skipped auth lock)');
+      return boot;
+    }
+  }
   const full = await fetchProfileWithTimeout(fetchProfile, userId);
   if (full) return full;
+  if (accessToken) {
+    const boot = await getByIdWithAccessToken(userId, accessToken);
+    if (boot) {
+      if (__DEV__) console.warn('[auth] hydrate used access-token bootstrap after timeout');
+      return boot;
+    }
+  }
   try {
     const lite = await profilesService.getById(userId);
     if (lite) {
@@ -142,6 +163,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /** Set in {@link fetchProfile} when satellite queries hit {@link PROFILE_SATELLITE_BUDGET_MS}; hydrate retries lists once. */
   const profileSatelliteMissRef = useRef(false);
 
+  /**
+   * Cold boot runs `getSession().then(hydrate)` and `onAuthStateChange` back-to-back.
+   * Without this guard both start `fetchProfile`, bump {@link authHydrateGenerationRef},
+   * and queue ~10 Supabase calls on the single auth-token lock — profile times out at 18s
+   * and feed prefetch (also ungated) finishes ~18s later (~36s total).
+   */
+  const profileHydrateInFlightForUserRef = useRef<string | null>(null);
+
   const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
     profileSatelliteMissRef.current = false;
     /**
@@ -159,81 +188,128 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * Load `profiles` first, then parallel “satellite” reads with a bounded wait so one slow
      * list query cannot force the outer {@link PROFILE_HYDRATE_TIMEOUT_MS} timeout.
      */
-    const profileRes = await supabase
-      .from('profiles')
-      .select(PROFILE_SELECT_WITH_AVATAR_FRAME)
-      .eq('id', userId)
-      .single();
+    /**
+     * Bound the profile row read and fall back if the avatar-frame embed stalls.
+     * Native / Expo Go: load plain columns first (one round-trip) — the embed often
+     * wastes 7s on timeout over tunnel/LAN before the row arrives. Web keeps embed-first
+     * because that path was tuned for browser PostgREST quirks.
+     */
+    const loadPlainRow = async () => {
+      const plainRes = await withProfileTimeout(
+        supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).single(),
+      );
+      if (!plainRes.error) return plainRes.data;
+      return null;
+    };
+    const loadEmbedRow = async () => {
+      const embedRes = await withProfileTimeout(
+        supabase.from('profiles').select(PROFILE_SELECT_WITH_AVATAR_FRAME).eq('id', userId).single(),
+      );
+      if (!embedRes.error) return embedRes.data;
+      return null;
+    };
 
-    const { data, error } = profileRes;
-    if (error || !data) return null;
-
-    const satellitesPromise = Promise.all([
-      supabase
-        .from('user_badges')
-        .select('badge_id, badges(id, name, description, icon, color, category)')
-        .eq('user_id', userId),
-      supabase.from('user_interests').select('interest').eq('user_id', userId),
-      supabase.from('community_members').select('community_id').eq('user_id', userId),
-      supabase.from('follows').select('following_id').eq('follower_id', userId).limit(2000),
-      supabase.from('saved_posts').select('post_id').eq('user_id', userId).limit(2000),
-    ]);
-
-    const satelliteRace = await Promise.race([
-      satellitesPromise.then((r) => ({ ok: true as const, r })),
-      new Promise<{ ok: false }>((resolve) =>
-        setTimeout(() => resolve({ ok: false }), PROFILE_SATELLITE_BUDGET_MS),
-      ),
-    ]);
-
-    let badgeRes: any;
-    let interestRes: any;
-    let communityRes: any;
-    let followsRes: any;
-    let savedRes: any;
-
-    if (satelliteRace.ok) {
-      [badgeRes, interestRes, communityRes, followsRes, savedRes] = satelliteRace.r;
-    } else {
-      if (__DEV__) {
-        console.warn(
-          `[auth] Profile satellite queries exceeded ${PROFILE_SATELLITE_BUDGET_MS}ms — continuing with empty side lists (badges, communities, follows, saved). Open Profile or retry login if lists look wrong.`,
-        );
+    let data: any = null;
+    const preferPlainFirst = Platform.OS !== 'web';
+    try {
+      if (preferPlainFirst) {
+        data = await loadPlainRow();
+        if (!data) data = await loadEmbedRow();
+      } else {
+        data = await loadEmbedRow();
+        if (!data) data = await loadPlainRow();
       }
-      profileSatelliteMissRef.current = true;
-      badgeRes = { data: null, error: null } as any;
-      interestRes = { data: null, error: null } as any;
-      communityRes = { data: null, error: { message: 'satellite_deadline' } as any } as any;
-      followsRes = { data: null, error: null } as any;
-      savedRes = { data: null, error: null } as any;
-      useAppStore.getState().setJoinedCommunityIdsFromServer([]);
-      useAppStore.getState().setFollowedCreatorIdsFromServer([]);
-      useAppStore.getState().setSavedPostIdsFromServer([]);
+    } catch {
+      /* timed out — both attempts failed */
     }
+    if (!data) return null;
 
-    const badgeRows = badgeRes.data;
-    const interestRows = interestRes.data;
-    const communityRows = communityRes.error ? null : communityRes.data;
-    const followRows = followsRes.data;
-    const savedRows = savedRes.data;
+    const badgeRows: any[] | null = null;
+    const interestRows: any[] | null = null;
+    const communityRows: any[] | null = null;
+    const followRows: any[] | null = null;
+    const savedRows: any[] | null = null;
+    const communityRes = { error: { message: 'satellite_deferred' } as any };
 
-    if (!communityRes.error) {
-      useAppStore.getState().setJoinedCommunityIdsFromServer(
-        (communityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
-      );
-    } else if (__DEV__ && (communityRes.error as any)?.message !== 'satellite_deadline') {
-      console.warn('[auth] community_members hydrate failed', communityRes.error.message);
-    }
+    void (async () => {
+      await new Promise((resolve) => setTimeout(resolve, PROFILE_SATELLITE_DEFER_MS));
+      try {
+        const satellitesPromise = Promise.all([
+          supabase
+            .from('user_badges')
+            .select('badge_id, badges(id, name, description, icon, color, category)')
+            .eq('user_id', userId),
+          supabase.from('user_interests').select('interest').eq('user_id', userId),
+          supabase.from('community_members').select('community_id').eq('user_id', userId),
+          supabase.from('follows').select('following_id').eq('follower_id', userId).limit(2000),
+          supabase.from('saved_posts').select('post_id').eq('user_id', userId).limit(2000),
+        ]);
 
-    if (followRows) {
-      useAppStore.getState().setFollowedCreatorIdsFromServer(
-        followRows.map((r: { following_id: string }) => String(r.following_id)),
-      );
-    }
+        const satelliteRace = await Promise.race([
+          satellitesPromise.then((r) => ({ ok: true as const, r })),
+          new Promise<{ ok: false }>((resolve) =>
+            setTimeout(() => resolve({ ok: false }), PROFILE_SATELLITE_BUDGET_MS),
+          ),
+        ]);
 
-    useAppStore.getState().setSavedPostIdsFromServer(
-      (savedRows ?? []).map((r: { post_id: string }) => String(r.post_id)),
-    );
+        if (!satelliteRace.ok) {
+          if (__DEV__) {
+            console.warn(
+              `[auth] Profile satellite queries exceeded ${PROFILE_SATELLITE_BUDGET_MS}ms — side lists unchanged until refresh.`,
+            );
+          }
+          profileSatelliteMissRef.current = true;
+          return;
+        }
+
+        const [badgeRes, interestRes, communityResInner, followsRes, savedRes] = satelliteRace.r;
+        const deferredCommunityRows = communityResInner.error ? null : communityResInner.data;
+
+        if (!communityResInner.error) {
+          useAppStore.getState().setJoinedCommunityIdsFromServer(
+            (deferredCommunityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
+          );
+        } else if (__DEV__) {
+          console.warn('[auth] community_members hydrate failed', communityResInner.error.message);
+        }
+
+        const deferredFollowRows = followsRes.data;
+        if (deferredFollowRows) {
+          useAppStore.getState().setFollowedCreatorIdsFromServer(
+            deferredFollowRows.map((r: { following_id: string }) => String(r.following_id)),
+          );
+        }
+
+        useAppStore.getState().setSavedPostIdsFromServer(
+          (savedRes.data ?? []).map((r: { post_id: string }) => String(r.post_id)),
+        );
+
+        setState((prev) => {
+          if (prev.user?.id !== userId || !prev.profile) return prev;
+          return {
+            ...prev,
+            profile: {
+              ...prev.profile,
+              badges: (badgeRes.data ?? []).map((r: any) => ({
+                id: r.badges.id,
+                name: r.badges.name,
+                description: r.badges.description,
+                icon: r.badges.icon,
+                color: r.badges.color,
+                category: r.badges.category,
+              })),
+              communitiesJoined: communityResInner.error
+                ? prev.profile.communitiesJoined
+                : (deferredCommunityRows ?? []).map((r: any) => r.community_id),
+              interests: (interestRes.data ?? []).map((r: any) => r.interest),
+            },
+          };
+        });
+      } catch (e) {
+        if (__DEV__) console.warn('[auth] deferred profile satellites failed', e);
+        profileSatelliteMissRef.current = true;
+      }
+    })();
 
     const row = data as Record<string, unknown> & {
       id: string;
@@ -347,8 +423,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       termsPrivacyAcceptedAt,
     };
 
-    return profile;
-  }, []);
+    return enrichProfileEquippedFrame(profile);
+  }, [setState]);
 
   /**
    * Read the current Supabase session and materialize `user` + `profile` in React state with a
@@ -376,11 +452,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: true,
       }));
 
+      profileHydrateInFlightForUserRef.current = userId;
       let profile: UserProfile | null = null;
       try {
-        profile = await hydrateProfileWithFallback(fetchProfile, userId);
+          profile = await hydrateProfileWithFallback(fetchProfile, userId, session.access_token);
       } catch (e) {
         console.error('[auth] hydrateAuthenticatedSession profile bundle', e);
+      } finally {
+        if (profileHydrateInFlightForUserRef.current === userId) {
+          profileHydrateInFlightForUserRef.current = null;
+        }
       }
       if (!profile) {
         profileSatelliteMissRef.current = false;
@@ -434,7 +515,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const job = (async () => {
       try {
-        const profile = await hydrateProfileWithFallback(fetchProfile, state.user!.id);
+        const profile = await hydrateProfileWithFallback(
+          fetchProfile,
+          state.user!.id,
+          state.session?.access_token,
+        );
         setState((prev) => ({
           ...prev,
           /** Resume / flaky cell: don’t wipe the shell if PostgREST hiccups (My Pulse tab stuck on spinner). */
@@ -448,7 +533,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
     refreshInFlightRef.current = job;
     await job;
-  }, [state.user, fetchProfile]);
+  }, [state.user, state.session?.access_token, fetchProfile]);
 
   const applyProfilePatch = useCallback((patch: Partial<UserProfile>) => {
     setState((prev) => {
@@ -484,6 +569,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     emailPasswordHydrateLockRef.current = false;
     authHydrateGenerationRef.current = 0;
+    profileHydrateInFlightForUserRef.current = null;
     resetRootIndexRedirectDedupe();
     setState({
       session: null,
@@ -588,7 +674,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
          * `router.replace('/auth/login')`, which ping-pongs with `/` and can blow the
          * React update depth limit.
          */
+        if (profileHydrateInFlightForUserRef.current === user.id) {
+          if (!cancelled) {
+            setState((prev) => ({
+              ...prev,
+              session,
+              user,
+              isAuthenticated: true,
+            }));
+          }
+          return;
+        }
+
         const coldBootGeneration = ++authHydrateGenerationRef.current;
+        profileHydrateInFlightForUserRef.current = user.id;
         if (!cancelled) {
           setState((prev) => ({
             ...prev,
@@ -602,9 +701,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void (async () => {
           let profile: UserProfile | null = null;
           try {
-            profile = await hydrateProfileWithFallback(fetchProfile, user.id);
+            profile = await hydrateProfileWithFallback(fetchProfile, user.id, session.access_token);
+            if (profile) {
+              void fetchProfile(user.id).then((full) => {
+                if (!full || coldBootGeneration !== authHydrateGenerationRef.current) return;
+                setState((prev) => {
+                  if (prev.user?.id !== user.id) return prev;
+                  return { ...prev, profile: full };
+                });
+              });
+            }
           } catch (e) {
             console.error('[auth] fetchProfile (initial session)', e);
+          } finally {
+            if (profileHydrateInFlightForUserRef.current === user.id) {
+              profileHydrateInFlightForUserRef.current = null;
+            }
           }
           if (coldBootGeneration !== authHydrateGenerationRef.current) return;
           setState((prev) => ({
@@ -636,10 +748,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-    /** Failsafe: never leave the app stuck on the index loading gate if Supabase hangs. */
+    /**
+     * Failsafe: never leave the app stuck on the index loading gate if Supabase hangs.
+     * Do NOT clear `isLoading` while signed-in profile hydrate may still succeed — that
+     * briefly showed "Could not load your profile" on slow Expo Go / tunnel cold starts.
+     */
     const failsafe = setTimeout(() => {
-      setState((prev) => (prev.isLoading ? { ...prev, isLoading: false } : prev));
-    }, 12_000);
+      setState((prev) => {
+        if (!prev.isLoading) return prev;
+        if (prev.isAuthenticated && !prev.profile) return prev;
+        return { ...prev, isLoading: false };
+      });
+    }, PROFILE_HYDRATE_FAILSAFE_MS);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session) => {
@@ -698,7 +818,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        /**
+         * `getSession().then` already started hydrate for this user; only merge session
+         * so we do not double-fetch profile + satellites on the auth lock queue.
+         */
+        if (profileHydrateInFlightForUserRef.current === user.id) {
+          if (!cancelled) {
+            setState((prev) => ({
+              ...prev,
+              session,
+              user,
+              isAuthenticated: true,
+              betaGiftCheckNonce: event === 'SIGNED_IN' ? prev.betaGiftCheckNonce + 1 : prev.betaGiftCheckNonce,
+            }));
+          }
+          return;
+        }
+
         const listenerGeneration = ++authHydrateGenerationRef.current;
+        profileHydrateInFlightForUserRef.current = user.id;
         if (!cancelled) {
           setState((prev) => ({
             ...prev,
@@ -713,10 +851,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let profile: UserProfile | null = null;
         try {
-          profile = await hydrateProfileWithFallback(fetchProfile, user.id);
+          profile = await hydrateProfileWithFallback(fetchProfile, user.id, session.access_token);
         } catch (e) {
           console.error('[auth] onAuthStateChange profile hydrate', e);
         } finally {
+          if (profileHydrateInFlightForUserRef.current === user.id) {
+            profileHydrateInFlightForUserRef.current = null;
+          }
           if (listenerGeneration !== authHydrateGenerationRef.current) return;
           setState((prev) => ({
             ...prev,

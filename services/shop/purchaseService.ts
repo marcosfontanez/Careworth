@@ -249,7 +249,7 @@ export const purchaseService = {
       p_creator_user_id: creatorUserId,
       p_gift_item_id: giftItem.id,
       p_context_type: contextType,
-      p_context_id: contextId ?? '',
+      p_context_id: contextId ?? null,
       p_idempotency_key: key,
     });
     if (error) {
@@ -263,7 +263,9 @@ export const purchaseService = {
         pgCode === 'PGRST202' ||
         lower.includes('could not find the function') ||
         lower.includes('economy_send_creator_gift');
-      const code = lower.includes('insufficient_sparks')
+      const code = lower.includes('gift_blocked')
+        ? 'GIFT_BLOCKED'
+        : lower.includes('insufficient_sparks')
         ? 'INSUFFICIENT_SPARKS'
         : lower.includes('self_gift')
           ? 'SELF_GIFT_NOT_ALLOWED'
@@ -427,6 +429,23 @@ export const purchaseService = {
       const android = row.store_product_id_android?.trim();
       if (ios) byStoreId.set(ios, row);
       if (android) byStoreId.set(android, row);
+    }
+
+    // Restore must also re-grant borders that have since been retired/delisted —
+    // the user paid for them, so a valid receipt must still resolve even though
+    // the item left the active shelf. Retired rows that still carry their store
+    // SKU map here; rows whose SKUs were cleared on delist cannot be matched by
+    // receipt and are a documented limitation (see supabase/BORDER_CATALOG.md).
+    try {
+      const retired = await shopQueriesService.getRetiredBorders();
+      for (const row of retired) {
+        const ios = row.store_product_id_ios?.trim();
+        const android = row.store_product_id_android?.trim();
+        if (ios && !byStoreId.has(ios)) byStoreId.set(ios, row);
+        if (android && !byStoreId.has(android)) byStoreId.set(android, row);
+      }
+    } catch {
+      /* retired-border merge is best-effort; active catalog still restores */
     }
 
     let entitlementsSynced = 0;

@@ -112,7 +112,7 @@ const signatureOverview: Record<Locale, HomeSignatureOverviewCopy> = {
   en: {
     eyebrow: "What makes it PulseVerse",
     items: [
-      { title: "Verified by license", kicker: "No fake-pro accounts" },
+      { title: "Built for licensed pros", kicker: "Credential paths in beta" },
       { title: "Built for the floor", kicker: "Shift-aware, not sterile" },
       { title: "Creators rewarded", kicker: "Borders, gifting, leaderboards" },
     ],
@@ -120,7 +120,7 @@ const signatureOverview: Record<Locale, HomeSignatureOverviewCopy> = {
   es: {
     eyebrow: "Lo que la hace PulseVerse",
     items: [
-      { title: "Verificado por licencia", kicker: "Sin cuentas falsas" },
+      { title: "Hecho para pros colegiados", kicker: "Verificación en beta" },
       { title: "Hecho para la planta", kicker: "Consciente del turno" },
       { title: "Creadores recompensados", kicker: "Bordes, regalos, leaderboards" },
     ],
@@ -191,14 +191,13 @@ const creatorHub: Record<Locale, HomeCreatorHubCopy> = {
   en: {
     eyebrow: "Creator economy",
     title: "Create. Customize. Get rewarded.",
-    description:
-      "Every tool the healthcare creator economy needs — built into one hub.",
+    description: "Create, customize, and get rewarded — in one hub.",
     posterTag: "Creator Hub",
     posterCaption: "Pulse Shop · Borders · Leaderboards · Live",
     /* Slim "credibility receipts" strip rendered as a single horizontal line under the banner.
        Each pillar is icon + short title only — full bodies live on the /features deep dives. */
     pillars: [
-      { title: "License-verified", body: "" },
+      { title: "Credential paths", body: "" },
       { title: "Native store payments", body: "" },
       { title: "Limited drops", body: "" },
       { title: "Earned ≠ purchased", body: "" },
@@ -216,7 +215,7 @@ const creatorHub: Record<Locale, HomeCreatorHubCopy> = {
     posterTag: "Creator Hub",
     posterCaption: "Pulse Shop · Bordes · Leaderboards · Live",
     pillars: [
-      { title: "Verificado por licencia", body: "" },
+      { title: "Vías de credencial", body: "" },
       { title: "Pagos en tienda nativa", body: "" },
       { title: "Drops limitados", body: "" },
       { title: "Ganado ≠ comprado", body: "" },
@@ -385,7 +384,7 @@ const trust: Record<Locale, HomeTrustCopy> = {
     eyebrow: "Built for healthcare life",
     title: "Designed with the floor in mind — not a press release.",
     description:
-      "Privacy, moderation, and the creator economy aren't afterthoughts here. They're the product.",
+      "Privacy, moderation, and creator tools built in — not bolted on.",
     commitments: [
       { title: "Healthcare context", body: "Surfaces and moderation tuned for licensed users. HIPAA-aware reporting." },
       { title: "Privacy by design", body: "Identity, verification, and visibility live in one place — yours to control." },

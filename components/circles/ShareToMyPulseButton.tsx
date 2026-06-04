@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
@@ -41,7 +42,7 @@ export function ShareToMyPulseButton({ circleSlug, thread, layout = 'full', labe
       if (user?.id) await queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(user.id) });
       Alert.alert('Pinned to My Pulse', 'Visitors can open this discussion from your profile.', [
         { text: 'Done', style: 'cancel' },
-        { text: 'View My Pulse', onPress: () => router.push('/(tabs)/my-pulse' as any) },
+        { text: 'View My Pulse', onPress: () => openMyPulse(router) },
       ]);
     },
     onError: () => {

@@ -1,4 +1,5 @@
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { marketingCardInteractive, marketingFocusRing } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
@@ -16,16 +17,18 @@ export function FeatureCard({
   return (
     <Card
       className={cn(
-        "group border border-[rgba(148,163,184,0.12)] bg-[rgba(12,21,36,0.5)] backdrop-blur-sm transition hover:border-primary/40 hover:shadow-[0_0_40px_-12px_rgba(45,127,249,0.35)]",
+        "group rounded-2xl backdrop-blur-md",
+        marketingCardInteractive,
+        marketingFocusRing,
         className,
       )}
     >
-      <CardHeader>
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary transition group-hover:bg-primary/25">
-          <Icon className="h-5 w-5" />
+      <CardHeader className="gap-4">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary transition group-hover:border-primary/40 group-hover:bg-primary/15">
+          <Icon className="h-5 w-5" aria-hidden />
         </div>
-        <CardTitle className="text-xl">{title}</CardTitle>
-        <CardDescription className="text-base leading-relaxed">{description}</CardDescription>
+        <CardTitle className="font-heading text-lg tracking-tight sm:text-xl">{title}</CardTitle>
+        <CardDescription className="text-sm leading-relaxed sm:text-base">{description}</CardDescription>
       </CardHeader>
     </Card>
   );

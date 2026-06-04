@@ -116,7 +116,12 @@ export function PremiumSectionHeader({
         {title}
       </h2>
       {description && (
-        <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+        <p
+          className={cn(
+            "mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:mt-4 sm:text-base",
+            align === "center" ? "mx-auto" : "",
+          )}
+        >
           {description}
         </p>
       )}

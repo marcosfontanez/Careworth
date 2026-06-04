@@ -276,6 +276,7 @@ function LiveKitHostAvController({
 
 function LiveKitVideoFill({ role, hidden }: { role: LiveKitMintRole; hidden?: boolean }) {
   const tracks = useTracks([Track.Source.Camera], { onlySubscribed: role === 'viewer' });
+  const lastGoodTrackRef = useRef<TrackReferenceOrPlaceholder | null>(null);
 
   const trackRef = useMemo((): TrackReferenceOrPlaceholder | null => {
     if (!tracks.length) return null;
@@ -287,16 +288,23 @@ function LiveKitVideoFill({ role, hidden }: { role: LiveKitMintRole; hidden?: bo
     return remote ?? tracks.find((t) => isTrackReference(t)) ?? tracks[0];
   }, [tracks, role]);
 
+  if (trackRef && isTrackReference(trackRef)) {
+    lastGoodTrackRef.current = trackRef;
+  }
+
+  const displayTrackRef =
+    trackRef && isTrackReference(trackRef) ? trackRef : lastGoodTrackRef.current;
+
   if (hidden) return null;
 
-  if (!trackRef || !isTrackReference(trackRef)) {
+  if (!displayTrackRef || !isTrackReference(displayTrackRef)) {
     return <View style={styles.videoFallback} />;
   }
 
   return (
     <VideoTrack
       style={styles.video}
-      trackRef={trackRef}
+      trackRef={displayTrackRef}
       objectFit="cover"
       zOrder={0}
       mirror={role === 'host'}

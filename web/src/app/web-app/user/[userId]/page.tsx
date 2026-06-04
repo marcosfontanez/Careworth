@@ -69,7 +69,7 @@ export default async function WebAppUserProfilePage({
       canFollow={result.canFollow}
       isFollowing={result.isFollowing}
       pulseUpdates={result.pulseUpdates}
-      posts={result.posts}
+      media={result.media}
       copy={c.profile}
       engagement={c.engagement}
       openAppHref={openAppHref}

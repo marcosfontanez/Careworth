@@ -63,6 +63,20 @@ export function useLiveKitSession({
   const joinedRef = useRef(false);
   const mintingRef = useRef(false);
   const generationRef = useRef(0);
+  const prevStreamIdRef = useRef<string | null>(null);
+  const forceRoomReconnectRef = useRef(false);
+  const debugContextRef = useRef({
+    streamStatus: streamStatus ?? null,
+    broadcastStartedAt: broadcastStartedAt ?? null,
+    endedAt: endedAt ?? null,
+    hostLastSeenAt: hostLastSeenAt ?? null,
+  });
+  debugContextRef.current = {
+    streamStatus: streamStatus ?? null,
+    broadcastStartedAt: broadcastStartedAt ?? null,
+    endedAt: endedAt ?? null,
+    hostLastSeenAt: hostLastSeenAt ?? null,
+  };
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -131,9 +145,13 @@ export function useLiveKitSession({
       setParticipantIdentity(session.participantIdentity ?? null);
       setError(null);
       setExpiresAt(session.expiresAt);
-      setSessionKey((k) => k + 1);
+      if (isRefresh || forceRoomReconnectRef.current) {
+        setSessionKey((k) => k + 1);
+        forceRoomReconnectRef.current = false;
+      }
       scheduleRefresh(session.expiresAt);
 
+      const debug = debugContextRef.current;
       liveKitJoinDebug.mintSuccess({
         streamId,
         roomName: session.roomName,
@@ -141,10 +159,10 @@ export function useLiveKitSession({
         participantIdentity: session.participantIdentity ?? null,
         role: isHost ? 'host' : 'viewer',
         tokenExpiresAt: session.expiresAt,
-        streamStatus: streamStatus ?? null,
-        broadcastStartedAt: broadcastStartedAt ?? null,
-        endedAt: endedAt ?? null,
-        hostLastSeenAt: hostLastSeenAt ?? null,
+        streamStatus: debug.streamStatus,
+        broadcastStartedAt: debug.broadcastStartedAt,
+        endedAt: debug.endedAt,
+        hostLastSeenAt: debug.hostLastSeenAt,
       });
 
       if (!isHost && !joinedRef.current) {
@@ -162,13 +180,14 @@ export function useLiveKitSession({
       setExpiresAt(null);
       setError(msg);
       clearRefreshTimer();
+      const debug = debugContextRef.current;
       liveKitJoinDebug.mintFailed({
         streamId,
         userId: userId ?? null,
-        streamStatus: streamStatus ?? null,
-        broadcastStartedAt: broadcastStartedAt ?? null,
-        endedAt: endedAt ?? null,
-        hostLastSeenAt: hostLastSeenAt ?? null,
+        streamStatus: debug.streamStatus,
+        broadcastStartedAt: debug.broadcastStartedAt,
+        endedAt: debug.endedAt,
+        hostLastSeenAt: debug.hostLastSeenAt,
         errorMessage: raw,
       });
       if (isRefresh) onRefreshFailed?.(msg);
@@ -180,6 +199,7 @@ export function useLiveKitSession({
   const remint = useCallback(() => {
     generationRef.current += 1;
     clearRefreshTimer();
+    forceRoomReconnectRef.current = true;
     setRemintNonce((n) => n + 1);
   }, [clearRefreshTimer]);
 
@@ -187,6 +207,10 @@ export function useLiveKitSession({
     joinedRef.current = false;
     clearRefreshTimer();
     generationRef.current += 1;
+    if (prevStreamIdRef.current !== streamId) {
+      forceRoomReconnectRef.current = true;
+      prevStreamIdRef.current = streamId;
+    }
 
     if (!enabled || !streamId) {
       setToken(null);
@@ -204,15 +228,16 @@ export function useLiveKitSession({
       generationRef.current += 1;
       clearRefreshTimer();
     };
+    // Intentionally omit hostLastSeenAt / broadcastStartedAt — heartbeat and
+    // broadcast markers update the stream row often; reminting on each change
+    // remounted LiveKitRoom and caused black flicker every ~30s.
   }, [
     enabled,
     streamId,
     isHost,
     userId,
     streamStatus,
-    broadcastStartedAt,
     endedAt,
-    hostLastSeenAt,
     livekitRoomName,
     remintNonce,
     clearRefreshTimer,

@@ -21,6 +21,8 @@ import {
   hydrateThreadRowsWithRelations,
 } from '@/lib/postgrestViewerSafeEmbeds';
 import { isDemoCatalogMediaUrl } from '@/utils/postPreviewMedia';
+import { ANONYMOUS_PUBLIC_CREATOR_ID } from '@/lib/postViewerPrivacy';
+import { getBlockRelationship } from './blocks';
 import { communitiesService, rowToCommunity } from './communities';
 import { profileRowToCreatorSummary, PROFILE_SELECT_CREATOR_WITH_FRAME } from './profileRowMapper';
 
@@ -499,6 +501,25 @@ export const circleThreadsDb = {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
+
+    // Block guard: a block in either direction with the (non-anonymous) thread
+    // author forbids replying. Confession authors are masked to the anonymous
+    // sentinel by the viewer-safe view, so they're skipped (RLS still governs
+    // membership/visibility for those rooms).
+    const { data: threadRow } = await fromCircleThreadsViewerSafe()
+      .select('author_id')
+      .eq('id', threadId)
+      .maybeSingle();
+    const authorId = threadRow
+      ? String((threadRow as { author_id?: string | null }).author_id ?? '')
+      : '';
+    if (authorId && authorId !== user.id && authorId !== ANONYMOUS_PUBLIC_CREATOR_ID) {
+      const block = await getBlockRelationship(user.id, authorId);
+      if (block === 'viewer_blocked' || block === 'blocked_by_viewer') {
+        throw new Error('You cannot reply to this thread.');
+      }
+    }
+
     const { error } = await supabase.from('circle_replies').insert({
       thread_id: threadId,
       author_id: user.id,

@@ -109,6 +109,14 @@ export default function CommunityDetailScreen() {
     return fromParam || slugFromSegments;
   }, [params.slug, slugFromSegments]);
 
+  /**
+   * Confessions (anonymous) rooms are thread-first by design: the composer
+   * creates `circle_threads`, so the room must open on the thread feed —
+   * otherwise a freshly posted confession is invisible on the (post-only)
+   * Top/Fresh wall and only appears under Hot Thread, which reads as broken.
+   */
+  const isAnonRoom = useMemo(() => isAnonymousConfessionCircle(slug), [slug]);
+
   const focusPostId = useMemo(() => {
     const raw = params.focusPost;
     const s = Array.isArray(raw) ? raw[0] : raw;
@@ -235,7 +243,7 @@ export default function CommunityDetailScreen() {
   const setCommunityJoined = useAppStore((s) => s.setCommunityJoined);
   const feedCreatorGifting = useFeatureFlags((s) => s.feedCreatorGifting);
 
-  const [mode, setMode] = useState<CircleMode>('top');
+  const [mode, setMode] = useState<CircleMode>(isAnonRoom ? 'questions' : 'top');
   const [refreshing, setRefreshing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const popularityBumpKeyRef = useRef<string | null>(null);
@@ -488,6 +496,10 @@ export default function CommunityDetailScreen() {
   const [reportThreadId, setReportThreadId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mode !== 'questions' || threadsSorted.length === 0) {
+      setThreadReadMap({});
+      return;
+    }
     let cancelled = false;
     const handle = InteractionManager.runAfterInteractions(() => {
       void (async () => {
@@ -501,7 +513,7 @@ export default function CommunityDetailScreen() {
       cancelled = true;
       handle.cancel();
     };
-  }, [threadsSorted]);
+  }, [mode, threadsSorted]);
 
   useEffect(() => {
     const cid = activeCommunity?.id;
@@ -601,32 +613,52 @@ export default function CommunityDetailScreen() {
   ]);
 
   const handleCreatePost = useCallback(
-    (intent?: 'meme' | 'thread' | 'question' | 'video') => {
+    async (intent?: 'meme' | 'thread' | 'question' | 'video') => {
       if (!activeCommunity) return;
       if (!user) {
         router.push('/auth/login');
         return;
       }
-      if (!joinedIds.has(activeCommunity.id)) {
-        Alert.alert(
-          'Join to post',
-          'Join this Circle to post or reply.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Join for updates and posting', onPress: () => void handleJoinPress() },
-          ],
-        );
+      const cid = activeCommunity.id;
+      const openComposer = () => {
+        const params = new URLSearchParams({
+          communityId: cid,
+          communityName: activeCommunity.name,
+          communitySlug: activeCommunity.slug,
+        });
+        if (intent) params.set('intent', intent);
+        router.push(`/communities/create-post?${params.toString()}`);
+      };
+
+      if (joinedIds.has(cid)) {
+        openComposer();
         return;
       }
-      const params = new URLSearchParams({
-        communityId: activeCommunity.id,
-        communityName: activeCommunity.name,
-        communitySlug: activeCommunity.slug,
-      });
-      if (intent) params.set('intent', intent);
-      router.push(`/communities/create-post?${params.toString()}`);
+
+      // The cached joined-ids set can be stale/empty (e.g. after a slow profile
+      // hydrate). Confirm membership directly before blocking a real member.
+      let actuallyMember = false;
+      try {
+        actuallyMember = await communityService.isMember(cid);
+      } catch {
+        /* network hiccup — fall back to the join prompt */
+      }
+      if (actuallyMember) {
+        setCommunityJoined(cid, true);
+        openComposer();
+        return;
+      }
+
+      Alert.alert(
+        'Join to post',
+        'Join this Circle to post or reply.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Join for updates and posting', onPress: () => void handleJoinPress() },
+        ],
+      );
     },
-    [activeCommunity, router, user, joinedIds, handleJoinPress],
+    [activeCommunity, router, user, joinedIds, handleJoinPress, setCommunityJoined],
   );
 
   /* ---------- Per-card actions (reuse the same patterns as feed.tsx) ---------- */
@@ -864,7 +896,8 @@ export default function CommunityDetailScreen() {
   const wallPostsLoading = isWallInitialLoading;
   const questionsThreadsLoading = isThreadsInitialLoading;
 
-  const ListHeader = (
+  const listHeader = useMemo(
+    () => (
     <View>
       <CircleRoomHeader
         insetTop={insets.top}
@@ -961,14 +994,19 @@ export default function CommunityDetailScreen() {
         onSelectCreator={(uid) => openPulsePage(router, uid)}
       />
 
-      <CircleModeChips
-        active={mode}
-        accent={accent}
-        onSelect={setMode}
-        hideVideo={isAnonCircle || videoPostCount === 0}
-      />
+      {/* Confessions rooms are a single anonymous thread feed — the wall sort
+          chips (Top / Fresh / Video / Questions) only fragment the room, so we
+          hide them and keep the user on the thread feed. */}
+      {isAnonCircle ? null : (
+        <CircleModeChips
+          active={mode}
+          accent={accent}
+          onSelect={setMode}
+          hideVideo={videoPostCount === 0}
+        />
+      )}
 
-      {mode === 'questions' && showQuestionsHint ? (
+      {!isAnonCircle && mode === 'questions' && showQuestionsHint ? (
         <View style={styles.hintBanner}>
           <Text style={styles.hintText}>
             Questions mode lists discussion threads — different from the wall tabs (Top / Fresh / Video).
@@ -987,6 +1025,31 @@ export default function CommunityDetailScreen() {
       ) : null}
 
     </View>
+    ),
+    [
+      insets.top,
+      activeCommunity,
+      accent,
+      memberCountLive,
+      onlineCount,
+      isJoined,
+      isAnonCircle,
+      showCirclesNavHint,
+      showAbout,
+      roomMuted,
+      user?.id,
+      showQuestionsHint,
+      mode,
+      allPosts,
+      circleThreads,
+      videoPostCount,
+      feedCreatorGifting,
+      handleJoinPress,
+      handleCreatePost,
+      router,
+      toast,
+      queryClient,
+    ],
   );
 
   const loadMoreWallPosts = useCallback(() => {
@@ -1018,6 +1081,98 @@ export default function CommunityDetailScreen() {
       </View>
     ) : null;
 
+  const renderWallItem = useCallback(
+    ({ item }: { item: Post | CircleThread }) =>
+      mode === 'questions' ? (
+        <CircleThreadCard
+          thread={item as CircleThread}
+          circleName={activeCommunity.name}
+          accent={accent.color}
+          isAnonymousRoom={isAnonCircle}
+          hasNewActivity={(() => {
+            const t = item as CircleThread;
+            const last = threadReadMap[t.id];
+            return typeof last === 'number' && last >= 0 && t.replyCount > last;
+          })()}
+          onPress={() =>
+            router.push(hrefCommunityThread(activeCommunity.slug, (item as CircleThread).id))
+          }
+          onProfile={
+            isAnonCircle
+              ? undefined
+              : () => openPulsePage(router, (item as CircleThread).authorId)
+          }
+          onReport={() => setReportThreadId((item as CircleThread).id)}
+        />
+      ) : (
+        <CirclePostCard
+          post={item as Post}
+          accent={accent}
+          isAnonymousRoom={isAnonCircle}
+          viewerReaction={viewerReactionForPost((item as Post).id)}
+          isOwner={!!user?.id && user.id === (item as Post).creatorId}
+          onOwnerMenu={() => openCirclePostOwnerMenu(item as Post)}
+          onGuestMenu={() => openCirclePostGuestMenu(item as Post)}
+          jumpHighlight={jumpHighlightPostId === (item as Post).id}
+          onPress={() => router.push(hrefPost(item as Post, activeCommunity.slug))}
+          onProfile={() => openPulsePage(router, (item as Post).creatorId)}
+          onReply={() => {
+            const p = item as Post;
+            if (p.commentsDisabled) {
+              toast.show('Comments are off for this post.', 'info');
+              router.push(hrefPost(p, activeCommunity.slug));
+              return;
+            }
+            router.push(hrefPostFocusComments(p, activeCommunity.slug));
+          }}
+          onPickReaction={(k) => {
+            if (!user) {
+              router.push('/auth/login');
+              return;
+            }
+            void handleCircleWallReaction(item as Post, k);
+          }}
+          onShare={() => handleShare(item as Post)}
+          onGift={
+            feedCreatorGifting &&
+            user?.id &&
+            user.id !== (item as Post).creatorId &&
+            !isAnonCircle &&
+            !(item as Post).isAnonymous
+              ? () => router.push(hrefPostOpenGift(item as Post, activeCommunity.slug))
+              : undefined
+          }
+        />
+      ),
+    [
+      mode,
+      activeCommunity,
+      accent,
+      isAnonCircle,
+      threadReadMap,
+      viewerReactionForPost,
+      user,
+      jumpHighlightPostId,
+      openCirclePostOwnerMenu,
+      openCirclePostGuestMenu,
+      router,
+      toast,
+      handleCircleWallReaction,
+      handleShare,
+      feedCreatorGifting,
+    ],
+  );
+
+  const wallListExtraData = useMemo(
+    () => ({
+      mode,
+      jumpHighlightPostId,
+      reactionsSig: postIdsSig,
+      threadReadsSig: mode === 'questions' ? JSON.stringify(threadReadMap) : '',
+    }),
+    [mode, jumpHighlightPostId, postIdsSig, threadReadMap],
+  );
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -1038,72 +1193,9 @@ export default function CommunityDetailScreen() {
           perfListLaidOutRef.current = sig;
           feedPerfLog('circleRoom:listFirstLayout', perfRoomT0Ref.current, slug);
         }}
-        renderItem={({ item }) =>
-          mode === 'questions' ? (
-            <CircleThreadCard
-              thread={item as CircleThread}
-              circleName={activeCommunity.name}
-              accent={accent.color}
-              isAnonymousRoom={isAnonCircle}
-              hasNewActivity={(() => {
-                const t = item as CircleThread;
-                const last = threadReadMap[t.id];
-                return typeof last === 'number' && last >= 0 && t.replyCount > last;
-              })()}
-              onPress={() =>
-                router.push(hrefCommunityThread(activeCommunity.slug, (item as CircleThread).id))
-              }
-              onProfile={
-                isAnonCircle
-                  ? undefined
-                  : () => openPulsePage(router, (item as CircleThread).authorId)
-              }
-              onReport={() => setReportThreadId((item as CircleThread).id)}
-            />
-          ) : (
-            <CirclePostCard
-              post={item as Post}
-              accent={accent}
-              isAnonymousRoom={isAnonCircle}
-              viewerReaction={viewerReactionForPost((item as Post).id)}
-              isOwner={!!user?.id && user.id === (item as Post).creatorId}
-              onOwnerMenu={() => openCirclePostOwnerMenu(item as Post)}
-              onGuestMenu={() => openCirclePostGuestMenu(item as Post)}
-              jumpHighlight={jumpHighlightPostId === (item as Post).id}
-              onPress={() =>
-                router.push(hrefPost(item as Post, activeCommunity.slug))
-              }
-              onProfile={() => openPulsePage(router, (item as Post).creatorId)}
-              onReply={() => {
-                const p = item as Post;
-                if (p.commentsDisabled) {
-                  toast.show('Comments are off for this post.', 'info');
-                  router.push(hrefPost(p, activeCommunity.slug));
-                  return;
-                }
-                router.push(hrefPostFocusComments(p, activeCommunity.slug));
-              }}
-              onPickReaction={(k) => {
-                if (!user) {
-                  router.push('/auth/login');
-                  return;
-                }
-                void handleCircleWallReaction(item as Post, k);
-              }}
-              onShare={() => handleShare(item as Post)}
-              onGift={
-                feedCreatorGifting &&
-                user?.id &&
-                user.id !== (item as Post).creatorId &&
-                !isAnonCircle &&
-                !(item as Post).isAnonymous
-                  ? () => router.push(hrefPostOpenGift(item as Post, activeCommunity.slug))
-                  : undefined
-              }
-            />
-          )
-        }
-        ListHeaderComponent={ListHeader}
+        renderItem={renderWallItem}
+        extraData={wallListExtraData}
+        ListHeaderComponent={listHeader}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         initialNumToRender={COMMUNITY_WALL_LIST_WINDOW.initialNumToRender}
@@ -1133,31 +1225,43 @@ export default function CommunityDetailScreen() {
               </View>
             ) : (
               <View style={styles.empty}>
-                <Ionicons name="chatbubbles-outline" size={40} color={colors.neutral.midGray} />
-                <Text style={styles.emptyTitle}>No threads yet</Text>
+                <Ionicons
+                  name={isAnonCircle ? 'shield-outline' : 'chatbubbles-outline'}
+                  size={40}
+                  color={colors.neutral.midGray}
+                />
+                <Text style={styles.emptyTitle}>
+                  {isAnonCircle ? 'No confessions yet' : 'No threads yet'}
+                </Text>
                 <Text style={styles.emptySubtitle}>
-                  Ask a question or tell a story — your crew shows up fast.
+                  {isAnonCircle
+                    ? 'Share something anonymously — your name stays hidden from other users.'
+                    : 'Ask a question or tell a story — your crew shows up fast.'}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => handleCreatePost('question')}
+                  onPress={() => handleCreatePost('thread')}
                   activeOpacity={0.85}
                   style={[styles.emptyCta, { backgroundColor: accent.color }]}
                 >
                   <Ionicons name="create" size={16} color="#FFFFFF" />
-                  <Text style={styles.emptyCtaText}>Start a discussion</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setMode('top');
-                    handleCreatePost('thread');
-                  }}
-                  activeOpacity={0.85}
-                  style={styles.emptyCtaSecondary}
-                >
-                  <Text style={[styles.emptyCtaSecondaryText, { color: accent.color }]}>
-                    Or open Top → new thread
+                  <Text style={styles.emptyCtaText}>
+                    {isAnonCircle ? 'Share a confession' : 'Start a discussion'}
                   </Text>
                 </TouchableOpacity>
+                {isAnonCircle ? null : (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setMode('top');
+                      handleCreatePost('thread');
+                    }}
+                    activeOpacity={0.85}
+                    style={styles.emptyCtaSecondary}
+                  >
+                    <Text style={[styles.emptyCtaSecondaryText, { color: accent.color }]}>
+                      Or open Top → new thread
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )
           ) : postsError ? (

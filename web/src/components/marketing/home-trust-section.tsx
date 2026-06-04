@@ -7,7 +7,7 @@ import {
 } from "@/components/marketing/website-visuals";
 import type { Locale } from "@/lib/i18n";
 import { getHomeTrustCopy } from "@/lib/marketing-copy/home-page-sections";
-import { marketingGutterX } from "@/lib/ui-classes";
+import { marketingGutterX, marketingSection } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 const ICONS = [Stethoscope, Lock, ShieldCheck, HeartHandshake] as const;
@@ -16,12 +16,12 @@ export function HomeTrustSection({ locale }: { locale: Locale }) {
   const c = getHomeTrustCopy(locale);
 
   return (
-    <section className="relative isolate border-t border-white/5 py-20 sm:py-24">
+    <section className={marketingSection}>
       <WebsiteSectionBackdrop variant="soft" />
       <div className={marketingGutterX}>
         <PremiumSectionHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
 
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {c.commitments.map((item, i) => (
             <TrustChip key={item.title} icon={ICONS[i] ?? ShieldCheck} title={item.title} body={item.body} />
           ))}
@@ -30,7 +30,7 @@ export function HomeTrustSection({ locale }: { locale: Locale }) {
         {/* Single anchor quote — premium, centered, with brand mark instead of three competing cards. */}
         <figure
           className={cn(
-            "relative mx-auto mt-14 max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-8 ring-1 ring-white/4 backdrop-blur-md sm:p-10",
+            "relative mx-auto mt-10 max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-6 ring-1 ring-white/4 backdrop-blur-md sm:p-8",
             "shadow-[0_24px_70px_-30px_rgba(20,184,166,0.35)]",
           )}
         >

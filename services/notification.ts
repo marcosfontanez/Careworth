@@ -10,6 +10,7 @@ import {
   unknownCreatorSummary,
   PROFILE_SELECT_CREATOR_WITH_FRAME,
 } from '@/services/supabase/profileRowMapper';
+import { getBlockedUserIdsBothWays } from '@/services/supabase/blocks';
 
 function rowToNotification(row: any): NotificationItem {
   const actor: CreatorSummary = row.actor_profile
@@ -61,17 +62,26 @@ export const notificationService = {
     ]);
     if (!uid) return [];
 
-    const { data, error } = await supabase
-      .from('notifications')
-      .select(
-        `id, type, actor_id, message, created_at, read, target_id, community_id, actor_profile:actor_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})`,
-      )
-      .eq('user_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(50);
+    const [{ data, error }, blockedIds] = await Promise.all([
+      supabase
+        .from('notifications')
+        .select(
+          `id, type, actor_id, message, created_at, read, target_id, community_id, actor_profile:actor_id(${PROFILE_SELECT_CREATOR_WITH_FRAME})`,
+        )
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      getBlockedUserIdsBothWays(uid),
+    ]);
 
     if (error || !data) return [];
-    return finalizeNotificationsForViewer(data.map(rowToNotification), {
+    // Drop notifications whose actor is blocked (either direction) before masking,
+    // so a blocked user's activity never surfaces even when it would be redacted.
+    const visible = data.filter((row) => {
+      const actorId = (row as { actor_id?: string | null }).actor_id;
+      return !(actorId && blockedIds.has(String(actorId)));
+    });
+    return finalizeNotificationsForViewer(visible.map(rowToNotification), {
       confessionsCommunityId,
       viewerId: uid,
     }).filter((n) => notificationPassesLocalMute(n, muted));

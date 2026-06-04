@@ -7,7 +7,6 @@ import {
   Headphones,
   Mail,
   MessageCircle,
-  Search,
   Shield,
   Sparkles,
 } from "lucide-react";
@@ -15,6 +14,7 @@ import {
 import { MarketingBreadcrumbs } from "@/components/marketing/marketing-breadcrumbs";
 import { NewsletterSignup } from "@/components/marketing/newsletter-signup";
 import { SupportFaqAccordion } from "@/components/marketing/support-faq-accordion";
+import { SupportHelpSearch } from "@/components/marketing/support-help-search";
 import { Button } from "@/components/ui/button";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import type { Locale } from "@/lib/i18n";
@@ -22,12 +22,13 @@ import { getMarketingFaqItems } from "@/lib/marketing-copy/faq";
 import { getSupportCenterCopy } from "@/lib/marketing-copy/support-center";
 import { getSupportEmail } from "@/lib/site-constants";
 import {
-  marketingCardMuted,
   marketingEyebrow,
+  marketingFocusRing,
+  marketingGradientFrame,
+  marketingGradientFrameInner,
   marketingGutterX,
-  marketingInlineLink,
   marketingInlineLinkStrong,
-  shadowPrimaryCta,
+  marketingSurfaceTile,
 } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -54,23 +55,16 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
                 {c.heroTitleAccent}
               </span>
             </h1>
-            <div className="mt-8 flex gap-2 rounded-2xl border border-white/10 bg-white/4 p-1.5 ring-1 ring-white/5">
-              <div className="flex flex-1 items-center gap-2 rounded-xl bg-[rgba(5,10,20,0.6)] px-4 py-3 text-sm text-muted-foreground">
-                <Search className="h-4 w-4 shrink-0 text-primary" />
-                {c.searchPlaceholder}
-              </div>
-              <Button className={cn("shrink-0 rounded-xl px-6 font-semibold", shadowPrimaryCta, "bg-primary")}>
-                {c.searchButton}
-              </Button>
-            </div>
-            <p className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-              {c.popularLabel}{" "}
-              {c.popularLinks.map((l) => (
-                <Link key={l.href + l.label} href={l.href} className={marketingInlineLink}>
-                  {l.label}
-                </Link>
-              ))}
-            </p>
+            <SupportHelpSearch
+              placeholder={c.searchPlaceholder}
+              searchButton={c.searchButton}
+              popularLabel={c.popularLabel}
+              popularLinks={c.popularLinks}
+              faqItems={faqItems}
+              helpTiles={c.helpTiles}
+              resultsTitle={c.searchResultsTitle}
+              noResults={c.searchNoResults}
+            />
           </div>
           <div className="relative flex justify-center lg:justify-end">
             <div className="relative h-56 w-56 rounded-3xl border border-white/10 bg-linear-to-br from-slate-900/80 to-primary/20 shadow-[0_24px_80px_-24px_rgba(45,127,249,0.45)] ring-1 ring-primary/25 sm:h-72 sm:w-72">
@@ -87,7 +81,7 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
           {c.helpTiles.map((tile, i) => {
             const Icon = helpIcons[i] ?? BookOpen;
             return (
-              <div key={tile.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
+              <div key={tile.title} className={cn("rounded-2xl p-6", marketingSurfaceTile)}>
                 <div className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-primary">
                   <Icon className="h-5 w-5" />
                 </div>
@@ -95,7 +89,7 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{tile.body}</p>
                 <Link
                   href={tile.href}
-                  className={cn("mt-4 inline-flex items-center gap-1 text-sm", marketingInlineLinkStrong)}
+                  className={cn("mt-4 inline-flex items-center gap-1 text-sm", marketingInlineLinkStrong, marketingFocusRing, "rounded-md")}
                 >
                   {tile.linkLabel}
                   <ArrowRight className="h-4 w-4" />
@@ -110,7 +104,9 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
             <p className={marketingEyebrow}>{c.faqEyebrow}</p>
             <h2 className="mt-2 text-2xl font-bold text-foreground">{c.faqTitle}</h2>
             <Button asChild variant="outline" className="mt-6 border-white/15 bg-transparent">
-              <Link href="/faq">{c.faqBrowseAll}</Link>
+              <Link href="/faq" className={marketingFocusRing}>
+                {c.faqBrowseAll}
+              </Link>
             </Button>
           </div>
           <SupportFaqAccordion items={c.faqItemsSubset} />
@@ -123,7 +119,7 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
             {c.contactCards.map((card, i) => {
               const Icon = contactIcons[i] ?? Headphones;
               const inner = (
-                <div className={cn("h-full rounded-2xl p-6", marketingCardMuted)}>
+                <div className={cn("h-full rounded-2xl p-6 transition duration-200 group-hover:border-primary/45", marketingSurfaceTile)}>
                   <Icon className="h-8 w-8 text-primary" />
                   <h3 className="mt-4 font-semibold text-foreground">{card.title}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{card.body}</p>
@@ -139,11 +135,11 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
                 </div>
               );
               return card.href.startsWith("mailto") ? (
-                <a key={card.title} href={card.href} className="group block">
+                <a key={card.title} href={card.href} className={cn("group block rounded-2xl", marketingFocusRing)}>
                   {inner}
                 </a>
               ) : (
-                <Link key={card.title} href={card.href} className="group block">
+                <Link key={card.title} href={card.href} className={cn("group block rounded-2xl", marketingFocusRing)}>
                   {inner}
                 </Link>
               );
@@ -155,13 +151,16 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
           {c.blurbs.map((b, i) => {
             const Icon = blurbIcons[i] ?? Shield;
             return (
-              <div key={b.title} className={cn("rounded-2xl p-6", marketingCardMuted)}>
+              <div key={b.title} className={cn("rounded-2xl p-6", marketingSurfaceTile)}>
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
                   <Icon className="h-7 w-7 text-primary" />
                 </div>
                 <h3 className="mt-4 text-center text-lg font-semibold text-foreground">{b.title}</h3>
                 <p className="mt-2 text-center text-sm text-muted-foreground">{b.body}</p>
-                <Link href={b.href} className={cn("mt-4 block text-center text-sm", marketingInlineLinkStrong)}>
+                <Link
+                  href={b.href}
+                  className={cn("mt-4 block text-center text-sm", marketingInlineLinkStrong, marketingFocusRing, "rounded-md")}
+                >
                   {b.linkCta}
                 </Link>
               </div>
@@ -169,11 +168,13 @@ export function SupportCenterContent({ locale }: { locale: Locale }) {
           })}
         </div>
 
-        <div className="relative mt-20 overflow-hidden rounded-2xl border border-white/10 bg-linear-to-r from-[#0c1f4a]/90 via-[rgba(5,10,20,0.95)] to-primary/20 p-8">
-          <h3 className="text-lg font-bold text-foreground">{c.subscribeTitle}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{c.subscribeBody}</p>
-          <div className="mt-4 max-w-md">
-            <NewsletterSignup source="support" locale={locale} />
+        <div className={cn(marketingGradientFrame, "mt-16")}>
+          <div className={cn(marketingGradientFrameInner, "p-6 sm:p-8")}>
+            <h3 className="text-lg font-bold text-foreground">{c.subscribeTitle}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{c.subscribeBody}</p>
+            <div className="mt-4 max-w-md">
+              <NewsletterSignup source="support" locale={locale} />
+            </div>
           </div>
         </div>
       </MarketingPageShell>

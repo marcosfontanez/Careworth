@@ -115,17 +115,11 @@ export async function fetchLiveHubHome(
     .map((s) => scheduledStreamToEvent(s, reminderIds.has(s.id)))
     .filter((e): e is LiveScheduledEvent => e != null);
 
-  const upcoming =
-    upcomingDb.length > 0 ? upcomingDb : isFeatureEnabled('liveDiscoveryDemos') ? DEMO_UPCOMING_SESSIONS : [];
+  const upcoming = upcomingDb;
 
   const circleFromReal = activeMerged.filter((s) => Boolean(s.communityId || s.communityName)).slice(0, 6);
 
-  const circleLives =
-    circleFromReal.length > 0
-      ? circleFromReal
-      : isFeatureEnabled('liveDiscoveryDemos')
-        ? DEMO_LIVE_STREAMS.filter((s) => s.communityName || s.tags.some((t) => /circle/i.test(t))).slice(0, 6)
-        : [];
+  const circleLives = circleFromReal;
 
   return {
     tab,
@@ -140,8 +134,10 @@ export async function fetchLiveHubHome(
 }
 
 export async function getLiveHubStreamById(id: string): Promise<LiveHubStream | null> {
-  const fromDemo = DEMO_LIVE_STREAMS.find((s) => s.id === id);
-  if (fromDemo) return fromDemo;
+  if (isFeatureEnabled('liveDiscoveryDemos')) {
+    const fromDemo = DEMO_LIVE_STREAMS.find((s) => s.id === id);
+    if (fromDemo) return fromDemo;
+  }
   const row = await streamsService.getStreamById(id);
   return row ? liveStreamToHub(row) : null;
 }

@@ -21,8 +21,7 @@ import {
   postHasDemoCatalogMedia,
 } from '@/utils/postPreviewMedia';
 import { VideoBrandWatermark } from '@/components/feed/VideoBrandWatermark';
-import { resolveFeedGradeLookId } from '@/lib/moodPresets';
-import { tintForLook } from '@/lib/videoFilters';
+import { resolveFeedGradeLookId, tintForLook } from '@/lib/videoFilters';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 type ThumbStyle = StyleProp<ImageStyle | ViewStyle>;
@@ -34,10 +33,7 @@ export type HubTileLayoutCss = { w: number; h: number };
 
 /** Feed-aligned tint RGBA for a post’s persisted grade / mood look — reusable outside tiles. */
 export function feedGradeTintFromPost(post: Post): string | null {
-  const id = resolveFeedGradeLookId({
-    videoLookId: post.videoLookId,
-    moodPreset: post.moodPreset,
-  });
+  const id = resolveFeedGradeLookId({ videoLookId: post.videoLookId });
   return id ? tintForLook(id) : null;
 }
 
@@ -388,7 +384,7 @@ export function RecentMediaThumb({
         <View style={[style, styles.videoTile]}>
           <WebVideoGridPoster publicUrl={v} />
           <FeedGradeTintOverlay tint={gradeTint} />
-          <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
+          <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );
     }
@@ -407,7 +403,7 @@ export function RecentMediaThumb({
             contentFit={hubImageContentFit}
           />
           <FeedGradeTintOverlay tint={gradeTint} />
-          <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
+          <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
         </View>
       );
     }
@@ -415,7 +411,7 @@ export function RecentMediaThumb({
       <View style={[style, styles.videoTile]}>
         <PausedVideoFrame publicUrl={v} style={StyleSheet.absoluteFillObject} contentFit="contain" />
         <FeedGradeTintOverlay tint={gradeTint} />
-        <VideoBrandWatermark brandKit={post.creator.brandKit} compact position="bottom-center" edgeOffset={6} variant="subtle" />
+        <VideoBrandWatermark compact position="bottom-center" edgeOffset={6} variant="subtle" />
       </View>
     );
   }

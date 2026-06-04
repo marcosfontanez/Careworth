@@ -78,7 +78,9 @@ function resolveHref(
     return "/web-app/my-pulse";
   }
 
-  if (LIVE_TYPES.has(type)) return "/web-app/live";
+  // Live notifications carry the stream id in target_id — route to the room when
+  // present so the viewer lands in the broadcast, not the generic Live hub.
+  if (LIVE_TYPES.has(type)) return targetId ? `/web-app/live/${targetId}` : "/web-app/live";
 
   if (type === "circle_thread_reply") {
     const slug = communityId ? slugById.get(communityId) : null;
@@ -105,7 +107,7 @@ function resolveHref(
   }
 
   if (POST_TARGET_TYPES.has(type) && targetId) {
-    return `/post/${targetId}`;
+    return `/web-app/post/${targetId}`;
   }
 
   return null;

@@ -7,7 +7,7 @@ import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
 import { ShareToMyPulseButton } from './ShareToMyPulseButton';
-import { isAnonymousConfessionCircle } from '@/lib/anonymousCircle';
+import { isAnonymousConfessionCircle, anonymousDisplayName } from '@/lib/anonymousCircle';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { pulseImageCircleWallProps } from '@/lib/pulseImage';
 
@@ -62,8 +62,10 @@ export function CircleThreadCard({
     [thread.author, thread.authorId],
   );
 
+  // Anonymous rooms NEVER expose the real name — render a stable per-thread
+  // pseudonym derived only from ids (not reversible to a handle).
   const displayName = isAnonymousRoom
-    ? (author.displayName || 'Anonymous')
+    ? anonymousDisplayName(thread.authorId, thread.id)
     : author.displayName;
 
   const showShare = showShareToMyPulse && !isAnonymousRoom;

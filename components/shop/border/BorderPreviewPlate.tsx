@@ -6,8 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import type { ShopItemRow } from '@/lib/shop/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
-import { rasterRingOuterBoxSide, shopItemBundledRasterPreview, shopItemIsEmeraldRenewalMay2026 } from '@/lib/pulseRingRasterAssets';
+import {
+  rasterRingOuterBoxSide,
+  shopItemBundledRasterPreview,
+  shopItemIsEmeraldRenewalMay2026,
+  shopItemIsClassOf2026,
+} from '@/lib/pulseRingRasterAssets';
 import { EmeraldRenewalRingMotion } from '@/components/profile/EmeraldRenewalRingMotion';
+import { PremiumBorderOverlay } from '@/components/profile/PremiumAnimatedProfileBorder';
 import { hexWithAlpha, ringBloomStyle } from '@/components/shop/border/previewPlateUtils';
 import { WaterPodiumBackdrop } from '@/components/shop/border/WaterPodiumBackdrop';
 
@@ -136,6 +142,11 @@ export function BorderPreviewPlate({
             />
             {shopItem && shopItemIsEmeraldRenewalMay2026(shopItem) ? (
               <EmeraldRenewalRingMotion ringDiameter={outer} active />
+            ) : null}
+            {/* Class of 2026 celebration — full overlay on featured/hero + large
+                previews; compact grid cards stay static (perf) with the motion hint. */}
+            {shopItem && shopItemIsClassOf2026(shopItem) && (isPodium || outer >= 150) ? (
+              <PremiumBorderOverlay box={outer} premiumType="classOf2026" />
             ) : null}
           </View>
         </View>

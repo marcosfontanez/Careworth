@@ -29,8 +29,10 @@ type Props = {
   chatBlocked?: boolean;
   chatSending?: boolean;
   listHeight?: number;
-  /** Fill parent flex space instead of fixed list height (Stream Manager). */
+  /** Fill parent flex space instead of fixed list height (Stream Manager / bottom sheets). */
   fillAvailable?: boolean;
+  /** Bottom sheet layout — keeps composer pinned while messages scroll above. */
+  inSheet?: boolean;
 };
 
 export function LiveChatPanel({
@@ -49,12 +51,14 @@ export function LiveChatPanel({
   chatSending = false,
   listHeight = 280,
   fillAvailable = false,
+  inSheet = false,
 }: Props) {
   const disabled = chatBlocked || chatSending;
+  const useFlexList = fillAvailable || inSheet;
 
   return (
-    <View style={[styles.wrap, fillAvailable && styles.wrapFill]}>
-      <View style={fillAvailable ? styles.listFill : { height: listHeight }}>
+    <View style={[styles.wrap, useFlexList && styles.wrapFill]}>
+      <View style={useFlexList ? styles.listFill : { height: listHeight }}>
         <LiveChatList
           messages={messages}
           pinned={pinned}
@@ -64,10 +68,10 @@ export function LiveChatPanel({
           onPinMessage={onPinMessage}
           onMessageLongPress={onMessageLongPress}
           onPressUser={onPressUser}
-          embedded={fillAvailable || listHeight < 320}
+          embedded={useFlexList || listHeight < 320}
         />
       </View>
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, inSheet && styles.inputRowSheet]}>
         {onLaunchPoll ? (
           <TouchableOpacity style={styles.sideBtn} onPress={onLaunchPoll} accessibilityLabel="Launch poll">
             <Ionicons name="stats-chart-outline" size={18} color={colors.primary.teal} />
@@ -113,9 +117,15 @@ export function LiveChatPanel({
 
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
-  wrapFill: { flex: 1 },
-  listFill: { flex: 1, minHeight: 160 },
+  wrapFill: { flex: 1, minHeight: 0 },
+  listFill: { flex: 1, minHeight: 120 },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingBottom: 4 },
+  inputRowSheet: {
+    flexShrink: 0,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
   sideBtn: {
     width: 40,
     height: 40,

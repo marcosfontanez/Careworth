@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
+import { openPulsePage, openMyPulse } from '@/lib/navigation/pulsePageRoutes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
@@ -190,7 +190,7 @@ export default function MyPulseDetailScreen() {
       queryClient.removeQueries({ queryKey: profileUpdateKeys.byId(id!) });
       queryClient.removeQueries({ queryKey: profileUpdateKeys.comments(id!) });
       if (router.canGoBack()) router.back();
-      else router.replace('/(tabs)/my-pulse');
+      else openMyPulse(router, { replace: true });
     },
   });
 
