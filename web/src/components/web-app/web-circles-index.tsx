@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Compass, Pin, Search, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Compass, MessageCircle, Pin, Search, Sparkles, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { loadCircleActivityBadgesAction } from "@/app/web-app/actions";
+import { pickCircleActivityBadge, type CircleActivityBadgeRow } from "@/lib/circles/activity-badges";
+import { getCircleLastVisitMap } from "@/lib/circles/circle-visit";
 import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
-import type { WebCircle, WebCirclesIndexResult, WebMyCircle } from "@/lib/web-app/circles-data";
-import { formatCount } from "@/lib/web-app/format";
+import type {
+  WebCircle,
+  WebCirclesIndexResult,
+  WebMyCircle,
+  WebRecentCircleActivity,
+  WebUnansweredQuestion,
+} from "@/lib/web-app/circles-data";
+import { formatCount, relativeTime } from "@/lib/web-app/format";
 
 import { WebCircleCard } from "./web-circle-card";
 
@@ -56,18 +65,108 @@ function SectionHeading({ icon, children }: { icon: React.ReactNode; children: R
   );
 }
 
+function ContinueConversations({
+  items,
+  copy,
+}: {
+  items: WebRecentCircleActivity[];
+  copy: WebAppCirclesCopy;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="mb-7">
+      <SectionHeading icon={<MessageCircle className="size-3.5 text-[var(--accent)]" aria-hidden />}>
+        {copy.continueTitle}
+      </SectionHeading>
+      <div className="flex flex-col gap-2.5">
+        {items.map((item) => {
+          if (item.kind !== "thread") return null;
+          const href = `/web-app/circles/${encodeURIComponent(item.slug)}/thread/${item.threadId}`;
+          return (
+            <Link
+              key={`t-${item.threadId}`}
+              href={href}
+              className="rounded-2xl border border-white/10 bg-[rgba(12,18,32,0.78)] p-4 transition hover:border-primary/25"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">{item.circleName}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.preview}</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">{relativeTime(item.lastInvolvedAt)}</p>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function UnansweredQuestions({
+  items,
+  copy,
+}: {
+  items: WebUnansweredQuestion[];
+  copy: WebAppCirclesCopy;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="mb-7">
+      <SectionHeading icon={<Compass className="size-3.5 text-[var(--accent)]" aria-hidden />}>
+        {copy.unansweredTitle}
+      </SectionHeading>
+      <div className="flex flex-col gap-2.5">
+        {items.map((item) => (
+          <Link
+            key={item.threadId}
+            href={`/web-app/circles/${encodeURIComponent(item.slug)}/thread/${item.threadId}`}
+            className="rounded-2xl border border-white/10 bg-[rgba(12,18,32,0.78)] p-4 transition hover:border-primary/25"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">{item.circleName}</p>
+            <p className="mt-1 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.preview}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function WebCirclesIndex({
   result,
   myCircles,
+  recentActivity,
+  unanswered,
   copy,
 }: {
   result: WebCirclesIndexResult;
   myCircles: WebMyCircle[];
+  recentActivity: WebRecentCircleActivity[];
+  unanswered: WebUnansweredQuestion[];
   copy: WebAppCirclesCopy;
 }) {
   const searchParams = useSearchParams();
-  // Honor the chrome top-bar search (?q=) as the initial filter value.
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [activityBadges, setActivityBadges] = useState<Map<string, CircleActivityBadgeRow>>(new Map());
+
+  useEffect(() => {
+    if (myCircles.length === 0) {
+      setActivityBadges(new Map());
+      return;
+    }
+    const ids = myCircles.map((c) => c.id);
+    const since = getCircleLastVisitMap(ids);
+    let cancelled = false;
+    void loadCircleActivityBadgesAction(ids, since).then((res) => {
+      if (cancelled || !res.ok) return;
+      const map = new Map<string, CircleActivityBadgeRow>();
+      for (const row of res.badges) {
+        map.set(row.communityId, row);
+      }
+      setActivityBadges(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [myCircles]);
 
   const circles = useMemo(() => (result.state === "ok" ? result.circles : []), [result]);
   const featured = useMemo(() => circles.find((c) => c.isPinned) ?? null, [circles]);
@@ -90,7 +189,9 @@ export function WebCirclesIndex({
         <p className="mt-1 text-sm text-muted-foreground">{copy.indexSubtitle}</p>
       </header>
 
-      {/* My Circles — the signed-in viewer's joined Circles. Join/leave + thread replies work on web. */}
+      <ContinueConversations items={recentActivity} copy={copy} />
+      <UnansweredQuestions items={unanswered} copy={copy} />
+
       <section className="mb-7">
         <SectionHeading icon={<Sparkles className="size-3.5 text-[var(--accent)]" aria-hidden />}>
           {copy.myCirclesTitle}
@@ -115,7 +216,20 @@ export function WebCirclesIndex({
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {myCircles.map((circle) => (
-              <WebCircleCard key={circle.id} circle={circle} copy={copy} />
+              <WebCircleCard
+                key={circle.id}
+                circle={circle}
+                copy={copy}
+                badge={pickCircleActivityBadge(
+                  activityBadges.get(circle.id) ?? {
+                    communityId: circle.id,
+                    newWallPosts: 0,
+                    newThreads: 0,
+                    newRepliesOnYours: 0,
+                    unansweredQuestions: 0,
+                  },
+                )}
+              />
             ))}
           </div>
         )}
@@ -125,50 +239,48 @@ export function WebCirclesIndex({
         <SectionHeading icon={<Compass className="size-3.5 text-[var(--accent)]" aria-hidden />}>
           {copy.discoverTitle}
         </SectionHeading>
-      {result.state === "error" ? (
-        <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
-          <p className="text-base font-semibold text-foreground">{copy.errorTitle}</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{copy.errorBody}</p>
-        </div>
-      ) : circles.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
-          <p className="text-base font-semibold text-foreground">{copy.indexEmptyTitle}</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{copy.indexEmptyBody}</p>
-        </div>
-      ) : (
-        <>
-          {/* Search */}
-          <div className="mb-5 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 backdrop-blur-sm focus-within:border-primary/40">
-            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={copy.searchPlaceholder}
-              className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-            />
+        {result.state === "error" ? (
+          <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
+            <p className="text-base font-semibold text-foreground">{copy.errorTitle}</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{copy.errorBody}</p>
           </div>
+        ) : circles.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.8)] p-8 text-center backdrop-blur-sm">
+            <p className="text-base font-semibold text-foreground">{copy.indexEmptyTitle}</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{copy.indexEmptyBody}</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-5 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 backdrop-blur-sm focus-within:border-primary/40">
+              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={copy.searchPlaceholder}
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+            </div>
 
-          {/* Featured pinned circle (hidden while actively searching) */}
-          {featured && !query.trim() ? (
-            <div className="mb-5">
-              <FeaturedCircle circle={featured} copy={copy} />
-            </div>
-          ) : null}
+            {featured && !query.trim() ? (
+              <div className="mb-5">
+                <FeaturedCircle circle={featured} copy={copy} />
+              </div>
+            ) : null}
 
-          {filtered.length === 0 ? (
-            <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-8 text-center text-sm text-muted-foreground backdrop-blur-sm">
-              {copy.searchEmpty}
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((circle) => (
-                <WebCircleCard key={circle.id} circle={circle} copy={copy} />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+            {filtered.length === 0 ? (
+              <div className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-8 text-center text-sm text-muted-foreground backdrop-blur-sm">
+                {copy.searchEmpty}
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {filtered.map((circle) => (
+                  <WebCircleCard key={circle.id} circle={circle} copy={copy} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   );

@@ -45,10 +45,11 @@ export function organizationAndWebsiteGraph(): Record<string, unknown> {
         applicationSubCategory: "Healthcare social network",
         operatingSystem: "iOS, Android",
         description:
-          "PulseVerse is a free social app for healthcare workers — nurses, doctors, and medical students — to share short videos, post updates, and join moderated communities called Circles.",
+          "PulseVerse is a free social app where healthcare workers, students, caregivers, and curious learners share stories, join Circles, follow creators, and explore live healthcare conversations.",
         audience: {
           "@type": "Audience",
-          audienceType: "Healthcare professionals (nurses, doctors, medical students)",
+          audienceType:
+            "Healthcare workers, students, caregivers, patients' families, and curious learners",
         },
         offers: {
           "@type": "Offer",

@@ -1,4 +1,4 @@
-import { WebAppChrome } from "@/components/web-app/web-app-chrome";
+import { WebAppShell } from "@/components/web-app/web-app-shell";
 import { getWebAppPageCopy } from "@/lib/marketing-copy/web-app";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { getWebAppAccount } from "@/lib/web-app/account";
@@ -20,7 +20,7 @@ export default async function WebAppLayout({ children }: { children: React.React
   const copy = getWebAppPageCopy(locale);
 
   return (
-    <WebAppChrome
+    <WebAppShell
       account={account}
       copy={copy.shell}
       engagement={copy.engagement}
@@ -29,6 +29,6 @@ export default async function WebAppLayout({ children }: { children: React.React
       suggestedCreators={rail.creators}
     >
       {children}
-    </WebAppChrome>
+    </WebAppShell>
   );
 }

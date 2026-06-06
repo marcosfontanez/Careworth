@@ -30,6 +30,7 @@ const TYPE_ICON: Record<string, { icon: LucideIcon; tone: string }> = {
   comment: { icon: MessageCircle, tone: "bg-teal-500/85" },
   reply: { icon: MessageCircle, tone: "bg-teal-500/85" },
   circle_thread_reply: { icon: MessageCircle, tone: "bg-teal-500/85" },
+  circle_reply_helpful: { icon: Heart, tone: "bg-teal-500/85" },
   circle_new_post: { icon: Users, tone: "bg-teal-500/85" },
   circle_post_digest: { icon: Users, tone: "bg-teal-500/85" },
   community_invite: { icon: Users, tone: "bg-indigo-500/85" },

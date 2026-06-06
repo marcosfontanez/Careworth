@@ -16,6 +16,7 @@ const CONFESSIONS_SCOPED = new Set([
   "circle_new_post",
   "circle_post_digest",
   "circle_thread_reply",
+  "circle_reply_helpful",
   "comment",
   "reply",
 ]);
@@ -82,7 +83,7 @@ function resolveHref(
   // present so the viewer lands in the broadcast, not the generic Live hub.
   if (LIVE_TYPES.has(type)) return targetId ? `/web-app/live/${targetId}` : "/web-app/live";
 
-  if (type === "circle_thread_reply") {
+  if (type === "circle_thread_reply" || type === "circle_reply_helpful") {
     const slug = communityId ? slugById.get(communityId) : null;
     if (slug && targetId) return `/web-app/circles/${slug}/thread/${targetId}`;
     return "/web-app/circles";
@@ -191,8 +192,12 @@ export async function loadWebNotifications(viewerId: string): Promise<WebNotific
       const actorMissing = !actorId || actorId === ANON_SENTINEL || !profile;
       const isSelf = !!actorId && actorId === viewerId;
       const confessionScoped =
-        !!confessionsCommunityId && communityId === confessionsCommunityId && CONFESSIONS_SCOPED.has(type);
-      const messageSaysAnon = type === "circle_new_post" && message.toLowerCase().includes("anonymous");
+        !!confessionsCommunityId &&
+        communityId === confessionsCommunityId &&
+        (CONFESSIONS_SCOPED.has(type) || type === "circle_reply_helpful");
+      const messageSaysAnon =
+        (type === "circle_new_post" && message.toLowerCase().includes("anonymous")) ||
+        (type === "circle_reply_helpful" && message.toLowerCase().startsWith("someone"));
       const mask = !isSelf && (actorMissing || confessionScoped || messageSaysAnon);
 
       const actor: WebNotificationActor = mask

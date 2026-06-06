@@ -1,7 +1,15 @@
 "use server";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
-import { ANON_SENTINEL, isConfessionCircle } from "@/lib/web-app/circles-data";
+import {
+  resolveThreadCreateFlair,
+  resolveThreadFlairUpdate,
+  flairLabelForThread,
+  type CircleFlairTag,
+  type CircleThreadKind,
+} from "@/lib/circles/flairs";
+import type { CircleActivityBadgeRow } from "@/lib/circles/activity-badges";
+import { ANON_SENTINEL, isConfessionCircle, fetchCircleActivityBadges } from "@/lib/web-app/circles-data";
 import { loadPostComments, type WebCommentsResult } from "@/lib/web-app/comments-data";
 
 /**
@@ -18,6 +26,28 @@ const PROCESSING_BLOCK = new Set(["queued", "running", "failed"]);
 const PUBLIC_PRIVACY = new Set(["public", "alias"]);
 /** Matches the DB CHECK constraint `comments_content_length_300`. */
 const COMMENT_MAX_LENGTH = 300;
+/** Circle thread title/body caps — mirrors native `circleThreadsDb.createThread`. */
+const THREAD_TITLE_MAX = 500;
+const THREAD_BODY_MAX = 12000;
+const VALID_FLAIR_TAGS = new Set<string>([
+  "question",
+  "story",
+  "humor",
+  "career_advice",
+  "caregiver_support",
+  "student_help",
+  "education",
+  "rant_vent",
+  "mythbuster",
+  "live_qa",
+]);
+
+function looksLikeRlsPolicyDenial(err: unknown): boolean {
+  if (err == null || typeof err !== "object") return false;
+  const code = String((err as { code?: string }).code ?? "");
+  const msg = String((err as { message?: string }).message ?? "").toLowerCase();
+  return code === "42501" || msg.includes("row-level security") || msg.includes("violates row-level security");
+}
 /** My Pulse thought body cap — mirrors the app's caption max. */
 const THOUGHT_MAX_LENGTH = 500;
 const MOOD_MAX_LENGTH = 60;
@@ -260,6 +290,34 @@ export async function togglePostLikeAction(postId: string): Promise<EngagementAc
       .insert({ user_id: user.id, post_id: postId, reaction: "heart" } as never);
     if (error) return { ok: false, reason: "error" };
     return { ok: true, active: true };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+/**
+ * Pulse / unlike a My Pulse update. Delegates to `toggle_profile_update_like`
+ * so insert/delete and count sync stay atomic on the server.
+ */
+export async function toggleProfileUpdateLikeAction(
+  updateId: string,
+): Promise<EngagementActionResult> {
+  if (!isSupabaseConfigured() || typeof updateId !== "string" || !updateId) {
+    return { ok: false, reason: "error" };
+  }
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    const { data, error } = await supabase.rpc("toggle_profile_update_like", {
+      p_update_id: updateId,
+    });
+    if (error) return { ok: false, reason: "error" };
+    return { ok: true, active: Boolean(data) };
   } catch {
     return { ok: false, reason: "error" };
   }
@@ -522,6 +580,470 @@ export async function createCircleReplyAction(
     const { error } = await supabase
       .from("circle_replies")
       .insert({ thread_id: threadId, author_id: user.id, body: content } as never);
+    if (error) return { ok: false, reason: "error" };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+/** Outcome of toggling Helpful on a Circle reply. */
+export type CircleReplyHelpfulResult =
+  | { ok: true; reacted: boolean; helpfulCount: number }
+  | { ok: false; reason: "auth" | "blocked" | "unavailable" | "error" };
+
+/**
+ * Toggle Helpful on a Circle reply — mirrors native `circleThreadsDb.toggleReplyHelpful`.
+ * RLS + `user_can_react_to_circle_reply` enforce membership and block guards.
+ */
+export async function toggleCircleReplyHelpfulAction(
+  replyId: string,
+): Promise<CircleReplyHelpfulResult> {
+  if (!isSupabaseConfigured() || typeof replyId !== "string" || !replyId) {
+    return { ok: false, reason: "error" };
+  }
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    const { data: replyRow, error: replyErr } = await supabase
+      .from("circle_replies_viewer_safe")
+      .select("id, author_id, moderation_status, helpful_count")
+      .eq("id", replyId)
+      .maybeSingle();
+    if (replyErr || !replyRow) return { ok: false, reason: "unavailable" };
+    const rr = replyRow as {
+      author_id?: string | null;
+      moderation_status?: string | null;
+      helpful_count?: number | null;
+    };
+    if (String(rr.moderation_status ?? "active") !== "active") {
+      return { ok: false, reason: "unavailable" };
+    }
+
+    const authorId = typeof rr.author_id === "string" ? rr.author_id : null;
+    if (authorId && authorId !== user.id && authorId !== ANON_SENTINEL) {
+      const { data: blocks } = await supabase
+        .from("blocked_users")
+        .select("blocker_id, blocked_id")
+        .or(
+          `and(blocker_id.eq.${user.id},blocked_id.eq.${authorId}),and(blocker_id.eq.${authorId},blocked_id.eq.${user.id})`,
+        )
+        .limit(1);
+      if (blocks && blocks.length > 0) return { ok: false, reason: "blocked" };
+    }
+
+    const { data: existing, error: readErr } = await supabase
+      .from("circle_reply_reactions")
+      .select("id")
+      .eq("reply_id", replyId)
+      .eq("user_id", user.id)
+      .eq("reaction_type", "helpful")
+      .maybeSingle();
+    if (readErr) return { ok: false, reason: "error" };
+
+    if (existing?.id) {
+      const { error } = await supabase
+        .from("circle_reply_reactions")
+        .delete()
+        .eq("id", String((existing as { id: string }).id));
+      if (error) return { ok: false, reason: "error" };
+      const { data: row } = await supabase
+        .from("circle_replies_viewer_safe")
+        .select("helpful_count")
+        .eq("id", replyId)
+        .maybeSingle();
+      return {
+        ok: true,
+        reacted: false,
+        helpfulCount: Number((row as { helpful_count?: number } | null)?.helpful_count ?? rr.helpful_count ?? 0),
+      };
+    }
+
+    const { error: insertErr } = await supabase.from("circle_reply_reactions").insert({
+      reply_id: replyId,
+      user_id: user.id,
+      reaction_type: "helpful",
+    } as never);
+    if (insertErr) {
+      if ((insertErr as { code?: string }).code === "23505") {
+        return { ok: true, reacted: true, helpfulCount: Number(rr.helpful_count ?? 0) };
+      }
+      return { ok: false, reason: "error" };
+    }
+
+    const { data: row } = await supabase
+      .from("circle_replies_viewer_safe")
+      .select("helpful_count")
+      .eq("id", replyId)
+      .maybeSingle();
+    return {
+      ok: true,
+      reacted: true,
+      helpfulCount: Number((row as { helpful_count?: number } | null)?.helpful_count ?? 0),
+    };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+/** Outcome of creating a text-only Circle discussion thread. */
+export type CircleThreadCreateResult =
+  | { ok: true; threadId: string }
+  | {
+      ok: false;
+      reason: "auth" | "empty" | "too_long" | "not_member" | "unavailable" | "error";
+    };
+
+/**
+ * Create a text-only Circle thread — mirrors native `circleThreadsDb.createThread`.
+ * RLS requires membership (`is_member_of_community`) and `author_id = auth.uid()`.
+ */
+export async function createCircleThreadAction(
+  slug: string,
+  input: {
+    title: string;
+    body: string;
+    flairTag?: CircleFlairTag | null;
+    postType?: "thread" | "question";
+  },
+): Promise<CircleThreadCreateResult> {
+  if (!isSupabaseConfigured() || typeof slug !== "string" || !slug) {
+    return { ok: false, reason: "error" };
+  }
+
+  const titleRaw = typeof input?.title === "string" ? input.title.trim() : "";
+  const bodyRaw = typeof input?.body === "string" ? input.body.trim() : "";
+  if (!titleRaw) return { ok: false, reason: "empty" };
+  if (!bodyRaw) return { ok: false, reason: "empty" };
+  if (titleRaw.length > THREAD_TITLE_MAX || bodyRaw.length > THREAD_BODY_MAX) {
+    return { ok: false, reason: "too_long" };
+  }
+
+  const flairRaw = input.flairTag?.trim() || null;
+  const flairTag =
+    flairRaw && VALID_FLAIR_TAGS.has(flairRaw) ? (flairRaw as CircleFlairTag) : null;
+  const postType = input.postType === "question" ? "question" : "thread";
+  const { kind, flairTag: resolvedFlair } = resolveThreadCreateFlair({ postType, flairTag });
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    const { data: community } = await supabase
+      .from("communities")
+      .select("id, slug")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!community) return { ok: false, reason: "unavailable" };
+    const communityId = String((community as { id: string }).id);
+
+    const { data: membership } = await supabase
+      .from("community_members")
+      .select("user_id")
+      .eq("community_id", communityId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!membership) return { ok: false, reason: "not_member" };
+
+    const title = titleRaw.slice(0, THREAD_TITLE_MAX);
+    const body = bodyRaw.slice(0, THREAD_BODY_MAX);
+
+    const { data: inserted, error } = await supabase
+      .from("circle_threads")
+      .insert({
+        community_id: communityId,
+        author_id: user.id,
+        kind,
+        flair_tag: resolvedFlair ?? null,
+        title,
+        body,
+        media_thumb_url: null,
+        linked_post_id: null,
+      } as never)
+      .select("id")
+      .single();
+
+    if (error || !inserted) {
+      if (looksLikeRlsPolicyDenial(error)) return { ok: false, reason: "not_member" };
+      return { ok: false, reason: "error" };
+    }
+
+    return { ok: true, threadId: String((inserted as { id: string }).id) };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+export type CircleActivityBadgesResult =
+  | { ok: true; badges: CircleActivityBadgeRow[] }
+  | { ok: false; reason: "auth" | "error" };
+
+/** Load joined-circle activity badges with client-supplied last-visit timestamps. */
+export async function loadCircleActivityBadgesAction(
+  communityIds: string[],
+  sinceByCommunity: Record<string, string>,
+): Promise<CircleActivityBadgesResult> {
+  if (!isSupabaseConfigured()) return { ok: false, reason: "error" };
+  const ids = communityIds.map((id) => id.trim()).filter(Boolean);
+  if (ids.length === 0) return { ok: true, badges: [] };
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    const since: Record<string, string> = {};
+    for (const id of ids) {
+      const ts = sinceByCommunity[id]?.trim();
+      if (ts) since[id] = ts;
+    }
+
+    const map = await fetchCircleActivityBadges(ids, since);
+    return { ok: true, badges: [...map.values()] };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+export type CircleThreadFlairUpdateResult =
+  | { ok: true; flairTag: CircleFlairTag | null; kind: CircleThreadKind; flairLabel: string }
+  | { ok: false; reason: "auth" | "forbidden" | "unavailable" | "error" };
+
+/** Update thread flair — author or circle moderator/staff (RLS enforced). */
+export async function updateCircleThreadFlairAction(
+  slug: string,
+  threadId: string,
+  flairTag: CircleFlairTag | null,
+): Promise<CircleThreadFlairUpdateResult> {
+  if (!isSupabaseConfigured() || !slug || !threadId) return { ok: false, reason: "error" };
+
+  const flairRaw = flairTag?.trim() || null;
+  const nextFlair =
+    flairRaw && VALID_FLAIR_TAGS.has(flairRaw) ? (flairRaw as CircleFlairTag) : null;
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    const { data: community } = await supabase
+      .from("communities")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!community) return { ok: false, reason: "unavailable" };
+    const communityId = String((community as { id: string }).id);
+
+    const { data: threadRow } = await supabase
+      .from("circle_threads")
+      .select("id, kind, author_id, moderation_status, deleted_at, community_id")
+      .eq("id", threadId)
+      .maybeSingle();
+    if (!threadRow) return { ok: false, reason: "unavailable" };
+    const tr = threadRow as {
+      kind?: string;
+      author_id?: string;
+      moderation_status?: string;
+      deleted_at?: string | null;
+      community_id?: string;
+    };
+    if (String(tr.community_id) !== communityId) return { ok: false, reason: "unavailable" };
+    if (String(tr.moderation_status ?? "active") !== "active" || tr.deleted_at != null) {
+      return { ok: false, reason: "unavailable" };
+    }
+
+    const isAuthor = String(tr.author_id) === user.id;
+    if (!isAuthor) {
+      const { data: canMod } = await supabase.rpc("can_moderate_circle_for_user", {
+        p_community_id: communityId,
+        p_user_id: user.id,
+      });
+      if (!canMod) return { ok: false, reason: "forbidden" };
+    }
+
+    const currentKind = (
+      ["question", "story", "advice", "meme", "media"].includes(String(tr.kind))
+        ? tr.kind
+        : "story"
+    ) as CircleThreadKind;
+    const { flairTag: savedTag, kind: nextKind } = resolveThreadFlairUpdate(nextFlair, currentKind);
+
+    const { error } = await supabase
+      .from("circle_threads")
+      .update({
+        flair_tag: savedTag,
+        kind: nextKind,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", threadId);
+    if (error) {
+      if (looksLikeRlsPolicyDenial(error)) return { ok: false, reason: "forbidden" };
+      return { ok: false, reason: "error" };
+    }
+
+    return {
+      ok: true,
+      flairTag: savedTag,
+      kind: nextKind,
+      flairLabel: flairLabelForThread({ kind: nextKind, flairTag: savedTag }),
+    };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+/** Outcome of web onboarding mutations. */
+export type WebOnboardingActionResult = { ok: true } | { ok: false; reason: "auth" | "error" };
+
+export type WebOnboardingCircleOption = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  memberCount: number;
+};
+
+export type WebOnboardingCompleteInput = {
+  audienceRole: string | null;
+  interests: string[];
+  circleIds: string[];
+  displayName: string;
+  username?: string | null;
+  bio?: string;
+  city?: string;
+  state?: string;
+  role?: string;
+  specialty?: string;
+  yearsExperience?: number;
+  medicalSafetyAcknowledged?: boolean;
+};
+
+/** Suggested starter Circles for the onboarding wizard (server-side slug ranking). */
+export async function loadWebOnboardingCirclesAction(input: {
+  audienceRole: string | null;
+  interests: string[];
+}): Promise<WebOnboardingCircleOption[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const { suggestWebOnboardingCircleSlugs } = await import("@/lib/web-app/onboarding-circle-suggestions");
+    const slugs = suggestWebOnboardingCircleSlugs({
+      audienceRole: input.audienceRole as import("@/lib/web-app/onboarding-constants").WebAudienceRole | null,
+      interests: input.interests as import("@/lib/web-app/onboarding-constants").WebContentInterest[],
+      limit: 8,
+    });
+    if (slugs.length === 0) return [];
+    const supabase = await createSupabaseServerClient();
+    const { data: rows } = await supabase
+      .from("communities")
+      .select("id, slug, name, description, icon, member_count")
+      .in("slug", slugs);
+    if (!rows?.length) return [];
+    const order = new Map(slugs.map((s, i) => [s, i]));
+    return [...rows]
+      .sort((a, b) => (order.get(String(a.slug)) ?? 99) - (order.get(String(b.slug)) ?? 99))
+      .map((r) => ({
+        id: String(r.id),
+        slug: String(r.slug),
+        name: String(r.name),
+        description: r.description != null ? String(r.description) : null,
+        icon: r.icon != null ? String(r.icon) : null,
+        memberCount: Number(r.member_count ?? 0),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function joinWebOnboardingCircles(userId: string, communityIds: string[]): Promise<void> {
+  const uniq = [...new Set(communityIds.filter(Boolean))];
+  if (uniq.length === 0) return;
+  const supabase = await createSupabaseServerClient();
+  for (const communityId of uniq) {
+    const { data: existing } = await supabase
+      .from("community_members")
+      .select("id")
+      .eq("community_id", communityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existing) continue;
+    await supabase
+      .from("community_members")
+      .insert({ community_id: communityId, user_id: userId, notify_new_posts: true } as never);
+  }
+}
+
+/** Persist onboarding choices and mark the profile complete (web mirror of native flow). */
+export async function completeWebOnboardingAction(
+  input: WebOnboardingCompleteInput,
+): Promise<WebOnboardingActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, reason: "error" };
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+
+    const interests = [...new Set((input.interests ?? []).filter(Boolean))];
+    await supabase.from("user_interests").delete().eq("user_id", user.id);
+    if (interests.length > 0) {
+      const { error: insErr } = await supabase.from("user_interests").insert(
+        interests.map((interest) => ({ user_id: user.id, interest })) as never,
+      );
+      if (insErr) return { ok: false, reason: "error" };
+    }
+
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      audience_role: input.audienceRole,
+      onboarding_completed_at: now,
+      updated_at: now,
+    };
+    if (input.displayName?.trim()) patch.display_name = input.displayName.trim();
+    if (input.username !== undefined) patch.username = input.username;
+    if (input.bio !== undefined) patch.bio = input.bio;
+    if (input.city !== undefined) patch.city = input.city;
+    if (input.state !== undefined) patch.state = input.state;
+    if (input.role !== undefined) patch.role = input.role;
+    if (input.specialty !== undefined) patch.specialty = input.specialty;
+    if (input.yearsExperience !== undefined) patch.years_experience = input.yearsExperience;
+    if (input.medicalSafetyAcknowledged) patch.medical_safety_acknowledged_at = now;
+
+    const { error: profileErr } = await supabase.from("profiles").update(patch).eq("id", user.id);
+    if (profileErr) return { ok: false, reason: "error" };
+
+    await joinWebOnboardingCircles(user.id, input.circleIds ?? []);
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+/** Skip onboarding — marks complete without persisting preferences. */
+export async function skipWebOnboardingAction(): Promise<WebOnboardingActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, reason: "error" };
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, reason: "auth" };
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ onboarding_completed_at: now, updated_at: now })
+      .eq("id", user.id);
     if (error) return { ok: false, reason: "error" };
     return { ok: true };
   } catch {

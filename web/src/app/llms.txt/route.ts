@@ -13,12 +13,12 @@ export function GET() {
   const base = getPublicSiteUrl();
   const body = `# PulseVerse
 
-> PulseVerse is a free social app built specifically for healthcare workers — nurses, doctors, and medical students. Members share short videos, post updates, and join moderated communities called Circles. It is designed around clinical culture with healthcare-grade moderation, and it never asks members to share patient information (PHI). Free to download and use on iOS (TestFlight beta) and Android (Google Play open testing).
+> PulseVerse is a free social app where healthcare workers, students, caregivers, and curious minds connect. Members share real healthcare stories, humor, education, and live conversations in moderated communities called Circles. Healthcare professionals remain the heart of the platform; everyone curious about healthcare is welcome. It is designed with healthcare-grade moderation and never asks members to share patient information (PHI). Free on iOS (TestFlight beta) and Android (Google Play open testing).
 
 ## What PulseVerse is
 
-- Category: social networking app for the healthcare community
-- Audience: nurses, physicians, medical and nursing students, and other healthcare professionals
+- Category: healthcare-centered social networking app
+- Audience: healthcare workers, nursing and medical students, caregivers, patients' families, and curious learners
 - Price: free to download and use
 - Platforms: iOS and Android
 - Core surfaces: Feed, Circles (topic communities), Live, and Pulse Page (profile with My Pulse + Media Hub)

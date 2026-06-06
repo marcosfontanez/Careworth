@@ -2,7 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
-import { loadFollowingIds, loadLikedPostIds } from "./engagement-data";
+import { loadFollowingIds, loadLikedPostIds, loadLikedProfileUpdateIds } from "./engagement-data";
 import { isVideoType, toHttps } from "./format";
 
 export type WebProfileFrame = {
@@ -34,14 +34,19 @@ export type WebProfileHeader = {
 
 export type WebPulseUpdate = {
   id: string;
+  userId: string;
   type: string;
   content: string | null;
   previewText: string | null;
   mood: string | null;
+  picsUrls: string[];
+  mediaThumb: string | null;
+  linkedUrl: string | null;
   isPinned: boolean;
   createdAt: string | null;
   likeCount: number;
   commentCount: number;
+  likedByViewer?: boolean;
 };
 
 export type WebProfilePost = {
@@ -57,14 +62,20 @@ export type WebProfilePost = {
   likedByViewer: boolean;
 };
 
-/** One tile in the Media Hub (a feed/circle post the user created or saved). */
+/** One tile in the Media Hub (feed post or My Pulse pic). */
 export type WebMediaItem = {
   key: string;
-  postId: string;
+  postId?: string;
+  pulseUpdateId?: string;
   thumbnailUrl: string | null;
+  imageUrl?: string | null;
   isVideo: boolean;
   caption: string | null;
   likeCount: number;
+  commentCount?: number;
+  sourceLabel?: string;
+  isAnonymous?: boolean;
+  likedByViewer?: boolean;
 };
 
 /** Media Hub library, split into the same three tabs as the native app. */
@@ -271,18 +282,28 @@ async function finalize(
   }
 
   const canFollow = !isOwner;
-  const [pulseUpdates, posts, favorites, followingSet] = await Promise.all([
-    loadPulseUpdates(supabase, targetUserId),
+  const [pulseUpdates, posts, favorites, pulsePicPhotos, followingSet] = await Promise.all([
+    loadPulseUpdates(supabase, targetUserId, viewerId),
     loadProfilePosts(supabase, targetUserId, isOwner, viewerId),
     // Saved posts are private — only the owner's Favorites tab is populated.
-    isOwner ? loadFavorites(supabase, targetUserId) : Promise.resolve<WebMediaItem[]>([]),
+    isOwner ? loadFavorites(supabase, targetUserId, viewerId) : Promise.resolve<WebMediaItem[]>([]),
+    loadPulsePicPhotos(supabase, targetUserId, viewerId),
     canFollow ? loadFollowingIds(supabase, viewerId, [targetUserId]) : Promise.resolve(new Set<string>()),
   ]);
 
   // Split the user's own feed/circle posts into the Videos and Photos tabs,
   // mirroring the native Media Hub (which keys off post.type).
   const videos = posts.filter((p) => p.isVideo).map(mediaItemFromPost);
-  const photos = posts.filter((p) => !p.isVideo && p.type === "image").map(mediaItemFromPost);
+  const postPhotos = posts.filter((p) => !p.isVideo && p.type === "image").map(mediaItemFromPost);
+  const seenPhotoUrls = new Set<string>();
+  const photos: WebMediaItem[] = [];
+  for (const item of [...postPhotos, ...pulsePicPhotos]) {
+    const url = (item.imageUrl ?? item.thumbnailUrl)?.trim();
+    if (!url || seenPhotoUrls.has(url)) continue;
+    seenPhotoUrls.add(url);
+    photos.push(item);
+    if (photos.length >= 40) break;
+  }
 
   return {
     state: "ok",
@@ -304,10 +325,78 @@ function mediaItemFromPost(p: WebProfilePost): WebMediaItem {
     key: `post:${p.id}`,
     postId: p.id,
     thumbnailUrl: p.thumbnailUrl ?? p.mediaUrl,
+    imageUrl: p.mediaUrl ?? p.thumbnailUrl,
     isVideo: p.isVideo,
     caption: p.caption,
     likeCount: p.likeCount,
+    commentCount: p.commentCount,
+    sourceLabel: "Feed post",
+    likedByViewer: p.likedByViewer,
   };
+}
+
+/** My Pulse `pics` updates → Media Hub Photos tab (mirrors native MediaHubSection). */
+async function loadPulsePicPhotos(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  viewerId: string,
+): Promise<WebMediaItem[]> {
+  try {
+    const { data } = await supabase
+      .from("profile_updates")
+      .select(
+        "id, type, content, preview_text, pics_urls, media_thumb, linked_url, like_count, comment_count",
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(40);
+
+    const out: WebMediaItem[] = [];
+    for (const r of (data ?? []) as AnyRow[]) {
+      const type = String(r.type ?? "");
+      const linkedUrl = str(r.linked_url);
+      const isPicsRow = type === "pics" || (type === "media_note" && !linkedUrl);
+      if (!isPicsRow) continue;
+
+      const urls: string[] = [];
+      if (Array.isArray(r.pics_urls)) {
+        for (const u of r.pics_urls) {
+          if (typeof u === "string" && u.trim()) urls.push(u.trim());
+        }
+      }
+      if (urls.length === 0) {
+        const thumb = toHttps(r.media_thumb);
+        if (thumb) urls.push(thumb);
+      }
+
+      const caption = str(r.content) ?? str(r.preview_text);
+      for (let i = 0; i < urls.length; i++) {
+        out.push({
+          key: `pulse:${String(r.id)}:${i}`,
+          pulseUpdateId: String(r.id),
+          thumbnailUrl: urls[i],
+          imageUrl: urls[i],
+          isVideo: false,
+          caption,
+          likeCount: num(r.like_count),
+          commentCount: num(r.comment_count),
+          sourceLabel: "My Pulse",
+        });
+      }
+    }
+    if (viewerId && out.length > 0) {
+      const updateIds = [...new Set(out.map((item) => item.pulseUpdateId).filter(Boolean))] as string[];
+      const likedSet = await loadLikedProfileUpdateIds(supabase, viewerId, updateIds);
+      for (const item of out) {
+        if (item.pulseUpdateId) {
+          item.likedByViewer = likedSet.has(item.pulseUpdateId);
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -318,6 +407,7 @@ function mediaItemFromPost(p: WebProfilePost): WebMediaItem {
 async function loadFavorites(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   userId: string,
+  viewerId: string,
 ): Promise<WebMediaItem[]> {
   try {
     const { data: saved } = await supabase
@@ -337,20 +427,28 @@ async function loadFavorites(
       .in("id", order);
 
     const byId = new Map<string, WebMediaItem>();
+    const postIds: string[] = [];
     for (const r of (postRows ?? []) as AnyRow[]) {
       const sched = String(r.scheduled_status ?? "live").toLowerCase();
       if (sched !== "live") continue;
       const proc = String(r.media_processing_status ?? "").toLowerCase().trim();
       if (PROCESSING_BLOCK.has(proc)) continue;
       const id = String(r.id);
+      postIds.push(id);
       byId.set(id, {
         key: `fav:${id}`,
         postId: id,
         thumbnailUrl: toHttps(r.thumbnail_url) ?? toHttps(r.media_url),
+        imageUrl: toHttps(r.media_url) ?? toHttps(r.thumbnail_url),
         isVideo: isVideoType(r.type),
         caption: str(r.caption),
         likeCount: num(r.like_count),
+        sourceLabel: "Feed post",
       });
+    }
+    const likedSet = viewerId ? await loadLikedPostIds(supabase, viewerId, postIds) : new Set<string>();
+    for (const item of byId.values()) {
+      if (item.postId) item.likedByViewer = likedSet.has(item.postId);
     }
     // Preserve saved-at order; drop any post no longer visible.
     return order.map((id) => byId.get(id)).filter((m): m is WebMediaItem => Boolean(m));
@@ -362,25 +460,44 @@ async function loadFavorites(
 async function loadPulseUpdates(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   userId: string,
+  viewerId: string,
 ): Promise<WebPulseUpdate[]> {
   try {
     const { data } = await supabase
       .from("profile_updates")
-      .select("id, type, content, preview_text, mood, is_pinned, created_at, like_count, comment_count")
+      .select(
+        "id, user_id, type, content, preview_text, mood, pics_urls, media_thumb, linked_url, is_pinned, created_at, like_count, comment_count",
+      )
       .eq("user_id", userId)
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(PULSE_LIMIT);
-    return ((data ?? []) as AnyRow[]).map((r) => ({
+    const rows = (data ?? []) as AnyRow[];
+    const likedSet =
+      viewerId && rows.length > 0
+        ? await loadLikedProfileUpdateIds(
+            supabase,
+            viewerId,
+            rows.map((r) => String(r.id)),
+          )
+        : new Set<string>();
+    return rows.map((r) => ({
       id: String(r.id),
+      userId: String(r.user_id),
       type: String(r.type ?? "thought"),
       content: str(r.content),
       previewText: str(r.preview_text),
       mood: str(r.mood),
+      picsUrls: Array.isArray(r.pics_urls)
+        ? r.pics_urls.filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+        : [],
+      mediaThumb: toHttps(r.media_thumb),
+      linkedUrl: str(r.linked_url),
       isPinned: Boolean(r.is_pinned),
       createdAt: str(r.created_at),
       likeCount: num(r.like_count),
       commentCount: num(r.comment_count),
+      likedByViewer: likedSet.has(String(r.id)),
     }));
   } catch {
     return [];

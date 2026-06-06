@@ -37,9 +37,9 @@ export function WebCircleThreadRow({
         <span className="truncate text-xs font-medium text-foreground/90">
           {thread.isAnonymous ? copy.anonymousLabel : author?.displayName ?? copy.anonymousLabel}
         </span>
-        {thread.kind ? (
+        {thread.flairLabel ? (
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {thread.kind}
+            {thread.flairLabel}
           </span>
         ) : null}
         {time ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{time}</span> : null}

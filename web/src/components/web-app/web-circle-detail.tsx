@@ -1,19 +1,37 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowLeft, ExternalLink, ShieldCheck, Users } from "lucide-react";
 
+import type { CircleTopHelper } from "@/lib/circles/identity";
 import type { WebAppCirclesCopy, WebAppEngagementCopy, WebAppFeedCopy } from "@/lib/marketing-copy/web-app";
-import type { WebCircle, WebCircleThread } from "@/lib/web-app/circles-data";
+import type {
+  WebCircle,
+  WebCircleIdentity,
+  WebCircleThread,
+  WebCircleWelcomeThread,
+} from "@/lib/web-app/circles-data";
 import type { WebFeedPost } from "@/lib/web-app/feed-data";
 import { formatCount } from "@/lib/web-app/format";
 
+import { WebCircleActiveVoices } from "./web-circle-active-voices";
 import { WebCircleJoinButton } from "./web-circle-join-button";
-import { WebCircleThreadRow } from "./web-circle-thread-row";
+import { WebCircleRulesCard } from "./web-circle-rules-card";
+import { WebCircleStartDiscussion } from "./web-circle-start-discussion";
+import { WebCircleStartHere } from "./web-circle-start-here";
+import { WebCircleVisitTracker } from "./web-circle-visit-tracker";
+import { WebCircleThreadList } from "./web-circle-thread-list";
 import { WebCircleWallPost } from "./web-circle-wall-post";
+import { WebCircleWeeklyPrompt } from "./web-circle-weekly-prompt";
 import { WebFeedCard } from "./web-feed-card";
 
 export function WebCircleDetail({
   circle,
   isConfession,
+  identity,
+  welcomeThread,
+  topHelpers,
   threads,
   wallPosts,
   copy,
@@ -23,9 +41,13 @@ export function WebCircleDetail({
   isExternalApp,
   currentUserId = null,
   isMember = false,
+  categories = [],
 }: {
   circle: WebCircle;
   isConfession: boolean;
+  identity: WebCircleIdentity;
+  welcomeThread: WebCircleWelcomeThread | null;
+  topHelpers: CircleTopHelper[];
   threads: WebCircleThread[];
   wallPosts: WebFeedPost[];
   copy: WebAppCirclesCopy;
@@ -35,11 +57,14 @@ export function WebCircleDetail({
   isExternalApp: boolean;
   currentUserId?: string | null;
   isMember?: boolean;
+  categories?: string[];
 }) {
   const externalProps = isExternalApp ? { target: "_blank", rel: "noreferrer" } : {};
+  const [weeklyDismissed, setWeeklyDismissed] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-[760px] px-4 py-6 sm:px-6 sm:py-8">
+      <WebCircleVisitTracker communityId={circle.id} />
       <Link
         href="/web-app/circles"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
@@ -48,7 +73,6 @@ export function WebCircleDetail({
         {copy.backToCircles}
       </Link>
 
-      {/* Circle header */}
       <header className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.86)] p-5 shadow-[0_24px_70px_-40px_rgba(0,0,0,0.9)] backdrop-blur-sm sm:p-6">
         <div className="flex items-start gap-4">
           <span className="grid size-14 shrink-0 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br from-primary/20 to-accent/15 text-3xl">
@@ -99,7 +123,35 @@ export function WebCircleDetail({
         ) : null}
       </header>
 
-      {/* Circle posts (wall) */}
+      <div className="mt-6 flex flex-col gap-4">
+        <WebCircleStartDiscussion
+          slug={circle.slug}
+          categories={categories}
+          isConfession={isConfession}
+          isMember={isMember}
+          copy={copy}
+          promptPrefill={{
+            title: identity.weeklyPrompt.title,
+            body: identity.weeklyPrompt.body,
+          }}
+        />
+        <WebCircleStartHere
+          copy={identity.welcomeCopy}
+          welcomeThread={welcomeThread}
+          isConfession={isConfession}
+          slug={circle.slug}
+        />
+        {!weeklyDismissed ? (
+          <WebCircleWeeklyPrompt
+            prompt={identity.weeklyPrompt}
+            copy={copy}
+            onDismiss={() => setWeeklyDismissed(true)}
+          />
+        ) : null}
+        <WebCircleRulesCard rules={identity.rules} copy={copy} />
+        {!isConfession ? <WebCircleActiveVoices helpers={topHelpers} copy={copy} /> : null}
+      </div>
+
       {wallPosts.length > 0 ? (
         <section className="mt-6">
           <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
@@ -129,7 +181,6 @@ export function WebCircleDetail({
         </section>
       ) : null}
 
-      {/* Threads */}
       <section className="mt-6">
         <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           {copy.threadsTitle}
@@ -139,11 +190,7 @@ export function WebCircleDetail({
             {copy.threadsEmpty}
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            {threads.map((thread) => (
-              <WebCircleThreadRow key={thread.id} slug={circle.slug} thread={thread} copy={copy} />
-            ))}
-          </div>
+          <WebCircleThreadList slug={circle.slug} threads={threads} copy={copy} />
         )}
       </section>
     </div>

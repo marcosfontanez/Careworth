@@ -22,20 +22,20 @@ export type HomeCtaCopy = {
 
 const hero: Record<Locale, HomeHeroCopy> = {
   en: {
-    eyebrow: "Built for healthcare professionals",
-    headline: "Healthcare culture has a home.",
+    eyebrow: "Healthcare-centered social — open to everyone",
+    headline: "Where healthcare stories, creators, and communities connect.",
     subhead:
-      "Designed for clinicians, students, and creators — join the beta.",
+      "For clinicians, students, caregivers, and curious minds — real stories, humor, education, and live conversations.",
     primaryCta: "Join the beta",
     secondaryCta: "See it in the browser",
     posterTag: "Live product render",
     posterCaption: "Login · Profile · Circles · Creator Hub",
   },
   es: {
-    eyebrow: "Hecho para profesionales de la salud",
-    headline: "La cultura sanitaria tiene un hogar.",
+    eyebrow: "Red social centrada en salud — abierta a todos",
+    headline: "Donde confluyen historias, creadores y comunidades de salud.",
     subhead:
-      "Diseñado para clínicos, estudiantes y creadores — únete a la beta.",
+      "Para clínicos, estudiantes, cuidadores y mentes curiosas — historias reales, humor, educación y conversaciones en vivo.",
     primaryCta: "Unirte a la beta",
     secondaryCta: "Verla en el navegador",
     posterTag: "Renderizado real",
@@ -46,7 +46,7 @@ const hero: Record<Locale, HomeHeroCopy> = {
 const bottomCta: Record<Locale, HomeCtaCopy> = {
   en: {
     title: "Make it your Pulse.",
-    description: "Join our early healthcare community — clinicians, students, and creators shaping PulseVerse.",
+    description: "Join clinicians, students, caregivers, and curious learners on PulseVerse — healthcare stories, creators, Circles, and live Q&A.",
     primaryLabel: "Join the beta",
     secondaryLabel: "Partner with us",
     ecosystemHeroAlt:
@@ -54,7 +54,8 @@ const bottomCta: Record<Locale, HomeCtaCopy> = {
   },
   es: {
     title: "Hazlo tu Pulse.",
-    description: "Únete a nuestra comunidad sanitaria inicial — clínicos, estudiantes y creadores que dan forma a PulseVerse.",
+    description:
+      "Únete a clínicos, estudiantes, cuidadores y mentes curiosas en PulseVerse — historias, creadores, Circles y Q&A en vivo.",
     primaryLabel: "Unirte a la beta",
     secondaryLabel: "Aliarte con nosotros",
     ecosystemHeroAlt:

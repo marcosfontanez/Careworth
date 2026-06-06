@@ -1,16 +1,8 @@
 import {
   BadgeCheck,
-  ChevronRight,
   ExternalLink,
-  Heart,
   Lock,
-  MessageCircle,
-  Moon,
   Pencil,
-  Pin,
-  ShieldCheck,
-  Sparkles,
-  Trophy,
   UserRound,
   Users,
   type LucideIcon,
@@ -25,10 +17,11 @@ import type {
   WebPulseUpdate,
 } from "@/lib/web-app/profile-data";
 import { cn } from "@/lib/utils";
-import { formatCount, relativeTime } from "@/lib/web-app/format";
+import { formatCount } from "@/lib/web-app/format";
 
 import { FollowButton } from "./follow-button";
 import { WebMediaHub } from "./web-media-hub";
+import { WebPulseUpdatesSection } from "./web-pulse-updates-section";
 
 /* ── Shared glass shell (mirrors native MyPulseGlassPanel) ───────────── */
 function GlassPanel({
@@ -163,55 +156,7 @@ function PulseScoreCard({ score, tier, label }: { score: number; tier: string | 
   );
 }
 
-/* ── Pulse updates ──────────────────────────────────────────────────── */
-function updateVisual(type: string): { Icon: LucideIcon; tile: string } {
-  const t = type.toLowerCase();
-  if (/(milestone|achiev|badge|reward|level)/.test(t))
-    return { Icon: Trophy, tile: "border-amber-300/30 bg-amber-400/10 text-amber-300" };
-  if (/(streak|consist|daily)/.test(t))
-    return { Icon: ShieldCheck, tile: "border-teal-300/30 bg-teal-400/10 text-teal-300" };
-  if (/(reflect|mood|journal|shift)/.test(t))
-    return { Icon: Moon, tile: "border-violet-300/30 bg-violet-400/10 text-violet-300" };
-  if (/(question|community|answer|reply)/.test(t))
-    return { Icon: Users, tile: "border-sky-300/30 bg-sky-400/10 text-sky-300" };
-  return { Icon: Sparkles, tile: "border-primary/30 bg-primary/10 text-primary" };
-}
-
-function PulseUpdateRow({ update }: { update: WebPulseUpdate }) {
-  const { Icon, tile } = updateVisual(update.type);
-  const title = update.type.replace(/_/g, " ");
-  const body = update.content?.trim() || update.previewText?.trim() || "";
-  const time = relativeTime(update.createdAt);
-  return (
-    <li className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3.5 transition hover:border-white/15 hover:bg-white/[0.05]">
-      <span className={`grid size-10 shrink-0 place-items-center rounded-xl border ${tile}`}>
-        {update.isPinned ? <Pin className="size-4" aria-hidden /> : <Icon className="size-4" aria-hidden />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold capitalize leading-snug text-foreground wrap-anywhere">
-            {title}
-            {update.mood ? <span className="font-normal text-muted-foreground"> · {update.mood}</span> : null}
-          </p>
-          {time ? <span className="shrink-0 text-[11px] text-muted-foreground">{time}</span> : null}
-        </div>
-        {body ? (
-          <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">{body}</p>
-        ) : null}
-        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <Heart className="size-3.5" aria-hidden />
-            {formatCount(update.likeCount)}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <MessageCircle className="size-3.5" aria-hidden />
-            {formatCount(update.commentCount)}
-          </span>
-        </div>
-      </div>
-    </li>
-  );
-}
+/* ── Pulse updates section lives in web-pulse-updates-section.tsx ─── */
 
 function LockedCard({ title, body }: { title: string; body: string }) {
   return (
@@ -363,54 +308,28 @@ export function WebProfile({
         <>
           {/* My Pulse — latest 5 rolling feed */}
           <GlassPanel className="p-4 sm:p-5">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-teal-300/80">
-                  {copy.myPulseKicker}
-                </span>
-                <div className="mt-0.5 flex items-center gap-2">
-                  <Sparkles className="size-4 text-[var(--accent)]" aria-hidden />
-                  <h2 className="font-heading text-base font-bold tracking-tight text-foreground">
-                    {copy.pulseUpdatesTitle}
-                  </h2>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {isOwner ? copy.myPulseSubtitleOwner : copy.myPulseSubtitleVisitor}
-                </p>
-              </div>
-              <span className="inline-flex shrink-0 items-baseline gap-0.5 rounded-full border border-teal-400/35 bg-teal-400/12 px-2.5 py-1">
-                <span className="text-sm font-extrabold tabular-nums text-teal-300">
-                  {Math.min(pulseUpdates.length, 5)}
-                </span>
-                <span className="text-[11px] font-bold tabular-nums text-teal-300/65">/5</span>
-              </span>
-            </div>
-            {pulseUpdates.length === 0 ? (
-              <p className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 text-center text-sm text-muted-foreground">
-                {copy.pulseUpdatesEmpty}
-              </p>
-            ) : (
-              <>
-                <ul className="grid gap-2.5 sm:grid-cols-2">
-                  {pulseUpdates.map((update) => (
-                    <PulseUpdateRow key={update.id} update={update} />
-                  ))}
-                </ul>
-                <a
-                  href={openAppHref}
-                  {...externalProps}
-                  className="mt-3 flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-foreground/90 transition hover:border-primary/40 hover:text-foreground"
-                >
-                  {copy.viewAllUpdates}
-                  <ChevronRight className="size-4" aria-hidden />
-                </a>
-              </>
-            )}
+            <WebPulseUpdatesSection
+              pulseUpdates={pulseUpdates}
+              profile={profile}
+              copy={copy}
+              isOwner={isOwner}
+              openAppHref={openAppHref}
+              externalProps={externalProps}
+            />
           </GlassPanel>
 
           {/* Media Hub — videos / favorites / photos library */}
           <GlassPanel className="p-4 sm:p-5">
-            <WebMediaHub media={media} copy={copy} isOwner={isOwner} />
+            <WebMediaHub
+              media={media}
+              copy={copy}
+              isOwner={isOwner}
+              creator={{
+                id: profile.id,
+                displayName: profile.displayName,
+                avatarUrl: profile.avatarUrl,
+              }}
+            />
           </GlassPanel>
         </>
       )}

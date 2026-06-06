@@ -22,6 +22,7 @@ import {
   Sparkles,
   TrendingUp,
   Users,
+  Wallet,
 } from "lucide-react";
 
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
@@ -46,6 +47,7 @@ const groups: { title: string; items: Item[] }[] = [
       { href: "/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/admin/platform", label: "Platform", icon: Layers },
       { href: "/admin/merchandising", label: "Shop & borders", icon: ShoppingBag },
+      { href: "/admin/economy", label: "Sparks economy", icon: Wallet },
     ],
   },
   {

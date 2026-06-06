@@ -24,6 +24,26 @@ export async function loadLikedPostIds(
   }
 }
 
+/** Set of update ids (from `updateIds`) the viewer has Pulsed. Best-effort. */
+export async function loadLikedProfileUpdateIds(
+  supabase: Supa,
+  viewerId: string,
+  updateIds: string[],
+): Promise<Set<string>> {
+  const ids = [...new Set(updateIds.filter(Boolean))];
+  if (ids.length === 0) return new Set();
+  try {
+    const { data } = await supabase
+      .from("profile_update_likes")
+      .select("update_id")
+      .eq("user_id", viewerId)
+      .in("update_id", ids);
+    return new Set(((data ?? []) as { update_id: string }[]).map((r) => String(r.update_id)));
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * Set of user ids that are blocked relative to the viewer, in *both* directions
  * (the viewer blocked them, or they blocked the viewer). One batched query.

@@ -14,8 +14,9 @@ export const pv = {
 
 export const site = {
   name: "PulseVerse",
-  tagline: "Healthcare culture, all in one place.",
-  description: "The social platform for the global healthcare community.",
+  tagline: "Healthcare stories, creators, communities, and conversations — for everyone.",
+  description:
+    "The social platform where healthcare workers, students, caregivers, and curious minds connect.",
 } as const;
 
 /** Full-color 3D lockup; background removed (transparent PNG). */

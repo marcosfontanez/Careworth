@@ -1,21 +1,54 @@
 "use client";
 
-import { Heart, Images, Play, Star, Video, type LucideIcon } from "lucide-react";
+import { Expand, Heart, Images, Play, Star, Video, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
 import type { WebMediaItem, WebProfileMedia } from "@/lib/web-app/profile-data";
+import {
+  buildWebMediaHubPhotoGallery,
+  findWebGalleryIndexByKey,
+  type WebPulsePhotoViewerCreator,
+} from "@/lib/web-app/pulse-photo-gallery";
 import { formatCount } from "@/lib/web-app/format";
+import { WebPulsePhotoViewerHost } from "./web-pulse-photo-viewer";
 
 type TabKey = "videos" | "favorites" | "photos";
 
-function MediaTile({ item }: { item: WebMediaItem }) {
+function MediaTile({
+  item,
+  onPhotoPress,
+}: {
+  item: WebMediaItem;
+  onPhotoPress?: () => void;
+}) {
+  if (!item.isVideo && onPhotoPress) {
+    return (
+      <button
+        type="button"
+        onClick={onPhotoPress}
+        className="group relative block aspect-[3/4] w-full overflow-hidden rounded-2xl border border-white/8 bg-[#05080f] text-left"
+      >
+        <MediaTileInner item={item} browsable />
+      </button>
+    );
+  }
+
+  const href = item.postId ? `/web-app/post/${item.postId}` : "#";
   return (
     <Link
-      href={`/web-app/post/${item.postId}`}
+      href={href}
       className="group relative block aspect-[3/4] overflow-hidden rounded-2xl border border-white/8 bg-[#05080f]"
     >
+      <MediaTileInner item={item} />
+    </Link>
+  );
+}
+
+function MediaTileInner({ item, browsable = false }: { item: WebMediaItem; browsable?: boolean }) {
+  return (
+    <>
       {item.thumbnailUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -40,6 +73,10 @@ function MediaTile({ item }: { item: WebMediaItem }) {
             <Play className="size-4 fill-current" aria-hidden />
           </span>
         </span>
+      ) : browsable ? (
+        <span className="pointer-events-none absolute left-2 top-2 grid size-6 place-items-center rounded-full border border-teal-400/35 bg-black/55 text-teal-200">
+          <Expand className="size-3.5" aria-hidden />
+        </span>
       ) : null}
 
       <span className="absolute bottom-2 right-2 grid size-6 place-items-center rounded-full border border-white/25 bg-black/65 text-white">
@@ -52,7 +89,7 @@ function MediaTile({ item }: { item: WebMediaItem }) {
           {formatCount(item.likeCount)}
         </span>
       ) : null}
-    </Link>
+    </>
   );
 }
 
@@ -103,16 +140,21 @@ export function WebMediaHub({
   media,
   copy,
   isOwner,
+  creator,
 }: {
   media: WebProfileMedia;
   copy: WebAppProfileCopy;
   isOwner: boolean;
+  creator: WebPulsePhotoViewerCreator;
 }) {
   const [tab, setTab] = useState<TabKey>("videos");
+  const [viewerSession, setViewerSession] = useState<{
+    items: ReturnType<typeof buildWebMediaHubPhotoGallery>;
+    initialIndex: number;
+  } | null>(null);
 
   const tabs: { key: TabKey; icon: LucideIcon; label: string; items: WebMediaItem[] }[] = [
     { key: "videos", icon: Video, label: copy.mediaTabVideos, items: media.videos },
-    // Favorites are private — only show the tab to the owner.
     ...(isOwner
       ? [{ key: "favorites" as const, icon: Star, label: copy.mediaTabFavorites, items: media.favorites }]
       : []),
@@ -120,6 +162,23 @@ export function WebMediaHub({
   ];
 
   const active = tabs.find((t) => t.key === tab) ?? tabs[0];
+
+  const photoGallery = useMemo(() => buildWebMediaHubPhotoGallery(media.photos), [media.photos]);
+  const favoritesPhotoGallery = useMemo(
+    () => buildWebMediaHubPhotoGallery(media.favorites.filter((f) => !f.isVideo)),
+    [media.favorites],
+  );
+
+  const openPhotoViewer = useCallback(
+    (item: WebMediaItem, gallery: ReturnType<typeof buildWebMediaHubPhotoGallery>) => {
+      if (!gallery.length) return;
+      setViewerSession({
+        items: gallery,
+        initialIndex: findWebGalleryIndexByKey(gallery, item.key),
+      });
+    },
+    [],
+  );
 
   let emptyMsg: string;
   if (active.key === "videos") emptyMsg = isOwner ? copy.mediaEmptyVideosOwner : copy.mediaEmptyVideosVisitor;
@@ -138,7 +197,6 @@ export function WebMediaHub({
         </p>
       </div>
 
-      {/* Segmented tabs */}
       <div
         role="tablist"
         className="mb-4 flex gap-1 rounded-2xl border border-white/8 bg-white/[0.03] p-1"
@@ -162,10 +220,40 @@ export function WebMediaHub({
       ) : (
         <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
           {active.items.map((item) => (
-            <MediaTile key={item.key} item={item} />
+            <MediaTile
+              key={item.key}
+              item={item}
+              onPhotoPress={
+                active.key === "photos"
+                  ? () => openPhotoViewer(item, photoGallery)
+                  : active.key === "favorites" && !item.isVideo
+                    ? () => openPhotoViewer(item, favoritesPhotoGallery)
+                    : undefined
+              }
+            />
           ))}
         </div>
       )}
+
+      <WebPulsePhotoViewerHost
+        session={
+          viewerSession
+            ? {
+                items: viewerSession.items,
+                initialIndex: viewerSession.initialIndex,
+                creator,
+                engagement: {
+                  like: copy.engagement.like,
+                  liked: copy.engagement.liked,
+                  likeError: copy.engagement.likeError,
+                  pulse: "Pulse",
+                  pulsed: "Pulsed",
+                },
+              }
+            : null
+        }
+        onClose={() => setViewerSession(null)}
+      />
     </section>
   );
 }

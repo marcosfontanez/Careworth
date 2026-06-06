@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Heart, MessageCircle, Play, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeft, ExternalLink, MessageCircle, Play, ShieldCheck, UserRound } from "lucide-react";
 
 import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
 import type { WebCircle, WebCircleAuthor, WebCircleReply, WebCircleThread } from "@/lib/web-app/circles-data";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 
 import { WebCircleJoinReply } from "./web-circle-join-reply";
+import { WebCircleRepliesSection } from "./web-circle-replies-section";
 import { WebCircleReplyComposer } from "./web-circle-reply-composer";
+import { WebCircleThreadFlairEdit } from "./web-circle-thread-flair-edit";
+import { WebCircleVisitTracker } from "./web-circle-visit-tracker";
 
 function Byline({
   author,
@@ -56,29 +59,14 @@ function Byline({
   );
 }
 
-function ReplyItem({ reply, copy }: { reply: WebCircleReply; copy: WebAppCirclesCopy }) {
-  return (
-    <li className="rounded-2xl border border-white/8 bg-white/[0.03] p-3.5">
-      <Byline author={reply.author} isAnonymous={reply.isAnonymous} time={relativeTime(reply.createdAt)} copy={copy} />
-      {reply.body?.trim() ? (
-        <p className="mt-2 text-sm leading-relaxed text-foreground/90 [overflow-wrap:anywhere]">{reply.body}</p>
-      ) : null}
-      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Heart className="size-3.5" aria-hidden />
-          {formatCount(reply.reactionCount)}
-        </span>
-      </div>
-    </li>
-  );
-}
-
 export function WebCircleThreadView({
   circle,
   isConfession,
   thread,
   replies,
   canReply,
+  canEditFlair,
+  categories,
   copy,
   openAppHref,
   isExternalApp,
@@ -87,8 +75,9 @@ export function WebCircleThreadView({
   isConfession: boolean;
   thread: WebCircleThread;
   replies: WebCircleReply[];
-  /** Viewer is a member and may post a reply (posting RLS requires membership). */
   canReply: boolean;
+  canEditFlair: boolean;
+  categories: string[];
   copy: WebAppCirclesCopy;
   openAppHref: string;
   isExternalApp: boolean;
@@ -97,6 +86,7 @@ export function WebCircleThreadView({
 
   return (
     <div className="mx-auto w-full max-w-[680px] px-4 py-6 sm:px-6 sm:py-8">
+      <WebCircleVisitTracker communityId={circle.id} />
       <Link
         href={`/web-app/circles/${encodeURIComponent(circle.slug)}`}
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
@@ -105,9 +95,21 @@ export function WebCircleThreadView({
         {circle.name}
       </Link>
 
-      {/* Thread */}
       <article className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.86)] p-5 shadow-[0_24px_70px_-40px_rgba(0,0,0,0.9)] backdrop-blur-sm sm:p-6">
         <Byline author={thread.author} isAnonymous={thread.isAnonymous} time={relativeTime(thread.createdAt)} copy={copy} />
+
+        <div className="mt-2">
+          <WebCircleThreadFlairEdit
+            slug={circle.slug}
+            threadId={thread.id}
+            categories={categories}
+            isConfession={isConfession}
+            initialFlairTag={thread.flairTag}
+            initialKind={thread.kind}
+            canEdit={canEditFlair}
+            copy={copy}
+          />
+        </div>
 
         {thread.title?.trim() ? (
           <h1 className="mt-3 font-heading text-xl font-bold tracking-tight text-foreground [overflow-wrap:anywhere]">
@@ -136,10 +138,6 @@ export function WebCircleThreadView({
 
         <div className="mt-4 flex items-center gap-4 border-t border-white/8 pt-3.5 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
-            <Heart className="size-4" aria-hidden />
-            {formatCount(thread.reactionCount)}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
             <MessageCircle className="size-4" aria-hidden />
             {formatCount(thread.replyCount)}
           </span>
@@ -161,14 +159,11 @@ export function WebCircleThreadView({
         </p>
       ) : null}
 
-      {/* Replies */}
       <section className="mt-6">
         <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           {copy.repliesTitle}
         </h2>
 
-        {/* Members can post a text reply (posting RLS requires membership);
-            non-members get a one-tap join prompt that unlocks the composer. */}
         {canReply ? (
           <WebCircleReplyComposer slug={circle.slug} threadId={thread.id} copy={copy} />
         ) : (
@@ -176,17 +171,7 @@ export function WebCircleThreadView({
         )}
 
         <div className="mt-5">
-        {replies.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-6 text-center text-sm text-muted-foreground backdrop-blur-sm">
-            {copy.repliesEmpty}
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-2.5">
-            {replies.map((reply) => (
-              <ReplyItem key={reply.id} reply={reply} copy={copy} />
-            ))}
-          </ul>
-        )}
+          <WebCircleRepliesSection replies={replies} copy={copy} />
         </div>
       </section>
     </div>

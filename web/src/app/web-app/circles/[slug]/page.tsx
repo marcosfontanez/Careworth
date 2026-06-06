@@ -60,6 +60,9 @@ export default async function WebAppCircleDetailPage({
     <WebCircleDetail
       circle={result.circle}
       isConfession={result.isConfession}
+      identity={result.identity}
+      welcomeThread={result.welcomeThread}
+      topHelpers={result.topHelpers}
       threads={result.threads}
       wallPosts={result.wallPosts}
       copy={c.circles}
@@ -69,6 +72,7 @@ export default async function WebAppCircleDetailPage({
       isExternalApp={isExternalApp}
       currentUserId={account.id}
       isMember={result.isMember}
+      categories={result.categories}
     />
   );
 }

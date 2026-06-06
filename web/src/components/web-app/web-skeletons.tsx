@@ -57,6 +57,23 @@ export function WebCirclesIndexSkeleton() {
         <div className={`h-7 w-32 ${shimmer}`} />
         <div className={`h-4 w-64 ${shimmer}`} />
       </div>
+      <div className="mb-7">
+        <div className={`mb-3 h-4 w-44 ${shimmer}`} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-4">
+              <div className="flex items-center gap-3">
+                <div className="size-12 animate-pulse rounded-2xl bg-white/8" />
+                <div className="flex-1 space-y-2">
+                  <div className={`h-4 w-32 ${shimmer}`} />
+                  <div className={`h-3 w-20 ${shimmer}`} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className={`mb-3 h-4 w-28 ${shimmer}`} />
       <div className="grid gap-3 sm:grid-cols-2">
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="rounded-3xl border border-white/10 bg-[rgba(12,18,32,0.7)] p-4">

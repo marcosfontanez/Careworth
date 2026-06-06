@@ -1,11 +1,27 @@
 import Link from "next/link";
 import { ArrowRight, Pin, Users } from "lucide-react";
 
+import type { CircleActivityBadgeLabel } from "@/lib/circles/activity-badges";
 import type { WebAppCirclesCopy } from "@/lib/marketing-copy/web-app";
 import type { WebCircle } from "@/lib/web-app/circles-data";
 import { formatCount } from "@/lib/web-app/format";
 
-export function WebCircleCard({ circle, copy }: { circle: WebCircle; copy: WebAppCirclesCopy }) {
+const BADGE_TONE: Record<CircleActivityBadgeLabel["tone"], string> = {
+  reply: "border-teal-300/40 bg-teal-300/10 text-teal-100",
+  post: "border-sky-300/40 bg-sky-300/10 text-sky-100",
+  question: "border-amber-300/40 bg-amber-300/10 text-amber-100",
+  hot: "border-rose-300/40 bg-rose-300/10 text-rose-100",
+};
+
+export function WebCircleCard({
+  circle,
+  copy,
+  badge = null,
+}: {
+  circle: WebCircle;
+  copy: WebAppCirclesCopy;
+  badge?: CircleActivityBadgeLabel | null;
+}) {
   return (
     <Link
       href={`/web-app/circles/${encodeURIComponent(circle.slug)}`}
@@ -27,9 +43,19 @@ export function WebCircleCard({ circle, copy }: { circle: WebCircle; copy: WebAp
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <Users className="size-3.5" aria-hidden />
             {formatCount(circle.memberCount)} {copy.membersLabel}
+            {badge ? (
+              <span
+                className={[
+                  "rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  BADGE_TONE[badge.tone],
+                ].join(" ")}
+              >
+                {badge.text}
+              </span>
+            ) : null}
           </p>
         </div>
       </div>

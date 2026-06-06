@@ -241,6 +241,52 @@ export type WebAppCirclesCopy = {
   discoverTitle: string;
   /** Wall-post comment toggle. */
   wallCommentLabel: string;
+  /** Circle identity cards. */
+  rulesTitle: string;
+  weeklyPromptBadge: string;
+  weeklyPromptDismiss: string;
+  weeklyPromptHint: string;
+  activeVoicesTitle: string;
+  helpfulLabel: string;
+  flairFilterEmpty: string;
+  /** Thread reply sorting + Helpful. */
+  replySortLabel: string;
+  replySortNew: string;
+  replySortTop: string;
+  replySortHelpful: string;
+  helpfulButtonLabel: string;
+  helpfulMarkLabel: string;
+  helpfulRemoveLabel: string;
+  helpfulError: string;
+  helpfulBlocked: string;
+  helpfulUnavailable: string;
+  /** Your Circles index sections. */
+  continueTitle: string;
+  unansweredTitle: string;
+  /** Thread creation (V1). */
+  startDiscussionCta: string;
+  askQuestionCta: string;
+  joinToPostTitle: string;
+  joinToPostBody: string;
+  threadComposerTitle: string;
+  threadComposerTitlePlaceholder: string;
+  threadComposerBodyPlaceholder: string;
+  threadComposerFlairLabel: string;
+  threadComposerFlairHint: string;
+  threadComposerConfessionHint: string;
+  threadComposerSubmit: string;
+  threadComposerPosting: string;
+  threadComposerError: string;
+  threadComposerTitleRequired: string;
+  threadComposerBodyRequired: string;
+  threadComposerCancel: string;
+  threadComposerMedicalSafety: string;
+  /** Thread flair edit (author / moderator). */
+  editFlairLabel: string;
+  editFlairSave: string;
+  editFlairSaving: string;
+  editFlairCancel: string;
+  editFlairError: string;
 };
 
 /** Shared engagement (follow / like) action labels. */
@@ -644,6 +690,48 @@ const copy: Record<Locale, WebAppPageCopy> = {
       exploreCirclesCta: "Explore Circles",
       discoverTitle: "Discover",
       wallCommentLabel: "Comments",
+      rulesTitle: "Circle guidelines",
+      weeklyPromptBadge: "This week",
+      weeklyPromptDismiss: "Dismiss prompt",
+      weeklyPromptHint: "Answer here with a question thread, or use the app for media and richer posts.",
+      activeVoicesTitle: "Active voices this week",
+      helpfulLabel: "helpful",
+      flairFilterEmpty: "No discussions match this flair. Try another filter.",
+      replySortLabel: "Sort replies",
+      replySortNew: "New",
+      replySortTop: "Top",
+      replySortHelpful: "Helpful",
+      helpfulButtonLabel: "Helpful",
+      helpfulMarkLabel: "Mark reply as Helpful",
+      helpfulRemoveLabel: "Remove Helpful mark",
+      helpfulError: "Could not update Helpful. Try again.",
+      helpfulBlocked: "You cannot mark this reply Helpful.",
+      helpfulUnavailable: "This reply is not available.",
+      continueTitle: "Continue conversations",
+      unansweredTitle: "Unanswered questions",
+      startDiscussionCta: "Start a discussion",
+      askQuestionCta: "Ask a question",
+      joinToPostTitle: "Join to post",
+      joinToPostBody: "Join this Circle to start a discussion. You can leave anytime.",
+      threadComposerTitle: "New discussion",
+      threadComposerTitlePlaceholder: "Title",
+      threadComposerBodyPlaceholder: "Share details, context, or your question…",
+      threadComposerFlairLabel: "Flair (optional)",
+      threadComposerFlairHint: "Help others browse — pick one tag if it fits.",
+      threadComposerConfessionHint: "Your name stays hidden — keep details general.",
+      threadComposerSubmit: "Post discussion",
+      threadComposerPosting: "Posting…",
+      threadComposerError: "Could not post your discussion. Try again.",
+      threadComposerTitleRequired: "Add a title for your discussion.",
+      threadComposerBodyRequired: "Add some details for your discussion.",
+      threadComposerCancel: "Cancel",
+      threadComposerMedicalSafety:
+        "General education only. PulseVerse does not replace medical advice, diagnosis, treatment, or emergency care.",
+      editFlairLabel: "Edit flair",
+      editFlairSave: "Save",
+      editFlairSaving: "Saving…",
+      editFlairCancel: "Cancel",
+      editFlairError: "Could not update flair. Try again.",
     },
     creatorHub: {
       title: "Creator Hub",
@@ -1047,6 +1135,48 @@ const copy: Record<Locale, WebAppPageCopy> = {
       exploreCirclesCta: "Explorar Círculos",
       discoverTitle: "Descubrir",
       wallCommentLabel: "Comentarios",
+      rulesTitle: "Normas del Círculo",
+      weeklyPromptBadge: "Esta semana",
+      weeklyPromptDismiss: "Ocultar aviso",
+      weeklyPromptHint: "Responde aquí con un hilo de pregunta, o usa la app para multimedia y publicaciones más completas.",
+      activeVoicesTitle: "Voces activas esta semana",
+      helpfulLabel: "útiles",
+      flairFilterEmpty: "Ningún hilo coincide con este flair. Prueba otro filtro.",
+      replySortLabel: "Ordenar respuestas",
+      replySortNew: "Nuevas",
+      replySortTop: "Top",
+      replySortHelpful: "Útiles",
+      helpfulButtonLabel: "Útil",
+      helpfulMarkLabel: "Marcar respuesta como útil",
+      helpfulRemoveLabel: "Quitar marca de útil",
+      helpfulError: "No se pudo actualizar. Inténtalo de nuevo.",
+      helpfulBlocked: "No puedes marcar esta respuesta como útil.",
+      helpfulUnavailable: "Esta respuesta no está disponible.",
+      continueTitle: "Continuar conversaciones",
+      unansweredTitle: "Preguntas sin respuesta",
+      startDiscussionCta: "Iniciar una discusión",
+      askQuestionCta: "Hacer una pregunta",
+      joinToPostTitle: "Únete para publicar",
+      joinToPostBody: "Únete a este Círculo para iniciar una discusión. Puedes salir cuando quieras.",
+      threadComposerTitle: "Nueva discusión",
+      threadComposerTitlePlaceholder: "Título",
+      threadComposerBodyPlaceholder: "Comparte detalles, contexto o tu pregunta…",
+      threadComposerFlairLabel: "Flair (opcional)",
+      threadComposerFlairHint: "Ayuda a otros a explorar — elige una etiqueta si encaja.",
+      threadComposerConfessionHint: "Tu nombre permanece oculto — mantén los detalles generales.",
+      threadComposerSubmit: "Publicar discusión",
+      threadComposerPosting: "Publicando…",
+      threadComposerError: "No se pudo publicar tu discusión. Inténtalo de nuevo.",
+      threadComposerTitleRequired: "Añade un título para tu discusión.",
+      threadComposerBodyRequired: "Añade algunos detalles para tu discusión.",
+      threadComposerCancel: "Cancelar",
+      threadComposerMedicalSafety:
+        "Solo educación general. PulseVerse no sustituye el consejo, diagnóstico, tratamiento o atención de emergencia médica.",
+      editFlairLabel: "Editar flair",
+      editFlairSave: "Guardar",
+      editFlairSaving: "Guardando…",
+      editFlairCancel: "Cancelar",
+      editFlairError: "No se pudo actualizar el flair. Inténtalo de nuevo.",
     },
     creatorHub: {
       title: "Creator Hub",
