@@ -56,6 +56,7 @@ export default async function WebAppPulseUpdatePage({
       update={result.update}
       comments={result.comments}
       copy={c.profile}
+      engagement={c.engagement}
       backHref={backHref}
       focusComments={focus === "comments"}
     />

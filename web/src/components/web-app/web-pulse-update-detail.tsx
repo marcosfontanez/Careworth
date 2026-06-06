@@ -4,13 +4,13 @@ import Link from "next/link";
 import { ArrowLeft, Expand, MessageCircle, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
 import {
   buildWebPulseUpdateDetailGallery,
   type WebPulsePhotoViewerCreator,
 } from "@/lib/web-app/pulse-photo-gallery";
-import type { WebPulseUpdateComment, WebPulseUpdateDetail } from "@/lib/web-app/pulse-update-data";
-import { resolveWebPicsUrls } from "@/lib/web-app/pulse-update-data";
+import type { WebPulseUpdateComment, WebPulseUpdateDetail } from "@/lib/web-app/pulse-update-types";
+import { resolveWebPicsUrls } from "@/lib/web-app/pulse-update-utils";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 import { WebPulsePhotoViewerHost } from "./web-pulse-photo-viewer";
 
@@ -18,12 +18,14 @@ export function WebPulseUpdateDetail({
   update,
   comments,
   copy,
+  engagement,
   backHref,
   focusComments = false,
 }: {
   update: WebPulseUpdateDetail;
   comments: WebPulseUpdateComment[];
   copy: WebAppProfileCopy;
+  engagement: WebAppEngagementCopy;
   backHref: string;
   focusComments?: boolean;
 }) {
@@ -173,9 +175,9 @@ export function WebPulseUpdateDetail({
                 initialIndex: viewerSession.initialIndex,
                 creator,
                 engagement: {
-                  like: copy.engagement.like,
-                  liked: copy.engagement.liked,
-                  likeError: copy.engagement.likeError,
+                  like: engagement.like,
+                  liked: engagement.liked,
+                  likeError: engagement.likeError,
                   pulse: "Pulse",
                   pulsed: "Pulsed",
                 },

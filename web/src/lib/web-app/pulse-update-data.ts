@@ -4,54 +4,15 @@ import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase
 
 import { toHttps } from "./format";
 import { loadLikedProfileUpdateIds } from "./engagement-data";
+import type {
+  WebPulseUpdateComment,
+  WebPulseUpdateDetail,
+  WebPulseUpdateResult,
+} from "./pulse-update-types";
+
+export type { WebPulseUpdateComment, WebPulseUpdateDetail, WebPulseUpdateResult };
 
 type AnyRow = Record<string, unknown>;
-
-export type WebPulseUpdateDetail = {
-  id: string;
-  userId: string;
-  type: string;
-  content: string | null;
-  previewText: string | null;
-  mood: string | null;
-  picsUrls: string[];
-  mediaThumb: string | null;
-  linkedUrl: string | null;
-  linkedPostId: string | null;
-  createdAt: string | null;
-  editedAt: string | null;
-  likeCount: number;
-  commentCount: number;
-  likedByViewer?: boolean;
-  author: {
-    id: string;
-    displayName: string;
-    username: string | null;
-    avatarUrl: string | null;
-  } | null;
-};
-
-export type WebPulseUpdateComment = {
-  id: string;
-  body: string;
-  createdAt: string | null;
-  edited: boolean;
-  author: {
-    id: string;
-    displayName: string;
-    username: string | null;
-    avatarUrl: string | null;
-  } | null;
-};
-
-export type WebPulseUpdateResult =
-  | { state: "unavailable" }
-  | { state: "error" }
-  | {
-      state: "ok";
-      update: WebPulseUpdateDetail;
-      comments: WebPulseUpdateComment[];
-    };
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v : null;
@@ -172,27 +133,4 @@ export async function loadWebPulseUpdate(
   } catch {
     return { state: "error" };
   }
-}
-
-export function isWebPulsePicsUpdate(update: {
-  type: string;
-  linkedUrl?: string | null;
-  picsUrls?: string[];
-  mediaThumb?: string | null;
-}): boolean {
-  const type = update.type.toLowerCase();
-  if (type === "pics") return true;
-  if (type === "media_note" && !update.linkedUrl?.trim()) {
-    return (update.picsUrls?.length ?? 0) > 0 || Boolean(update.mediaThumb?.trim());
-  }
-  return false;
-}
-
-export function resolveWebPicsUrls(update: {
-  picsUrls?: string[];
-  mediaThumb?: string | null;
-}): string[] {
-  if (update.picsUrls?.length) return update.picsUrls;
-  const thumb = update.mediaThumb?.trim();
-  return thumb ? [thumb] : [];
 }

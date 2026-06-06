@@ -312,6 +312,7 @@ export function WebProfile({
               pulseUpdates={pulseUpdates}
               profile={profile}
               copy={copy}
+              engagement={engagement}
               isOwner={isOwner}
               openAppHref={openAppHref}
               externalProps={externalProps}
@@ -323,6 +324,7 @@ export function WebProfile({
             <WebMediaHub
               media={media}
               copy={copy}
+              engagement={engagement}
               isOwner={isOwner}
               creator={{
                 id: profile.id,

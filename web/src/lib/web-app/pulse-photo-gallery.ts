@@ -1,9 +1,9 @@
 import type { WebMediaItem } from "@/lib/web-app/profile-data";
+import type { WebPulseUpdateDetail } from "@/lib/web-app/pulse-update-types";
 import {
   isWebPulsePicsUpdate,
   resolveWebPicsUrls,
-  type WebPulseUpdateDetail,
-} from "@/lib/web-app/pulse-update-data";
+} from "@/lib/web-app/pulse-update-utils";
 
 export type WebPulsePhotoViewerItem = {
   id: string;

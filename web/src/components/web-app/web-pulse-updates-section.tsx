@@ -17,13 +17,16 @@ import {
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
-import type { WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
 import type { WebProfileHeader, WebPulseUpdate } from "@/lib/web-app/profile-data";
 import {
   buildWebPulseUpdatePhotoGallery,
   type WebPulsePhotoViewerCreator,
 } from "@/lib/web-app/pulse-photo-gallery";
-import { isWebPulsePicsUpdate, resolveWebPicsUrls } from "@/lib/web-app/pulse-update-data";
+import {
+  isWebPulsePicsUpdate,
+  resolveWebPicsUrls,
+} from "@/lib/web-app/pulse-update-utils";
 import { formatCount, relativeTime } from "@/lib/web-app/format";
 import { WebPulsePhotoViewerHost } from "./web-pulse-photo-viewer";
 
@@ -124,6 +127,7 @@ export function WebPulseUpdatesSection({
   pulseUpdates,
   profile,
   copy,
+  engagement,
   isOwner,
   openAppHref,
   externalProps,
@@ -131,6 +135,7 @@ export function WebPulseUpdatesSection({
   pulseUpdates: WebPulseUpdate[];
   profile: WebProfileHeader;
   copy: WebAppProfileCopy;
+  engagement: WebAppEngagementCopy;
   isOwner: boolean;
   openAppHref: string;
   externalProps: React.AnchorHTMLAttributes<HTMLAnchorElement>;
@@ -209,9 +214,9 @@ export function WebPulseUpdatesSection({
                 initialIndex: viewerSession.initialIndex,
                 creator,
                 engagement: {
-                  like: copy.engagement.like,
-                  liked: copy.engagement.liked,
-                  likeError: copy.engagement.likeError,
+                  like: engagement.like,
+                  liked: engagement.liked,
+                  likeError: engagement.likeError,
                   pulse: "Pulse",
                   pulsed: "Pulsed",
                 },

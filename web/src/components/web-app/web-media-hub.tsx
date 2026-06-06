@@ -4,7 +4,7 @@ import { Expand, Heart, Images, Play, Star, Video, type LucideIcon } from "lucid
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
-import type { WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
+import type { WebAppEngagementCopy, WebAppProfileCopy } from "@/lib/marketing-copy/web-app";
 import type { WebMediaItem, WebProfileMedia } from "@/lib/web-app/profile-data";
 import {
   buildWebMediaHubPhotoGallery,
@@ -139,11 +139,13 @@ function SegTab({
 export function WebMediaHub({
   media,
   copy,
+  engagement,
   isOwner,
   creator,
 }: {
   media: WebProfileMedia;
   copy: WebAppProfileCopy;
+  engagement: WebAppEngagementCopy;
   isOwner: boolean;
   creator: WebPulsePhotoViewerCreator;
 }) {
@@ -243,9 +245,9 @@ export function WebMediaHub({
                 initialIndex: viewerSession.initialIndex,
                 creator,
                 engagement: {
-                  like: copy.engagement.like,
-                  liked: copy.engagement.liked,
-                  likeError: copy.engagement.likeError,
+                  like: engagement.like,
+                  liked: engagement.liked,
+                  likeError: engagement.likeError,
                   pulse: "Pulse",
                   pulsed: "Pulsed",
                 },
