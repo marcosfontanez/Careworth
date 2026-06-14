@@ -9,7 +9,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display, var(--font-sans));
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -124,5 +124,164 @@
   ::selection {
     background: color-mix(in oklab, var(--primary) 38%, transparent);
     color: var(--foreground);
+  }
+}
+
+/* ===========================================================================
+ * PulseVerse premium motion + surface utilities.
+ * All motion is gated by the global prefers-reduced-motion block above, which
+ * collapses every animation/transition to ~0ms — so these degrade to a static,
+ * fully-legible page for users who opt out of motion.
+ * ======================================================================== */
+
+@property --pv-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes pv-aurora {
+  0% { transform: translate3d(-4%, -2%, 0) scale(1.05); }
+  50% { transform: translate3d(4%, 3%, 0) scale(1.12); }
+  100% { transform: translate3d(-4%, -2%, 0) scale(1.05); }
+}
+
+@keyframes pv-float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes pv-shimmer {
+  0% { background-position: -150% 0; }
+  100% { background-position: 250% 0; }
+}
+
+@keyframes pv-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes pv-spin {
+  to { --pv-angle: 360deg; }
+}
+
+@layer utilities {
+  /* --- Scroll reveal (driven by the Reveal client component) ------------- */
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(20px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 0.7, 0.2, 1),
+      transform 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
+    will-change: opacity, transform;
+  }
+  [data-reveal][data-shown] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* --- Animated aurora background (slow drifting gradient mesh) ---------- */
+  .pv-aurora {
+    background:
+      radial-gradient(ellipse 60% 45% at 18% 12%, rgba(0, 210, 255, 0.18), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 85% 28%, rgba(37, 99, 235, 0.18), transparent 55%),
+      radial-gradient(ellipse 65% 50% at 55% 100%, rgba(15, 118, 180, 0.16), transparent 60%);
+    animation: pv-aurora 24s ease-in-out infinite;
+  }
+
+  /* --- Film grain overlay for cinematic depth --------------------------- */
+  .pv-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
+
+  /* --- Floating idle motion (hero poster) ------------------------------- */
+  .pv-float {
+    animation: pv-float 7s ease-in-out infinite;
+  }
+
+  /* --- Gradient headline text (white -> light cyan, high contrast) ------ */
+  .pv-gradient-text {
+    background: linear-gradient(180deg, #ffffff 0%, #bfe9ff 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* --- Shimmer sweep across a gradient word ----------------------------- */
+  .pv-shimmer-text {
+    background: linear-gradient(
+      100deg,
+      #cfe9ff 0%,
+      #ffffff 35%,
+      #00d2ff 50%,
+      #ffffff 65%,
+      #cfe9ff 100%
+    );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: pv-shimmer 6s linear infinite;
+  }
+
+  /* --- Cursor-follow spotlight card ------------------------------------- */
+  .pv-spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      240px circle at var(--pv-mx, 50%) var(--pv-my, 50%),
+      rgba(0, 210, 255, 0.16),
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .pv-spotlight:hover::before,
+  .pv-spotlight:focus-within::before {
+    opacity: 1;
+  }
+
+  /* --- Rotating conic gradient border (flagship bento tile) ------------- */
+  .pv-conic-border::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--pv-angle),
+      transparent 0%,
+      rgba(0, 210, 255, 0.7) 18%,
+      rgba(37, 99, 235, 0.7) 38%,
+      transparent 62%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: pv-spin 7s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* --- Marquee track (duplicate children inside for seamless loop) ------ */
+  .pv-marquee {
+    animation: pv-marquee 38s linear infinite;
+  }
+  .pv-marquee-group:hover .pv-marquee {
+    animation-play-state: paused;
   }
 }

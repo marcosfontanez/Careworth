@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Inter } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import { cookies } from "next/headers";
+import { preconnect, prefetchDNS } from "react-dom";
 import "./globals.css";
 import { SiteAnalytics } from "@/components/site-analytics";
 import { SkipToMain } from "@/components/skip-to-main";
@@ -10,6 +11,7 @@ import { isVercelPreviewDeployment } from "@/lib/deployment-env";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n";
 import { PV_LOCALE_COOKIE } from "@/lib/locale-preference";
 import { getPublicSiteUrl } from "@/lib/site-url";
+import { getSupabaseUrlAndAnon } from "@/lib/supabase/public-env";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -17,6 +19,14 @@ const inter = Inter({
   display: "swap",
   adjustFontFallback: true,
   weight: ["400", "500", "600", "700"],
+});
+
+/* Distinctive display face for headlines; body copy stays on Inter. */
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-display",
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["500", "600", "700"],
 });
 
 export const viewport: Viewport = {
@@ -54,8 +64,16 @@ export default async function RootLayout({
   const raw = jar.get(PV_LOCALE_COOKIE)?.value;
   const htmlLang = raw && isLocale(raw) ? raw : DEFAULT_LOCALE;
 
+  /* Warm the connection to Supabase so the first client-side auth/data call
+     doesn't pay full DNS + TLS setup. Free, safe resource hint. */
+  const supabaseCreds = getSupabaseUrlAndAnon();
+  if (supabaseCreds?.url) {
+    prefetchDNS(supabaseCreds.url);
+    preconnect(supabaseCreds.url, { crossOrigin: "anonymous" });
+  }
+
   return (
-    <html lang={htmlLang} className={`dark ${inter.variable} min-h-dvh scroll-smooth`}>
+    <html lang={htmlLang} className={`dark ${inter.variable} ${spaceGrotesk.variable} min-h-dvh scroll-smooth`}>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
         <Script id="pv-auth-callback-redirect" strategy="beforeInteractive">
           {`

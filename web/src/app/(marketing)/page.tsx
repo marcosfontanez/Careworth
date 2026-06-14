@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 
 import { HeroSection } from "@/components/marketing/hero-section";
 import { HomeFeatureShowcase } from "@/components/marketing/home-feature-showcase";
+import { Reveal } from "@/components/marketing/reveal";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
@@ -23,10 +24,18 @@ export default async function HomePage() {
     <>
       <HeroSection locale={locale} />
       <HomeFeatureShowcase locale={locale} />
-      <HomePulseDuo locale={locale} />
-      <HomeCreatorHub locale={locale} />
-      <HomeTrustSection locale={locale} />
-      <HomeFinalCta locale={locale} />
+      <Reveal>
+        <HomePulseDuo locale={locale} />
+      </Reveal>
+      <Reveal>
+        <HomeCreatorHub locale={locale} />
+      </Reveal>
+      <Reveal>
+        <HomeTrustSection locale={locale} />
+      </Reveal>
+      <Reveal>
+        <HomeFinalCta locale={locale} />
+      </Reveal>
     </>
   );
 }

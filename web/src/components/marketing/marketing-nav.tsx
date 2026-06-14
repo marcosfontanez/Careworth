@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ArrowRight, Menu } from "lucide-react";
 
 import { signOutUser } from "@/app/(marketing)/login/actions";
@@ -59,11 +60,29 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
     (account?.username ? `@${account.username}` : null) ||
     strings.myPulse;
 
+  /* Condense the bar after a little scroll — tighter height, deeper blur, a
+     faint cyan hairline. A small premium "settle" cue on every page. */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-50 border-b border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.92)] backdrop-blur-xl">
+    <header
+      className={cn(
+        "sticky top-0 z-50 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300",
+        scrolled
+          ? "border-[rgba(0,210,255,0.16)] bg-[rgba(5,10,20,0.96)] shadow-[0_10px_40px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl"
+          : "border-[rgba(148,163,184,0.1)] bg-[rgba(5,10,20,0.85)] backdrop-blur-xl",
+      )}
+    >
       <div
         className={cn(
-          "flex min-h-16 items-center gap-2 py-2 sm:min-h-20 sm:gap-3 lg:gap-5",
+          "flex items-center gap-2 transition-[min-height,padding] duration-300 sm:gap-3 lg:gap-5",
+          scrolled ? "min-h-14 py-1.5 sm:min-h-16" : "min-h-16 py-2 sm:min-h-20",
           marketingGutterX,
         )}
       >

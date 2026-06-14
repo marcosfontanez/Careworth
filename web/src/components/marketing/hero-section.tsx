@@ -17,7 +17,7 @@ export function HeroSection({ locale }: { locale: Locale }) {
   const t = getHomeHeroCopy(locale);
   return (
     <section className="relative isolate overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-20 lg:pb-24">
-      <WebsiteSectionBackdrop variant="deep" />
+      <WebsiteSectionBackdrop variant="deep" animated />
       <div
         aria-hidden
         className="pointer-events-none absolute -left-24 top-12 -z-10 h-[420px] w-[420px] rounded-full bg-primary/10 blur-[110px]"
@@ -41,7 +41,7 @@ export function HeroSection({ locale }: { locale: Locale }) {
             </span>
             {/* Visible H1 — mirrors the headline baked into the hero image for SEO + screen readers
                 (Google won't reliably read text-as-pixels). Kept compact so the poster stays the lede. */}
-            <h1 className="mt-4 max-w-md text-balance font-heading text-3xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem]">
+            <h1 className="pv-gradient-text mt-4 max-w-md text-balance font-heading text-3xl font-bold leading-[1.05] tracking-tight sm:text-4xl lg:text-[2.6rem]">
               {t.headline}
             </h1>
             <p className="mt-5 max-w-md text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -68,7 +68,7 @@ export function HeroSection({ locale }: { locale: Locale }) {
               sizes="(max-width: 1024px) 100vw, 760px"
               size="dramatic"
               tag={{ label: t.posterTag }}
-              className="lg:translate-y-2"
+              className="pv-float lg:translate-y-2"
             />
             <PosterCaptionStrip device="iPhone" context={t.posterCaption} tone="cyan" />
           </div>

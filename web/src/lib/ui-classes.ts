@@ -73,7 +73,7 @@ export const marketingSurfaceTile = cn(
 export const marketingCtaPrimaryClasses = cn(
   "h-11 min-h-11 rounded-full px-6 text-sm font-semibold sm:h-12 sm:px-7 sm:text-base",
   "bg-gradient-to-r from-primary via-[#2d7ff9] to-[#00a8cc] text-primary-foreground",
-  "hover:brightness-110 active:brightness-95",
+  "transition-[transform,filter,box-shadow] duration-200 hover:brightness-110 hover:-translate-y-0.5 active:scale-[0.98] active:brightness-95",
   shadowPrimaryCta,
   marketingFocusRing,
 );
@@ -81,7 +81,7 @@ export const marketingCtaPrimaryClasses = cn(
 /** Secondary glass CTA button. */
 export const marketingCtaSecondaryClasses = cn(
   "h-11 min-h-11 rounded-full border border-white/15 bg-white/5 px-6 text-sm font-semibold text-foreground sm:h-12 sm:px-7 sm:text-base",
-  "hover:border-white/25 hover:bg-white/8",
+  "transition-[transform,background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/8 hover:-translate-y-0.5 active:scale-[0.98]",
   marketingFocusRing,
 );
 

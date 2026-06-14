@@ -64,9 +64,12 @@ const TONE = {
 
 export function WebsiteSectionBackdrop({
   variant = "deep",
+  animated = false,
   className,
 }: {
   variant?: "deep" | "soft" | "spotlight";
+  /** Slowly drifts the gradient mesh for a living aurora feel (motion-safe). */
+  animated?: boolean;
   className?: string;
 }) {
   const layers: Record<string, string> = {
@@ -76,11 +79,20 @@ export function WebsiteSectionBackdrop({
       "bg-[radial-gradient(ellipse_60%_55%_at_50%_50%,rgba(20,184,166,0.10),transparent_60%)]",
   };
   return (
-    <div
-      aria-hidden
-      className={cn("pointer-events-none absolute inset-0 -z-10", layers[variant], className)}
-    />
+    <div aria-hidden className={cn("pointer-events-none absolute inset-0 -z-10", className)}>
+      <div className={cn("absolute inset-0", layers[variant])} />
+      {animated && <div className="pv-aurora absolute inset-[-15%] opacity-70 blur-2xl" />}
+    </div>
   );
+}
+
+/* ---------------------------------------------------------------------------
+ * GrainOverlay — faint film grain for cinematic depth. Place inside a
+ * `relative` section; it sits at z-0 behind content via the `.pv-grain` rule.
+ * ------------------------------------------------------------------------- */
+
+export function GrainOverlay({ className }: { className?: string }) {
+  return <div aria-hidden className={cn("pv-grain pointer-events-none absolute inset-0", className)} />;
 }
 
 /* ---------------------------------------------------------------------------
@@ -720,7 +732,7 @@ export function FeatureTile({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.65)] p-6 ring-1 ring-white/4 backdrop-blur-md transition duration-200 hover:border-(--accent)/40 hover:shadow-[0_28px_70px_-28px_rgba(20,184,166,0.45)]",
+        "pv-spotlight group relative overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.65)] p-6 ring-1 ring-white/4 backdrop-blur-md transition duration-200 hover:-translate-y-0.5 hover:border-(--accent)/40 hover:shadow-[0_28px_70px_-28px_rgba(20,184,166,0.45)]",
         className,
       )}
     >
@@ -758,7 +770,7 @@ export function TrustChip({
   body: string;
 }) {
   return (
-    <div className="flex gap-4 rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-5 ring-1 ring-white/3 backdrop-blur-sm">
+    <div className="pv-spotlight relative flex gap-4 overflow-hidden rounded-2xl border border-white/10 bg-[rgba(12,21,36,0.55)] p-5 ring-1 ring-white/3 backdrop-blur-sm transition duration-200 hover:border-primary/30">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/25">
         <Icon className="h-5 w-5" aria-hidden />
       </div>

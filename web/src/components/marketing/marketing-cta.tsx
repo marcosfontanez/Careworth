@@ -28,10 +28,15 @@ export function MarketingPrimaryCta({
       <MarketingDestinationLink
         href={href}
         analyticsSource={analyticsSource}
-        className="inline-flex items-center justify-center gap-2"
+        className="group/cta inline-flex items-center justify-center gap-2"
       >
         {children}
-        {showArrow ? <ArrowRight className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden /> : null}
+        {showArrow ? (
+          <ArrowRight
+            className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/cta:translate-x-1 sm:h-5 sm:w-5"
+            aria-hidden
+          />
+        ) : null}
       </MarketingDestinationLink>
     </Button>
   );
