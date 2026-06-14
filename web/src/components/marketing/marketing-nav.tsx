@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Menu } from "lucide-react";
 
 import { signOutUser } from "@/app/(marketing)/login/actions";
+import { getSupabaseBrowserClient } from "@/components/auth/supabase-browser-client";
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,50 @@ export type MarketingAccountChip = {
   displayName: string | null;
   username: string | null;
 } | null;
+
+/**
+ * Resolves the signed-in marketing visitor **on the client, after paint**.
+ *
+ * The marketing shell is intentionally SSR-anonymous (no Supabase auth/DB work
+ * in the server render → fast, cacheable TTFB). Logged-in chrome (the "me" link
+ * + sign-out) hydrates in shortly after load via the browser Supabase client.
+ * For the public homepage CWV traffic (overwhelmingly anonymous) this is a no-op
+ * network-wise; for signed-in users it's a tiny, non-blocking post-paint fetch.
+ */
+function useMarketingAccount(): MarketingAccountChip {
+  const [account, setAccount] = useState<MarketingAccountChip>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (cancelled || !user) return;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, username")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        setAccount({
+          userId: user.id,
+          displayName: profile?.display_name ?? null,
+          username: profile?.username ?? null,
+        });
+      } catch {
+        /* Anonymous or unconfigured — keep the logged-out nav. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return account;
+}
 
 function NavLink({
   href,
@@ -51,8 +96,9 @@ function NavLink({
   );
 }
 
-export function MarketingNav({ locale, account }: { locale: Locale; account: MarketingAccountChip }) {
+export function MarketingNav({ locale }: { locale: Locale }) {
   const pathname = usePathname() ?? "";
+  const account = useMarketingAccount();
   const centerLinks = getMarketingCenterLinks(locale);
   const strings = getMarketingNavStrings(locale);
   const meLabel =
@@ -102,6 +148,7 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
           {account ? (
             <Link
               href="/me"
+              prefetch={false}
               className={cn(
                 "hidden max-w-26 truncate text-sm font-semibold text-foreground hover:text-primary md:inline md:max-w-36 xl:max-w-44",
                 marketingFocusRing,
@@ -120,7 +167,7 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
             </form>
           ) : (
             <Button variant="ghost" size="sm" className="hidden shrink-0 px-2 text-muted-foreground md:inline-flex" asChild>
-              <Link href="/login" className={marketingFocusRing}>
+              <Link href="/login" prefetch={false} className={marketingFocusRing}>
                 {strings.logIn}
               </Link>
             </Button>
@@ -165,6 +212,7 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
                     <>
                       <Link
                         href="/me"
+                        prefetch={false}
                         className={cn(
                           "rounded-lg px-3 py-2.5 text-base font-medium text-foreground hover:bg-secondary",
                           marketingFocusRing,
@@ -187,6 +235,7 @@ export function MarketingNav({ locale, account }: { locale: Locale; account: Mar
                   ) : (
                     <Link
                       href="/login"
+                      prefetch={false}
                       className={cn(
                         "rounded-lg px-3 py-2.5 text-base font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
                         marketingFocusRing,

@@ -69,14 +69,17 @@ export function MarketingSecondaryLink({
   href,
   children,
   className,
+  prefetch,
 }: {
   href: string;
   children: ReactNode;
   className?: string;
+  /** Pass `false` for heavy app routes (e.g. /web-app) to skip background prefetch. */
+  prefetch?: boolean;
 }) {
   return (
     <Button size="lg" variant="outline" className={cn(marketingCtaSecondaryClasses, className)} asChild>
-      <Link href={href} className="inline-flex items-center justify-center gap-2">
+      <Link href={href} prefetch={prefetch} className="inline-flex items-center justify-center gap-2">
         {children}
       </Link>
     </Button>

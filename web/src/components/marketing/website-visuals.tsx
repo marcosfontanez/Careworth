@@ -496,7 +496,10 @@ export function ScreenshotShowcaseCard({
       {cornerTrace && <PosterCornerTrace tone={glow} position="corners" />}
       <div
         className={cn(
-          "relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/4 backdrop-blur-md",
+          /* No backdrop-blur here: the opaque screenshot fills this box, so a
+             backdrop filter would never be visible yet still forces an expensive
+             full-area paint. The glow shadow below carries the depth. */
+          "relative overflow-hidden rounded-3xl border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/4",
           tone.glow,
         )}
       >
@@ -621,7 +624,9 @@ export function PosterFrame({
 
       <div
         className={cn(
-          "relative overflow-hidden rounded-[2rem] border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/4 backdrop-blur-md sm:rounded-[2.25rem]",
+          /* No backdrop-blur: the opaque poster image covers this surface, so the
+             filter is never visible but would repaint the whole (large) frame. */
+          "relative overflow-hidden rounded-[2rem] border border-white/10 bg-[rgba(8,14,26,0.7)] ring-1 ring-white/4 sm:rounded-[2.25rem]",
           glowClass,
         )}
       >

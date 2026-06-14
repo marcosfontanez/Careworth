@@ -66,7 +66,7 @@ export function HomeFeatureShowcase({ locale }: { locale: Locale }) {
 
   return (
     <section className={marketingSection}>
-      <WebsiteSectionBackdrop variant="soft" animated />
+      <WebsiteSectionBackdrop variant="soft" />
       <GrainOverlay />
       <div className={cn("relative", marketingGutterX)}>
         <Reveal>

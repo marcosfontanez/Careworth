@@ -8,10 +8,17 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Deliberately OUTSIDE the `(marketing)` route group: this is a fast auth
+ * transition page, so it must not pull in the marketing nav, footer, locale
+ * resolution, or any product renders. It uses only the minimal root layout and
+ * a single tiny client island that exchanges the Supabase code/hash and
+ * redirects — nothing else loads.
+ */
 export default function AuthConfirmPage() {
   return (
     <div
-      className="relative flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center px-4 py-16"
+      className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-16"
       style={{
         background:
           "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(20,184,166,0.12), transparent)",

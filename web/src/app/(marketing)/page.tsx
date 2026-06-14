@@ -24,16 +24,16 @@ export default async function HomePage() {
     <>
       <HeroSection locale={locale} />
       <HomeFeatureShowcase locale={locale} />
-      <Reveal>
+      <Reveal className="pv-cv-section">
         <HomePulseDuo locale={locale} />
       </Reveal>
-      <Reveal>
+      <Reveal className="pv-cv-section">
         <HomeCreatorHub locale={locale} />
       </Reveal>
-      <Reveal>
+      <Reveal className="pv-cv-section">
         <HomeTrustSection locale={locale} />
       </Reveal>
-      <Reveal>
+      <Reveal className="pv-cv-section">
         <HomeFinalCta locale={locale} />
       </Reveal>
     </>

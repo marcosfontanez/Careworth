@@ -51,7 +51,9 @@ export function HeroSection({ locale }: { locale: Locale }) {
               <MarketingPrimaryCta href="/download" analyticsSource="hero_primary">
                 {t.primaryCta}
               </MarketingPrimaryCta>
-              <MarketingSecondaryLink href="/web-app">{t.secondaryCta}</MarketingSecondaryLink>
+              <MarketingSecondaryLink href="/web-app" prefetch={false}>
+                {t.secondaryCta}
+              </MarketingSecondaryLink>
             </div>
           </div>
 

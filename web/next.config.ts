@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 import type { NextConfig } from "next";
 
 import { marketingContentSecurityPolicy } from "./src/lib/content-security-policy";
@@ -36,6 +37,13 @@ const nextConfig: NextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    /* AVIF first (≈30–50% smaller than WebP for these screenshots), WebP fallback.
+       The marketing source PNGs are 1.5–2 MB; the optimizer delivers a fraction of
+       that at the requested width, which directly improves LCP. */
+    formats: ["image/avif", "image/webp"],
+    /* Cache optimized variants on the CDN for 30 days so repeat/real-user visits
+       skip re-optimization (faster image TTFB). */
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
   /*
    * Monorepo: default `next dev` uses Turbopack; CSS `@import "tailwindcss"` still resolves from the
@@ -92,4 +100,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/* Bundle analysis: run `ANALYZE=true npm run build` (or `npm run analyze`) to emit
+   the per-route client/server bundle treemaps. The dependency is only required
+   when analyzing, so normal builds never load it. */
+const withBundleAnalyzer =
+  process.env.ANALYZE === "true"
+    ? createRequire(import.meta.url)("@next/bundle-analyzer")({ enabled: true })
+    : (config: NextConfig) => config;
+
+export default withBundleAnalyzer(nextConfig);

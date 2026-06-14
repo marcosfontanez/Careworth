@@ -174,11 +174,19 @@
     transition:
       opacity 0.7s cubic-bezier(0.22, 0.7, 0.2, 1),
       transform 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
-    will-change: opacity, transform;
   }
   [data-reveal][data-shown] {
     opacity: 1;
     transform: none;
+  }
+
+  /* --- Below-the-fold section budget ------------------------------------ *
+   * Skips layout + paint for off-screen marketing sections until they near
+   * the viewport, cutting initial main-thread work (helps FCP/LCP/INP). The
+   * intrinsic-size keeps the scrollbar stable so CLS stays ~0. */
+  .pv-cv-section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 720px;
   }
 
   /* --- Animated aurora background (slow drifting gradient mesh) ---------- */
