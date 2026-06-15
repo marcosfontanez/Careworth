@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 
 import { MarketingSecondaryLink } from "@/components/marketing/marketing-cta";
 import { Button } from "@/components/ui/button";
-import type { Locale } from "@/lib/i18n";
-import { getHomeLandingCopy } from "@/lib/marketing-copy/home-landing";
+import { MARKETING_EVENTS } from "@/lib/marketing-analytics";
+import { trackHomepageConversion } from "@/lib/marketing-conversion-tracking";
+import type { HomeLandingCopy } from "@/lib/marketing-copy/home-landing";
 import { getAndroidOpenTestingUrl, getIosTestflightUrl } from "@/lib/site-constants";
 import {
   marketingCtaSecondaryClasses,
@@ -14,8 +17,11 @@ import {
 } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
-export function HomeDownloadCta({ locale }: { locale: Locale }) {
-  const c = getHomeLandingCopy(locale).download;
+type Props = {
+  copy: HomeLandingCopy["download"];
+};
+
+export function HomeDownloadCta({ copy }: Props) {
   const iosUrl = getIosTestflightUrl();
   const androidUrl = getAndroidOpenTestingUrl();
 
@@ -34,32 +40,74 @@ export function HomeDownloadCta({ locale }: { locale: Locale }) {
             />
             <div className="relative">
               <h2 className="font-heading text-[2rem] font-bold tracking-tight text-foreground sm:text-[2.5rem]">
-                {c.headline}
+                {copy.headline}
               </h2>
               <p className="mx-auto mt-4 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground">
-                {c.body}
+                {copy.body}
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
                 <Button size="lg" variant="outline" className={marketingCtaSecondaryClasses} asChild>
-                  <a href={iosUrl} target="_blank" rel="noopener noreferrer">
-                    {c.iosCta}
+                  <a
+                    href={iosUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      trackHomepageConversion(MARKETING_EVENTS.homepageIosBetaClick, {
+                        section: "download_band",
+                        cta_label: copy.iosCta,
+                        destination: iosUrl,
+                      })
+                    }
+                  >
+                    {copy.iosCta}
                   </a>
                 </Button>
                 <Button size="lg" variant="outline" className={marketingCtaSecondaryClasses} asChild>
-                  <a href={androidUrl} target="_blank" rel="noopener noreferrer">
-                    {c.androidCta}
+                  <a
+                    href={androidUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      trackHomepageConversion(MARKETING_EVENTS.homepageAndroidBetaClick, {
+                        section: "download_band",
+                        cta_label: copy.androidCta,
+                        destination: androidUrl,
+                      })
+                    }
+                  >
+                    {copy.androidCta}
                   </a>
                 </Button>
-                <MarketingSecondaryLink href="/web-app" prefetch={false}>
-                  {c.webBetaCta}
+                <MarketingSecondaryLink
+                  href="/web-app"
+                  prefetch={false}
+                  onClick={() =>
+                    trackHomepageConversion(MARKETING_EVENTS.homepageWebBetaClick, {
+                      section: "download_band",
+                      cta_label: copy.webBetaCta,
+                      destination: "/web-app",
+                    })
+                  }
+                >
+                  {copy.webBetaCta}
                 </MarketingSecondaryLink>
               </div>
               <p className="mx-auto mt-6 max-w-xl text-xs leading-relaxed text-muted-foreground/90">
-                {c.webBetaNote}
+                {copy.webBetaNote}
               </p>
               <p className="mt-6 text-sm text-muted-foreground">
-                <Link href="/contact" className="font-semibold text-sky-300 underline-offset-4 hover:underline">
-                  Need help getting access?
+                <Link
+                  href="/support"
+                  onClick={() =>
+                    trackHomepageConversion(MARKETING_EVENTS.supportCtaClick, {
+                      section: "download_band",
+                      cta_label: copy.supportLinkLabel,
+                      destination: "/support",
+                    })
+                  }
+                  className="font-semibold text-sky-300 underline-offset-4 hover:underline"
+                >
+                  {copy.supportLinkLabel}
                 </Link>
               </p>
             </div>

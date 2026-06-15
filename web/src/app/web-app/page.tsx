@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { AppJsonLd } from "@/components/json-ld";
 import { WebAppLanding } from "@/components/web-app/web-app-landing";
 import { getWebAppPageCopy } from "@/lib/marketing-copy/web-app";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
+import { generateMarketingMetadata } from "@/lib/marketing-seo";
+import { webAppPageSchema } from "@/lib/structured-data";
 import { getWebAppAccount } from "@/lib/web-app/account";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const locale = await getMarketingLocale();
-  const c = getWebAppPageCopy(locale);
-  return {
-    title: c.metaTitle,
-    description: c.metaDescription,
-  };
+  return generateMarketingMetadata("webApp");
 }
 
 export default async function WebAppPage() {
@@ -28,5 +26,10 @@ export default async function WebAppPage() {
   // Signed out → polished public landing with a login CTA.
   const locale = await getMarketingLocale();
   const c = getWebAppPageCopy(locale);
-  return <WebAppLanding copy={c.landing} />;
+  return (
+    <>
+      <AppJsonLd data={webAppPageSchema()} />
+      <WebAppLanding copy={c.landing} />
+    </>
+  );
 }

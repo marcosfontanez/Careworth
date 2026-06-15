@@ -77,6 +77,9 @@ const nextConfig: NextConfig = {
         destination: "/admin/merchandising?section=frames",
         permanent: true,
       },
+      { source: "/circles", destination: "/features/circles", permanent: true },
+      { source: "/live", destination: "/features/live", permanent: true },
+      { source: "/creator-hub", destination: "/features", permanent: false },
     ];
   },
   async headers() {

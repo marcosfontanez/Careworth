@@ -1,13 +1,11 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-
+import { HomeFeatureCtaLink } from "@/components/marketing/home-feature-cta-link";
 import { LandingImage } from "@/components/marketing/landing-image";
 import { Reveal } from "@/components/marketing/reveal";
 import { PremiumSectionHeader } from "@/components/marketing/website-visuals";
 import type { Locale } from "@/lib/i18n";
 import { getHomeLandingCopy, type LandingFeature } from "@/lib/marketing-copy/home-landing";
 import { LANDING } from "@/lib/marketing-landing-assets";
-import { marketingFocusRing, marketingGutterX, marketingInlineLinkStrong, marketingSection } from "@/lib/ui-classes";
+import { marketingGutterX, marketingSection } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
 const FEATURE_ASSETS: Record<
@@ -58,14 +56,7 @@ function FeatureRow({
             </li>
           ))}
         </ul>
-        <Link
-          href={feature.href}
-          prefetch={feature.href.startsWith("/web-app") ? false : undefined}
-          className={cn("mt-6 inline-flex items-center gap-1.5", marketingInlineLinkStrong, marketingFocusRing)}
-        >
-          {feature.cta}
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
+        <HomeFeatureCtaLink feature={feature} />
       </div>
     </div>
   );

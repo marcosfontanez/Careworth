@@ -89,3 +89,52 @@ export function breadcrumbListSchema(items: readonly { name: string; href: strin
     })),
   };
 }
+
+/** Mobile app download surface — no ratings or unverified audience counts. */
+export function downloadPageAppSchema(): Record<string, unknown> {
+  const url = getPublicSiteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@type": "MobileApplication",
+    name: site.name,
+    url: `${url}/download`,
+    applicationCategory: "SocialNetworkingApplication",
+    operatingSystem: "iOS, Android",
+    description: site.description,
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: site.name,
+      url,
+    },
+  };
+}
+
+/** Web beta entry — browser-based software surface. */
+export function webAppPageSchema(): Record<string, unknown> {
+  const url = getPublicSiteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: `${site.name} Web Beta`,
+    url: `${url}/web-app`,
+    applicationCategory: "SocialNetworkingApplication",
+    operatingSystem: "Web browser",
+    description:
+      "PulseVerse Web beta — browse Feed and more in your browser. Sign in with your PulseVerse account; rich creation still works best in the mobile app.",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: site.name,
+      url,
+    },
+  };
+}

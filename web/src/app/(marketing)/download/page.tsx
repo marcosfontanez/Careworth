@@ -1,12 +1,15 @@
 import Link from "next/link";
+import Image from "next/image";
 
-import { BetaAccessButtons } from "@/components/marketing/beta-access-buttons";
+import { DownloadAccessPanel } from "@/components/marketing/download-access-panel";
 import { SectionHeader } from "@/components/marketing/section-header";
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { PosterFrame } from "@/components/marketing/website-visuals";
+import { AppJsonLd } from "@/components/json-ld";
 import { getDownloadPageCopy } from "@/lib/marketing-copy/download";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
+import { downloadPageAppSchema } from "@/lib/structured-data";
 import { marketingElevatedFrame, marketingFocusRing, marketingInlineLink } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +21,7 @@ export default async function DownloadPage() {
 
   return (
     <MarketingPageShell width="medium" breadcrumbPath="/download">
+      <AppJsonLd data={downloadPageAppSchema()} />
       <div className="scroll-mt-24" id="beta">
         <SectionHeader eyebrow={t.eyebrow} title={t.title} description={t.description} />
       </div>
@@ -37,7 +41,7 @@ export default async function DownloadPage() {
       </div>
 
       <div className={cn("mx-auto mt-10 max-w-2xl rounded-2xl p-6 sm:p-8", marketingElevatedFrame)}>
-        <BetaAccessButtons locale={locale} showRequestInvite className="justify-center" />
+        <DownloadAccessPanel copy={t} showRequestInvite className="justify-center" />
 
         <div className="mt-10 border-t border-white/10 pt-8">
           <p className="text-sm font-semibold text-foreground">{t.betaStepsTitle}</p>
@@ -55,7 +59,8 @@ export default async function DownloadPage() {
           </p>
         </div>
 
-        <p className="mt-8 text-center text-sm leading-relaxed text-muted-foreground">{t.footnote}</p>
+        <p className="mt-8 text-center text-sm leading-relaxed text-muted-foreground">{t.availabilityNote}</p>
+        <p className="mt-4 text-center text-sm font-medium text-foreground/90">{t.footnote}</p>
       </div>
     </MarketingPageShell>
   );

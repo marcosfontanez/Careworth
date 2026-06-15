@@ -10,6 +10,7 @@ export type DownloadPageCopy = {
   iosBetaCta: string;
   /** Shown when NEXT_PUBLIC_ANDROID_OPEN_TESTING_URL is set */
   androidBetaCta: string;
+  webBetaCta: string;
   betaStepsTitle: string;
   betaSteps: readonly string[];
   faqHintBefore: string;
@@ -18,19 +19,27 @@ export type DownloadPageCopy = {
   /** Alt text for the wide early-access hero infographic (phones + value props). */
   earlyAccessHeroAlt: string;
   footnote: string;
+  supportLinkLabel: string;
+  availabilityNote: string;
+  qrTitle: string;
+  qrHint: string;
+  deviceHintIos: string;
+  deviceHintAndroid: string;
+  deviceHintDesktop: string;
 };
 
 const copy: Record<Locale, DownloadPageCopy> = {
   en: {
     eyebrow: "Get the app",
-    title: "Join early access",
+    title: "Join PulseVerse free.",
     description:
-      "PulseVerse is rolling out to clinicians, students, and allied teams. Join on iPhone via TestFlight or on Android via Google Play open testing — or request an invite if you need help.",
+      "Early access is open on iOS and Android. Start in the mobile app for the full experience, then use the web beta when you want PulseVerse in the browser.",
     requestInvite: "Request invite",
     appStoreSoon: "App Store (soon)",
     playSoon: "Google Play (soon)",
     iosBetaCta: "Join iOS beta",
     androidBetaCta: "Join Android beta",
+    webBetaCta: "Explore web beta",
     betaStepsTitle: "Install the beta",
     betaSteps: [
       "iPhone / iPad: install Apple TestFlight from the App Store, tap Join iOS beta below, accept the invite, then Install in TestFlight.",
@@ -42,19 +51,27 @@ const copy: Record<Locale, DownloadPageCopy> = {
     faqHintAfter: "includes eligibility and regional rollout notes.",
     earlyAccessHeroAlt:
       "PulseVerse early access infographic: headline, three benefit cards, rolling-out status bar, iOS TestFlight and Android beta phone mockups with join buttons.",
-    footnote:
-      "Creator program: indicate on the contact form if you plan to host Live sessions or publish educational series — we'll prioritize moderator-ready cohorts.",
+    footnote: "Mobile app available now. Web beta expanding.",
+    supportLinkLabel: "Need help getting in?",
+    availabilityNote:
+      "Web beta: Feed is the main browser surface today — more areas roll out over time. Mobile is still the best full PulseVerse experience.",
+    qrTitle: "Scan to download",
+    qrHint: "Opens pulseverse.app/download on your phone.",
+    deviceHintIos: "On iPhone or iPad? Tap Join iOS beta — TestFlight handles the rest.",
+    deviceHintAndroid: "On Android? Tap Join Android beta to opt in on Google Play.",
+    deviceHintDesktop: "On desktop? Use both beta links below, or scan the QR code with your phone.",
   },
   es: {
     eyebrow: "Descarga la app",
-    title: "Únete al acceso anticipado",
+    title: "Únete a PulseVerse gratis.",
     description:
-      "PulseVerse llega a clínicos, estudiantes y equipos afines. Únete en iPhone con TestFlight o en Android con la prueba abierta de Google Play — o solicita invitación si necesitas ayuda.",
+      "El acceso anticipado está abierto en iOS y Android. Empieza en la app móvil para la experiencia completa y usa la beta web cuando quieras PulseVerse en el navegador.",
     requestInvite: "Solicitar invitación",
     appStoreSoon: "App Store (pronto)",
     playSoon: "Google Play (pronto)",
     iosBetaCta: "Beta iOS",
     androidBetaCta: "Beta Android",
+    webBetaCta: "Explorar beta web",
     betaStepsTitle: "Instalar la beta",
     betaSteps: [
       "iPhone / iPad: instala Apple TestFlight desde la App Store, pulsa Beta iOS abajo, acepta la invitación e Instalar en TestFlight.",
@@ -66,8 +83,15 @@ const copy: Record<Locale, DownloadPageCopy> = {
     faqHintAfter: "incluye elegibilidad y despliegue por región.",
     earlyAccessHeroAlt:
       "Infografía de acceso anticipado PulseVerse: titular, tres beneficios, barra de despliegue, mockups iOS TestFlight y Android con botones para unirse.",
-    footnote:
-      "Programa para creadores: indícalo en el formulario de contacto si planeas Lives o series educativas — priorizamos cohortes listas para moderación.",
+    footnote: "App móvil disponible ahora. Beta web en expansión.",
+    supportLinkLabel: "¿Necesitas ayuda para entrar?",
+    availabilityNote:
+      "Beta web: Feed es la superficie principal en el navegador hoy — más áreas llegarán con el tiempo. El móvil sigue siendo la mejor experiencia completa.",
+    qrTitle: "Escanea para descargar",
+    qrHint: "Abre pulseverse.app/download en tu teléfono.",
+    deviceHintIos: "¿En iPhone o iPad? Pulsa Beta iOS — TestFlight hace el resto.",
+    deviceHintAndroid: "¿En Android? Pulsa Beta Android para apuntarte en Google Play.",
+    deviceHintDesktop: "¿En escritorio? Usa ambos enlaces beta abajo o escanea el código QR con tu teléfono.",
   },
 };
 

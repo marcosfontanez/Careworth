@@ -50,6 +50,7 @@ export type HomeLandingCopy = {
     androidCta: string;
     webBetaCta: string;
     webBetaNote: string;
+    supportLinkLabel: string;
   };
   trustBand: {
     phiLead: string;
@@ -128,7 +129,7 @@ const en: HomeLandingCopy = {
         copy: "Record, upload, plan, and publish with tools made for modern creators.",
         bullets: ["Record and upload", "B-roll Studio", "Drafts and scheduled posts"],
         cta: "Open Creator Hub",
-        href: "/features",
+        href: "/creator-hub",
       },
       {
         id: "live",
@@ -177,6 +178,7 @@ const en: HomeLandingCopy = {
     webBetaCta: "Explore web beta",
     webBetaNote:
       "Web beta: Feed access today, with more surfaces rolling out. Mobile app is the best way to experience PulseVerse now.",
+    supportLinkLabel: "Need help getting in?",
   },
   trustBand: {
     phiLead: "PHI & clinical safety:",
@@ -227,6 +229,7 @@ const es: HomeLandingCopy = {
     iosCta: "Beta iOS",
     androidCta: "Beta Android",
     webBetaCta: "Explorar beta web",
+    supportLinkLabel: "¿Necesitas ayuda para entrar?",
   },
 };
 

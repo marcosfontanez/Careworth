@@ -34,7 +34,7 @@ export default async function HomePage() {
         <HomeDemoVideo copy={landing.demo} />
       </Reveal>
       <Reveal className="pv-cv-section">
-        <HomeDownloadCta locale={locale} />
+        <HomeDownloadCta copy={landing.download} />
       </Reveal>
       <HomeTrustBand locale={locale} />
       {/* Room for sticky mobile CTA bar */}

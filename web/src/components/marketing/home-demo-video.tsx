@@ -6,6 +6,8 @@ import { useCallback, useRef, useState } from "react";
 import { LandingImage } from "@/components/marketing/landing-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { MARKETING_EVENTS } from "@/lib/marketing-analytics";
+import { trackHomepageConversion } from "@/lib/marketing-conversion-tracking";
 import type { HomeLandingCopy } from "@/lib/marketing-copy/home-landing";
 import { LANDING } from "@/lib/marketing-landing-assets";
 import { marketingCtaPrimaryClasses, marketingFocusRing, marketingGutterX, marketingSection } from "@/lib/ui-classes";
@@ -27,7 +29,11 @@ export function HomeDemoVideo({ copy }: Props) {
   const onOpen = useCallback(() => {
     setOpen(true);
     setLoaded(true);
-  }, []);
+    trackHomepageConversion(MARKETING_EVENTS.demoVideoModalOpen, {
+      section: "demo",
+      cta_label: copy.button,
+    });
+  }, [copy.button]);
 
   const onClose = useCallback(() => {
     setOpen(false);
@@ -50,7 +56,14 @@ export function HomeDemoVideo({ copy }: Props) {
         <div className="relative mx-auto mt-10 max-w-sm">
           <button
             type="button"
-            onClick={onOpen}
+            onClick={() => {
+              onOpen();
+              trackHomepageConversion(MARKETING_EVENTS.homepageWatchDemoClick, {
+                section: "demo",
+                cta_label: copy.button,
+                destination: "#demo-modal",
+              });
+            }}
             className={cn(
               "group relative block w-full overflow-hidden rounded-[1.75rem] border border-white/10 ring-1 ring-white/5",
               "shadow-[0_40px_100px_-30px_rgba(20,184,166,0.45)] transition duration-200 hover:border-accent/40",
@@ -76,7 +89,18 @@ export function HomeDemoVideo({ copy }: Props) {
         </div>
 
         <div className="mt-8 flex justify-center">
-          <Button size="lg" className={marketingCtaPrimaryClasses} onClick={onOpen}>
+          <Button
+            size="lg"
+            className={marketingCtaPrimaryClasses}
+            onClick={() => {
+              onOpen();
+              trackHomepageConversion(MARKETING_EVENTS.homepageWatchDemoClick, {
+                section: "demo",
+                cta_label: copy.button,
+                destination: "#demo-modal",
+              });
+            }}
+          >
             {copy.button}
           </Button>
         </div>
@@ -96,6 +120,16 @@ export function HomeDemoVideo({ copy }: Props) {
               playsInline
               preload="none"
               poster={LANDING.demoPoster.src}
+              onPlay={() =>
+                trackHomepageConversion(MARKETING_EVENTS.demoVideoStarted, {
+                  section: "demo_modal",
+                })
+              }
+              onEnded={() =>
+                trackHomepageConversion(MARKETING_EVENTS.demoVideoCompleted, {
+                  section: "demo_modal",
+                })
+              }
             >
               <source src={LANDING.demoWebm} type="video/webm" />
               <source src={LANDING.demoMp4} type="video/mp4" />

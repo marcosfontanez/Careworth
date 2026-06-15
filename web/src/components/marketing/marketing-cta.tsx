@@ -13,6 +13,7 @@ type MarketingCtaProps = {
   className?: string;
   analyticsSource?: string;
   showArrow?: boolean;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 };
 
 /** Primary marketing CTA — gradient pill, consistent across homepage and hub pages. */
@@ -22,12 +23,14 @@ export function MarketingPrimaryCta({
   className,
   analyticsSource,
   showArrow = true,
+  onClick,
 }: MarketingCtaProps) {
   return (
     <Button size="lg" className={cn(marketingCtaPrimaryClasses, className)} asChild>
       <MarketingDestinationLink
         href={href}
         analyticsSource={analyticsSource}
+        onClick={onClick}
         className="group/cta inline-flex items-center justify-center gap-2"
       >
         {children}
@@ -70,16 +73,18 @@ export function MarketingSecondaryLink({
   children,
   className,
   prefetch,
+  onClick,
 }: {
   href: string;
   children: ReactNode;
   className?: string;
   /** Pass `false` for heavy app routes (e.g. /web-app) to skip background prefetch. */
   prefetch?: boolean;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }) {
   return (
     <Button size="lg" variant="outline" className={cn(marketingCtaSecondaryClasses, className)} asChild>
-      <Link href={href} prefetch={prefetch} className="inline-flex items-center justify-center gap-2">
+      <Link href={href} prefetch={prefetch} onClick={onClick} className="inline-flex items-center justify-center gap-2">
         {children}
       </Link>
     </Button>

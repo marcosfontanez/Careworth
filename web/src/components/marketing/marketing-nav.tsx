@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { Locale } from "@/lib/i18n";
 import { getMarketingCenterLinks, getMarketingNavStrings } from "@/lib/marketing-copy/nav";
+import { MARKETING_EVENTS } from "@/lib/marketing-analytics";
+import { trackHomepageConversion } from "@/lib/marketing-conversion-tracking";
 import { marketingCtaPrimaryClasses, marketingFocusRing, marketingGutterX } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -70,14 +72,17 @@ function NavLink({
   href,
   label,
   active,
+  onNavigate,
 }: {
   href: string;
   label: string;
   active: boolean;
+  onNavigate?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         "relative shrink-0 whitespace-nowrap px-1.5 py-2 text-sm font-medium transition-colors",
         marketingFocusRing,
@@ -140,7 +145,33 @@ export function MarketingNav({ locale }: { locale: Locale }) {
           <div className="flex w-max items-center justify-start gap-x-2 px-1 sm:gap-x-3 xl:gap-x-5 2xl:gap-x-6">
             {centerLinks.map((item) => {
               const active = item.match(pathname);
-              return <NavLink key={item.href} href={item.href} label={item.label} active={active} />;
+              const onNavigate =
+                item.href === "/advertisers"
+                  ? () =>
+                      trackHomepageConversion(MARKETING_EVENTS.advertiserCtaClick, {
+                        page: pathname || "/",
+                        section: "nav_desktop",
+                        cta_label: item.label,
+                        destination: item.href,
+                      })
+                  : item.href === "/support"
+                    ? () =>
+                        trackHomepageConversion(MARKETING_EVENTS.supportCtaClick, {
+                          page: pathname || "/",
+                          section: "nav_desktop",
+                          cta_label: item.label,
+                          destination: item.href,
+                        })
+                    : undefined;
+              return (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  active={active}
+                  onNavigate={onNavigate}
+                />
+              );
             })}
           </div>
         </nav>

@@ -14,6 +14,7 @@ const staticPaths = [
   "/compare",
   "/contact",
   "/download",
+  "/web-app",
   "/faq",
   "/features",
   "/features/circles",

@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 
 import { MarketingDestinationLink } from "@/components/marketing/marketing-destination-link";
 import { Button } from "@/components/ui/button";
+import { MARKETING_EVENTS } from "@/lib/marketing-analytics";
+import { trackHomepageConversion } from "@/lib/marketing-conversion-tracking";
 import { marketingCtaPrimaryClasses } from "@/lib/ui-classes";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +22,17 @@ export function MobileStickyDownloadCta() {
       )}
     >
       <Button size="lg" className={cn("pointer-events-auto w-full", marketingCtaPrimaryClasses)} asChild>
-        <MarketingDestinationLink href="/download" analyticsSource="mobile_sticky_download">
+        <MarketingDestinationLink
+          href="/download"
+          analyticsSource="mobile_sticky_download"
+          onClick={() =>
+            trackHomepageConversion(MARKETING_EVENTS.homepageDownloadClick, {
+              section: "mobile_sticky",
+              cta_label: "Download free",
+              destination: "/download",
+            })
+          }
+        >
           Download free
         </MarketingDestinationLink>
       </Button>

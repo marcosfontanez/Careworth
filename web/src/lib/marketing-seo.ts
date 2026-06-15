@@ -11,6 +11,7 @@ export type MarketingSeoKey =
   | "about"
   | "contact"
   | "download"
+  | "webApp"
   | "faq"
   | "features"
   | "featuresCircles"
@@ -41,6 +42,7 @@ const PATHS: Record<MarketingSeoKey, `/${string}` | "/"> = {
   about: "/about",
   contact: "/contact",
   download: "/download",
+  webApp: "/web-app",
   faq: "/faq",
   features: "/features",
   featuresCircles: "/features/circles",
@@ -94,9 +96,19 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   download: {
     title: "Download",
-    description: `Join ${site.name} on iOS (TestFlight) or Android (Google Play open testing).`,
-    ogTitle: "Download",
-    ogDescription: `Get ${site.name} on iPhone or Android — beta links on our download page.`,
+    description:
+      "Join PulseVerse free — early access on iOS (TestFlight) and Android (Google Play open testing). Start in the mobile app, then explore the web beta in your browser.",
+    ogTitle: "Join PulseVerse free",
+    ogDescription:
+      "Get PulseVerse on iPhone or Android. Mobile app available now; web beta expanding.",
+  },
+  webApp: {
+    title: "Web Beta",
+    description:
+      "PulseVerse Web beta — sign in to browse Feed and more in your browser. Rich creation and account settings still work best in the mobile app.",
+    ogTitle: "PulseVerse Web Beta",
+    ogDescription:
+      "Browse PulseVerse in your browser. Same account as iOS and Android — Feed and more surfaces rolling out on web.",
   },
   faq: {
     title: "FAQ",
@@ -237,9 +249,19 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   download: {
     title: "Descargar",
-    description: `Únete a ${site.name} en iOS (TestFlight) o Android (prueba abierta de Google Play).`,
-    ogTitle: "Descargar",
-    ogDescription: `Consigue ${site.name} en iPhone o Android — enlaces beta en la página de descarga.`,
+    description:
+      "Únete a PulseVerse gratis — acceso anticipado en iOS (TestFlight) y Android (prueba abierta de Google Play). Empieza en la app móvil y explora la beta web en el navegador.",
+    ogTitle: "Únete a PulseVerse gratis",
+    ogDescription:
+      "Consigue PulseVerse en iPhone o Android. App móvil disponible ahora; beta web en expansión.",
+  },
+  webApp: {
+    title: "Beta web",
+    description:
+      "PulseVerse Web beta — inicia sesión para explorar Feed y más en el navegador. La creación avanzada y los ajustes de cuenta funcionan mejor en la app móvil.",
+    ogTitle: "PulseVerse Web Beta",
+    ogDescription:
+      "Explora PulseVerse en el navegador. La misma cuenta que iOS y Android — Feed y más superficies llegando a la web.",
   },
   faq: {
     title: "Preguntas frecuentes",
@@ -362,6 +384,8 @@ export function marketingMetadataFor(key: MarketingSeoKey, locale: Locale): Meta
   const e = bundle[key];
   const baseClean = getPublicSiteUrl().replace(/\/$/, "");
   const url = path === "/" ? `${baseClean}/` : `${baseClean}${path}`;
+  const ogTitle = `${e.ogTitle} · ${site.name}`;
+  const ogImagePath = path === "/" ? "/opengraph-image" : `${path}/opengraph-image`;
 
   return {
     title: e.title,
@@ -369,12 +393,19 @@ export function marketingMetadataFor(key: MarketingSeoKey, locale: Locale): Meta
     ...(e.keywords ? { keywords: e.keywords } : {}),
     alternates: canonical(path),
     openGraph: {
-      title: `${e.ogTitle} · ${site.name}`,
+      title: ogTitle,
       description: e.ogDescription,
       siteName: site.name,
       type: "website",
       locale: locale === "es" ? "es_ES" : "en_US",
       url,
+      images: [{ url: ogImagePath, width: 1200, height: 630, alt: ogTitle }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: ogTitle,
+      description: e.ogDescription,
+      images: [ogImagePath],
     },
   };
 }
