@@ -2,24 +2,34 @@ import type { Locale } from "@/lib/i18n";
 
 const linkDefs = [
   {
-    id: "features",
+    id: "product",
     href: "/features",
-    match: (p: string) => p === "/features" || p.startsWith("/features"),
+    match: (p: string) => p === "/features" || (p.startsWith("/features/") && !p.startsWith("/features/circles") && !p.startsWith("/features/live")),
   },
   {
-    id: "webApp",
-    href: "/web-app",
-    match: (p: string) => p === "/web-app" || p.startsWith("/web-app/"),
+    id: "circles",
+    href: "/features/circles",
+    match: (p: string) => p.startsWith("/features/circles") || p.startsWith("/communities"),
   },
   {
-    id: "support",
-    href: "/support",
-    match: (p: string) => p.startsWith("/support"),
+    id: "creatorHub",
+    href: "/features",
+    match: (p: string) => p === "/features",
+  },
+  {
+    id: "live",
+    href: "/features/live",
+    match: (p: string) => p.startsWith("/features/live"),
   },
   {
     id: "advertisers",
     href: "/advertisers",
     match: (p: string) => p.startsWith("/advertisers"),
+  },
+  {
+    id: "support",
+    href: "/support",
+    match: (p: string) => p.startsWith("/support"),
   },
 ] as const;
 
@@ -27,16 +37,20 @@ type LinkId = (typeof linkDefs)[number]["id"];
 
 const labels: Record<Locale, Record<LinkId, string>> = {
   en: {
-    features: "Product",
-    webApp: "Web Beta",
-    support: "Support",
+    product: "Product",
+    circles: "Circles",
+    creatorHub: "Creator Hub",
+    live: "Live",
     advertisers: "Advertisers",
+    support: "Support",
   },
   es: {
-    features: "Producto",
-    webApp: "Web Beta",
-    support: "Ayuda",
+    product: "Producto",
+    circles: "Circles",
+    creatorHub: "Creator Hub",
+    live: "Live",
     advertisers: "Anunciantes",
+    support: "Ayuda",
   },
 };
 
@@ -66,7 +80,7 @@ export type MarketingNavStrings = {
 const navStrings: Record<Locale, MarketingNavStrings> = {
   en: {
     logIn: "Sign in",
-    join: "Join Beta",
+    join: "Download free",
     menuLabel: "Menu",
     myPulse: "My Pulse",
     staffPortal: "Staff portal",
@@ -74,7 +88,7 @@ const navStrings: Record<Locale, MarketingNavStrings> = {
   },
   es: {
     logIn: "Iniciar sesión",
-    join: "Unirte a la beta",
+    join: "Descargar gratis",
     menuLabel: "Menú",
     myPulse: "My Pulse",
     staffPortal: "Portal staff",

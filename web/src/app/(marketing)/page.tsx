@@ -1,41 +1,45 @@
 import dynamic from "next/dynamic";
 
 import { HeroSection } from "@/components/marketing/hero-section";
-import { HomeFeatureShowcase } from "@/components/marketing/home-feature-showcase";
+import { HomeDemoVideo } from "@/components/marketing/home-demo-video";
+import { HomeDownloadCta } from "@/components/marketing/home-download-cta";
+import { HomeExperienceShowcase } from "@/components/marketing/home-experience-showcase";
+import { HomeTrustBand } from "@/components/marketing/home-trust-band";
+import { HomeWhyDifferent } from "@/components/marketing/home-why-different";
 import { Reveal } from "@/components/marketing/reveal";
+import { getHomeLandingCopy } from "@/lib/marketing-copy/home-landing";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
-const HomePulseDuo = dynamic(() => import("@/components/marketing/home-pulse-duo").then((mod) => mod.HomePulseDuo));
-const HomeCreatorHub = dynamic(() =>
-  import("@/components/marketing/home-creator-hub").then((mod) => mod.HomeCreatorHub),
+const MobileStickyDownloadCta = dynamic(() =>
+  import("@/components/marketing/mobile-sticky-download-cta").then((m) => m.MobileStickyDownloadCta),
 );
-const HomeTrustSection = dynamic(() =>
-  import("@/components/marketing/home-trust-section").then((mod) => mod.HomeTrustSection),
-);
-const HomeFinalCta = dynamic(() => import("@/components/marketing/home-final-cta").then((mod) => mod.HomeFinalCta));
 
 export const generateMetadata = () => generateMarketingMetadata("home");
 
 export default async function HomePage() {
   const locale = await getMarketingLocale();
+  const landing = getHomeLandingCopy(locale);
 
   return (
     <>
       <HeroSection locale={locale} />
-      <HomeFeatureShowcase locale={locale} />
       <Reveal className="pv-cv-section">
-        <HomePulseDuo locale={locale} />
+        <HomeExperienceShowcase locale={locale} />
       </Reveal>
       <Reveal className="pv-cv-section">
-        <HomeCreatorHub locale={locale} />
+        <HomeWhyDifferent copy={landing.whyDifferent} />
       </Reveal>
       <Reveal className="pv-cv-section">
-        <HomeTrustSection locale={locale} />
+        <HomeDemoVideo copy={landing.demo} />
       </Reveal>
       <Reveal className="pv-cv-section">
-        <HomeFinalCta locale={locale} />
+        <HomeDownloadCta locale={locale} />
       </Reveal>
+      <HomeTrustBand locale={locale} />
+      {/* Room for sticky mobile CTA bar */}
+      <div className="h-20 lg:hidden" aria-hidden />
+      <MobileStickyDownloadCta />
     </>
   );
 }

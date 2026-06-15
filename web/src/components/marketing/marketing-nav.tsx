@@ -178,8 +178,7 @@ export function MarketingNav({ locale }: { locale: Locale }) {
             asChild
           >
             <MarketingDestinationLink href="/download" analyticsSource="nav_desktop_join" className="inline-flex items-center gap-1.5">
-              <span className="hidden sm:inline">{strings.join}</span>
-              <span className="sm:hidden">Beta</span>
+              <span>{strings.join}</span>
               <ArrowRight className="h-4 w-4" aria-hidden />
             </MarketingDestinationLink>
           </Button>
