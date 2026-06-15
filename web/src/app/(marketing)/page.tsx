@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 
+import { HomeDemoProvider } from "@/components/marketing/home-demo-context";
 import { HeroSection } from "@/components/marketing/hero-section";
 import { HomeDemoVideo } from "@/components/marketing/home-demo-video";
 import { HomeDownloadCta } from "@/components/marketing/home-download-cta";
@@ -22,7 +23,7 @@ export default async function HomePage() {
   const landing = getHomeLandingCopy(locale);
 
   return (
-    <>
+    <HomeDemoProvider>
       <HeroSection locale={locale} />
       <Reveal className="pv-cv-section">
         <HomeExperienceShowcase locale={locale} />
@@ -40,6 +41,6 @@ export default async function HomePage() {
       {/* Room for sticky mobile CTA bar */}
       <div className="h-20 lg:hidden" aria-hidden />
       <MobileStickyDownloadCta />
-    </>
+    </HomeDemoProvider>
   );
 }

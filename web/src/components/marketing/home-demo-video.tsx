@@ -1,8 +1,9 @@
 "use client";
 
 import { Play } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useHomeDemo } from "@/components/marketing/home-demo-context";
 import { LandingImage } from "@/components/marketing/landing-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -22,23 +23,74 @@ type Props = {
  * opens the modal (no MP4/WebM on initial page load).
  */
 export function HomeDemoVideo({ copy }: Props) {
+  const { registerDemoOpener } = useHomeDemo();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sessionRef = useRef({
+    modalOpenTracked: false,
+    startedTracked: false,
+    completedTracked: false,
+  });
 
-  const onOpen = useCallback(() => {
+  const openModal = useCallback(() => {
     setOpen(true);
     setLoaded(true);
+  }, []);
+
+  const trackModalOpenOnce = useCallback(() => {
+    if (sessionRef.current.modalOpenTracked) return;
+    sessionRef.current.modalOpenTracked = true;
     trackHomepageConversion(MARKETING_EVENTS.demoVideoModalOpen, {
       section: "demo",
       cta_label: copy.button,
     });
   }, [copy.button]);
 
-  const onClose = useCallback(() => {
+  const handleOpen = useCallback(() => {
+    openModal();
+    trackModalOpenOnce();
+  }, [openModal, trackModalOpenOnce]);
+
+  const handleClose = useCallback(() => {
     setOpen(false);
     videoRef.current?.pause();
+    sessionRef.current = {
+      modalOpenTracked: false,
+      startedTracked: false,
+      completedTracked: false,
+    };
   }, []);
+
+  const handleWatchDemoClick = useCallback(() => {
+    handleOpen();
+    trackHomepageConversion(MARKETING_EVENTS.homepageWatchDemoClick, {
+      section: "demo",
+      cta_label: copy.button,
+      destination: "#demo-modal",
+    });
+  }, [handleOpen, copy.button]);
+
+  useEffect(() => {
+    registerDemoOpener(handleOpen);
+    return () => registerDemoOpener(null);
+  }, [registerDemoOpener, handleOpen]);
+
+  useEffect(() => {
+    if (window.location.hash !== "#demo") return;
+    handleOpen();
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [handleOpen]);
+
+  useEffect(() => {
+    if (!open || !loaded) return;
+    const id = requestAnimationFrame(() => {
+      void videoRef.current?.play().catch(() => {
+        /* Autoplay may be blocked until user gesture — controls remain available. */
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open, loaded]);
 
   return (
     <section id="demo" className={cn(marketingSection, "scroll-mt-24")}>
@@ -56,14 +108,7 @@ export function HomeDemoVideo({ copy }: Props) {
         <div className="relative mx-auto mt-10 max-w-sm">
           <button
             type="button"
-            onClick={() => {
-              onOpen();
-              trackHomepageConversion(MARKETING_EVENTS.homepageWatchDemoClick, {
-                section: "demo",
-                cta_label: copy.button,
-                destination: "#demo-modal",
-              });
-            }}
+            onClick={handleWatchDemoClick}
             className={cn(
               "group relative block w-full overflow-hidden rounded-[1.75rem] border border-white/10 ring-1 ring-white/5",
               "shadow-[0_40px_100px_-30px_rgba(20,184,166,0.45)] transition duration-200 hover:border-accent/40",
@@ -92,21 +137,14 @@ export function HomeDemoVideo({ copy }: Props) {
           <Button
             size="lg"
             className={marketingCtaPrimaryClasses}
-            onClick={() => {
-              onOpen();
-              trackHomepageConversion(MARKETING_EVENTS.homepageWatchDemoClick, {
-                section: "demo",
-                cta_label: copy.button,
-                destination: "#demo-modal",
-              });
-            }}
+            onClick={handleWatchDemoClick}
           >
             {copy.button}
           </Button>
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={(v) => (v ? onOpen() : onClose())}>
+      <Dialog open={open} onOpenChange={(v) => (v ? handleOpen() : handleClose())}>
         <DialogContent
           showCloseButton
           className="max-h-[96vh] w-[min(96vw,420px)] gap-0 overflow-hidden border-white/10 bg-[rgba(6,10,22,0.98)] p-0 sm:max-w-[420px]"
@@ -120,16 +158,20 @@ export function HomeDemoVideo({ copy }: Props) {
               playsInline
               preload="none"
               poster={LANDING.demoPoster.src}
-              onPlay={() =>
+              onPlay={() => {
+                if (sessionRef.current.startedTracked) return;
+                sessionRef.current.startedTracked = true;
                 trackHomepageConversion(MARKETING_EVENTS.demoVideoStarted, {
                   section: "demo_modal",
-                })
-              }
-              onEnded={() =>
+                });
+              }}
+              onEnded={() => {
+                if (sessionRef.current.completedTracked) return;
+                sessionRef.current.completedTracked = true;
                 trackHomepageConversion(MARKETING_EVENTS.demoVideoCompleted, {
                   section: "demo_modal",
-                })
-              }
+                });
+              }}
             >
               <source src={LANDING.demoWebm} type="video/webm" />
               <source src={LANDING.demoMp4} type="video/mp4" />
