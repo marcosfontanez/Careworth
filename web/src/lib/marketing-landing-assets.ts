@@ -6,6 +6,13 @@ export const LANDING = {
     webp: "/marketing/landing/hero-real-stories-desktop.webp",
     width: 2400,
     height: 1109,
+    /** ≤828w montage for mobile — avoids shipping the 2400w desktop asset on small viewports. */
+    mobile: {
+      src: "/marketing/landing/hero-real-stories-mobile.avif",
+      webp: "/marketing/landing/hero-real-stories-mobile.webp",
+      width: 828,
+      height: 383,
+    },
     alt: "PulseVerse on iPhone — Feed, Circles, My Pulse, Creator Hub, and Live in one healthcare-rooted social platform.",
   },
   feed: {

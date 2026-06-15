@@ -1,7 +1,6 @@
 import { Sparkles } from "lucide-react";
 
 import { HomeHeroActions } from "@/components/marketing/home-hero-actions";
-import { LandingImage } from "@/components/marketing/landing-image";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { WebsiteSectionBackdrop } from "@/components/marketing/website-visuals";
 import type { Locale } from "@/lib/i18n";
@@ -71,18 +70,29 @@ export function HeroSection({ locale }: { locale: Locale }) {
               aria-hidden
               className="pointer-events-none absolute inset-[-12%] -z-10 rounded-[3rem] bg-[radial-gradient(ellipse_70%_55%_at_50%_45%,rgba(20,184,166,0.28),transparent_62%)] blur-2xl"
             />
-            <LandingImage
-              src={LANDING.hero.src}
-              alt={LANDING.hero.alt}
-              width={LANDING.hero.width}
-              height={LANDING.hero.height}
-              priority
-              sizes="(max-width: 1024px) 100vw, min(960px, 58vw)"
+            <div
               className={cn(
+                "relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-[rgba(8,14,26,0.85)] ring-1 ring-white/5",
                 "w-full shadow-[0_50px_140px_-40px_rgba(20,184,166,0.55)]",
                 "lg:rounded-[2rem] xl:rounded-[2.25rem]",
               )}
-            />
+            >
+              <picture>
+                <source media="(min-width: 1024px)" srcSet={LANDING.hero.src} type="image/avif" />
+                <source media="(min-width: 1024px)" srcSet={LANDING.hero.webp} type="image/webp" />
+                <source srcSet={LANDING.hero.mobile.src} type="image/avif" />
+                <source srcSet={LANDING.hero.mobile.webp} type="image/webp" />
+                <img
+                  src={LANDING.hero.mobile.src}
+                  alt={LANDING.hero.alt}
+                  width={LANDING.hero.mobile.width}
+                  height={LANDING.hero.mobile.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="block h-auto w-full"
+                />
+              </picture>
+            </div>
           </div>
         </div>
 

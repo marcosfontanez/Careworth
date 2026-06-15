@@ -28,14 +28,14 @@ export default async function DownloadPage() {
 
       <div className="mt-8 sm:mt-10">
         <PosterFrame
-          src="/marketing/marketing-download-early-access.png"
+          src="/marketing/marketing-download-early-access.avif"
           alt={t.earlyAccessHeroAlt}
           width={1024}
           height={576}
           priority
           glow="cyan"
           tag={{ label: t.eyebrow, tone: "cyan" }}
-          sizes="(max-width: 768px) 100vw, min(1024px, 92vw)"
+          sizes="(max-width: 768px) calc(100vw - 2rem), min(720px, 92vw)"
           cornerTrace={false}
         />
       </div>

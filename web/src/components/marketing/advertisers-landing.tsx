@@ -65,7 +65,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
           </div>
           <div className="relative">
             <PosterFrame
-              src="/marketing/marketing-advertisers-ad-solutions.png"
+              src="/marketing/marketing-advertisers-ad-solutions.avif"
               alt={c.hero.ecosystemImageAlt}
               width={1024}
               height={576}
@@ -73,7 +73,7 @@ export function AdvertisersLanding({ locale }: { locale: Locale }) {
               glow="blue"
               size="dramatic"
               tag={{ label: c.hero.ecosystemPosterTag, tone: "cyan" }}
-              sizes="(max-width: 1024px) 100vw, 50vw"
+              sizes="(max-width: 1024px) calc(100vw - 2rem), min(560px, 50vw)"
               className="mx-auto w-full max-w-3xl lg:mx-0 lg:max-w-none"
             />
           </div>

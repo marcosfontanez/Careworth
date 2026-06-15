@@ -9,6 +9,7 @@ import { HomeTrustBand } from "@/components/marketing/home-trust-band";
 import { HomeWhyDifferent } from "@/components/marketing/home-why-different";
 import { Reveal } from "@/components/marketing/reveal";
 import { getHomeLandingCopy } from "@/lib/marketing-copy/home-landing";
+import { LANDING } from "@/lib/marketing-landing-assets";
 import { getMarketingLocale } from "@/lib/marketing-locale-server";
 import { generateMarketingMetadata } from "@/lib/marketing-seo";
 
@@ -24,6 +25,13 @@ export default async function HomePage() {
 
   return (
     <HomeDemoProvider>
+      <link
+        rel="preload"
+        as="image"
+        href={LANDING.hero.src}
+        type="image/avif"
+        media="(min-width: 1024px)"
+      />
       <HeroSection locale={locale} />
       <Reveal className="pv-cv-section">
         <HomeExperienceShowcase locale={locale} />

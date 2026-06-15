@@ -24,8 +24,9 @@ export function MarketingLogo({ className, variant = "nav" }: { className?: stri
         alt=""
         width={pulseverseLogoLockup.width}
         height={pulseverseLogoLockup.height}
-        sizes="(max-width: 640px) 88vw, (max-width: 768px) 360px, 400px"
-        priority={variant === "nav"}
+        sizes="(max-width: 640px) 152px, (max-width: 768px) 200px, 216px"
+        loading={variant === "nav" ? "eager" : undefined}
+        priority={false}
         className={cn(
           /* Nav lockup: keep width bounded so center links are not covered (wide max-w was crowding flex row). */
           "w-auto max-w-38 object-contain object-left sm:max-w-50 md:max-w-54",

@@ -48,8 +48,8 @@ export function WebAppLanding({
             alt={copy.kicker}
             width={pulseverseLogoLockup.width}
             height={pulseverseLogoLockup.height}
-            priority
-            sizes="(max-width: 640px) 220px, 320px"
+            loading="eager"
+            sizes="(max-width: 640px) 176px, 256px"
             className="h-16 w-auto object-contain object-left sm:h-20 md:h-24"
           />
         </Link>
