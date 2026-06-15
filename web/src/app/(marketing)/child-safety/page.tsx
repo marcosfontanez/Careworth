@@ -40,7 +40,11 @@ export default async function ChildSafetyPage() {
   return (
     <MarketingPageShell width="medium" breadcrumbPath="/child-safety">
       <SectionHeader eyebrow={c.eyebrow} title={c.title} description={c.intro} />
+      <p className="mt-4 text-xs text-muted-foreground">{c.lastReviewedLabel}</p>
       <div className="mt-12 grid gap-6">
+        <PolicyCard title={c.surfacesTitle}>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.surfacesBody}</p>
+        </PolicyCard>
         <PolicyCard title={c.zeroToleranceTitle}>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.zeroToleranceLead}</p>
           <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
@@ -51,6 +55,9 @@ export default async function ChildSafetyPage() {
         </PolicyCard>
         <PolicyCard title={c.inAppTitle}>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.inAppBody}</p>
+        </PolicyCard>
+        <PolicyCard title={c.urgentTitle}>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.urgentBody}</p>
         </PolicyCard>
         <PolicyCard title={c.reviewTitle}>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.reviewBody}</p>

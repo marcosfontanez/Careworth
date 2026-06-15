@@ -24,7 +24,8 @@ const copy: Record<Locale, CommunityGuidelinesPageCopy> = {
       { id: "safety", label: "Safety & PHI" },
       { id: "enforcement", label: "Enforcement" },
     ],
-    intro: "PulseVerse is a culture network for healthcare professionals. Be respectful, accurate, and mindful of patient privacy. Moderation may restrict accounts that harm community safety.",
+    intro:
+      "PulseVerse is healthcare-rooted and open to healthcare workers, students, caregivers, creators, and curious minds. Be respectful, accurate, and mindful of patient privacy. Moderation may restrict accounts that harm community safety.",
     expectationsHeading: "Core expectations",
     expectationsItems: [
       "Treat colleagues and students with dignity — especially across power differences.",
@@ -47,7 +48,8 @@ const copy: Record<Locale, CommunityGuidelinesPageCopy> = {
       { id: "safety", label: "Seguridad y PHI" },
       { id: "enforcement", label: "Aplicación" },
     ],
-    intro: "PulseVerse es una red cultural para profesionales sanitarios. Sé respetuoso, riguroso y cuidadoso con la privacidad del paciente. La moderación puede restringir cuentas que dañen la seguridad de la comunidad.",
+    intro:
+      "PulseVerse tiene raíz en la salud y está abierto a profesionales sanitarios, estudiantes, cuidadores, creadores y mentes curiosas. Sé respetuoso, riguroso y cuidadoso con la privacidad del paciente. La moderación puede restringir cuentas que dañen la seguridad de la comunidad.",
     expectationsHeading: "Expectativas básicas",
     expectationsItems: [
       "Trata a colegas y estudiantes con dignidad — especialmente cuando hay diferencias de poder.",

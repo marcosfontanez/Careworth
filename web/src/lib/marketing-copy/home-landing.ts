@@ -179,9 +179,9 @@ const en: HomeLandingCopy = {
       "Web beta: Feed access today, with more surfaces rolling out. Mobile app is the best way to experience PulseVerse now.",
   },
   trustBand: {
-    phiLead: "Clinical safety reminder:",
+    phiLead: "PHI & clinical safety:",
     phiBody:
-      "PulseVerse is not for sharing protected health information (PHI). See our",
+      "PulseVerse is not a system of record for identifiable patient information. Never post PHI or individually identifiable patient details. See",
     links: [
       { label: "FAQ", href: "/faq" },
       { label: "Community guidelines", href: "/community-guidelines" },

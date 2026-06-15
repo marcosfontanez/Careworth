@@ -100,9 +100,9 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   faq: {
     title: "FAQ",
-    description: `Common questions about ${site.name} for healthcare professionals and teams.`,
+    description: `Download, web beta, PHI, moderation, Sparks, and account deletion — common questions about ${site.name}.`,
     ogTitle: "FAQ",
-    ogDescription: `Answers about ${site.name}, safety, and eligibility.`,
+    ogDescription: `Answers about ${site.name}, safety, eligibility, and the web beta.`,
   },
   features: {
     title: "Features",
@@ -161,7 +161,7 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   communityGuidelines: {
     title: "Community guidelines",
-    description: `How we keep ${site.name} respectful, accurate, and safe for healthcare professionals.`,
+    description: `How we keep ${site.name} respectful, accurate, and safe — healthcare-rooted and open to students, caregivers, and creators.`,
     ogTitle: "Community guidelines",
     ogDescription: `Rules and norms on ${site.name}.`,
   },
@@ -173,7 +173,7 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   trust: {
     title: "Trust & safety",
-    description: `How ${site.name} approaches moderation, reporting, and protecting healthcare culture on the network.`,
+    description: `Reporting, moderation, Live safety, appeals, and PHI expectations on ${site.name}.`,
     ogTitle: "Trust & safety",
     ogDescription: `Trust, safety, and moderation on ${site.name}.`,
   },
@@ -196,13 +196,13 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
   },
   privacy: {
     title: "Privacy Policy",
-    description: `How ${site.name} collects, uses, and protects information.`,
+    description: `How ${site.name} collects, uses, retains, and protects account, content, purchase, and safety data.`,
     ogTitle: "Privacy Policy",
     ogDescription: `Privacy practices for ${site.name}.`,
   },
   terms: {
     title: "Terms of Service",
-    description: `Terms that govern your use of ${site.name} apps and websites.`,
+    description: `Terms for ${site.name} — user content, moderation, Live, PHI, purchases, and enforcement.`,
     ogTitle: "Terms of Service",
     ogDescription: `Terms of service for ${site.name}.`,
   },
@@ -211,9 +211,9 @@ const en: Record<MarketingSeoKey, SeoEntry> = {
 const es: Record<MarketingSeoKey, SeoEntry> = {
   home: {
     title: `${site.name} — Cultura en salud, todo en un solo lugar.`,
-    description: "La plataforma social para la comunidad sanitaria global.",
+    description: "La plataforma social donde profesionales de la salud, estudiantes, cuidadores y mentes curiosas conectan.",
     ogTitle: site.name,
-    ogDescription: "La plataforma social para la comunidad sanitaria global.",
+    ogDescription: "La plataforma social donde profesionales de la salud, estudiantes, cuidadores y mentes curiosas conectan.",
     keywords: [
       "red social sanitaria",
       "comunidad clínica",
@@ -243,9 +243,9 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   faq: {
     title: "Preguntas frecuentes",
-    description: `Preguntas habituales sobre ${site.name} para profesionales y equipos sanitarios.`,
+    description: `Descarga, beta web, PHI, moderación, Sparks y eliminación de cuenta — preguntas habituales sobre ${site.name}.`,
     ogTitle: "Preguntas frecuentes",
-    ogDescription: `Respuestas sobre ${site.name}, seguridad y elegibilidad.`,
+    ogDescription: `Respuestas sobre ${site.name}, seguridad, elegibilidad y la beta web.`,
   },
   features: {
     title: "Funciones",
@@ -309,7 +309,7 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   communityGuidelines: {
     title: "Normas de la comunidad",
-    description: `Cómo mantenemos ${site.name} respetuoso, riguroso y seguro para profesionales sanitarios.`,
+    description: `Cómo mantenemos ${site.name} respetuoso, riguroso y seguro — con raíz sanitaria y abierto a estudiantes, cuidadores y creadores.`,
     ogTitle: "Normas de la comunidad",
     ogDescription: `Reglas y normas en ${site.name}.`,
   },
@@ -321,7 +321,7 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   trust: {
     title: "Confianza y seguridad",
-    description: `Cómo ${site.name} aborda moderación, reportes y la protección de la cultura sanitaria en la red.`,
+    description: `Denuncias, moderación, seguridad en Live, apelaciones y expectativas sobre PHI en ${site.name}.`,
     ogTitle: "Confianza y seguridad",
     ogDescription: `Confianza, seguridad y moderación en ${site.name}.`,
   },
@@ -344,13 +344,13 @@ const es: Record<MarketingSeoKey, SeoEntry> = {
   },
   privacy: {
     title: "Política de privacidad",
-    description: `Cómo ${site.name} recopila, usa y protege la información.`,
+    description: `Cómo ${site.name} recopila, usa, retiene y protege datos de cuenta, contenido, compras y seguridad.`,
     ogTitle: "Política de privacidad",
     ogDescription: `Prácticas de privacidad de ${site.name}.`,
   },
   terms: {
     title: "Términos del servicio",
-    description: `Términos que rigen el uso de las apps y sitios de ${site.name}.`,
+    description: `Términos de ${site.name}: contenido de usuario, moderación, Live, PHI, compras y aplicación.`,
     ogTitle: "Términos del servicio",
     ogDescription: `Términos de servicio de ${site.name}.`,
   },

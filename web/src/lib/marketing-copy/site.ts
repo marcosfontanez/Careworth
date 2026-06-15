@@ -3,7 +3,7 @@ import type { Locale } from "@/lib/i18n";
 
 const description: Record<Locale, string> = {
   en: site.description,
-  es: "La red social para la comunidad sanitaria global.",
+  es: "La plataforma social donde profesionales de la salud, estudiantes, cuidadores y mentes curiosas conectan.",
 };
 
 const tagline: Record<Locale, string> = {

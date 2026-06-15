@@ -22,7 +22,7 @@ function MarketingLocaleSwitcherInner({ locale }: { locale: Locale }) {
         id="pv-marketing-locale"
         name="locale"
         defaultValue={locale}
-        className="h-9 max-w-[11rem] rounded-md border border-white/15 bg-white/5 px-2 text-xs text-foreground"
+        className="h-9 min-w-[9.5rem] rounded-lg border border-white/15 bg-[rgba(12,21,36,0.65)] px-3 text-xs font-medium text-foreground shadow-inner"
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
       >
         {SUPPORTED_LOCALES.map((code) => (
@@ -44,7 +44,7 @@ export function MarketingLocaleSwitcher({ locale }: { locale: Locale }) {
           <select
             name="locale"
             defaultValue={locale}
-            className="h-9 max-w-[11rem] rounded-md border border-white/15 bg-white/5 px-2 text-xs text-foreground"
+            className="h-9 min-w-[9.5rem] rounded-lg border border-white/15 bg-[rgba(12,21,36,0.65)] px-3 text-xs font-medium text-foreground shadow-inner"
             disabled
             aria-label="Language"
           >

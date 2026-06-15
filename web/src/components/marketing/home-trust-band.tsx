@@ -31,11 +31,17 @@ export function HomeTrustBand({ locale }: { locale: Locale }) {
             className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground"
             aria-label="Trust and legal"
           >
+            <Link href="/trust" className={cn(marketingInlineLink, marketingFocusRing, "text-xs")}>
+              Trust &amp; safety
+            </Link>
             <Link href="/terms" className={cn(marketingInlineLink, marketingFocusRing, "text-xs")}>
               Terms
             </Link>
             <Link href="/child-safety" className={cn(marketingInlineLink, marketingFocusRing, "text-xs")}>
               Child safety
+            </Link>
+            <Link href="/privacy" className={cn(marketingInlineLink, marketingFocusRing, "text-xs")}>
+              Privacy
             </Link>
             <Link href="/faq" className={cn(marketingInlineLink, marketingFocusRing, "text-xs")}>
               FAQ

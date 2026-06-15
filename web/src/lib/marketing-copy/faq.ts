@@ -4,183 +4,135 @@ export type MarketingFaqItem = { q: string; a: string };
 
 const en: MarketingFaqItem[] = [
   {
-    q: "How do I download PulseVerse?",
-    a: "Go to pulseverse.app/download — tap Join iOS beta for TestFlight on iPhone, or Join Android beta for Google Play open testing. You can also request an invite from the contact form if you need help getting access.",
+    q: "Is PulseVerse free?",
+    a: "Yes. PulseVerse is free to download and use on iOS (TestFlight beta) and Android (Google Play open testing). Optional in-app purchases such as Sparks, gifts, and profile borders are available inside the app.",
+  },
+  {
+    q: "How do I download the app?",
+    a: "Go to pulseverse.app/download — tap Join iOS beta for TestFlight on iPhone, or Join Android beta for Google Play open testing. You can also request help from the contact form if you need access.",
+  },
+  {
+    q: "Is PulseVerse only for healthcare workers?",
+    a: "No. PulseVerse is healthcare-rooted, not healthcare-only. The platform is built around healthcare culture, but students, caregivers, creators, and curious minds are welcome alongside clinicians and allied health professionals.",
+  },
+  {
+    q: "Can caregivers, students, creators, and curious minds join?",
+    a: "Yes. PulseVerse is open to anyone who wants a respectful, moderated social space with healthcare roots — from nursing students and caregivers to creators sharing stories, humor, education, and everyday moments.",
+  },
+  {
+    q: "Is the web beta the full app?",
+    a: "Not yet. Mobile app available now. Web beta expanding — start in the app for the full PulseVerse experience. The web beta currently focuses on Feed access, with more surfaces rolling out over time.",
   },
   {
     q: "What is PulseVerse?",
-    a: "A social platform for healthcare professionals — Feed, Circles, Live, and Pulse Page (with My Pulse and Media Hub) — with moderation built for clinical culture.",
+    a: "PulseVerse is a social platform where healthcare workers, students, caregivers, and curious minds connect — through Feed video, Circles communities, My Pulse profiles, Live, and creator tools — with moderation built for clinical culture.",
   },
   {
-    q: "Who is PulseVerse for?",
-    a: "Licensed or training healthcare professionals and aligned teams — from bedside to classroom — who want culture, not another corporate directory.",
+    q: "Can I post patient stories?",
+    a: "You may share general, de-identified stories and educational moments when they do not reveal who a patient is. Never include names, faces, dates, room numbers, identifiers, or other details that could identify a specific patient.",
   },
   {
-    q: "What is Pulse Page?",
-    a: "Your identity home: expressive profile, Current Vibe (mini music player), My Pulse (your latest five updates), and Media Hub (recent videos, favorites, photos) — a living page, not a static résumé.",
+    q: "Can I post PHI?",
+    a: "No. PulseVerse is not a system of record for protected health information (PHI). Do not post identifiable patient information or individually identifiable patient details. Violations may be removed or escalated.",
   },
   {
-    q: "How does My Pulse work?",
-    a: "Only your five most recent My Pulse items are visible on your Pulse Page. New posts appear at the top; when you add a sixth, the oldest visible item drops off — so your profile stays fresh.",
-  },
-  {
-    q: "What can I post to My Pulse?",
-    a: "Thought (short updates), Clip (from your PulseVerse posts or saves from the Feed), Link (external URLs with optional commentary), and Pics (photo moments). Clips stay inside PulseVerse — they are not arbitrary external video uploads.",
-  },
-  {
-    q: "What is Current Vibe?",
-    a: "A premium mini music player on your Pulse Page showing what you are listening to — part of your identity and the atmosphere of your profile.",
-  },
-  {
-    q: "What is Media Hub?",
-    a: "The personal media library on Pulse Page: Recent Videos, Favorites, and My Photos in one compact grid.",
-  },
-  {
-    q: "How is the Live tab organized?",
-    a: "Featured Live, Top Live Now, Rising Lives, and Browse by Topic — emphasis on what’s broadcasting and gaining momentum now, not a schedule-first webinar experience.",
-  },
-  {
-    q: "How do I verify my account?",
-    a: "Verification paths vary by region and credential type. Start from Settings → Verification and follow the guided checklist.",
+    q: "Can I give or request medical advice?",
+    a: "No. Educational storytelling is welcome, but PulseVerse does not provide individualized medical advice and does not create a provider–patient relationship. Direct personal care decisions belong in proper clinical channels.",
   },
   {
     q: "How do I report content?",
-    a: "Use the overflow menu on posts, comments, or profiles. For live streams, flag from the player — live incidents are prioritized.",
+    a: "Use the overflow menu on posts, comments, profiles, Circles, or Live streams. For urgent safety issues, use in-app reporting and contact paths described on our Trust & safety page (/trust) and Help Center (/support).",
+  },
+  {
+    q: "How do gifts, Sparks, and borders work?",
+    a: "Sparks are in-app currency used for gifts, shop items, and profile customization such as avatar borders. Purchases are processed by Apple or Google where applicable. Owned items stay in your inventory; shop availability may change over time.",
+  },
+  {
+    q: "How do I delete my account?",
+    a: "Open Settings in the mobile app and use the account deletion flow. Deletion removes or anonymizes account data according to our Privacy Policy, subject to safety, legal, and moderation retention requirements.",
   },
   {
     q: "Where can I read about trust, safety, and moderation?",
-    a: "See the Trust & safety overview on our public site at /trust — it summarizes reporting, moderation posture, and how we approach healthcare culture, with links to Community guidelines, Privacy, FAQ, and Support.",
+    a: "See /trust for reporting, moderation posture, Live safety, and appeals — alongside Community guidelines (/community-guidelines) and our Privacy Policy (/privacy).",
   },
   {
-    q: "Does PulseVerse publish a high-level safety overview for clinicians or partners?",
-    a: "Yes. The /trust page is the starting point for teams evaluating the network — alongside our Community guidelines for enforceable norms and Privacy Policy for data practices.",
+    q: "What is My Pulse?",
+    a: "My Pulse is your personalized profile surface — identity, stats, vibe music, Pulse Score, and your latest updates — designed to show your vibe, not just a static résumé.",
+  },
+  {
+    q: "How do Circles work?",
+    a: "Circles are topic communities for healthcare, humor, students, caregivers, creators, and everyday life — with weekly prompts, highlights, and moderated discussions that stay active over time.",
   },
   {
     q: "Is PulseVerse HIPAA-compliant?",
-    a: "The product is designed with healthcare-grade trust and safety expectations. Specific compliance posture depends on your deployment and BAA needs — talk to us for enterprise health pathways.",
-  },
-  {
-    q: "Can I post identifiable patient information (PHI)?",
-    a: "No. PulseVerse is not a system of record for PHI. Do not post identifiable patient information; violations may be removed or escalated.",
-  },
-  {
-    q: "How does moderation work?",
-    a: "Reports flow into trained moderator queues with severity, category, and live tooling. Appeals capture context for review. For a public overview, see our Trust & safety page (/trust).",
-  },
-  {
-    q: "Can I use PulseVerse for medical advice?",
-    a: "No. Educational storytelling is welcome; individualized medical advice belongs in proper clinical channels. Community guidelines spell this out.",
-  },
-  {
-    q: "How do Circles differ from generic forums?",
-    a: "Circles are healthcare-native topic spaces with moderated, high-signal threads — connected to Pulse Page and easy to repost into My Pulse — without old-school forum energy.",
-  },
-  {
-    q: "Is PulseVerse free?",
-    a: "Yes. PulseVerse is free to download and use on iOS (TestFlight beta) and Android (Google Play open testing).",
-  },
-  {
-    q: "Is there a free social app for nurses?",
-    a: "Yes — PulseVerse is a free social app built for nurses and the wider healthcare community to share short videos, connect, and join moderated communities. See pulseverse.app/for/nurses.",
-  },
-  {
-    q: "What is a good TikTok or Instagram alternative for healthcare workers?",
-    a: "PulseVerse is a free, healthcare-only alternative — short videos and updates with clinical-culture moderation instead of a general-audience feed. See pulseverse.app/compare.",
-  },
-  {
-    q: "Is there a social app for doctors or medical students?",
-    a: "Yes. PulseVerse welcomes physicians, residents, and medical and nursing students. See pulseverse.app/for/doctors and pulseverse.app/for/medical-students.",
+    a: "PulseVerse is designed with healthcare-grade trust and safety expectations for a public social product. It is not intended as a HIPAA-covered system of record. Enterprise or BAA needs require a separate conversation with our team.",
   },
 ];
 
 const es: MarketingFaqItem[] = [
   {
-    q: "¿Cómo descargo PulseVerse?",
-    a: "Entra en pulseverse.app/download — pulsa Beta iOS para TestFlight en iPhone, o Beta Android para la prueba abierta de Google Play. También puedes solicitar invitación desde el formulario de contacto.",
+    q: "¿PulseVerse es gratis?",
+    a: "Sí. PulseVerse es gratis para descargar y usar en iOS (beta de TestFlight) y Android (prueba abierta de Google Play). Compras opcionales como Sparks, regalos y bordes de perfil están disponibles dentro de la app.",
+  },
+  {
+    q: "¿Cómo descargo la app?",
+    a: "Entra en pulseverse.app/download — pulsa Beta iOS para TestFlight en iPhone, o Beta Android para la prueba abierta de Google Play. También puedes pedir ayuda desde el formulario de contacto.",
+  },
+  {
+    q: "¿PulseVerse es solo para profesionales de la salud?",
+    a: "No. PulseVerse tiene raíz en la salud, pero no es exclusivo de ella. La plataforma se construye alrededor de la cultura sanitaria, pero estudiantes, cuidadores, creadores y mentes curiosas son bienvenidos junto a clínicos y profesionales aliados.",
+  },
+  {
+    q: "¿Pueden unirse cuidadores, estudiantes, creadores y mentes curiosas?",
+    a: "Sí. PulseVerse está abierto a quien busque un espacio social respetuoso y moderado con raíz sanitaria — desde estudiantes de enfermería y cuidadores hasta creadores que comparten historias, humor, educación y momentos cotidianos.",
+  },
+  {
+    q: "¿La beta web es la app completa?",
+    a: "Todavía no. App móvil disponible ahora. Beta web en expansión — empieza en la app para la experiencia completa. La beta web se centra hoy en el Feed, con más superficies en camino.",
   },
   {
     q: "¿Qué es PulseVerse?",
-    a: "Una red social para profesionales de la salud: Feed, Circles, Live y Pulse Page (con My Pulse y Media Hub), con moderación pensada para la cultura clínica.",
+    a: "PulseVerse es una plataforma social donde profesionales de la salud, estudiantes, cuidadores y mentes curiosas conectan — con Feed, Circles, My Pulse, Live y herramientas para creadores — con moderación pensada para la cultura clínica.",
   },
   {
-    q: "¿Para quién es PulseVerse?",
-    a: "Profesionales en ejercicio o en formación y equipos alineados — desde la cabecera hasta el aula — que buscan cultura, no otro directorio corporativo.",
+    q: "¿Puedo publicar historias de pacientes?",
+    a: "Puedes compartir historias generales desidentificadas y momentos educativos que no revelen quién es un paciente. Nunca incluyas nombres, rostros, fechas, habitaciones, identificadores u otros datos que permitan identificar a una persona concreta.",
   },
   {
-    q: "¿Qué es Pulse Page?",
-    a: "Tu casa de identidad: perfil expresivo, Current Vibe (mini reproductor), My Pulse (tus cinco novedades más recientes) y Media Hub (vídeos recientes, favoritos, fotos): una página viva, no un currículum estático.",
+    q: "¿Puedo publicar PHI?",
+    a: "No. PulseVerse no es un sistema de registro para información de salud protegida (PHI). No publiques datos identificables del paciente. Las infracciones pueden eliminarse o escalarse.",
   },
   {
-    q: "¿Cómo funciona My Pulse?",
-    a: "Solo se ven en tu Pulse Page los cinco elementos más recientes de My Pulse. Lo nuevo arriba; al publicar un sexto, el más antiguo deja de mostrarse — así el perfil se mantiene fresco.",
-  },
-  {
-    q: "¿Qué puedo publicar en My Pulse?",
-    a: "Thought (notas breves), Clip (desde tus publicaciones en PulseVerse o guardados del Feed), Link (URLs externas con comentario opcional) y Pics (momentos en foto). Los clips se quedan dentro de PulseVerse: no son subidas de vídeo externas arbitrarias.",
-  },
-  {
-    q: "¿Qué es Current Vibe?",
-    a: "Un mini reproductor premium en tu Pulse Page con lo que estás escuchando — parte de tu identidad y del ambiente del perfil.",
-  },
-  {
-    q: "¿Qué es Media Hub?",
-    a: "La biblioteca personal en Pulse Page: vídeos recientes, favoritos y mis fotos en una cuadrícula compacta.",
-  },
-  {
-    q: "¿Cómo está organizada la pestaña Live?",
-    a: "Destacados, Top en vivo ahora, en ascenso y explorar por tema — énfasis en lo que emite y gana impulso ahora, no una parrilla solo de webinars.",
-  },
-  {
-    q: "¿Cómo verifico mi cuenta?",
-    a: "Las rutas dependen de región y tipo de credencial. Empieza en Ajustes → Verificación y sigue la lista guiada.",
+    q: "¿Puedo dar o pedir consejo médico?",
+    a: "No. La divulgación educativa sí; PulseVerse no ofrece consejo médico individualizado ni crea relación proveedor–paciente. Las decisiones de atención personal van a canales clínicos adecuados.",
   },
   {
     q: "¿Cómo denuncio contenido?",
-    a: "Usa el menú de opciones en publicaciones, comentarios o perfiles. En directos, marca desde el reproductor: los incidentes en vivo tienen prioridad.",
+    a: "Usa el menú de opciones en publicaciones, comentarios, perfiles, Circles o transmisiones Live. Para asuntos urgentes, usa los flujos in-app y las vías descritas en /trust y /support.",
+  },
+  {
+    q: "¿Cómo funcionan regalos, Sparks y bordes?",
+    a: "Los Sparks son moneda in-app para regalos, artículos de tienda y personalización como bordes de avatar. Las compras las procesan Apple o Google cuando corresponda. Los artículos adquiridos quedan en tu inventario.",
+  },
+  {
+    q: "¿Cómo elimino mi cuenta?",
+    a: "Abre Ajustes en la app móvil y usa el flujo de eliminación de cuenta. La eliminación retira o anonimiza datos según la Política de privacidad, sujeta a retención por seguridad, legal y moderación.",
   },
   {
     q: "¿Dónde leo sobre confianza, seguridad y moderación?",
-    a: "Consulta la página de confianza y seguridad en /trust: resume denuncias, postura de moderación y cultura sanitaria, con enlaces a normas de la comunidad, privacidad, FAQ y ayuda.",
+    a: "Consulta /trust para denuncias, moderación, seguridad en Live y apelaciones — junto con las normas de la comunidad (/community-guidelines) y la Política de privacidad (/privacy).",
   },
   {
-    q: "¿PulseVerse publica una vista general de seguridad para clínicos o socios?",
-    a: "Sí. /trust es el punto de partida para equipos que evalúan la red, junto con las normas de la comunidad y la política de privacidad.",
+    q: "¿Qué es My Pulse?",
+    a: "My Pulse es tu perfil personalizado — identidad, stats, música vibe, Pulse Score y tus novedades recientes — diseñado para mostrar tu vibe, no solo un currículum estático.",
+  },
+  {
+    q: "¿Cómo funcionan Circles?",
+    a: "Circles son comunidades temáticas para salud, humor, estudiantes, cuidadores, creadores y vida cotidiana — con prompts semanales, destacados y debates moderados.",
   },
   {
     q: "¿Es PulseVerse compatible con HIPAA?",
-    a: "El producto se diseña con expectativas de confianza y seguridad propias de la salud. El cumplimiento concreto depende de tu despliegue y necesidad de BAA — hablemos para vías enterprise.",
-  },
-  {
-    q: "¿Puedo publicar información identificable del paciente (PHI)?",
-    a: "No. PulseVerse no es un sistema de registro para PHI. No publiques datos identificables; las infracciones pueden eliminarse o escalarse.",
-  },
-  {
-    q: "¿Cómo funciona la moderación?",
-    a: "Las denuncias van a colas de moderadores con gravedad, categoría y herramientas para Live. Los recursos aportan contexto. Vista general pública en /trust.",
-  },
-  {
-    q: "¿Puedo usar PulseVerse para consejo médico?",
-    a: "No. La divulgación educativa sí; el consejo médico individualizado va a canales clínicos adecuados. Las normas de la comunidad lo concretan.",
-  },
-  {
-    q: "¿En qué se diferencian Circles de foros genéricos?",
-    a: "Circles son espacios temáticos propios de la salud, con hilos moderados y de alta señal, enlaces a Pulse Page y fácil republicación a My Pulse — sin la dinámica de foros antiguos.",
-  },
-  {
-    q: "¿PulseVerse es gratis?",
-    a: "Sí. PulseVerse es gratis para descargar y usar en iOS (beta de TestFlight) y Android (prueba abierta de Google Play).",
-  },
-  {
-    q: "¿Hay una app social gratis para enfermeras?",
-    a: "Sí — PulseVerse es una app social gratuita para enfermeras y la comunidad sanitaria: comparte vídeos cortos, conecta y únete a comunidades moderadas. Ver pulseverse.app/for/nurses.",
-  },
-  {
-    q: "¿Cuál es una buena alternativa a TikTok o Instagram para sanitarios?",
-    a: "PulseVerse es una alternativa gratuita y solo sanitaria: vídeos cortos y novedades con moderación de cultura clínica en lugar de un feed de audiencia general. Ver pulseverse.app/compare.",
-  },
-  {
-    q: "¿Hay una app social para médicos o estudiantes de medicina?",
-    a: "Sí. PulseVerse da la bienvenida a médicos, residentes y estudiantes de medicina y enfermería. Ver pulseverse.app/for/doctors y pulseverse.app/for/medical-students.",
+    a: "PulseVerse se diseña con expectativas de confianza y seguridad propias de la salud para un producto social público. No está pensado como sistema cubierto por HIPAA. Necesidades enterprise o BAA requieren conversación aparte con nuestro equipo.",
   },
 ];
 

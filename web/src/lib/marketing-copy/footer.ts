@@ -9,11 +9,11 @@ export type FooterCopy = {
   columns: FooterColumn[];
   stayConnectedTitle: string;
   stayConnectedBlurb: string;
-  phiLead: string;
+  getAppTitle: string;
+  iosBeta: string;
+  androidBeta: string;
+  viewDownloadPage: string;
   phiBody: string;
-  phiBetween: string;
-  phiFaq: string;
-  phiGuidelines: string;
   legalBlurb: string;
   privacy: string;
   terms: string;
@@ -53,15 +53,23 @@ const copy: Record<Locale, FooterCopy> = {
           { href: "/community-guidelines", label: "Community guidelines" },
         ],
       },
+      {
+        title: "Legal",
+        links: [
+          { href: "/privacy", label: "Privacy" },
+          { href: "/terms", label: "Terms" },
+          { href: "/privacy#privacy-choices", label: "Privacy choices" },
+        ],
+      },
     ],
     stayConnectedTitle: "Stay connected",
     stayConnectedBlurb: "Product updates and trust & safety news.",
-    phiLead: "PHI & clinical safety:",
+    getAppTitle: "Get PulseVerse",
+    iosBeta: "Join iOS beta",
+    androidBeta: "Join Android beta",
+    viewDownloadPage: "View download page →",
     phiBody:
-      "is not a system of record for identifiable patient information. Never post PHI or individually identifiable patient details. See",
-    phiBetween: "and",
-    phiFaq: "FAQ",
-    phiGuidelines: "Community guidelines",
+      "PHI & clinical safety: PulseVerse is not a system of record for identifiable patient information. Never post PHI or individually identifiable patient details.",
     legalBlurb: "Legal & community documents last updated {date}.",
     privacy: "Privacy",
     terms: "Terms",
@@ -99,15 +107,23 @@ const copy: Record<Locale, FooterCopy> = {
           { href: "/community-guidelines", label: "Normas de la comunidad" },
         ],
       },
+      {
+        title: "Legal",
+        links: [
+          { href: "/privacy", label: "Privacidad" },
+          { href: "/terms", label: "Términos" },
+          { href: "/privacy#privacy-choices", label: "Opciones de privacidad" },
+        ],
+      },
     ],
     stayConnectedTitle: "Mantente al tanto",
     stayConnectedBlurb: "Novedades del producto y de confianza y seguridad.",
-    phiLead: "PHI y seguridad clínica:",
+    getAppTitle: "Obtener PulseVerse",
+    iosBeta: "Beta iOS",
+    androidBeta: "Beta Android",
+    viewDownloadPage: "Ver página de descarga →",
     phiBody:
-      "no es un sistema de registro para información identificable de pacientes. No publiques PHI ni datos que permitan identificar a pacientes. Consulta las",
-    phiBetween: "y las",
-    phiFaq: "FAQ",
-    phiGuidelines: "normas de la comunidad",
+      "PHI y seguridad clínica: PulseVerse no es un sistema de registro para información identificable de pacientes. No publiques PHI ni datos que permitan identificar a pacientes.",
     legalBlurb: "Documentos legales y de comunidad actualizados por última vez el {date}.",
     privacy: "Privacidad",
     terms: "Términos",
