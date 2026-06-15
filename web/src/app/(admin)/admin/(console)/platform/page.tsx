@@ -4,6 +4,7 @@ import { AdminDataHealthCard } from "@/components/admin/admin-data-health-card";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
 import { CreatePartnerKeyForm } from "@/components/admin/create-partner-key-form";
+import { WebhookOutboxSummaryCard } from "@/components/admin/webhook-outbox-summary-card";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,8 +21,8 @@ import {
   loadFeatureFlags,
   loadPartnerApiKeys,
   loadPlatformCounts,
-  loadWebhookOutboxRecent,
 } from "@/lib/admin/platform-queries";
+import { loadWebhookOutboxSummary } from "@/lib/admin/webhook-outbox";
 
 import {
   revokePartnerApiKeyForm,
@@ -30,10 +31,10 @@ import {
 } from "./actions";
 
 export default async function AdminPlatformPage() {
-  const [flags, keys, webhooks, tasks, counts, dataHealth] = await Promise.all([
+  const [flags, keys, webhookSummary, tasks, counts, dataHealth] = await Promise.all([
     loadFeatureFlags(),
     loadPartnerApiKeys(),
-    loadWebhookOutboxRecent(30),
+    loadWebhookOutboxSummary(),
     loadComplianceTasks(),
     loadPlatformCounts(),
     loadAdminDataHealth(),
@@ -72,9 +73,11 @@ export default async function AdminPlatformPage() {
         </div>
         <div className="rounded-xl border border-white/10 bg-card/40 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Webhooks pending</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{counts.pendingWebhooks}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{webhookSummary.pending}</p>
         </div>
       </div>
+
+      <WebhookOutboxSummaryCard summary={webhookSummary} compact />
 
       <AdminPanelCard>
         <CardHeader>
@@ -152,45 +155,6 @@ export default async function AdminPlatformPage() {
                 <TableRow>
                   <TableCell colSpan={4} className="text-muted-foreground">
                     No keys yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </AdminPanelCard>
-
-      <AdminPanelCard>
-        <CardHeader>
-          <CardTitle>Webhook outbox (recent)</CardTitle>
-          <p className="text-xs text-muted-foreground">Rows enqueue from moderation actions; delivery worker is separate.</p>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Attempts</TableHead>
-                <TableHead>Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {webhooks.length ? (
-                webhooks.map((w) => (
-                  <TableRow key={w.id}>
-                    <TableCell className="max-w-[200px] truncate text-xs font-mono">{w.eventType}</TableCell>
-                    <TableCell className="text-xs">{w.status}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{w.attempts}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(w.createdAt).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
-                    No webhooks yet.
                   </TableCell>
                 </TableRow>
               )}

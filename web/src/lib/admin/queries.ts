@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminDataSupabaseClient, getAdminDataAccessMode } from "@/lib/supabase/admin-data";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { formatCount } from "@/lib/admin/format";
+import { WEBHOOK_STALE_PENDING_MS } from "@/lib/admin/webhook-outbox";
 import type {
   AdminNotificationDigest,
   AdminNotificationItem,
@@ -1314,12 +1315,14 @@ export async function loadAdminActionQueue(): Promise<AdminActionQueueItem[]> {
   if (!isSupabaseConfigured()) return [];
   try {
     const supabase = await createAdminDataSupabaseClient();
+    const staleBefore = new Date(Date.now() - WEBHOOK_STALE_PENDING_MS).toISOString();
     const [
       { count: pendingReports },
       { count: pendingAppeals },
       { count: liveActive },
       { count: newLeads },
       { count: failedWebhooks },
+      { count: stalePendingWebhooks },
     ] = await Promise.all([
       supabase.from("reports").select("id", { count: "exact", head: true }).eq("status", "pending"),
       supabase
@@ -1329,6 +1332,11 @@ export async function loadAdminActionQueue(): Promise<AdminActionQueueItem[]> {
       supabase.from("live_streams").select("id", { count: "exact", head: true }).eq("status", "live"),
       supabase.from("marketing_contact_leads").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("webhook_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
+      supabase
+        .from("webhook_outbox")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+        .lt("created_at", staleBefore),
     ]);
 
     const items: AdminActionQueueItem[] = [
@@ -1361,11 +1369,18 @@ export async function loadAdminActionQueue(): Promise<AdminActionQueueItem[]> {
         tone: "default",
       },
       {
-        id: "webhooks",
+        id: "webhooks-failed",
         label: "Failed webhook deliveries",
         count: failedWebhooks ?? 0,
-        href: "/admin/platform",
+        href: "/admin/platform/webhooks?status=failed",
         tone: (failedWebhooks ?? 0) > 0 ? "warning" : "default",
+      },
+      {
+        id: "webhooks-stale",
+        label: "Stale pending webhooks",
+        count: stalePendingWebhooks ?? 0,
+        href: "/admin/platform/webhooks?status=pending&stale=1",
+        tone: (stalePendingWebhooks ?? 0) > 0 ? "warning" : "default",
       },
     ];
 

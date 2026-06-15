@@ -4102,6 +4102,9 @@ export type Database = {
           profile_song_title: string | null
           profile_song_url: string | null
           pulse_score_current: number
+          pulse_status_emoji: string | null
+          pulse_status_text: string | null
+          pulse_status_updated_at: string | null
           pulse_tier: string
           push_token: string | null
           push_token_updated_at: string | null
@@ -4147,6 +4150,9 @@ export type Database = {
           profile_song_title?: string | null
           profile_song_url?: string | null
           pulse_score_current?: number
+          pulse_status_emoji?: string | null
+          pulse_status_text?: string | null
+          pulse_status_updated_at?: string | null
           pulse_tier?: string
           push_token?: string | null
           push_token_updated_at?: string | null
@@ -4192,6 +4198,9 @@ export type Database = {
           profile_song_title?: string | null
           profile_song_url?: string | null
           pulse_score_current?: number
+          pulse_status_emoji?: string | null
+          pulse_status_text?: string | null
+          pulse_status_updated_at?: string | null
           pulse_tier?: string
           push_token?: string | null
           push_token_updated_at?: string | null
@@ -6093,6 +6102,7 @@ export type Database = {
           delivered_at: string | null
           event_type: string
           id: string
+          last_attempted_at: string | null
           last_error: string | null
           payload: Json
           status: string
@@ -6103,6 +6113,7 @@ export type Database = {
           delivered_at?: string | null
           event_type: string
           id?: string
+          last_attempted_at?: string | null
           last_error?: string | null
           payload?: Json
           status?: string
@@ -6113,6 +6124,7 @@ export type Database = {
           delivered_at?: string | null
           event_type?: string
           id?: string
+          last_attempted_at?: string | null
           last_error?: string | null
           payload?: Json
           status?: string
