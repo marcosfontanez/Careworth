@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireAdminSupabaseForModeration } from "@/lib/admin/moderation-auth";
+import { requireAdminApiSession } from "@/lib/admin/require-admin-api-session";
 import { checkRateLimitDistributed } from "@/lib/server/rate-limit-distributed";
 import { getClientIpFromHeaders } from "@/lib/server/rate-limit";
 
-/**
- * Open in the browser while logged into /admin to verify cookies + staff reach the API layer.
- */
+/** Staff-only session probe — production-safe (no env/token diagnostics). */
 export async function GET(req: NextRequest) {
   const ip = getClientIpFromHeaders((n) => req.headers.get(n));
   const rl = await checkRateLimitDistributed(`api:debug-auth:${ip}`, 20, 60_000);
@@ -14,21 +12,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Too many requests." }, { status: 429 });
   }
 
-  const g = await requireAdminSupabaseForModeration();
-  if (!g.ok) {
-    return NextResponse.json(
-      { ok: false, error: g.error },
-      { status: 401 },
-    );
-  }
-  const body: Record<string, unknown> = {
-    ok: true,
-    staffUserId: g.adminUserId,
-  };
-  // Avoid disclosing server env layout in production (defense in depth; route is admin-only).
-  if (process.env.NODE_ENV !== "production") {
-    body.hasServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
-  }
+  const auth = await requireAdminApiSession();
+  if (!auth.ok) return auth.response;
 
-  return NextResponse.json(body);
+  return NextResponse.json({ ok: true });
 }

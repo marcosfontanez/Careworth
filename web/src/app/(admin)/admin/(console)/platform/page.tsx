@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdminDataHealthCard } from "@/components/admin/admin-data-health-card";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
 import { CreatePartnerKeyForm } from "@/components/admin/create-partner-key-form";
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { loadAdminDataHealth } from "@/lib/admin/admin-data-health";
 import {
   loadComplianceTasks,
   loadFeatureFlags,
@@ -28,12 +30,13 @@ import {
 } from "./actions";
 
 export default async function AdminPlatformPage() {
-  const [flags, keys, webhooks, tasks, counts] = await Promise.all([
+  const [flags, keys, webhooks, tasks, counts, dataHealth] = await Promise.all([
     loadFeatureFlags(),
     loadPartnerApiKeys(),
     loadWebhookOutboxRecent(30),
     loadComplianceTasks(),
     loadPlatformCounts(),
+    loadAdminDataHealth(),
   ]);
 
   return (
@@ -43,6 +46,8 @@ export default async function AdminPlatformPage() {
         title="Platform & enterprise"
         description="Feature flags, partner API keys, webhook queue, compliance checklist, and operational counters. Apply migration 067_platform_enterprise_foundation.sql for full schema."
       />
+
+      <AdminDataHealthCard health={dataHealth} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-xl border border-white/10 bg-card/40 px-4 py-3">

@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { serverLog } from "@/lib/server/logger";
-import { checkRateLimitDistributed } from "@/lib/server/rate-limit-distributed";
-import { getClientIpFromHeaders } from "@/lib/server/rate-limit";
 import {
   approveReportDismiss,
   markReportActionTaken,
@@ -12,6 +9,10 @@ import {
   suspendSubjectFromReport,
   warnOnReport,
 } from "@/lib/admin/moderation-mutations";
+import { requireAdminApiSession } from "@/lib/admin/require-admin-api-session";
+import { serverLog } from "@/lib/server/logger";
+import { checkRateLimitDistributed } from "@/lib/server/rate-limit-distributed";
+import { getClientIpFromHeaders } from "@/lib/server/rate-limit";
 
 type ModerationBody = {
   action?: string;
@@ -21,10 +22,6 @@ type ModerationBody = {
   circleAction?: "hide" | "remove" | "restore" | "pending_review";
 };
 
-/**
- * Same mutations as server actions, invoked via fetch so the admin UI works even when
- * the Next.js server-action RPC layer fails in dev (bundler / cookie edge cases).
- */
 export async function POST(req: NextRequest) {
   const ip = getClientIpFromHeaders((n) => req.headers.get(n));
   const rl = await checkRateLimitDistributed(`api:moderation:${ip}`, 90, 60_000);
@@ -32,6 +29,9 @@ export async function POST(req: NextRequest) {
     serverLog.warn("moderation rate limited", { ip });
     return NextResponse.json({ ok: false, error: "Too many requests. Try again shortly." }, { status: 429 });
   }
+
+  const auth = await requireAdminApiSession();
+  if (!auth.ok) return auth.response;
 
   let body: ModerationBody;
   try {

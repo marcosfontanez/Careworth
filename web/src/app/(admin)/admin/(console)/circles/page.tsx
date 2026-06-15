@@ -1,4 +1,4 @@
-import { AdminCirclesDirectory } from "@/components/admin/admin-circles-directory";
+import { AdminCirclesConsole } from "@/components/admin/admin-circles-console";
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { loadCircles, loadCirclesOpsStrip } from "@/lib/admin/queries";
@@ -11,10 +11,10 @@ export default async function AdminCirclesPage() {
       <AdminPageHeader
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Circles" }]}
         title="Circles"
-        description={`Communities from Supabase — ${circles.length} rows. Filter locally by name or slug; structural edits stay in Studio until a write API ships.`}
+        description={`Community curation — ${circles.length} circles. Create, edit, feature, and archive from the web console.`}
       />
       <AdminOpsStrip items={ops.length ? ops : [{ label: "Circles", value: "0", hint: "no data" }]} className="xl:grid-cols-3" />
-      <AdminCirclesDirectory circles={circles} />
+      <AdminCirclesConsole circles={circles} />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { colors } from '@/theme';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
 import { useToast } from '@/components/ui/Toast';
 import { soundCatalogService, type SoundCatalogAdminRow } from '@/services/supabase/soundCatalog';
+import { writeMobileAdminAudit } from '@/lib/adminAuditMobile';
 import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 
 const SOUND_CATALOG_ADMIN_LIST_WINDOW = getAdminModerationListWindow('soundCatalog');
@@ -91,6 +92,12 @@ export default function AdminSoundCatalogScreen() {
         sortBoost: boost,
         isActive,
       });
+      await writeMobileAdminAudit({
+        action: 'sound_catalog.upsert',
+        entityType: 'sound_catalog',
+        entityId: pid,
+        metadata: { post_id: pid, is_active: isActive, sort_boost: boost },
+      });
       showToast('Saved to catalog', 'success');
       setPostId('');
       setArtist('');
@@ -118,6 +125,12 @@ export default function AdminSoundCatalogScreen() {
           onPress: async () => {
             try {
               await soundCatalogService.deleteByPostId(row.post_id);
+              await writeMobileAdminAudit({
+                action: 'sound_catalog.delete',
+                entityType: 'sound_catalog',
+                entityId: row.post_id,
+                metadata: { post_id: row.post_id },
+              });
               showToast('Removed', 'success');
               await load();
             } catch (e: unknown) {

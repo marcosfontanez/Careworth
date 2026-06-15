@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { AdminActionQueuePanel } from "@/components/admin/admin-action-queue-panel";
+import { AdminDataHealthCard } from "@/components/admin/admin-data-health-card";
 import { DashboardExportButton, type DashboardExportSnapshotInput } from "@/components/admin/dashboard-export-button";
 import {
   AudienceDonutChart,
@@ -30,8 +32,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { loadAdminDataHealth } from "@/lib/admin/admin-data-health";
 import {
   buildDashboardOpsStrip,
+  loadAdminActionQueue,
   loadAdminCounts,
   loadAdminUsers,
   loadAudienceRoleMix,
@@ -70,6 +74,8 @@ export default async function AdminDashboardPage() {
     health,
     liveSnap,
     modSla,
+    actionQueue,
+    dataHealth,
   ] = await Promise.all([
     loadAdminCounts(),
     loadReports(),
@@ -87,6 +93,8 @@ export default async function AdminDashboardPage() {
     loadSystemHealthSnapshot(),
     loadLive24hSnapshot(),
     loadModerationSlaSnapshot(),
+    loadAdminActionQueue(),
+    loadAdminDataHealth(),
   ]);
 
   const circlesRanked = await loadCircles();
@@ -235,6 +243,8 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
       <AdminOpsStrip items={opsStrip} />
+      <AdminActionQueuePanel items={actionQueue} />
+      <AdminDataHealthCard health={dataHealth} />
       <AdminPanelCard>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Moderation SLA (30d)</CardTitle>

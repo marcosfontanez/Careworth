@@ -53,11 +53,13 @@ function usersToCsv(rows: AdminUser[]): string {
   return lines.join("\n");
 }
 
-const STATUS_FILTERS: Array<{ key: "all" | AdminUser["status"]; label: string }> = [
+const STATUS_FILTERS: Array<{ key: "all" | AdminUser["status"] | "staff" | "verified"; label: string }> = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "suspended", label: "Suspended" },
   { key: "banned", label: "Banned" },
+  { key: "staff", label: "Staff" },
+  { key: "verified", label: "Verified" },
 ];
 
 export function UsersConsole({ users }: { users: AdminUser[] }) {
@@ -67,7 +69,9 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return users.filter((u) => {
-      if (status !== "all" && u.status !== status) return false;
+      if (status === "staff" && !u.roleAdmin) return false;
+      if (status === "verified" && !u.isVerified) return false;
+      if (status !== "all" && status !== "staff" && status !== "verified" && u.status !== status) return false;
       if (!needle) return true;
       const hay = `${u.displayName} ${u.profession} ${u.specialty} ${u.id}`.toLowerCase();
       return hay.includes(needle);
@@ -128,7 +132,7 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead>Name</TableHead>
                 <TableHead>Profession</TableHead>
-                <TableHead>Specialty</TableHead>
+                <TableHead>Flags</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Reports</TableHead>
                 <TableHead>Strikes</TableHead>
@@ -142,7 +146,16 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
                 <TableRow key={u.id} className="border-border">
                   <TableCell className="font-medium">{u.displayName}</TableCell>
                   <TableCell>{u.profession}</TableCell>
-                  <TableCell className="text-muted-foreground">{u.specialty}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {u.roleAdmin ? (
+                        <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-200">Staff</span>
+                      ) : null}
+                      {u.isVerified ? (
+                        <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] text-sky-200">Verified</span>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <StatusBadge status={u.status} />
                   </TableCell>
@@ -153,7 +166,7 @@ export function UsersConsole({ users }: { users: AdminUser[] }) {
                   <TableCell className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button size="sm" variant="default" asChild>
-                        <Link href={`/admin/users/${u.id}`}>Economy audit</Link>
+                        <Link href={`/admin/users/${u.id}`}>User detail</Link>
                       </Button>
                       <Button size="sm" variant="outline" asChild>
                         <Link href="/admin/moderation">Moderation</Link>

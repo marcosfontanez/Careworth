@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAdminDataSupabaseClient } from "@/lib/supabase/admin-data";
+import { createAdminDataSupabaseClient, getAdminDataAccessMode } from "@/lib/supabase/admin-data";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { formatCount } from "@/lib/admin/format";
 import type {
@@ -409,7 +409,7 @@ export async function loadAdminUsers(): Promise<AdminUser[]> {
     const { data: profiles, error } = await supabase
       .from("profiles")
       .select(
-        "id, display_name, role, specialty, city, state, created_at, avatar_url, follower_count, is_verified",
+        "id, display_name, role, specialty, city, state, created_at, avatar_url, follower_count, is_verified, role_admin",
       )
       .order("created_at", { ascending: false })
       .limit(150);
@@ -435,6 +435,8 @@ export async function loadAdminUsers(): Promise<AdminUser[]> {
         specialty: p.specialty,
         avatarUrl: p.avatar_url ?? undefined,
         status: isBanned ? "banned" : "active",
+        roleAdmin: p.role_admin === true,
+        isVerified: p.is_verified === true,
         reportsCount: 0,
         strikes: 0,
         joinedAt: (p.created_at as string).slice(0, 10),
@@ -454,7 +456,9 @@ export async function loadCircles(): Promise<CircleAdmin[]> {
     const supabase = await createAdminDataSupabaseClient();
     const { data, error } = await supabase
       .from("communities")
-      .select("id, name, slug, member_count, post_count, featured_order, trending_topics")
+      .select(
+        "id, name, slug, description, icon, accent_color, categories, member_count, post_count, featured_order, trending_topics, metadata",
+      )
       .order("member_count", { ascending: false })
       .limit(100);
 
@@ -463,15 +467,25 @@ export async function loadCircles(): Promise<CircleAdmin[]> {
       return [];
     }
 
-    return data.map((c, i) => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      members: c.member_count ?? 0,
-      posts24h: 0,
-      featuredOrder: c.featured_order,
-      trendScore: (c.trending_topics?.length ?? 0) + (100 - i),
-    }));
+    return data.map((c, i) => {
+      const meta =
+        c.metadata && typeof c.metadata === "object" ? (c.metadata as Record<string, unknown>) : {};
+      return {
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        description: (c.description as string) ?? "",
+        icon: (c.icon as string) ?? "🏥",
+        accentColor: (c.accent_color as string) ?? "#1E4ED8",
+        categories: (c.categories as string[]) ?? [],
+        members: c.member_count ?? 0,
+        posts24h: 0,
+        postCount: c.post_count ?? 0,
+        featuredOrder: c.featured_order,
+        trendScore: (c.trending_topics?.length ?? 0) + (100 - i),
+        archived: meta.admin_archived === true,
+      };
+    });
   } catch (e) {
     console.error("loadCircles exception:", e);
     return [];
@@ -494,9 +508,17 @@ export async function loadAppeals(): Promise<AppealRow[]> {
     }
 
     const userIds = [...new Set(data.map((a) => a.user_id as string))];
-    const { data: profs } = await supabase.from("profiles").select("id, display_name").in("id", userIds);
+    const postIds = [...new Set(data.map((a) => a.post_id).filter(Boolean))] as string[];
+
+    const [{ data: profs }, { data: posts }] = await Promise.all([
+      supabase.from("profiles").select("id, display_name").in("id", userIds),
+      postIds.length
+        ? supabase.from("posts").select("id, privacy_mode").in("id", postIds)
+        : Promise.resolve({ data: [] as { id: string; privacy_mode: string | null }[] }),
+    ]);
 
     const names = new Map((profs ?? []).map((p) => [p.id as string, p.display_name as string]));
+    const postPrivacy = new Map((posts ?? []).map((p) => [p.id as string, p.privacy_mode as string | null]));
 
     const statusMap: Record<string, AppealRow["status"]> = {
       pending: "open",
@@ -510,7 +532,10 @@ export async function loadAppeals(): Promise<AppealRow[]> {
 
     return data.map((a) => ({
       id: a.id as string,
+      userId: a.user_id as string,
       userName: names.get(a.user_id as string) ?? (a.user_id as string).slice(0, 8),
+      postId: (a.post_id as string | null) ?? null,
+      postPrivacyMode: a.post_id ? (postPrivacy.get(a.post_id as string) ?? null) : null,
       actionTaken: a.post_id ? `Post ${String(a.post_id).slice(0, 8)}…` : "Account / content",
       requestedAt: a.created_at as string,
       status: statusMap[String(a.status)] ?? "open",
@@ -1275,6 +1300,90 @@ export function buildDashboardOpsStrip(input: {
       hint: input.topCircleMembers ? `${formatCount(input.topCircleMembers)} members` : "no data",
     },
   ];
+}
+
+export type AdminActionQueueItem = {
+  id: string;
+  label: string;
+  count: number;
+  href: string;
+  tone: "default" | "warning" | "danger";
+};
+
+export async function loadAdminActionQueue(): Promise<AdminActionQueueItem[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const supabase = await createAdminDataSupabaseClient();
+    const [
+      { count: pendingReports },
+      { count: pendingAppeals },
+      { count: liveActive },
+      { count: newLeads },
+      { count: failedWebhooks },
+    ] = await Promise.all([
+      supabase.from("reports").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase
+        .from("content_appeals")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["pending", "reviewed", "open"]),
+      supabase.from("live_streams").select("id", { count: "exact", head: true }).eq("status", "live"),
+      supabase.from("marketing_contact_leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("webhook_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
+    ]);
+
+    const items: AdminActionQueueItem[] = [
+      {
+        id: "reports",
+        label: "Pending reports",
+        count: pendingReports ?? 0,
+        href: "/admin/moderation",
+        tone: (pendingReports ?? 0) > 0 ? "danger" : "default",
+      },
+      {
+        id: "live",
+        label: "Active live streams",
+        count: liveActive ?? 0,
+        href: "/admin/live",
+        tone: "default",
+      },
+      {
+        id: "appeals",
+        label: "Pending appeals",
+        count: pendingAppeals ?? 0,
+        href: "/admin/appeals",
+        tone: (pendingAppeals ?? 0) > 0 ? "warning" : "default",
+      },
+      {
+        id: "leads",
+        label: "New leads",
+        count: newLeads ?? 0,
+        href: "/admin/leads",
+        tone: "default",
+      },
+      {
+        id: "webhooks",
+        label: "Failed webhook deliveries",
+        count: failedWebhooks ?? 0,
+        href: "/admin/platform",
+        tone: (failedWebhooks ?? 0) > 0 ? "warning" : "default",
+      },
+    ];
+
+    const accessMode = getAdminDataAccessMode();
+    if (accessMode === "session_rls") {
+      items.push({
+        id: "platform",
+        label: "Platform data degraded",
+        count: 1,
+        href: "/admin/platform",
+        tone: "warning",
+      });
+    }
+
+    return items;
+  } catch {
+    return [];
+  }
 }
 
 export type HealthServiceRow = { name: string; status: "operational" | "degraded" | "down" };

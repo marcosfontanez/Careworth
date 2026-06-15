@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { writeMobileAdminAudit } from '@/lib/adminAuditMobile';
 import type { CircleModerationStatus } from '@/lib/circleModeration';
 import { CIRCLE_MODERATION_ACTIVE } from '@/lib/circleModeration';
 
@@ -216,6 +217,12 @@ export const circleModerationService = {
       created_by: user.id,
     });
     if (error) throw error;
+    await writeMobileAdminAudit({
+      action: 'circle.moderator.add',
+      entityType: 'community',
+      entityId: communityId,
+      metadata: { circle_id: communityId, user_id: userId, role },
+    });
   },
 
   async removeModerator(communityId: string, userId: string): Promise<void> {
@@ -225,5 +232,11 @@ export const circleModerationService = {
       .eq('community_id', communityId)
       .eq('user_id', userId);
     if (error) throw error;
+    await writeMobileAdminAudit({
+      action: 'circle.moderator.remove',
+      entityType: 'community',
+      entityId: communityId,
+      metadata: { circle_id: communityId, user_id: userId },
+    });
   },
 };

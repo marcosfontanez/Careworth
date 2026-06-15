@@ -42,7 +42,7 @@ export default async function AdminAppealsPage() {
               <CardContent className="space-y-3 text-sm text-muted-foreground">
                 <p>{a.notes}</p>
                 <p className="text-xs">Requested {new Date(a.requestedAt).toLocaleString()}</p>
-                <AppealRowActions appealId={a.id} status={a.status} />
+                <AppealRowActions appeal={a} />
               </CardContent>
             </AdminPanelCard>
           ))

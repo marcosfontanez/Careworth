@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { AccentComposerFrame } from '@/components/ui/AccentComposerFrame';
+import { writeMobileAdminAudit } from '@/lib/adminAuditMobile';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
@@ -499,6 +500,12 @@ export default function AdminPanel() {
       toast.show(error.message ?? 'Failed to ban user', 'error');
       return;
     }
+    await writeMobileAdminAudit({
+      action: 'user.ban',
+      entityType: 'profile',
+      entityId: targetId,
+      metadata: { target_user_id: targetId, reason: reason.slice(0, 200) },
+    });
     toast.show('User banned', 'success');
     setSelectedUser(null);
     void loadData();
@@ -522,6 +529,12 @@ export default function AdminPanel() {
                 toast.show(rpcToastMessage(error.message ?? 'Failed to update role'), 'error');
                 return;
               }
+              await writeMobileAdminAudit({
+                action: newVal ? 'staff.grant' : 'staff.revoke',
+                entityType: 'profile',
+                entityId: userRow.id,
+                metadata: { target_user_id: userRow.id, old_value: userRow.role_admin, new_value: newVal },
+              });
               toast.show(`Admin ${newVal ? 'granted' : 'revoked'}`, 'success');
               setSelectedUser(null);
               void loadData();
@@ -542,6 +555,12 @@ export default function AdminPanel() {
       toast.show(rpcToastMessage(error.message ?? 'Failed to update verification'), 'error');
       return;
     }
+    await writeMobileAdminAudit({
+      action: next ? 'verified.grant' : 'verified.revoke',
+      entityType: 'profile',
+      entityId: userRow.id,
+      metadata: { target_user_id: userRow.id, old_value: userRow.is_verified, new_value: next },
+    });
     toast.show(next ? 'User verified' : 'Verification removed', 'success');
     setSelectedUser(null);
     void loadData();
@@ -558,6 +577,12 @@ export default function AdminPanel() {
             toast.show(error.message ?? 'Failed to delete post', 'error');
             return;
           }
+          await writeMobileAdminAudit({
+            action: 'content.post.delete',
+            entityType: 'post',
+            entityId: post.id,
+            metadata: { post_id: post.id },
+          });
           toast.show('Post deleted', 'success');
           void loadData();
         },
@@ -575,6 +600,12 @@ export default function AdminPanel() {
       toast.show(rpcToastMessage(error.message ?? 'Failed to update post'), 'error');
       return;
     }
+    await writeMobileAdminAudit({
+      action: newMode === 'private' ? 'content.post.hide' : 'content.post.restore',
+      entityType: 'post',
+      entityId: post.id,
+      metadata: { post_id: post.id, privacy_mode: newMode },
+    });
     toast.show(newMode === 'private' ? 'Post hidden' : 'Post restored', 'success');
     void loadData();
   };

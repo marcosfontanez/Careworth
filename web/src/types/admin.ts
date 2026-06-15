@@ -32,6 +32,8 @@ export interface AdminUser {
   specialty: string;
   avatarUrl?: string;
   status: UserStatus;
+  roleAdmin: boolean;
+  isVerified: boolean;
   reportsCount: number;
   strikes: number;
   joinedAt: string;
@@ -73,10 +75,16 @@ export interface CircleAdmin {
   id: string;
   name: string;
   slug: string;
+  description: string;
+  icon: string;
+  accentColor: string;
+  categories: string[];
   members: number;
   posts24h: number;
+  postCount: number;
   featuredOrder: number | null;
   trendScore: number;
+  archived: boolean;
 }
 
 export interface LiveSessionRow {
@@ -92,7 +100,10 @@ export interface LiveSessionRow {
 
 export interface AppealRow {
   id: string;
+  userId: string;
   userName: string;
+  postId: string | null;
+  postPrivacyMode: string | null;
   actionTaken: string;
   requestedAt: string;
   status: AppealStatus;
