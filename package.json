@@ -30,7 +30,7 @@
     "eas:log:ios": "node scripts/eas-log-submission.mjs ios",
     "eas:log:android": "node scripts/eas-log-submission.mjs android",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test:webhook-delivery": "npx --yes deno@2 test --config supabase/functions/_shared/webhook-delivery/deno.json supabase/functions/_shared/webhook-delivery/delivery.test.ts",
     "smoke": "npm run typecheck && npm run test && npm run db:types:check",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings 250",
@@ -119,9 +119,6 @@
     "patch-package": "^8.0.1",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"
-  },
-  "optionalDependencies": {
-    "sharp": "^0.34.5"
   },
   "private": true
 }

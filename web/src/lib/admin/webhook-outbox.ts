@@ -59,6 +59,9 @@ export type WebhookOutboxSummary = {
   lastAttemptAt: string | null;
   workerDeliveryEnabled: boolean;
   workerNote: string;
+  workerLastRunAt: string | null;
+  workerStatus: string;
+  activeDestinations: number;
 };
 
 type RawRow = {
@@ -104,6 +107,9 @@ export async function loadWebhookOutboxSummary(): Promise<WebhookOutboxSummary> 
     lastAttemptAt: null,
     workerDeliveryEnabled: false,
     workerNote: "Delivery is handled by the webhook worker (outside this Next.js app).",
+    workerLastRunAt: null,
+    workerStatus: "unknown",
+    activeDestinations: 0,
   };
   if (!isSupabaseConfigured()) return empty;
 
@@ -111,7 +117,7 @@ export async function loadWebhookOutboxSummary(): Promise<WebhookOutboxSummary> 
     const supabase = await createAdminDataSupabaseClient();
     const staleBefore = new Date(Date.now() - WEBHOOK_STALE_PENDING_MS).toISOString();
 
-    const [pending, failed, delivered, retrying, ignored, stale, flags, oldestPending, lastDelivered, lastFailed, lastAttempt] =
+    const [pending, failed, delivered, retrying, ignored, stale, flags, oldestPending, lastDelivered, lastFailed, lastAttempt, workerState, destinations] =
       await Promise.all([
         supabase.from("webhook_outbox").select("id", { count: "exact", head: true }).eq("status", "pending"),
         supabase.from("webhook_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
@@ -152,9 +158,21 @@ export async function loadWebhookOutboxSummary(): Promise<WebhookOutboxSummary> 
           .order("last_attempted_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from("webhook_worker_state")
+          .select("last_run_at, last_status, last_summary")
+          .eq("singleton_key", "default")
+          .maybeSingle(),
+        supabase
+          .from("webhook_destinations")
+          .select("id", { count: "exact", head: true })
+          .eq("is_active", true),
       ]);
 
     const workerDeliveryEnabled = Boolean(flags.data?.enabled);
+    const workerLastRunAt = (workerState.data?.last_run_at as string) ?? null;
+    const workerStatus = String(workerState.data?.last_status ?? "unknown");
+    const activeDestinations = destinations.count ?? 0;
     const oldestCreated = oldestPending.data?.created_at as string | undefined;
     const oldestPendingAgeMs = oldestCreated
       ? Math.max(0, Date.now() - new Date(oldestCreated).getTime())
@@ -164,8 +182,16 @@ export async function loadWebhookOutboxSummary(): Promise<WebhookOutboxSummary> 
       "Delivery is handled by the webhook worker (outside this Next.js app). Staff retries re-queue events as pending.";
     if (!workerDeliveryEnabled) {
       workerNote +=
-        " The webhook_delivery feature flag is off — enable it on Platform when the worker is ready.";
-    } else if ((stale.count ?? 0) > 0) {
+        " The webhook_delivery feature flag is off — enable it on Platform when destinations are configured.";
+    } else if (activeDestinations === 0) {
+      workerNote += " No active webhook destinations are configured — delivery will not run.";
+    } else if (!workerLastRunAt) {
+      workerNote += " Worker has not recorded a run yet — deploy deliver-webhook-outbox and confirm cron.";
+    } else if (Date.now() - new Date(workerLastRunAt).getTime() > 15 * 60_000) {
+      workerNote += " Worker heartbeat is stale — verify the deliver-webhook-outbox cron is running.";
+    }
+
+    if (workerDeliveryEnabled && activeDestinations > 0 && (stale.count ?? 0) > 0) {
       workerNote +=
         " Pending events are aging — verify the worker is running and can reach webhook destinations.";
     } else if ((failed.count ?? 0) > 0) {
@@ -188,6 +214,9 @@ export async function loadWebhookOutboxSummary(): Promise<WebhookOutboxSummary> 
       lastAttemptAt: (lastAttempt.data?.last_attempted_at as string) ?? null,
       workerDeliveryEnabled,
       workerNote,
+      workerLastRunAt,
+      workerStatus,
+      activeDestinations,
     };
   } catch (e) {
     console.error("loadWebhookOutboxSummary:", e);

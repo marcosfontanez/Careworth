@@ -365,6 +365,18 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+# Circle weekly AI prompt cron functions. Both are authorized by the
+# `x-cron-secret` header (see _shared/circle-prompts/cronAuth.ts), so JWT
+# verification is disabled — this version-controls the `--no-verify-jwt` deploy.
+[functions.generate-circle-weekly-prompts]
+verify_jwt = false
+
+[functions.calculate-circle-weekly-prompt-metrics]
+verify_jwt = false
+
+[functions.deliver-webhook-outbox]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

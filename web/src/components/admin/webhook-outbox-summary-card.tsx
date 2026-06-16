@@ -76,12 +76,23 @@ export function WebhookOutboxSummaryCard({
           <p>
             <span className="font-medium text-foreground/90">Last attempt:</span> {fmtTime(summary.lastAttemptAt)}
           </p>
+          <p>
+            <span className="font-medium text-foreground/90">Worker run:</span> {fmtTime(summary.workerLastRunAt)}
+            {summary.workerStatus !== "unknown" ? (
+              <span className="ml-1 text-foreground/70">({summary.workerStatus.replace(/_/g, " ")})</span>
+            ) : null}
+          </p>
         </div>
 
         <p className="text-xs text-muted-foreground">
           Worker flag:{" "}
           <span className={summary.workerDeliveryEnabled ? "text-emerald-200" : "text-amber-200"}>
             webhook_delivery {summary.workerDeliveryEnabled ? "enabled" : "disabled"}
+          </span>
+          <span className="mx-2 text-border">·</span>
+          Active destinations:{" "}
+          <span className={summary.activeDestinations > 0 ? "text-foreground/90" : "text-amber-200"}>
+            {summary.activeDestinations}
           </span>
         </p>
 

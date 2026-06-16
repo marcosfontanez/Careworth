@@ -6100,10 +6100,12 @@ export type Database = {
           attempts: number
           created_at: string
           delivered_at: string | null
+          destination_id: string | null
           event_type: string
           id: string
           last_attempted_at: string | null
           last_error: string | null
+          next_attempt_at: string | null
           payload: Json
           status: string
         }
@@ -6111,10 +6113,12 @@ export type Database = {
           attempts?: number
           created_at?: string
           delivered_at?: string | null
+          destination_id?: string | null
           event_type: string
           id?: string
           last_attempted_at?: string | null
           last_error?: string | null
+          next_attempt_at?: string | null
           payload?: Json
           status?: string
         }
@@ -6122,12 +6126,90 @@ export type Database = {
           attempts?: number
           created_at?: string
           delivered_at?: string | null
+          destination_id?: string | null
           event_type?: string
           id?: string
           last_attempted_at?: string | null
           last_error?: string | null
+          next_attempt_at?: string | null
           payload?: Json
           status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_outbox_destination_id_fkey"
+            columns: ["destination_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_destinations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhook_destinations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_types: string[]
+          id: string
+          is_active: boolean
+          metadata: Json
+          name: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_types?: string[]
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_types?: string[]
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_destinations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhook_worker_state: {
+        Row: {
+          last_run_at: string | null
+          last_status: string
+          last_summary: Json
+          singleton_key: string
+          updated_at: string
+        }
+        Insert: {
+          last_run_at?: string | null
+          last_status?: string
+          last_summary?: Json
+          singleton_key?: string
+          updated_at?: string
+        }
+        Update: {
+          last_run_at?: string | null
+          last_status?: string
+          last_summary?: Json
+          singleton_key?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -6717,6 +6799,33 @@ export type Database = {
       admin_delete_sound_catalog: {
         Args: { p_post_id: string }
         Returns: undefined
+      }
+      webhook_outbox_claim_batch: {
+        Args: {
+          p_limit?: number
+          p_max_attempts?: number
+          p_min_age_seconds?: number
+          p_stale_lock_seconds?: number
+        }
+        Returns: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          destination_id: string | null
+          event_type: string
+          id: string
+          last_attempted_at: string | null
+          last_error: string | null
+          next_attempt_at: string | null
+          payload: Json
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "webhook_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       admin_post_set_privacy_mode: {
         Args: { p_post_id: string; p_privacy_mode: string }
