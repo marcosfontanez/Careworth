@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { MARKETING_LEAD_STATUSES } from "@/lib/admin/marketing-lead-status";
+import { isCampaignEditorEnabled, loadCampaignLinksByLead } from "@/lib/admin/campaign-editor";
 import { loadAdminLeadOwnerOptions, loadMarketingContactMessages } from "@/lib/admin/queries";
 
 import { updateMarketingLeadAction } from "./actions";
@@ -32,9 +33,11 @@ export default async function AdminLeadsPage({
 }) {
   const q = await searchParams;
   const statusFilter = q.status?.trim() || undefined;
-  const [rows, ownerOptions] = await Promise.all([
+  const [rows, ownerOptions, campaignByLead, editorEnabled] = await Promise.all([
     loadMarketingContactMessages({ limit: 200, status: statusFilter }),
     loadAdminLeadOwnerOptions(),
+    loadCampaignLinksByLead(),
+    isCampaignEditorEnabled(),
   ]);
 
   return (
@@ -100,6 +103,7 @@ export default async function AdminLeadsPage({
                 <TableHead>Host</TableHead>
                 <TableHead className="min-w-[280px]">CRM</TableHead>
                 <TableHead className="min-w-[220px]">Message</TableHead>
+                <TableHead className="min-w-[140px]">Campaign</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -187,11 +191,31 @@ export default async function AdminLeadsPage({
                     <TableCell className="max-w-[260px]">
                       <span className="line-clamp-4 text-xs text-muted-foreground">{r.message}</span>
                     </TableCell>
+                    <TableCell className="align-top text-xs">
+                      {(campaignByLead.get(r.id) ?? []).map((c) => (
+                        <Link
+                          key={c.id}
+                          href={`/admin/campaigns/${c.id}`}
+                          className="mb-1 block text-primary underline-offset-4 hover:underline"
+                        >
+                          {c.campaignName}
+                        </Link>
+                      ))}
+                      {editorEnabled ? (
+                        <Button size="sm" variant="secondary" className="mt-1" asChild>
+                          <Link href={`/admin/campaigns/new?leadId=${encodeURIComponent(r.id)}`}>
+                            Create campaign
+                          </Link>
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">Editor off</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">
+                  <TableCell colSpan={8} className="text-muted-foreground">
                     No rows returned — verify Supabase env, filters, or apply CRM migration{" "}
                     <span className="font-mono">189</span>.
                   </TableCell>

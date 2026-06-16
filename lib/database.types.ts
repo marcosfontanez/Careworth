@@ -48,13 +48,19 @@ export type Database = {
           clicks: number
           cpm_rate: number
           created_at: string | null
+          created_by: string | null
           cta_label: string
           cta_url: string
           description: string
           end_date: string
           id: string
           impressions: number
+          internal_notes: string | null
+          lead_id: string | null
           media_url: string
+          metadata: Json
+          objective: string | null
+          owner_id: string | null
           start_date: string
           status: string
           target_roles: string[] | null
@@ -71,13 +77,19 @@ export type Database = {
           clicks?: number
           cpm_rate?: number
           created_at?: string | null
+          created_by?: string | null
           cta_label?: string
           cta_url: string
           description?: string
           end_date: string
           id?: string
           impressions?: number
+          internal_notes?: string | null
+          lead_id?: string | null
           media_url: string
+          metadata?: Json
+          objective?: string | null
+          owner_id?: string | null
           start_date?: string
           status?: string
           target_roles?: string[] | null
@@ -94,13 +106,19 @@ export type Database = {
           clicks?: number
           cpm_rate?: number
           created_at?: string | null
+          created_by?: string | null
           cta_label?: string
           cta_url?: string
           description?: string
           end_date?: string
           id?: string
           impressions?: number
+          internal_notes?: string | null
+          lead_id?: string | null
           media_url?: string
+          metadata?: Json
+          objective?: string | null
+          owner_id?: string | null
           start_date?: string
           status?: string
           target_roles?: string[] | null

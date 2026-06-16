@@ -1330,7 +1330,7 @@ export async function loadAdminActionQueue(): Promise<AdminActionQueueItem[]> {
         .select("id", { count: "exact", head: true })
         .in("status", ["pending", "reviewed", "open"]),
       supabase.from("live_streams").select("id", { count: "exact", head: true }).eq("status", "live"),
-      supabase.from("marketing_contact_leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("marketing_contact_messages").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("webhook_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
       supabase
         .from("webhook_outbox")
