@@ -4233,6 +4233,7 @@ export type Database = {
           push_token_updated_at: string | null
           role: string
           role_admin: boolean
+          staff_roles: Database["public"]["Enums"]["staff_role"][]
           selected_pulse_avatar_frame_id: string | null
           shift_preference: string
           specialty: string
@@ -4281,6 +4282,7 @@ export type Database = {
           push_token_updated_at?: string | null
           role?: string
           role_admin?: boolean
+          staff_roles?: Database["public"]["Enums"]["staff_role"][]
           selected_pulse_avatar_frame_id?: string | null
           shift_preference?: string
           specialty?: string
@@ -4329,6 +4331,7 @@ export type Database = {
           push_token_updated_at?: string | null
           role?: string
           role_admin?: boolean
+          staff_roles?: Database["public"]["Enums"]["staff_role"][]
           selected_pulse_avatar_frame_id?: string | null
           shift_preference?: string
           specialty?: string
@@ -7339,14 +7342,35 @@ export type Database = {
           role: string
           is_verified: boolean
           role_admin: boolean
+          staff_roles: Database["public"]["Enums"]["staff_role"][]
           created_at: string
           post_count: number
           follower_count: number
         }[]
       }
+      admin_profile_set_staff_roles: {
+        Args: { p_target_user_id: string; p_staff_roles: Database["public"]["Enums"]["staff_role"][] }
+        Returns: undefined
+      }
+      caller_has_staff_role: {
+        Args: { p_role: Database["public"]["Enums"]["staff_role"] }
+        Returns: boolean
+      }
+      count_staff_owners: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       current_user_role_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      current_user_staff_roles: {
+        Args: Record<PropertyKey, never>
+        Returns: Database["public"]["Enums"]["staff_role"][]
+      }
+      effective_staff_roles: {
+        Args: { p_user_id: string }
+        Returns: Database["public"]["Enums"]["staff_role"][]
       }
       get_top_today: {
         Args: { feed_limit?: number }
@@ -7650,7 +7674,15 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      staff_role:
+        | "owner"
+        | "admin"
+        | "moderator"
+        | "community"
+        | "marketing"
+        | "support"
+        | "analyst"
+        | "economy"
     }
     CompositeTypes: {
       [_ in never]: never

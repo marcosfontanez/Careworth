@@ -4,43 +4,28 @@ import { revalidatePath } from "next/cache";
 
 import { writeAdminAudit } from "@/lib/admin/audit-log";
 import { generatePartnerApiSecret, hashPartnerApiKey, partnerKeyPrefixFromSecret } from "@/lib/admin/partner-api-key";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-async function requireStaffId(): Promise<{ supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>; userId: string } | null> {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user?.id) return null;
-    const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
-    if (isAdmin !== true) return null;
-    return { supabase, userId: user.id };
-  } catch {
-    return null;
-  }
-}
+import { requireStaffActionPermission } from "@/lib/admin/staff-permissions";
 
 export async function toggleFeatureFlagForm(formData: FormData): Promise<void> {
-  const gate = await requireStaffId();
-  if (!gate) return;
+  const gate = await requireStaffActionPermission("platform.flags");
+  if (!gate.ok) return;
   const key = String(formData.get("key") ?? "").trim();
   const enabled = String(formData.get("enabled") ?? "") === "true";
   if (!key) return;
   await gate.supabase.from("feature_flags").update({ enabled, updated_at: new Date().toISOString() }).eq("key", key);
   await writeAdminAudit(gate.supabase, {
-    staffUserId: gate.userId,
+    staffUserId: gate.ctx.userId,
     action: enabled ? "feature_flag.enable" : "feature_flag.disable",
     entityType: "feature_flag",
     entityId: key,
-    metadata: { key, enabled },
+    metadata: { key, enabled, source_surface: "web" },
   });
   revalidatePath("/admin/platform");
 }
 
 export async function createPartnerApiKeyAction(label: string): Promise<{ secret?: string; error?: string }> {
-  const gate = await requireStaffId();
-  if (!gate) return { error: "Unauthorized." };
+  const gate = await requireStaffActionPermission("platform.api_keys");
+  if (!gate.ok) return { error: "Unauthorized." };
   const trimmed = label.trim().slice(0, 120);
   if (!trimmed) return { error: "Label required." };
   const secret = generatePartnerApiSecret();
@@ -51,37 +36,38 @@ export async function createPartnerApiKeyAction(label: string): Promise<{ secret
     key_prefix,
     key_hash,
     scopes: ["read:health"],
-    created_by: gate.userId,
+    created_by: gate.ctx.userId,
   });
   if (error) return { error: error.message };
   await writeAdminAudit(gate.supabase, {
-    staffUserId: gate.userId,
+    staffUserId: gate.ctx.userId,
     action: "partner_api_key.create",
     entityType: "partner_api_keys",
-    metadata: { label: trimmed },
+    metadata: { label: trimmed, source_surface: "web" },
   });
   revalidatePath("/admin/platform");
   return { secret };
 }
 
 export async function revokePartnerApiKeyForm(formData: FormData): Promise<void> {
-  const gate = await requireStaffId();
-  if (!gate) return;
+  const gate = await requireStaffActionPermission("platform.api_keys");
+  if (!gate.ok) return;
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
   await gate.supabase.from("partner_api_keys").update({ revoked_at: new Date().toISOString() }).eq("id", id);
   await writeAdminAudit(gate.supabase, {
-    staffUserId: gate.userId,
+    staffUserId: gate.ctx.userId,
     action: "partner_api_key.revoke",
     entityType: "partner_api_keys",
     entityId: id,
+    metadata: { source_surface: "web" },
   });
   revalidatePath("/admin/platform");
 }
 
 export async function toggleComplianceTaskForm(formData: FormData): Promise<void> {
-  const gate = await requireStaffId();
-  if (!gate) return;
+  const gate = await requireStaffActionPermission("platform.compliance");
+  if (!gate.ok) return;
   const taskId = String(formData.get("taskId") ?? "").trim();
   const done = String(formData.get("done") ?? "") === "true";
   if (!taskId) return;
@@ -89,15 +75,15 @@ export async function toggleComplianceTaskForm(formData: FormData): Promise<void
     .from("compliance_tasks")
     .update({
       completed_at: done ? new Date().toISOString() : null,
-      completed_by: done ? gate.userId : null,
+      completed_by: done ? gate.ctx.userId : null,
     })
     .eq("id", taskId);
   await writeAdminAudit(gate.supabase, {
-    staffUserId: gate.userId,
+    staffUserId: gate.ctx.userId,
     action: done ? "compliance_task.complete" : "compliance_task.uncomplete",
     entityType: "compliance_tasks",
     entityId: taskId,
-    metadata: { done },
+    metadata: { done, source_surface: "web" },
   });
   revalidatePath("/admin/platform");
 }

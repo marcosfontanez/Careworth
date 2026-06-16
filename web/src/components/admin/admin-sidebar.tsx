@@ -29,6 +29,8 @@ import {
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { MarketingLogo } from "@/components/marketing/marketing-logo";
 import { Badge } from "@/components/ui/badge";
+import { ADMIN_SIDEBAR_HREF_PERMISSION } from "@/lib/staffPermissions-shared";
+import type { StaffPermission, StaffRole } from "@/lib/staffPermissions-shared";
 import type { AdminHealthStrip } from "@/types/admin-health";
 import { cn } from "@/lib/utils";
 
@@ -94,11 +96,30 @@ export function AdminSidebar({
   currentPath,
   pendingAppealsCount = 0,
   health,
+  allowedPermissions,
+  staffRoles,
 }: {
   currentPath: string;
   pendingAppealsCount?: number;
   health: AdminHealthStrip;
+  allowedPermissions: StaffPermission[];
+  staffRoles: StaffRole[];
 }) {
+  const allowed = new Set(allowedPermissions);
+
+  function canSeeHref(href: string): boolean {
+    const base = href.split("#")[0] ?? href;
+    const perm = ADMIN_SIDEBAR_HREF_PERMISSION[base];
+    if (!perm) return true;
+    return allowed.has(perm);
+  }
+
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canSeeHref(item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
   function linkActive(href: string): boolean {
     const base = href.split("#")[0] ?? href;
     if (base === "/admin/dashboard") return currentPath === base;
@@ -111,8 +132,13 @@ export function AdminSidebar({
         <MarketingLogo variant="admin" className="min-w-0" />
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Admin</span>
       </div>
+      {staffRoles.length ? (
+        <p className="border-b border-sidebar-border px-3 py-2 text-[10px] text-muted-foreground">
+          Roles: {staffRoles.join(", ")}
+        </p>
+      ) : null}
       <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4" aria-label="Admin">
-        {groups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.title}>
             <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/90">
               {group.title}

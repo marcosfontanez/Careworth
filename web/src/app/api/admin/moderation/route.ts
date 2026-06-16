@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Too many requests. Try again shortly." }, { status: 429 });
   }
 
-  const auth = await requireAdminApiSession();
+  const auth = await requireAdminApiSession({ permission: "moderation.write" });
   if (!auth.ok) return auth.response;
 
   let body: ModerationBody;

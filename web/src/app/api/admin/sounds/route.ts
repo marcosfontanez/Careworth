@@ -37,7 +37,7 @@ function pickPostIds(body: MutationBody): string[] {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAdminApiSession();
+  const auth = await requireAdminApiSession({ permission: "sound_catalog.manage" });
   if (!auth.ok) return auth.response;
 
   const sp = req.nextUrl.searchParams;
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Too many requests. Try again shortly." }, { status: 429 });
   }
 
-  const auth = await requireAdminApiSession();
+  const auth = await requireAdminApiSession({ permission: "sound_catalog.manage" });
   if (!auth.ok) return auth.response;
 
   let body: MutationBody;

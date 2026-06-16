@@ -6,11 +6,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { writeAdminAudit } from "@/lib/admin/audit-log";
 import { requireAdminSupabaseForModeration } from "@/lib/admin/moderation-auth";
+import { requireStaffPermission, type StaffPermission } from "@/lib/admin/staff-permissions";
+import { normalizeStaffRoles, type StaffRole } from "@/lib/staffPermissions-shared";
 import { createAdminDataSupabaseClient } from "@/lib/supabase/admin-data";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 
-async function gate() {
-  return requireAdminSupabaseForModeration();
+async function gate(permission?: StaffPermission) {
+  const g = await requireAdminSupabaseForModeration();
+  if (!g.ok) return g;
+  if (!permission) return g;
+  const perm = await requireStaffPermission(g.supabase, g.adminUserId, permission);
+  if (!perm.ok) return { ok: false as const, error: perm.error };
+  return g;
 }
 
 function auditMeta(extra?: Record<string, unknown>) {
@@ -25,6 +32,7 @@ export type AdminUserDetailProfile = {
   specialty: string;
   avatarUrl: string | null;
   roleAdmin: boolean;
+  staffRoles: StaffRole[];
   isVerified: boolean;
   createdAt: string;
   followerCount: number;
@@ -83,7 +91,7 @@ export async function loadAdminUserDetail(userId: string): Promise<AdminUserDeta
     const { data: profile, error: profileErr } = await supabase
       .from("profiles")
       .select(
-        "id, display_name, username, role, specialty, avatar_url, role_admin, is_verified, created_at, follower_count, post_count",
+        "id, display_name, username, role, specialty, avatar_url, role_admin, staff_roles, is_verified, created_at, follower_count, post_count",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -152,6 +160,10 @@ export async function loadAdminUserDetail(userId: string): Promise<AdminUserDeta
         specialty: (profile.specialty as string) || "—",
         avatarUrl: (profile.avatar_url as string | null) ?? null,
         roleAdmin: profile.role_admin === true,
+        staffRoles: normalizeStaffRoles(
+          Array.isArray(profile.staff_roles) ? (profile.staff_roles as string[]) : [],
+          profile.role_admin === true,
+        ),
         isVerified: profile.is_verified === true,
         createdAt: profile.created_at as string,
         followerCount: Number(profile.follower_count ?? 0),
@@ -201,12 +213,69 @@ export async function countStaffAdmins(supabase: SupabaseClient): Promise<number
   return count ?? 0;
 }
 
+export async function adminSetStaffRoles(
+  targetUserId: string,
+  roles: StaffRole[],
+  staffNote?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const g = await gate("users.staff_manage");
+  if (!g.ok) return { ok: false, error: g.error };
+  const { supabase, adminUserId } = g;
+
+  const normalized = normalizeStaffRoles(roles);
+  if (normalized.length === 0) {
+    return { ok: false, error: "Select at least one staff role." };
+  }
+
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("staff_roles, role_admin")
+    .eq("id", targetUserId)
+    .maybeSingle();
+  if (!target) return { ok: false, error: "User not found" };
+
+  const previous = normalizeStaffRoles(
+    Array.isArray(target.staff_roles) ? (target.staff_roles as string[]) : [],
+    target.role_admin === true,
+  );
+
+  const { error } = await supabase.rpc("admin_profile_set_staff_roles", {
+    p_target_user_id: targetUserId,
+    p_staff_roles: normalized,
+  });
+  if (error) {
+    if (error.message.includes("last_owner_lockout")) {
+      return { ok: false, error: "Cannot remove the last owner. Promote another owner first." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  await writeAdminAudit(supabase, {
+    staffUserId: adminUserId,
+    action: "staff.roles.update",
+    entityType: "profile",
+    entityId: targetUserId,
+    metadata: auditMeta({
+      target_user_id: targetUserId,
+      actor_user_id: adminUserId,
+      previous_roles: previous,
+      new_roles: normalized,
+      staff_note: staffNote?.trim() || null,
+    }),
+  });
+
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${targetUserId}`);
+  revalidatePath("/admin/audit");
+  return { ok: true };
+}
+
 export async function adminSetRoleAdmin(
   targetUserId: string,
   roleAdmin: boolean,
   staffNote?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const g = await gate();
+  const g = await gate("users.staff_manage");
   if (!g.ok) return { ok: false, error: g.error };
   const { supabase, adminUserId } = g;
 
@@ -260,7 +329,7 @@ export async function adminSetVerified(
   isVerified: boolean,
   staffNote?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const g = await gate();
+  const g = await gate("users.moderate");
   if (!g.ok) return { ok: false, error: g.error };
   const { supabase, adminUserId } = g;
 
@@ -299,7 +368,7 @@ export async function adminBanUser(
   reason: string,
   staffNote?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const g = await gate();
+  const g = await gate("users.moderate");
   if (!g.ok) return { ok: false, error: g.error };
   const { supabase, adminUserId } = g;
 
@@ -335,7 +404,7 @@ export async function adminLiftBan(
   targetUserId: string,
   staffNote?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const g = await gate();
+  const g = await gate("users.moderate");
   if (!g.ok) return { ok: false, error: g.error };
   const { supabase, adminUserId } = g;
 
@@ -379,7 +448,7 @@ export async function adminSuspendUser(
   expiresAt: string,
   staffNote?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const g = await gate();
+  const g = await gate("users.moderate");
   if (!g.ok) return { ok: false, error: g.error };
   const { supabase, adminUserId } = g;
 

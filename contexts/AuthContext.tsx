@@ -18,8 +18,10 @@ import {
   withProfileTimeout,
 } from '@/services/supabase/profiles';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
-import { validateServerAuthSession } from '@/lib/authSessionGuard';
+import { tryRecoverStoredSession, validateServerAuthSession } from '@/lib/authSessionGuard';
 import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
+import { queryClient } from '@/lib/queryClient';
+import { hydrateJoinedCommunitiesFromServer } from '@/lib/hydrateJoinedCommunities';
 
 interface AuthState {
   session: Session | null;
@@ -159,6 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * inline email hydrate’s generation check fails → `isLoading` never clears on fast logout→login in one session.
    */
   const emailPasswordHydrateLockRef = useRef(false);
+  /** When true, skip `tryRecoverStoredSession` on SIGNED_OUT — user tapped Sign out. */
+  const intentionalSignOutRef = useRef(false);
 
   /** Set in {@link fetchProfile} when satellite queries hit {@link PROFILE_SATELLITE_BUDGET_MS}; hydrate retries lists once. */
   const profileSatelliteMissRef = useRef(false);
@@ -240,7 +244,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('badge_id, badges(id, name, description, icon, color, category)')
             .eq('user_id', userId),
           supabase.from('user_interests').select('interest').eq('user_id', userId),
-          supabase.from('community_members').select('community_id').eq('user_id', userId),
           supabase.from('follows').select('following_id').eq('follower_id', userId).limit(2000),
           supabase.from('saved_posts').select('post_id').eq('user_id', userId).limit(2000),
         ]);
@@ -262,16 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const [badgeRes, interestRes, communityResInner, followsRes, savedRes] = satelliteRace.r;
-        const deferredCommunityRows = communityResInner.error ? null : communityResInner.data;
-
-        if (!communityResInner.error) {
-          useAppStore.getState().setJoinedCommunityIdsFromServer(
-            (deferredCommunityRows ?? []).map((r: { community_id: string }) => String(r.community_id)),
-          );
-        } else if (__DEV__) {
-          console.warn('[auth] community_members hydrate failed', communityResInner.error.message);
-        }
+        const [badgeRes, interestRes, followsRes, savedRes] = satelliteRace.r;
 
         const deferredFollowRows = followsRes.data;
         if (deferredFollowRows) {
@@ -298,9 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 color: r.badges.color,
                 category: r.badges.category,
               })),
-              communitiesJoined: communityResInner.error
-                ? prev.profile.communitiesJoined
-                : (deferredCommunityRows ?? []).map((r: any) => r.community_id),
+              communitiesJoined: prev.profile.communitiesJoined,
               interests: (interestRes.data ?? []).map((r: any) => r.interest),
             },
           };
@@ -351,6 +343,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const pr = data as any;
 
+    let roleAdmin = false;
+    try {
+      const { data: isStaff } = await supabase.rpc('current_user_role_admin');
+      roleAdmin = isStaff === true;
+    } catch {
+      roleAdmin = false;
+    }
+
     const termsPrivacyAcceptedAt: UserProfile['termsPrivacyAcceptedAt'] =
       pr.terms_and_privacy_accepted_at != null
         ? String(pr.terms_and_privacy_accepted_at)
@@ -393,7 +393,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       privacyMode: row.privacy_mode as any,
       interests: (interestRows ?? []).map((r: any) => r.interest),
       isVerified: row.is_verified,
-      roleAdmin: Boolean((row as { role_admin?: boolean }).role_admin),
+      roleAdmin,
       shiftPreference: row.shift_preference as any,
       profileSongTitle: title ?? null,
       profileSongArtist: artist ?? null,
@@ -421,7 +421,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? undefined
           : mapPulseAvatarFrameEmbed(pr.pulse_avatar_frame) ?? null,
       termsPrivacyAcceptedAt,
+      audienceRole: pr.audience_role ?? null,
+      onboardingCompletedAt:
+        pr.onboarding_completed_at != null ? String(pr.onboarding_completed_at) : null,
+      medicalSafetyAcknowledgedAt:
+        pr.medical_safety_acknowledged_at != null
+          ? String(pr.medical_safety_acknowledged_at)
+          : null,
+      creatorAudienceTags: Array.isArray(pr.creator_audience_tags)
+        ? pr.creator_audience_tags.filter(Boolean)
+        : [],
+      isCreator: Boolean(pr.is_creator),
     };
+
+    void hydrateJoinedCommunitiesFromServer(userId)
+      .then((ids) => {
+        setState((prev) => {
+          if (prev.user?.id !== userId || !prev.profile) return prev;
+          return { ...prev, profile: { ...prev.profile, communitiesJoined: ids } };
+        });
+      })
+      .catch((e) => {
+        if (__DEV__) console.warn('[auth] community_members eager hydrate failed', e);
+      });
 
     return enrichProfileEquippedFrame(profile);
   }, [setState]);
@@ -525,6 +547,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /** Resume / flaky cell: don’t wipe the shell if PostgREST hiccups (My Pulse tab stuck on spinner). */
           profile: profile ?? prev.profile,
         }));
+        if (state.user?.id) {
+          try {
+            const ids = await hydrateJoinedCommunitiesFromServer(state.user.id);
+            setState((prev) => {
+              if (!prev.profile || prev.user?.id !== state.user!.id) return prev;
+              return { ...prev, profile: { ...prev.profile, communitiesJoined: ids } };
+            });
+          } catch (e) {
+            if (__DEV__) console.warn('[auth] refreshProfile joined communities', e);
+          }
+        }
       } catch (e) {
         if (__DEV__) console.warn('[auth] refreshProfile failed', e);
       } finally {
@@ -543,19 +576,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    intentionalSignOutRef.current = true;
     try {
       analytics.track('sign_out');
-      await analytics.flush();
+      await Promise.race([
+        analytics.flush(),
+        new Promise<void>((resolve) => setTimeout(resolve, 2500)),
+      ]);
     } catch {
       /* non-fatal */
     }
     try {
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-      if (error) {
-        console.warn('[auth] signOut:', error.message);
+      if (Platform.OS !== 'web') {
+        void supabase.auth.stopAutoRefresh();
+      }
+      const { error: globalErr } = await supabase.auth.signOut({ scope: 'global' });
+      if (globalErr) {
+        const { error: localErr } = await supabase.auth.signOut({ scope: 'local' });
+        if (localErr) {
+          console.warn('[auth] signOut:', localErr.message);
+        }
       }
     } catch (e) {
       console.warn('[auth] signOut failed', e);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        /* last resort — local state cleared below */
+      }
     }
     try {
       useProfileCustomization.getState().setProfileSong(null);
@@ -564,6 +612,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       useAppStore.getState().setSavedPostIdsFromServer([]);
       useAppStore.getState().setBetaTesterBorderBlocking(false);
       useAppStore.getState().clearBetaTesterGiftPending();
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      queryClient.clear();
     } catch {
       /* non-fatal */
     }
@@ -588,27 +641,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const sessionGuardBusy = useRef(false);
 
+  /** Keep JWT refresh alive whenever we have a session (not only after profile hydrate). */
+  useEffect(() => {
+    if (Platform.OS === 'web' || !state.isAuthenticated) return;
+    void supabase.auth.startAutoRefresh();
+    return () => {
+      void supabase.auth.stopAutoRefresh();
+    };
+  }, [state.isAuthenticated]);
+
   useEffect(() => {
     if (!state.isAuthenticated || state.isLoading) return;
 
     let cancelled = false;
-    void (async () => {
-      const r = await validateServerAuthSession();
-      if (cancelled || r === 'ok') return;
-      await signOut();
-    })();
+    /** Defer first server check until auto-refresh has had time to run after cold boot. */
+    const t = setTimeout(() => {
+      void (async () => {
+        const r = await validateServerAuthSession({ strict: true });
+        if (cancelled || r === 'ok') return;
+        await signOut();
+      })();
+    }, 4000);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
   }, [state.isAuthenticated, state.isLoading, signOut]);
 
   useEffect(() => {
-    const runGuard = () => {
+    const runGuard = (strict: boolean) => {
       if (!isAuthenticatedRef.current || sessionGuardBusy.current) return;
       sessionGuardBusy.current = true;
       void (async () => {
         try {
-          const r = await validateServerAuthSession();
+          const r = await validateServerAuthSession({ strict });
           if (r !== 'ok') await signOut();
         } finally {
           sessionGuardBusy.current = false;
@@ -619,18 +685,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let foregroundGuardTimer: ReturnType<typeof setTimeout> | null = null;
     const sub = AppState.addEventListener('change', (next) => {
       if (next !== 'active') return;
+      if (Platform.OS !== 'web') {
+        void supabase.auth.startAutoRefresh();
+      }
       /**
-       * iOS/Android radios + TLS often need a beat after resume. Hitting Auth
-       * `getUser` immediately can fail transiently and feel like a "stuck" app
-       * if paired with other foreground work.
+       * Resume: refresh the session before any strict validation so we do not
+       * treat a briefly stale access token as "signed out".
        */
       if (foregroundGuardTimer != null) clearTimeout(foregroundGuardTimer);
       foregroundGuardTimer = setTimeout(() => {
         foregroundGuardTimer = null;
-        runGuard();
-      }, 550);
+        runGuard(true);
+      }, 1600);
     });
-    const interval = setInterval(runGuard, 90_000);
+    /** Light periodic check — only refreshes JWT when near expiry; does not call getUser(). */
+    const interval = setInterval(() => runGuard(false), 120_000);
     return () => {
       sub.remove();
       clearInterval(interval);
@@ -766,6 +835,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const user = session?.user ?? null;
 
         if (!user) {
+          if (event === 'SIGNED_OUT' && intentionalSignOutRef.current) {
+            intentionalSignOutRef.current = false;
+          } else {
+            const recovered =
+              event === 'SIGNED_OUT' ? await tryRecoverStoredSession() : null;
+            if (recovered?.user && !cancelled) {
+              setState((prev) => ({
+                ...prev,
+                session: recovered,
+                user: recovered.user,
+                isAuthenticated: true,
+                isLoading: prev.profile ? false : prev.isLoading,
+              }));
+              return;
+            }
+          }
+
           authHydrateGenerationRef.current = 0;
           emailPasswordHydrateLockRef.current = false;
           try {

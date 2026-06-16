@@ -20,7 +20,7 @@ import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseIm
 import { adsService, subscriptionService, creatorTipsService } from '@/services/monetization';
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
 import { circleModerationService } from '@/services/supabase';
-import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
+import { hasStaffPermission, normalizeStaffRoles, type StaffPermission, type StaffRole } from '@/lib/staffPermissions';
 
 const ADMIN_MOD_LIST_WINDOW = getAdminModerationListWindow();
 
@@ -86,6 +86,20 @@ export default function AdminPanel() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
+  const [staffRoles, setStaffRoles] = useState<StaffRole[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.rpc('current_user_staff_roles');
+      if (cancelled) return;
+      setStaffRoles(normalizeStaffRoles(Array.isArray(data) ? (data as string[]) : []));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [tab, setTab] = useState<Tab>('reports');
 
   // Reports state
@@ -610,6 +624,15 @@ export default function AdminPanel() {
     void loadData();
   };
 
+  const TAB_PERMISSIONS: Record<Tab, StaffPermission> = {
+    reports: 'moderation.write',
+    users: 'users.read',
+    content: 'moderation.write',
+    circles: 'circles.manage',
+    stats: 'insights.read',
+    revenue: 'economy.read',
+  };
+
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'reports', label: 'Reports', icon: 'flag-outline' },
     { key: 'users', label: 'Users', icon: 'people-outline' },
@@ -617,7 +640,7 @@ export default function AdminPanel() {
     { key: 'circles', label: 'Circles', icon: 'globe-outline' },
     { key: 'stats', label: 'Stats', icon: 'bar-chart-outline' },
     { key: 'revenue', label: 'Revenue', icon: 'cash-outline' },
-  ];
+  ].filter((t) => hasStaffPermission(staffRoles, TAB_PERMISSIONS[t.key]));
 
   const REPORT_FILTERS: { key: ReportFilter; label: string }[] = [
     { key: 'pending', label: 'Pending' },

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Too many requests." }, { status: 429 });
   }
 
-  const auth = await requireAdminApiSession();
+  const auth = await requireAdminApiSession({ permission: "live.manage" });
   if (!auth.ok) return auth.response;
 
   let body: { streamId?: string };

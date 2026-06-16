@@ -4,12 +4,18 @@ import {
   adminBanUser,
   adminLiftBan,
   adminSetRoleAdmin,
+  adminSetStaffRoles,
   adminSetVerified,
   adminSuspendUser,
 } from "@/lib/admin/user-admin-mutations";
+import type { StaffRole } from "@/lib/staffPermissions-shared";
 
 export async function grantStaffAction(targetUserId: string, staffNote?: string) {
-  return adminSetRoleAdmin(targetUserId, true, staffNote);
+  return adminSetStaffRoles(targetUserId, ["admin"], staffNote);
+}
+
+export async function setStaffRolesAction(targetUserId: string, roles: StaffRole[], staffNote?: string) {
+  return adminSetStaffRoles(targetUserId, roles, staffNote);
 }
 
 export async function revokeStaffAction(targetUserId: string, staffNote?: string) {

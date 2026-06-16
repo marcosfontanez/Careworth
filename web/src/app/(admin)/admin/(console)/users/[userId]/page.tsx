@@ -4,6 +4,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { UserAdminDetailPanels } from "@/components/admin/user-admin-detail-panels";
 import { UserEconomyAuditPanel } from "@/components/admin/user-economy-audit-panel";
 import { requireAdminSession } from "@/lib/admin/require-admin-session";
+import { resolveStaffContext } from "@/lib/admin/staff-permissions";
 import { loadAdminUserDetail } from "@/lib/admin/user-admin-mutations";
 import { isUuidLike, loadUserEconomyAudit } from "@/lib/admin/user-economy-queries";
 
@@ -13,11 +14,12 @@ export default async function AdminUserDetailPage({ params }: Props) {
   const { userId } = await params;
   if (!isUuidLike(userId)) notFound();
 
-  const [{ user }, detail, audit] = await Promise.all([
+  const [{ supabase, user }, detail, audit] = await Promise.all([
     requireAdminSession(),
     loadAdminUserDetail(userId),
     loadUserEconomyAudit(userId),
   ]);
+  const staffCtx = await resolveStaffContext(supabase, user.id);
 
   if (!detail?.profile) notFound();
 
@@ -38,7 +40,12 @@ export default async function AdminUserDetailPage({ params }: Props) {
         title={title}
         description={`Staff user detail — enforcement, admin controls, moderation history, and economy audit for ${detail.profile.id}.`}
       />
-      <UserAdminDetailPanels detail={detail} currentStaffUserId={user.id} />
+      <UserAdminDetailPanels
+        detail={detail}
+        currentStaffUserId={user.id}
+        canManageStaff={staffCtx?.permissions.has("users.staff_manage") ?? false}
+        canModerateUsers={staffCtx?.permissions.has("users.moderate") ?? false}
+      />
       {audit?.profile ? (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Economy audit</h2>

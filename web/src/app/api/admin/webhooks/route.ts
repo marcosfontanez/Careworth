@@ -21,7 +21,7 @@ type MutationBody = {
 };
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAdminApiSession();
+  const auth = await requireAdminApiSession({ permission: "platform.webhooks" });
   if (!auth.ok) return auth.response;
 
   const sp = req.nextUrl.searchParams;
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Too many requests. Try again shortly." }, { status: 429 });
   }
 
-  const auth = await requireAdminApiSession();
+  const auth = await requireAdminApiSession({ permission: "platform.webhooks" });
   if (!auth.ok) return auth.response;
 
   let body: MutationBody;

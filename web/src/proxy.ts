@@ -32,7 +32,9 @@ export async function proxy(request: NextRequest) {
   const creds = getSupabaseUrlAndAnon();
 
   if (creds) {
-    return withLocaleCookieIfNeeded(request, await updateSupabaseSession(request));
+    const response = await updateSupabaseSession(request);
+    response.headers.set("x-pathname", pathname);
+    return withLocaleCookieIfNeeded(request, response);
   }
 
   if (!isAdminUi && !isAdminApi) {

@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminTopbar } from "@/components/admin/admin-topbar";
+import type { StaffPermission, StaffRole } from "@/lib/staffPermissions-shared";
 import type { AdminHealthStrip } from "@/types/admin-health";
 import type { AdminNotificationDigest } from "@/types/admin";
 
@@ -13,17 +14,27 @@ export function AdminConsoleShell({
   staffName,
   staffSubtitle,
   health,
+  allowedPermissions,
+  staffRoles,
 }: {
   children: React.ReactNode;
   notifications: AdminNotificationDigest;
   staffName: string;
   staffSubtitle: string;
   health: AdminHealthStrip;
+  allowedPermissions: StaffPermission[];
+  staffRoles: StaffRole[];
 }) {
   const pathname = usePathname();
   return (
     <div className="flex min-h-dvh bg-[#050a14] bg-[radial-gradient(ellipse_85%_60%_at_50%_-15%,rgba(45,127,249,0.1),transparent)]">
-      <AdminSidebar currentPath={pathname} pendingAppealsCount={notifications.pendingAppealsCount} health={health} />
+      <AdminSidebar
+        currentPath={pathname}
+        pendingAppealsCount={notifications.pendingAppealsCount}
+        health={health}
+        allowedPermissions={allowedPermissions}
+        staffRoles={staffRoles}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopbar notifications={notifications} staffName={staffName} staffSubtitle={staffSubtitle} />
         <div id="main-content" tabIndex={-1} className="flex-1 overflow-auto p-6 outline-none md:p-8">

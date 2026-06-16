@@ -3,25 +3,16 @@
 import { revalidatePath } from "next/cache";
 
 import { writeAdminAudit } from "@/lib/admin/audit-log";
+import { requireStaffActionPermission } from "@/lib/admin/staff-permissions";
 import { createAdminDataSupabaseClient } from "@/lib/supabase/admin-data";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function requireStaffId(): Promise<string | null> {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user?.id) return null;
-    const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
-    if (isAdmin !== true) return null;
-    return user.id;
-  } catch {
-    return null;
-  }
+  const gate = await requireStaffActionPermission("merchandising.grant");
+  if (!gate.ok) return null;
+  return gate.ctx.userId;
 }
 
 export async function grantPulseAvatarFrameAction(input: {

@@ -39,9 +39,16 @@ import type { AdminUserDetail } from "@/lib/admin/user-admin-mutations";
 type Props = {
   detail: AdminUserDetail;
   currentStaffUserId: string;
+  canManageStaff: boolean;
+  canModerateUsers: boolean;
 };
 
-export function UserAdminDetailPanels({ detail, currentStaffUserId }: Props) {
+export function UserAdminDetailPanels({
+  detail,
+  currentStaffUserId,
+  canManageStaff,
+  canModerateUsers,
+}: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -95,6 +102,9 @@ export function UserAdminDetailPanels({ detail, currentStaffUserId }: Props) {
         <CardContent className="flex flex-wrap gap-2 text-sm">
           <StatusBadge status={p.roleAdmin ? "resolved" : "pending"} />
           {p.roleAdmin ? <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-xs text-violet-200">Staff</span> : null}
+          {p.staffRoles.length ? (
+            <span className="text-xs text-muted-foreground">Roles: {p.staffRoles.join(", ")}</span>
+          ) : null}
           {p.isVerified ? <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-xs text-sky-200">Verified</span> : null}
           {isBanned ? <StatusBadge status="banned" /> : <StatusBadge status="active" />}
           <span className="text-muted-foreground">Joined {new Date(p.createdAt).toLocaleDateString()}</span>
@@ -111,11 +121,12 @@ export function UserAdminDetailPanels({ detail, currentStaffUserId }: Props) {
           </p>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          {!p.roleAdmin ? (
+          {canManageStaff && !p.roleAdmin ? (
             <Button size="sm" disabled={pending} onClick={() => setDialog({ kind: "grant_staff" })}>
               Grant staff
             </Button>
-          ) : (
+          ) : null}
+          {canManageStaff && p.roleAdmin ? (
             <Button
               size="sm"
               variant="destructive"
@@ -124,15 +135,17 @@ export function UserAdminDetailPanels({ detail, currentStaffUserId }: Props) {
             >
               Revoke staff
             </Button>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => setDialog({ kind: p.isVerified ? "verify_off" : "verify_on" })}
-          >
-            {p.isVerified ? "Remove verified badge" : "Grant verified badge"}
-          </Button>
+          ) : null}
+          {canModerateUsers ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={() => setDialog({ kind: p.isVerified ? "verify_off" : "verify_on" })}
+            >
+              {p.isVerified ? "Remove verified badge" : "Grant verified badge"}
+            </Button>
+          ) : null}
           <Button size="sm" variant="outline" asChild>
             <Link href="/admin/audit">View audit log</Link>
           </Button>
@@ -157,7 +170,7 @@ export function UserAdminDetailPanels({ detail, currentStaffUserId }: Props) {
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            {!isBanned ? (
+            {canModerateUsers && !isBanned ? (
               <>
                 <Button size="sm" variant="destructive" disabled={pending} onClick={() => setDialog({ kind: "ban" })}>
                   Ban user
@@ -166,11 +179,12 @@ export function UserAdminDetailPanels({ detail, currentStaffUserId }: Props) {
                   Suspend user
                 </Button>
               </>
-            ) : (
+            ) : null}
+            {canModerateUsers && isBanned ? (
               <Button size="sm" variant="outline" disabled={pending} onClick={() => setDialog({ kind: "lift_ban" })}>
                 Lift ban
               </Button>
-            )}
+            ) : null}
             <Button size="sm" variant="outline" asChild>
               <Link href="/admin/moderation">Open moderation</Link>
             </Button>

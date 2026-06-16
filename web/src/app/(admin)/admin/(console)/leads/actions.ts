@@ -4,26 +4,17 @@ import { revalidatePath } from "next/cache";
 
 import { writeAdminAudit } from "@/lib/admin/audit-log";
 import { isMarketingLeadStatus } from "@/lib/admin/marketing-lead-status";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireStaffActionPermission } from "@/lib/admin/staff-permissions";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function requireStaffGate(): Promise<
-  { ok: true; supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>; staffId: string } | { ok: false }
+  { ok: true; supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createSupabaseServerClient>>; staffId: string } | { ok: false }
 > {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user?.id) return { ok: false };
-    const { data: isAdmin } = await supabase.rpc("current_user_role_admin");
-    if (isAdmin !== true) return { ok: false };
-    return { ok: true, supabase, staffId: user.id };
-  } catch {
-    return { ok: false };
-  }
+  const gate = await requireStaffActionPermission("leads.write");
+  if (!gate.ok) return { ok: false };
+  return { ok: true, supabase: gate.supabase, staffId: gate.ctx.userId };
 }
 
 export async function updateMarketingLeadAction(formData: FormData): Promise<void> {
