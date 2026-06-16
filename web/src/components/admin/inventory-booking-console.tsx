@@ -35,6 +35,7 @@ import type {
   PlacementBookingRow,
   PlacementCatalogRow,
 } from "@/lib/admin/placement-booking-shared";
+import type { InventoryDeliveryRow } from "@/lib/admin/sponsored-placement-delivery";
 import {
   BOOKING_STATUSES,
   INVENTORY_BOOKING_DISCLAIMER,
@@ -53,6 +54,8 @@ type Props = {
   placements: PlacementCatalogRow[];
   filters: InventoryFilters;
   bookingEnabled: boolean;
+  deliveryRows: InventoryDeliveryRow[];
+  deliveryFlagEnabled: boolean;
 };
 
 export function InventoryBookingConsole({
@@ -61,6 +64,8 @@ export function InventoryBookingConsole({
   placements,
   filters,
   bookingEnabled,
+  deliveryRows,
+  deliveryFlagEnabled,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -158,6 +163,54 @@ export function InventoryBookingConsole({
       <p className="rounded-lg border border-amber-500/25 bg-amber-500/8 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
         {INVENTORY_BOOKING_DISCLAIMER}
       </p>
+
+      <p className="rounded-lg border border-amber-500/25 bg-amber-500/8 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+        {INVENTORY_BOOKING_DISCLAIMER}
+      </p>
+
+      <AdminPanelCard>
+        <CardHeader>
+          <CardTitle>Delivery readiness</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Platform flag{" "}
+            <span className="font-mono">sponsored_placement_delivery_enabled</span> is{" "}
+            {deliveryFlagEnabled ? "ON" : "OFF"}. Mobile{" "}
+            <span className="font-mono">sponsoredPosts</span> is a separate app kill switch.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {deliveryRows.length ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Placement</TableHead>
+                    <TableHead>Surface</TableHead>
+                    <TableHead>Deliverable</TableHead>
+                    <TableHead>Ineligible</TableHead>
+                    <TableHead>Warnings</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deliveryRows.map((row) => (
+                    <TableRow key={row.placementKey}>
+                      <TableCell className="text-sm">{row.placementName}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.surface}</TableCell>
+                      <TableCell className="tabular-nums">{row.deliverableCount}</TableCell>
+                      <TableCell className="tabular-nums">{row.ineligibleCount}</TableCell>
+                      <TableCell className="max-w-xs text-xs text-muted-foreground">
+                        {row.warnings.length ? row.warnings.join(" ") : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No placement catalog rows loaded.</p>
+          )}
+        </CardContent>
+      </AdminPanelCard>
 
       {!bookingEnabled ? (
         <p className="text-xs text-muted-foreground">

@@ -108,6 +108,8 @@ export type CampaignInput = {
   ctaUrl?: string;
   ctaLabel?: string;
   confirmLockedEdit?: boolean;
+  /** Required when activating while delivery flags are on and an eligible booking exists. */
+  confirmDeliveryActivation?: boolean;
 };
 
 export function parseCampaignEditorFilters(

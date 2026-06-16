@@ -1,6 +1,14 @@
 import { supabase } from '@/lib/supabase';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import {
+  payloadToSponsorInfo,
+  toSafeDeliveryPayload,
+  createSessionDeduper,
+  type SponsoredPlacementPayload,
+} from '@/lib/sponsoredPlacementDelivery';
 import type { AdCampaign, Post, SponsorInfo } from '@/types';
+
+const impressionDeduper = createSessionDeduper();
 
 function rowToCampaign(row: any): AdCampaign {
   return {
@@ -26,7 +34,69 @@ function rowToCampaign(row: any): AdCampaign {
   };
 }
 
+function isDeliveryEnabled(): boolean {
+  return isFeatureEnabled('sponsoredPosts') && isFeatureEnabled('sponsoredPlacementDelivery');
+}
+
+function payloadToPost(payload: SponsoredPlacementPayload): Post {
+  const sponsorInfo: SponsorInfo = payloadToSponsorInfo(payload);
+  const mediaUrl = payload.mediaUrl;
+  const isVideo = /\.(mp4|mov|webm)(\?|$)/i.test(mediaUrl);
+
+  return {
+    id: `sponsored-${payload.campaignId}`,
+    creatorId: 'system',
+    creator: {
+      id: 'system',
+      displayName: payload.advertiserName,
+      avatarUrl: payload.advertiserLogo ?? '',
+      role: '',
+      specialty: '',
+      city: '',
+      state: '',
+      isVerified: true,
+    },
+    type: isVideo ? 'video' : 'image',
+    caption: payload.description,
+    mediaUrl,
+    hashtags: [],
+    communities: [],
+    isAnonymous: false,
+    privacyMode: 'public',
+    likeCount: 0,
+    commentCount: 0,
+    shareCount: 0,
+    viewCount: 0,
+    saveCount: 0,
+    createdAt: new Date().toISOString(),
+    rankingScore: 0,
+    feedTypeEligible: ['forYou'],
+    roleContext: '',
+    specialtyContext: '',
+    locationContext: '',
+    isSponsored: true,
+    sponsorInfo,
+  };
+}
+
 export const adsService = {
+  async fetchEligiblePlacement(args?: {
+    surface?: string;
+    device?: string;
+    slotKey?: string;
+  }): Promise<SponsoredPlacementPayload | null> {
+    if (!isDeliveryEnabled()) return null;
+
+    const { data, error } = await supabase.rpc('fetch_eligible_sponsored_placement', {
+      p_surface: args?.surface ?? 'feed',
+      p_device: args?.device ?? 'mobile',
+      p_slot_key: args?.slotKey ?? 'in_feed_sponsored',
+    });
+
+    if (error || !data || typeof data !== 'object') return null;
+    return toSafeDeliveryPayload(data as Record<string, unknown>);
+  },
+
   async getActiveCampaigns(): Promise<AdCampaign[]> {
     if (!isFeatureEnabled('sponsoredPosts')) return [];
 
@@ -42,73 +112,21 @@ export const adsService = {
     return (data ?? []).map(rowToCampaign);
   },
 
-  async getSponsoredPostForFeed(
-    viewerRole?: string,
-    viewerSpecialty?: string,
-    viewerState?: string,
-  ): Promise<Post | null> {
-    if (!isFeatureEnabled('sponsoredPosts')) return null;
-
-    const campaigns = await this.getActiveCampaigns();
-    if (campaigns.length === 0) return null;
-
-    const matched = campaigns.find((c) => {
-      if (c.budgetSpent >= c.budgetTotal) return false;
-      const roleMatch = c.targetRoles.length === 0 || (viewerRole && c.targetRoles.includes(viewerRole as any));
-      const specMatch = c.targetSpecialties.length === 0 || (viewerSpecialty && c.targetSpecialties.includes(viewerSpecialty as any));
-      const stateMatch = c.targetStates.length === 0 || (viewerState && c.targetStates.includes(viewerState));
-      return roleMatch && specMatch && stateMatch;
-    }) ?? campaigns[0];
-
-    if (!matched) return null;
-
-    const sponsorInfo: SponsorInfo = {
-      advertiserName: matched.advertiserName,
-      advertiserLogo: matched.advertiserLogo,
-      ctaLabel: matched.ctaLabel,
-      ctaUrl: matched.ctaUrl,
-      campaignId: matched.id,
-    };
-
-    return {
-      id: `sponsored-${matched.id}`,
-      creatorId: 'system',
-      creator: {
-        id: 'system',
-        displayName: matched.advertiserName,
-        avatarUrl: matched.advertiserLogo ?? '',
-        role: '',
-        specialty: '',
-        city: '',
-        state: '',
-        isVerified: true,
-      },
-      type: matched.mediaUrl?.includes('.mp4') ? 'video' : 'image',
-      caption: matched.description,
-      mediaUrl: matched.mediaUrl,
-      hashtags: [],
-      communities: [],
-      isAnonymous: false,
-      privacyMode: 'public',
-      likeCount: 0,
-      commentCount: 0,
-      shareCount: 0,
-      viewCount: matched.impressions,
-      saveCount: 0,
-      createdAt: matched.startDate,
-      rankingScore: 0,
-      feedTypeEligible: ['forYou'],
-      roleContext: '',
-      specialtyContext: '',
-      locationContext: '',
-      isSponsored: true,
-      sponsorInfo,
-    };
+  /** Booked in-feed placement — requires both delivery flags and eligible campaign/booking. */
+  async getSponsoredPostForFeed(): Promise<Post | null> {
+    const payload = await this.fetchEligiblePlacement({
+      surface: 'feed',
+      device: 'mobile',
+      slotKey: 'in_feed_sponsored',
+    });
+    if (!payload) return null;
+    return payloadToPost(payload);
   },
 
-  /** Requires a signed-in Supabase session (RPC is authenticated-only post–migration 180). */
+  /** Track once per app session per campaign. Requires signed-in session. */
   async trackImpression(campaignId: string): Promise<void> {
-    if (!isFeatureEnabled('sponsoredPosts')) return;
+    if (!isDeliveryEnabled()) return;
+    if (!impressionDeduper.once(campaignId)) return;
 
     try {
       await supabase.rpc('increment_ad_impression', { campaign_id: campaignId });
@@ -117,14 +135,14 @@ export const adsService = {
 
   /** Requires a signed-in Supabase session (RPC is authenticated-only post–migration 180). */
   async trackClick(campaignId: string): Promise<void> {
-    if (!isFeatureEnabled('sponsoredPosts')) return;
+    if (!isDeliveryEnabled()) return;
 
     try {
       await supabase.rpc('increment_ad_click', { campaign_id: campaignId });
     } catch {}
   },
 
-  // Admin methods
+  /** Admin methods */
   async getAllCampaigns(): Promise<AdCampaign[]> {
     const { data, error } = await supabase
       .from('ad_campaigns')
@@ -164,5 +182,10 @@ export const adsService = {
 
   async updateCampaignStatus(id: string, status: AdCampaign['status']): Promise<void> {
     await supabase.from('ad_campaigns').update({ status }).eq('id', id);
+  },
+
+  /** Test helper — clears session impression dedupe. */
+  _resetImpressionSessionForTests() {
+    impressionDeduper.reset();
   },
 };

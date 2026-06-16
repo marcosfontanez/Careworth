@@ -1380,6 +1380,7 @@ export default function AdminPanel() {
                 <FlagToggle label="Feed creator gifting (rail)" flag="feedCreatorGifting" />
                 <FlagToggle label="Feed compact action rail (tap to expand)" flag="feedCompactActionRail" />
                 <FlagToggle label="Sponsored Posts" flag="sponsoredPosts" />
+                <FlagToggle label="Sponsored placement delivery" flag="sponsoredPlacementDelivery" />
                 <FlagToggle label="PulseVerse Pro" flag="pulseversePro" />
                 <FlagToggle label="Creator Tips" flag="creatorTips" />
                 <FlagToggle label="Creator Fund" flag="creatorFund" />

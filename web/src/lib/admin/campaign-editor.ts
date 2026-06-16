@@ -3,6 +3,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { writeAdminAudit } from "@/lib/admin/audit-log";
+import { loadBookingsForCampaign } from "@/lib/admin/placement-booking";
+import { isSponsoredPlacementDeliveryEnabled } from "@/lib/admin/sponsored-placement-delivery";
+import {
+  evaluateSponsoredDelivery,
+  validateCampaignCreative,
+} from "@/lib/sponsored-placement-delivery-shared";
 import {
   CAMPAIGN_PLANNING_CTA_URL,
   CAMPAIGN_PLANNING_MEDIA_URL,
@@ -613,6 +619,7 @@ export async function setAdminCampaignStatus(
   id: string,
   status: CampaignStatus,
   staffNote?: string,
+  options?: { confirmDeliveryActivation?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!UUID_RE.test(id)) return { ok: false, error: "Invalid campaign id." };
   const existing = await loadAdminCampaignById(id);
@@ -620,6 +627,67 @@ export async function setAdminCampaignStatus(
   const from = existing.status as CampaignStatus;
   if (!canTransitionStatus(from, status)) {
     return { ok: false, error: `Cannot change status from ${from} to ${status}.` };
+  }
+
+  if (status === "active") {
+    const creative = validateCampaignCreative({
+      advertiserName: existing.sponsor,
+      description: existing.description,
+      mediaUrl: existing.mediaUrl,
+      ctaLabel: existing.ctaLabel,
+      ctaUrl: existing.ctaUrl,
+    });
+    if (!creative.ok) {
+      return { ok: false, error: creative.reason };
+    }
+    if (
+      existing.mediaUrl.trim() === CAMPAIGN_PLANNING_MEDIA_URL ||
+      existing.ctaUrl.trim() === CAMPAIGN_PLANNING_CTA_URL
+    ) {
+      return {
+        ok: false,
+        error: "Replace planning placeholder creative before activating for delivery.",
+      };
+    }
+
+    const deliveryEnabled = await isSponsoredPlacementDeliveryEnabled();
+    if (deliveryEnabled) {
+      const bookings = await loadBookingsForCampaign(id);
+      const primaryBooking =
+        bookings.find((b) => b.placementKey === "in_feed_sponsored") ?? bookings[0] ?? null;
+      const wouldDeliver = primaryBooking
+        ? evaluateSponsoredDelivery({
+            flags: { sponsoredPostsEnabled: true, sponsoredPlacementDeliveryEnabled: true },
+            campaign: {
+              status: "active",
+              startDate: existing.start,
+              endDate: existing.end,
+              advertiserName: existing.sponsor,
+              description: existing.description,
+              mediaUrl: existing.mediaUrl,
+              ctaLabel: existing.ctaLabel,
+              ctaUrl: existing.ctaUrl,
+              budgetSpent: existing.budgetSpent,
+              budgetTotal: existing.budgetTotal,
+            },
+            booking: { status: primaryBooking.status, startAt: primaryBooking.startAt, endAt: primaryBooking.endAt },
+            placement: {
+              key: primaryBooking.placementKey,
+              isActive: true,
+              surface: primaryBooking.surface,
+              device: "mobile",
+            },
+          }).eligible
+        : false;
+
+      if (wouldDeliver && !options?.confirmDeliveryActivation) {
+        return {
+          ok: false,
+          error:
+            "Delivery flags are on and this campaign has an eligible booking. Confirm activation — turning on sponsored delivery can make eligible booked campaigns visible to users.",
+        };
+      }
+    }
   }
 
   const { error } = await supabase

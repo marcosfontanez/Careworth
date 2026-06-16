@@ -28,6 +28,7 @@ type MutationBody = {
   leadId?: string | null;
   campaign?: Partial<CampaignInput>;
   status?: CampaignStatus;
+  confirmDeliveryActivation?: boolean;
 };
 
 function editorDisabledResponse() {
@@ -108,6 +109,9 @@ export async function POST(req: NextRequest) {
 
   const action = typeof body.action === "string" ? body.action.trim() : "";
   const staffNote = typeof body.staffNote === "string" ? body.staffNote : undefined;
+  const confirmDeliveryActivation = body.confirmDeliveryActivation === true;
+
+  const statusOptions = { confirmDeliveryActivation };
 
   if (action === "create") {
     const c = body.campaign;
@@ -138,12 +142,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "pause") {
-    const result = await setAdminCampaignStatus(auth.session.supabase, auth.session.adminUserId, id, "paused", staffNote);
+    const result = await setAdminCampaignStatus(auth.session.supabase, auth.session.adminUserId, id, "paused", staffNote, statusOptions);
     return NextResponse.json(result, { status: result.ok ? 200 : 422 });
   }
 
   if (action === "resume") {
-    const result = await setAdminCampaignStatus(auth.session.supabase, auth.session.adminUserId, id, "active", staffNote);
+    const result = await setAdminCampaignStatus(auth.session.supabase, auth.session.adminUserId, id, "active", staffNote, statusOptions);
     return NextResponse.json(result, { status: result.ok ? 200 : 422 });
   }
 
@@ -154,6 +158,7 @@ export async function POST(req: NextRequest) {
       id,
       "completed",
       staffNote,
+      statusOptions,
     );
     return NextResponse.json(result, { status: result.ok ? 200 : 422 });
   }
@@ -165,6 +170,7 @@ export async function POST(req: NextRequest) {
       id,
       "cancelled",
       staffNote,
+      statusOptions,
     );
     return NextResponse.json(result, { status: result.ok ? 200 : 422 });
   }
@@ -187,6 +193,7 @@ export async function POST(req: NextRequest) {
       id,
       body.status,
       staffNote,
+      statusOptions,
     );
     return NextResponse.json(result, { status: result.ok ? 200 : 422 });
   }

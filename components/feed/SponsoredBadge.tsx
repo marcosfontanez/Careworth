@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import type { SponsorInfo } from '@/types';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
+import { adsService } from '@/services/monetization';
 
 interface Props {
   sponsor: SponsorInfo;
@@ -17,10 +18,11 @@ export function SponsoredBadge({ sponsor }: Props) {
         <Text style={styles.label}>Sponsored</Text>
       </View>
       <Text style={styles.advertiser}>by {sponsor.advertiserName}</Text>
-      {sponsor.ctaUrl && (
+      {sponsor.ctaUrl ? (
         <TouchableOpacity
           style={styles.ctaBtn}
           onPress={() => {
+            if (sponsor.campaignId) void adsService.trackClick(sponsor.campaignId);
             if (sponsor.ctaUrl) openWebUrlSafely(sponsor.ctaUrl);
           }}
           activeOpacity={0.7}
@@ -28,7 +30,7 @@ export function SponsoredBadge({ sponsor }: Props) {
           <Text style={styles.ctaText}>{sponsor.ctaLabel || 'Learn More'}</Text>
           <Ionicons name="open-outline" size={12} color="#FFF" />
         </TouchableOpacity>
-      )}
+      ) : null}
     </View>
   );
 }

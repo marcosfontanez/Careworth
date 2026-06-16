@@ -175,7 +175,9 @@ function VideoFeedPostInner({
     ? { content: 16, progress: 10, rail: 20 }
     : { content: 88, progress: 82, rail: 112 };
   const isAnon = post.isAnonymous;
-  const sponsoredPostsEnabled = useFeatureFlags((s) => s.sponsoredPosts);
+  const sponsoredDeliveryEnabled = useFeatureFlags(
+    (s) => s.sponsoredPosts && s.sponsoredPlacementDelivery,
+  );
   const feedCreatorGifting = useFeatureFlags((s) => s.feedCreatorGifting);
   const { user } = useAuth();
   const [creatorGiftOpen, setCreatorGiftOpen] = useState(false);
@@ -324,14 +326,19 @@ function VideoFeedPostInner({
     () =>
       Gesture.Pan()
         .enabled(Boolean(onOpenCreatorVideos && hasVideo && !post.isAnonymous))
-        /** Prefer vertical feed scroll unless the user clearly drags left first. */
-        .failOffsetY([-22, 22])
-        .activeOffsetX(-36)
+        /** Prefer vertical feed paging unless the user clearly drags left. */
+        .failOffsetY([-72, 72])
+        .activeOffsetX(-10)
+        .maxPointers(1)
         .onEnd((e) => {
           'worklet';
-          const { translationX, translationY } = e;
-          if (translationX > -72) return;
-          if (Math.abs(translationY) > Math.abs(translationX) * 0.88) return;
+          const { translationX, translationY, velocityX } = e;
+          const horizontalIntent =
+            Math.abs(translationY) <= Math.abs(translationX) * 0.9;
+          const farEnough = translationX <= -44;
+          const fastFlick = velocityX <= -320 && translationX <= -22;
+          if (!horizontalIntent) return;
+          if (!farEnough && !fastFlick) return;
           runOnJS(fireOpenCreatorVideos)();
         }),
     [onOpenCreatorVideos, hasVideo, post.isAnonymous, fireOpenCreatorVideos],
@@ -522,6 +529,7 @@ function VideoFeedPostInner({
 
       <FeedActionRail
         post={post}
+        isFeedCellActive={isActive}
         bottomInset={chromeBottom.rail}
         isLiked={isLiked}
         isSaved={isSaved}
@@ -540,7 +548,7 @@ function VideoFeedPostInner({
       />
 
       <View style={[styles.content, { bottom: chromeBottom.content }]}>
-        {sponsoredPostsEnabled && post.isSponsored && post.sponsorInfo && (
+        {sponsoredDeliveryEnabled && post.isSponsored && post.sponsorInfo && (
           <SponsoredBadge sponsor={post.sponsorInfo} />
         )}
 
@@ -713,7 +721,11 @@ function VideoFeedPostInner({
   if (onOpenCreatorVideos && hasVideo && !post.isAnonymous) {
     return (
       <>
-        <GestureDetector gesture={swipeOpenCreatorGrid}>{body}</GestureDetector>
+        <GestureDetector gesture={swipeOpenCreatorGrid}>
+          <View style={{ width: SCREEN_W, height: pageH }} collapsable={false}>
+            {body}
+          </View>
+        </GestureDetector>
         {creatorGiftTray}
       </>
     );
@@ -1086,7 +1098,10 @@ function FeedVideoPlayer({
       <VideoView
         player={player}
         style={StyleSheet.absoluteFillObject}
-        contentFit="cover"
+        // 9:16 (1080×1920) clips in tab feed cells are narrower than the video frame — `cover`
+        // scales to height and crops left/right (burned-in captions bleed off). `contain` shows
+        // the full frame with subtle letterboxing on `colors.media.videoCanvas`.
+        contentFit="contain"
         nativeControls={false}
         {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
       />

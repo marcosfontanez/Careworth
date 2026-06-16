@@ -12,6 +12,7 @@ import {
   type CampaignFormValues,
 } from "@/components/admin/campaign-form";
 import { CampaignBookingsPanel } from "@/components/admin/campaign-bookings-panel";
+import { CampaignDeliveryStatusCard } from "@/components/admin/campaign-delivery-status-card";
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -40,6 +41,7 @@ import type {
   CampaignOwnerOption,
 } from "@/lib/admin/campaign-editor-shared";
 import type { PlacementBookingRow, PlacementCatalogRow } from "@/lib/admin/placement-booking-shared";
+import type { CampaignDeliveryStatus } from "@/lib/admin/sponsored-placement-delivery";
 import { formatCount } from "@/lib/admin/format";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +74,7 @@ type Props = {
   bookings: PlacementBookingRow[];
   catalogPlacements: PlacementCatalogRow[];
   bookingEnabled: boolean;
+  deliveryStatus: CampaignDeliveryStatus;
 };
 
 export function CampaignDetailEditor({
@@ -84,6 +87,7 @@ export function CampaignDetailEditor({
   bookings,
   catalogPlacements,
   bookingEnabled,
+  deliveryStatus,
 }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(initialEdit && editorEnabled);
@@ -91,6 +95,7 @@ export function CampaignDetailEditor({
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ tone: "ok" | "err"; message: string } | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmDeliveryActivate, setConfirmDeliveryActivate] = useState(false);
 
   const locked = ["completed", "cancelled"].includes(campaign.status);
 
@@ -176,6 +181,8 @@ export function CampaignDetailEditor({
           },
         ]}
       />
+
+      <CampaignDeliveryStatusCard status={deliveryStatus} />
 
       {editing ? (
         <AdminPanelCard>
@@ -286,7 +293,7 @@ export function CampaignDetailEditor({
               </Button>
             ) : null}
             {campaign.status === "paused" ? (
-              <Button size="sm" disabled={pending} onClick={() => void mutate({ action: "resume", id: campaign.id })}>
+              <Button size="sm" disabled={pending} onClick={() => setConfirmDeliveryActivate(true)}>
                 Resume
               </Button>
             ) : null}
@@ -373,6 +380,35 @@ export function CampaignDetailEditor({
           )}
         </CardContent>
       </AdminPanelCard>
+
+      <Dialog open={confirmDeliveryActivate} onOpenChange={setConfirmDeliveryActivate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Activate campaign for delivery?</DialogTitle>
+            <DialogDescription>
+              Turning on sponsored delivery can make eligible booked campaigns visible to users when both delivery flags
+              are enabled. Confirm only after creative and booking QA.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeliveryActivate(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                await mutate({
+                  action: "resume",
+                  id: campaign.id,
+                  confirmDeliveryActivation: true,
+                });
+                setConfirmDeliveryActivate(false);
+              }}
+            >
+              Activate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <DialogContent>

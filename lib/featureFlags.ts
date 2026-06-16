@@ -124,7 +124,16 @@ export interface FeatureFlags {
    * or the Admin → Feature flags toggle.
    */
   feedCompactActionRail: boolean;
+  /**
+   * Global mobile/app kill switch for sponsored feed placements. Default **off**.
+   * Staff can toggle under Admin → Feature flags (session-only until remote sync ships).
+   */
   sponsoredPosts: boolean;
+  /**
+   * Second-layer delivery gate — must match DB `sponsored_placement_delivery_enabled`.
+   * Default **off**; server RPC also enforces the DB flag.
+   */
+  sponsoredPlacementDelivery: boolean;
   pulseversePro: boolean;
   creatorTips: boolean;
   creatorFund: boolean;
@@ -363,6 +372,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   feedCreatorGifting: defaultFeedCreatorGifting(),
   feedCompactActionRail: defaultFeedCompactActionRail(),
   sponsoredPosts: false,
+  sponsoredPlacementDelivery: false,
   pulseversePro: false,
   creatorTips: false,
   creatorFund: false,

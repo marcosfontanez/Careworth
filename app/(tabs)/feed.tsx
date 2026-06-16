@@ -27,8 +27,11 @@ import { useFeedEngagement } from '@/hooks/useFeedEngagement';
 import { useFeedCommentsSheet } from '@/hooks/useFeedCommentsSheet';
 import { useFeedLiveDiscovery } from '@/hooks/useFeedLiveDiscovery';
 import { useViewTracker } from '@/hooks/useViewTracker';
+import { useFeatureFlags } from '@/lib/featureFlags';
+import { adsService } from '@/services/monetization';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBorderGovernorScreenFocus } from '@/hooks/useBorderGovernorScreenFocus';
 import { useToast } from '@/components/ui/Toast';
 import { colors } from '@/theme';
 import { queryClient } from '@/lib/queryClient';
@@ -51,6 +54,8 @@ const FEED_SOUND_WARM_RADIUS = 4;
 /** Start loading the next infinite page before the user hits the true tail. */
 const FETCH_NEXT_WHEN_WITHIN = 6;
 const MAX_IMAGE_PREFETCH_URLS = 36;
+/** In-feed sponsored card slot (0-indexed) on For You only. */
+const SPONSORED_FEED_INSERT_INDEX = 2;
 
 function feedWindowRange(len: number, centerIdx: number, radius: number) {
   if (len <= 0) return { start: 0, end: 0 };
@@ -69,6 +74,7 @@ export default function FeedScreen() {
   const feedListWindow = useMemo(() => getFeedVideoListWindow(), []);
   const router = useRouter();
   const isFocused = useIsFocused();
+  useBorderGovernorScreenFocus();
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const insets = useSafeAreaInsets();
   const { user, isLoading: authLoading } = useAuth();
@@ -121,6 +127,36 @@ export default function FeedScreen() {
 
   const posts = useMemo(() => feedInfData?.pages.flatMap((p) => p.posts) ?? [], [feedInfData]);
 
+  const sponsoredPostsEnabled = useFeatureFlags((s) => s.sponsoredPosts);
+  const sponsoredPlacementDelivery = useFeatureFlags((s) => s.sponsoredPlacementDelivery);
+  const [sponsoredPost, setSponsoredPost] = useState<Post | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (feedTab !== 'forYou' || !user?.id || !sponsoredPostsEnabled || !sponsoredPlacementDelivery) {
+      setSponsoredPost(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    void adsService.getSponsoredPostForFeed().then((post) => {
+      if (!cancelled) setSponsoredPost(post);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [feedTab, user?.id, sponsoredPostsEnabled, sponsoredPlacementDelivery, dataUpdatedAt]);
+
+  const feedPosts = useMemo(() => {
+    const base = posts ?? [];
+    if (feedTab !== 'forYou' || !sponsoredPost) return base;
+    if (base.some((p) => p.id === sponsoredPost.id)) return base;
+    const copy = [...base];
+    const idx = Math.min(SPONSORED_FEED_INSERT_INDEX, copy.length);
+    copy.splice(idx, 0, sponsoredPost);
+    return copy;
+  }, [posts, sponsoredPost, feedTab]);
+
   const {
     likedPostsRef,
     savedPostIds,
@@ -169,13 +205,20 @@ export default function FeedScreen() {
   /** Synced each render; read from `renderItem` without listing `activePostId` in `useCallback` deps (avoids new renderItem every snap). */
   activePostIdRef.current = activePostId;
 
+  useEffect(() => {
+    if (!activePostId?.startsWith('sponsored-')) return;
+    const post = feedPosts.find((p) => p.id === activePostId);
+    const campaignId = post?.sponsorInfo?.campaignId;
+    if (campaignId) void adsService.trackImpression(campaignId);
+  }, [activePostId, feedPosts]);
+
   /** Index of the snapped “page”; drives windowed prefetch so deep scrolls warm the right neighbors. */
   const activeWarmIndex = useMemo(() => {
-    if (!posts.length) return 0;
+    if (!feedPosts.length) return 0;
     if (!activePostId) return 0;
-    const i = posts.findIndex((p) => p.id === activePostId);
+    const i = feedPosts.findIndex((p) => p.id === activePostId);
     return i >= 0 ? i : 0;
-  }, [posts, activePostId]);
+  }, [feedPosts, activePostId]);
 
   useEffect(() => {
     if (activeWarmIndex > 0) setLiveTrayPinned(false);
@@ -239,7 +282,7 @@ export default function FeedScreen() {
    * Do not depend on `activePostId` here — if it flickers null, we must not reset to index 0 while the user has scrolled.
    */
   useEffect(() => {
-    const list = posts ?? [];
+    const list = feedPosts ?? [];
     if (!list.length) {
       if (prevActiveId.current) {
         onViewEnd(prevActiveId.current);
@@ -254,18 +297,20 @@ export default function FeedScreen() {
     const nextId = stillInFeed ? cur : list[0].id;
 
     if (nextId !== prevActiveId.current) {
-      if (prevActiveId.current) onViewEnd(prevActiveId.current);
-      if (nextId) onViewStart(nextId);
+      if (prevActiveId.current && !prevActiveId.current.startsWith('sponsored-')) {
+        onViewEnd(prevActiveId.current);
+      }
+      if (nextId && !nextId.startsWith('sponsored-')) onViewStart(nextId);
       prevActiveId.current = nextId;
       setActivePostId(nextId);
     }
-  }, [posts, onViewStart, onViewEnd]);
+  }, [feedPosts, onViewStart, onViewEnd]);
 
   /** Paging feed: derive the focused clip from scroll offset (viewableItems[0] is not reliably the snapped page). */
   const syncActiveFromScrollOffset = useCallback(
     (offsetY: number) => {
       if (Platform.OS === 'web') return;
-      const list = posts ?? [];
+      const list = feedPosts ?? [];
       if (!list.length || pageHeight <= 0) return;
 
       const idx = Math.round(offsetY / pageHeight);
@@ -273,12 +318,14 @@ export default function FeedScreen() {
       const newId = list[clamped]?.id ?? null;
 
       if (newId === prevActiveId.current) return;
-      if (prevActiveId.current) onViewEnd(prevActiveId.current);
-      if (newId) onViewStart(newId);
+      if (prevActiveId.current && !prevActiveId.current.startsWith('sponsored-')) {
+        onViewEnd(prevActiveId.current);
+      }
+      if (newId && !newId.startsWith('sponsored-')) onViewStart(newId);
       prevActiveId.current = newId;
       setActivePostId(newId);
     },
-    [posts, pageHeight, onViewStart, onViewEnd],
+    [feedPosts, pageHeight, onViewStart, onViewEnd],
   );
 
   const onMomentumScrollEnd = useCallback(
@@ -332,8 +379,10 @@ export default function FeedScreen() {
       const newActiveId = topItem?.item?.id ?? null;
 
       if (newActiveId !== prevActiveId.current) {
-        if (prevActiveId.current) onViewEnd(prevActiveId.current);
-        if (newActiveId) onViewStart(newActiveId);
+        if (prevActiveId.current && !prevActiveId.current.startsWith('sponsored-')) {
+          onViewEnd(prevActiveId.current);
+        }
+        if (newActiveId && !newActiveId.startsWith('sponsored-')) onViewStart(newActiveId);
         prevActiveId.current = newActiveId;
       }
 
@@ -461,8 +510,6 @@ export default function FeedScreen() {
       </View>
     );
   }
-
-  const feedPosts = posts ?? [];
 
   return (
     <View style={styles.container} onLayout={onFeedLayout}>
