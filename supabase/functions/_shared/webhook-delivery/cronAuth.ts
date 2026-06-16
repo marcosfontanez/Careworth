@@ -9,6 +9,7 @@ export function checkWebhookDeliveryCronAuth(req: Request): CronAuthResult {
     Deno.env.get("WEBHOOK_DELIVERY_CRON_SECRET")?.trim() ||
     Deno.env.get("CRON_SECRET")?.trim() ||
     Deno.env.get("DISPATCH_SCHEDULED_SECRET")?.trim() ||
+    Deno.env.get("CIRCLE_PROMPTS_CRON_SECRET")?.trim() ||
     "";
 
   if (!secret) {
