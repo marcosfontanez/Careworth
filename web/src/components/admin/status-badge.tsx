@@ -18,6 +18,7 @@ const variants: Record<string, string> = {
   delivered: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30",
   retrying: "bg-pv-electric/15 text-blue-200 border-pv-electric/30",
   ignored: "bg-muted text-muted-foreground",
+  hidden: "bg-muted text-muted-foreground border-border/60",
   critical: "bg-destructive/25 text-red-100",
   high: "bg-amber-500/20 text-amber-100",
   medium: "bg-pv-electric/20 text-blue-100",

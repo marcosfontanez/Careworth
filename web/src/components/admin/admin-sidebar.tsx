@@ -10,6 +10,7 @@ import {
   LineChart,
   Megaphone,
   MessagesSquare,
+  Music2,
   Orbit,
   Package,
   Radio,
@@ -46,6 +47,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { href: "/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/admin/platform", label: "Platform", icon: Layers },
+      { href: "/admin/sound-catalog", label: "Sound catalog", icon: Music2 },
       { href: "/admin/merchandising", label: "Shop & borders", icon: ShoppingBag },
       { href: "/admin/economy", label: "Sparks economy", icon: Wallet },
     ],
