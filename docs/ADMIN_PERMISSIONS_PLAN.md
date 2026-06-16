@@ -100,3 +100,31 @@
 1. Dual-read complete (this release)
 2. Migrate all RLS `role_admin` checks to `caller_has_staff_role` incrementally
 3. Deprecate `role_admin` column after all gates migrated
+
+## Emergency owner recovery (internal)
+
+Requires **Supabase SQL Editor** or service-role access — never expose publicly.
+
+**Inspect state:**
+
+```sql
+select id, role_admin, staff_roles, display_name, username
+from profiles
+where role_admin = true or cardinality(staff_roles) > 0;
+```
+
+**Restore owner on a known account** (replace `<USER_UUID>`):
+
+```sql
+update profiles
+set role_admin = true, staff_roles = array['owner']::public.staff_role[]
+where id = '<USER_UUID>';
+```
+
+**Verify:**
+
+```sql
+select count(*) from profiles where 'owner'::public.staff_role = any(staff_roles);
+```
+
+If `owner_count = 0`, run the update above before deploying permission-gated admin code.

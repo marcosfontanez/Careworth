@@ -1,15 +1,19 @@
 -- Admin P2: Staff role tiers (legacy role_admin fallback during migration).
 
-create type public.staff_role as enum (
-  'owner',
-  'admin',
-  'moderator',
-  'community',
-  'marketing',
-  'support',
-  'analyst',
-  'economy'
-);
+do $$ begin
+  create type public.staff_role as enum (
+    'owner',
+    'admin',
+    'moderator',
+    'community',
+    'marketing',
+    'support',
+    'analyst',
+    'economy'
+  );
+exception
+  when duplicate_object then null;
+end $$;
 
 alter table public.profiles
   add column if not exists staff_roles public.staff_role[] not null default '{}'::public.staff_role[];
@@ -214,8 +218,10 @@ begin
 end;
 $$;
 
--- Extend staff directory RPC with staff_roles.
-create or replace function public.admin_list_profiles(
+-- Extend staff directory RPC with staff_roles (return type change requires drop first).
+drop function if exists public.admin_list_profiles(text, boolean, integer);
+
+create function public.admin_list_profiles(
   p_search text default null,
   p_admins_only boolean default false,
   p_limit integer default 100
