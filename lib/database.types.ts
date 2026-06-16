@@ -129,6 +129,111 @@ export type Database = {
         }
         Relationships: []
       }
+      ad_placements: {
+        Row: {
+          capacity_type: string
+          created_at: string
+          description: string | null
+          device: string
+          id: string
+          is_active: boolean
+          key: string
+          max_active_campaigns: number
+          metadata: Json
+          name: string
+          surface: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_type?: string
+          created_at?: string
+          description?: string | null
+          device?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          max_active_campaigns?: number
+          metadata?: Json
+          name: string
+          surface: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_type?: string
+          created_at?: string
+          description?: string | null
+          device?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          max_active_campaigns?: number
+          metadata?: Json
+          name?: string
+          surface?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      campaign_placement_bookings: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          created_by: string | null
+          end_at: string
+          id: string
+          metadata: Json
+          notes: string | null
+          placement_id: string
+          priority: number
+          start_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          created_by?: string | null
+          end_at: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          placement_id: string
+          priority?: number
+          start_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_at?: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          placement_id?: string
+          priority?: number
+          start_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_placement_bookings_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_placement_bookings_placement_id_fkey"
+            columns: ["placement_id"]
+            isOneToOne: false
+            referencedRelation: "ad_placements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_audit_log: {
         Row: {
           action: string

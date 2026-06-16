@@ -11,6 +11,7 @@ import {
   formValuesToInput,
   type CampaignFormValues,
 } from "@/components/admin/campaign-form";
+import { CampaignBookingsPanel } from "@/components/admin/campaign-bookings-panel";
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -38,7 +39,7 @@ import type {
   CampaignAuditRow,
   CampaignOwnerOption,
 } from "@/lib/admin/campaign-editor-shared";
-import { INVENTORY_PLANNING_DISCLAIMER } from "@/lib/admin/campaign-editor-shared";
+import type { PlacementBookingRow, PlacementCatalogRow } from "@/lib/admin/placement-booking-shared";
 import { formatCount } from "@/lib/admin/format";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,9 @@ type Props = {
   placements: string[];
   editorEnabled: boolean;
   initialEdit?: boolean;
+  bookings: PlacementBookingRow[];
+  catalogPlacements: PlacementCatalogRow[];
+  bookingEnabled: boolean;
 };
 
 export function CampaignDetailEditor({
@@ -77,6 +81,9 @@ export function CampaignDetailEditor({
   placements,
   editorEnabled,
   initialEdit = false,
+  bookings,
+  catalogPlacements,
+  bookingEnabled,
 }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(initialEdit && editorEnabled);
@@ -256,12 +263,15 @@ export function CampaignDetailEditor({
         </div>
       )}
 
-      <AdminPanelCard>
-        <CardHeader>
-          <CardTitle>Inventory note</CardTitle>
-        </CardHeader>
-        <CardContent className="text-xs leading-relaxed text-muted-foreground">{INVENTORY_PLANNING_DISCLAIMER}</CardContent>
-      </AdminPanelCard>
+      <CampaignBookingsPanel
+        campaignId={campaign.id}
+        campaignName={campaign.campaignName}
+        defaultStart={campaign.start}
+        defaultEnd={campaign.end}
+        bookings={bookings}
+        placements={catalogPlacements}
+        bookingEnabled={bookingEnabled}
+      />
 
       {editorEnabled && !editing ? (
         <AdminPanelCard>

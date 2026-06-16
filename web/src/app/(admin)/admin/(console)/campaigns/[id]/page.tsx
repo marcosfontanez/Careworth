@@ -8,6 +8,11 @@ import {
   loadCampaignOwnerOptions,
   loadKnownPlacements,
 } from "@/lib/admin/campaign-editor";
+import {
+  isPlacementBookingEnabled,
+  loadBookingsForCampaign,
+  loadPlacementCatalog,
+} from "@/lib/admin/placement-booking";
 
 export default async function AdminCampaignDetailPage({
   params,
@@ -18,13 +23,17 @@ export default async function AdminCampaignDetailPage({
 }) {
   const { id } = await params;
   const q = await searchParams;
-  const [campaign, audit, owners, placements, editorEnabled] = await Promise.all([
-    loadAdminCampaignById(id),
-    loadCampaignAudit(id),
-    loadCampaignOwnerOptions(),
-    loadKnownPlacements(),
-    isCampaignEditorEnabled(),
-  ]);
+  const [campaign, audit, owners, placements, editorEnabled, bookings, catalogPlacements, bookingEnabled] =
+    await Promise.all([
+      loadAdminCampaignById(id),
+      loadCampaignAudit(id),
+      loadCampaignOwnerOptions(),
+      loadKnownPlacements(),
+      isCampaignEditorEnabled(),
+      loadBookingsForCampaign(id),
+      loadPlacementCatalog(true),
+      isPlacementBookingEnabled(),
+    ]);
 
   if (!campaign) notFound();
 
@@ -36,6 +45,9 @@ export default async function AdminCampaignDetailPage({
       placements={placements}
       editorEnabled={editorEnabled}
       initialEdit={q.edit === "1"}
+      bookings={bookings}
+      catalogPlacements={catalogPlacements}
+      bookingEnabled={bookingEnabled}
     />
   );
 }

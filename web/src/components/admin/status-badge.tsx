@@ -20,6 +20,7 @@ const variants: Record<string, string> = {
   ignored: "bg-muted text-muted-foreground",
   hidden: "bg-muted text-muted-foreground border-border/60",
   draft: "bg-muted text-muted-foreground border-white/12",
+  reserved: "bg-pv-electric/15 text-blue-200 border-pv-electric/30",
   paused: "bg-amber-500/15 text-amber-200 border-amber-500/30",
   completed: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30",
   cancelled: "bg-destructive/10 text-red-200/80 border-destructive/20",
