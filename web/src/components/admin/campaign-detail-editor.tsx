@@ -12,7 +12,9 @@ import {
   type CampaignFormValues,
 } from "@/components/admin/campaign-form";
 import { CampaignBookingsPanel } from "@/components/admin/campaign-bookings-panel";
-import { CampaignDeliveryStatusCard } from "@/components/admin/campaign-delivery-status-card";
+import { CampaignLaunchReadinessCard } from "@/components/admin/campaign-launch-readiness-card";
+import { CampaignSponsoredPerformanceCard } from "@/components/admin/campaign-sponsored-performance-card";
+import { SponsoredDeliveryCsvExport } from "@/components/admin/sponsored-delivery-csv-export";
 import { AdminOpsStrip } from "@/components/admin/dashboard-panels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminPanelCard } from "@/components/admin/admin-panel-card";
@@ -41,7 +43,10 @@ import type {
   CampaignOwnerOption,
 } from "@/lib/admin/campaign-editor-shared";
 import type { PlacementBookingRow, PlacementCatalogRow } from "@/lib/admin/placement-booking-shared";
-import type { CampaignDeliveryStatus } from "@/lib/admin/sponsored-placement-delivery";
+import type {
+  CampaignDeliveryReportRow,
+  LaunchReadinessSummary,
+} from "@/lib/sponsored-delivery-reporting-shared";
 import { formatCount } from "@/lib/admin/format";
 import { cn } from "@/lib/utils";
 
@@ -74,7 +79,8 @@ type Props = {
   bookings: PlacementBookingRow[];
   catalogPlacements: PlacementCatalogRow[];
   bookingEnabled: boolean;
-  deliveryStatus: CampaignDeliveryStatus;
+  deliveryReport: CampaignDeliveryReportRow;
+  launchReadiness: LaunchReadinessSummary;
 };
 
 export function CampaignDetailEditor({
@@ -87,7 +93,8 @@ export function CampaignDetailEditor({
   bookings,
   catalogPlacements,
   bookingEnabled,
-  deliveryStatus,
+  deliveryReport,
+  launchReadiness,
 }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(initialEdit && editorEnabled);
@@ -142,6 +149,10 @@ export function CampaignDetailEditor({
             <Button size="sm" variant="outline" className="border-white/15" asChild>
               <Link href="/admin/campaigns">Back to list</Link>
             </Button>
+            <Button size="sm" variant="outline" className="border-white/15" asChild>
+              <Link href={`/admin/campaigns/${campaign.id}/report`}>Sponsor report</Link>
+            </Button>
+            <SponsoredDeliveryCsvExport rows={[deliveryReport]} />
             {editorEnabled && !editing ? (
               <Button size="sm" onClick={() => setEditing(true)}>
                 Edit
@@ -182,7 +193,16 @@ export function CampaignDetailEditor({
         ]}
       />
 
-      <CampaignDeliveryStatusCard status={deliveryStatus} />
+      <CampaignSponsoredPerformanceCard
+        report={deliveryReport}
+        campaignStatus={campaign.status}
+        mediaUrl={campaign.mediaUrl}
+        description={campaign.description}
+        ctaLabel={campaign.ctaLabel}
+        ctaUrl={campaign.ctaUrl}
+      />
+
+      <CampaignLaunchReadinessCard readiness={launchReadiness} />
 
       {editing ? (
         <AdminPanelCard>

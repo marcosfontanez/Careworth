@@ -34,10 +34,12 @@ export type SponsoredPlacementPayload = {
 };
 
 export type DeliveryFlagState = {
-  /** Mobile Zustand kill switch — not stored in Supabase feature_flags. */
+  /** Mobile Zustand kill switch `sponsoredPosts`. */
   sponsoredPostsEnabled: boolean;
+  /** Mobile Zustand kill switch `sponsoredPlacementDelivery`. */
+  mobilePlacementDeliveryEnabled: boolean;
   /** DB flag `sponsored_placement_delivery_enabled`. */
-  sponsoredPlacementDeliveryEnabled: boolean;
+  platformDeliveryEnabled: boolean;
 };
 
 export type CampaignDeliveryInputs = {
@@ -210,7 +212,11 @@ export function isPlacementContextMatch(
 }
 
 export function areDeliveryFlagsEnabled(flags: DeliveryFlagState): boolean {
-  return flags.sponsoredPostsEnabled && flags.sponsoredPlacementDeliveryEnabled;
+  return (
+    flags.sponsoredPostsEnabled &&
+    flags.mobilePlacementDeliveryEnabled &&
+    flags.platformDeliveryEnabled
+  );
 }
 
 export function evaluateSponsoredDelivery(args: {
@@ -273,6 +279,9 @@ export function evaluateSponsoredDelivery(args: {
     }
     if (!args.booking) {
       return { state: "blocked_no_booking", eligible: false, reasons };
+    }
+    if (args.placement && !args.placement.isActive) {
+      return { state: "blocked_placement", eligible: false, reasons };
     }
     return { state: "blocked_booking", eligible: false, reasons };
   }

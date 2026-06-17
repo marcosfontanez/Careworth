@@ -67,7 +67,7 @@ export function CampaignDeliveryStatusCard({ status }: Props) {
           />
           <FlagRow
             label="Platform delivery flag"
-            enabled={status.flags.sponsoredPlacementDeliveryEnabled}
+            enabled={status.flags.platformDeliveryEnabled}
             hint="Platform → feature_flags → sponsored_placement_delivery_enabled"
           />
         </div>
@@ -99,7 +99,7 @@ export function CampaignDeliveryStatusCard({ status }: Props) {
           </div>
         </div>
 
-        {!status.flags.sponsoredPlacementDeliveryEnabled ? (
+        {!status.flags.platformDeliveryEnabled ? (
           <p className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-100/80">
             Turning on sponsored delivery can make eligible booked campaigns visible to users. Keep both flags off until
             internal QA is complete.

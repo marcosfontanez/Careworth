@@ -14,12 +14,14 @@ import {
 
 const FLAGS_OFF: DeliveryFlagState = {
   sponsoredPostsEnabled: false,
-  sponsoredPlacementDeliveryEnabled: false,
+  mobilePlacementDeliveryEnabled: false,
+  platformDeliveryEnabled: false,
 };
 
 const FLAGS_ON: DeliveryFlagState = {
   sponsoredPostsEnabled: true,
-  sponsoredPlacementDeliveryEnabled: true,
+  mobilePlacementDeliveryEnabled: true,
+  platformDeliveryEnabled: true,
 };
 
 const NOW = new Date("2026-06-15T12:00:00.000Z");
@@ -125,7 +127,7 @@ describe("sponsored placement delivery", () => {
     expect(evalResult.state).toBe("blocked_booking");
   });
 
-  it("inactive placement returns no ad", () => {
+  it("inactive placement returns blocked_placement", () => {
     const evalResult = evaluateSponsoredDelivery({
       flags: FLAGS_ON,
       campaign: baseCampaign(),
@@ -134,7 +136,7 @@ describe("sponsored placement delivery", () => {
       now: NOW,
     });
     expect(evalResult.eligible).toBe(false);
-    expect(evalResult.state).toBe("blocked_booking");
+    expect(evalResult.state).toBe("blocked_placement");
   });
 
   it("valid campaign + booking + flags on returns safe payload", () => {

@@ -13,7 +13,7 @@ import {
   loadBookingsForCampaign,
   loadPlacementCatalog,
 } from "@/lib/admin/placement-booking";
-import { loadCampaignDeliveryStatus } from "@/lib/admin/sponsored-placement-delivery";
+import { loadCampaignDeliveryReport } from "@/lib/admin/sponsored-delivery-reporting";
 
 export default async function AdminCampaignDetailPage({
   params,
@@ -38,7 +38,7 @@ export default async function AdminCampaignDetailPage({
 
   if (!campaign) notFound();
 
-  const deliveryStatus = await loadCampaignDeliveryStatus(campaign, bookings);
+  const { report, launchReadiness } = await loadCampaignDeliveryReport(campaign, bookings);
 
   return (
     <CampaignDetailEditor
@@ -51,7 +51,8 @@ export default async function AdminCampaignDetailPage({
       bookings={bookings}
       catalogPlacements={catalogPlacements}
       bookingEnabled={bookingEnabled}
-      deliveryStatus={deliveryStatus}
+      deliveryReport={report}
+      launchReadiness={launchReadiness}
     />
   );
 }

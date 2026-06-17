@@ -59,6 +59,8 @@ export type PlacementBookingRow = {
   placementKey: string;
   placementName: string;
   surface: string;
+  placementDevice: string;
+  placementIsActive: boolean;
   capacityType: CapacityType;
   maxActiveCampaigns: number;
   startAt: string;

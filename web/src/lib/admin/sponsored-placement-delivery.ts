@@ -69,7 +69,8 @@ export function evaluateCampaignDeliveryFromAdmin(args: {
 }): CampaignDeliveryStatus {
   const flags: DeliveryFlagState = {
     sponsoredPostsEnabled: false,
-    sponsoredPlacementDeliveryEnabled: args.deliveryFlagEnabled,
+    mobilePlacementDeliveryEnabled: false,
+    platformDeliveryEnabled: args.deliveryFlagEnabled,
   };
 
   const deliverableBookings = args.bookings.filter((b) =>
@@ -101,9 +102,9 @@ export function evaluateCampaignDeliveryFromAdmin(args: {
     placement: primaryBooking
       ? {
           key: primaryBooking.placementKey,
-          isActive: true,
+          isActive: primaryBooking.placementIsActive,
           surface: primaryBooking.surface,
-          device: "mobile",
+          device: primaryBooking.placementDevice,
         }
       : null,
   });
@@ -181,7 +182,8 @@ export function summarizeInventoryDelivery(args: {
       const evalResult = evaluateSponsoredDelivery({
         flags: {
           sponsoredPostsEnabled: true,
-          sponsoredPlacementDeliveryEnabled: args.deliveryFlagEnabled,
+          mobilePlacementDeliveryEnabled: true,
+          platformDeliveryEnabled: args.deliveryFlagEnabled,
         },
         campaign: campaign
           ? {
@@ -211,9 +213,9 @@ export function summarizeInventoryDelivery(args: {
         booking: { status: booking.status, startAt: booking.startAt, endAt: booking.endAt },
         placement: {
           key: booking.placementKey,
-          isActive: true,
+          isActive: booking.placementIsActive,
           surface: booking.surface,
-          device: "mobile",
+          device: booking.placementDevice,
         },
       });
       if (evalResult.eligible) deliverableCount += 1;

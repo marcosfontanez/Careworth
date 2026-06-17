@@ -657,7 +657,7 @@ export async function setAdminCampaignStatus(
         bookings.find((b) => b.placementKey === "in_feed_sponsored") ?? bookings[0] ?? null;
       const wouldDeliver = primaryBooking
         ? evaluateSponsoredDelivery({
-            flags: { sponsoredPostsEnabled: true, sponsoredPlacementDeliveryEnabled: true },
+            flags: { sponsoredPostsEnabled: true, mobilePlacementDeliveryEnabled: true, platformDeliveryEnabled: true },
             campaign: {
               status: "active",
               startDate: existing.start,
@@ -673,9 +673,9 @@ export async function setAdminCampaignStatus(
             booking: { status: primaryBooking.status, startAt: primaryBooking.startAt, endAt: primaryBooking.endAt },
             placement: {
               key: primaryBooking.placementKey,
-              isActive: true,
+              isActive: primaryBooking.placementIsActive,
               surface: primaryBooking.surface,
-              device: "mobile",
+              device: primaryBooking.placementDevice,
             },
           }).eligible
         : false;

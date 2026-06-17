@@ -180,6 +180,7 @@ export const ADMIN_ROUTE_PERMISSIONS: { prefix: string; permission: StaffPermiss
   { prefix: "/admin/circles", permission: "circles.manage" },
   { prefix: "/admin/live", permission: "live.manage" },
   { prefix: "/admin/moderation", permission: "moderation.write" },
+  { prefix: "/admin/reports/sponsored", permission: "partnerships.read" },
   { prefix: "/admin/reports", permission: "reports.read" },
   { prefix: "/admin/appeals", permission: "appeals.write" },
   { prefix: "/admin/brand-safety", permission: "brand_safety.read" },
@@ -195,6 +196,9 @@ export const ADMIN_ROUTE_PERMISSIONS: { prefix: string; permission: StaffPermiss
 
 export function permissionForAdminPath(pathname: string): StaffPermission | null {
   const path = pathname.split("?")[0]?.split("#")[0] ?? pathname;
+  if (path === "/admin/reports/sponsored" || /\/admin\/campaigns\/[^/]+\/report$/.test(path)) {
+    return "partnerships.read";
+  }
   const sorted = [...ADMIN_ROUTE_PERMISSIONS].sort((a, b) => b.prefix.length - a.prefix.length);
   for (const row of sorted) {
     if (path === row.prefix || path.startsWith(`${row.prefix}/`)) {

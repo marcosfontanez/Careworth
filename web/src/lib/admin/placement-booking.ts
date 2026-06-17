@@ -278,6 +278,8 @@ async function enrichBookings(
       placementKey: p.key,
       placementName: p.name,
       surface: p.surface,
+      placementDevice: p.device,
+      placementIsActive: p.isActive,
       capacityType: p.capacityType,
       maxActiveCampaigns: p.maxActiveCampaigns,
       startAt: row.start_at,

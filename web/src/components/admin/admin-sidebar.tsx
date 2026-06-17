@@ -77,6 +77,7 @@ const groups: { title: string; items: Item[] }[] = [
       { href: "/admin/advertisers", label: "Advertiser overview", icon: TrendingUp },
       { href: "/admin/audience-insights", label: "Audience insights", icon: LineChart },
       { href: "/admin/campaigns", label: "Campaigns", icon: Megaphone },
+      { href: "/admin/reports/sponsored", label: "Sponsored delivery", icon: LineChart },
       { href: "/admin/inventory", label: "Inventory & placements", icon: Package },
       { href: "/admin/creators", label: "Creators", icon: Sparkles },
       { href: "/admin/leads", label: "Leads / inquiries", icon: MessagesSquare },
