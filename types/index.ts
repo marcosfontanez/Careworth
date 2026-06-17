@@ -1,5 +1,6 @@
 import type { BorderRarityTier } from '@/lib/shop/borderCatalogTaxonomy';
 import type { VideoLookId } from '@/lib/videoFilters';
+import type { CircleIdentityMetadata } from '@/lib/circleIdentity';
 
 export type Role =
   | ''
@@ -66,6 +67,7 @@ export type NotificationType =
   | 'comment'
   | 'reply'
   | 'circle_thread_reply'
+  | 'circle_reply_helpful'
   | 'mention'
   | 'community_invite'
   | 'circle_new_post'
@@ -77,7 +79,8 @@ export type NotificationType =
   | 'diamonds_earned'
   | 'gift_sent'
   | 'live_go_live'
-  | 'live_stream_live';
+  | 'live_stream_live'
+  | 'pulse_board_shoutout';
 
 export type ContentInterest =
   | 'humor'
@@ -89,7 +92,34 @@ export type ContentInterest =
   | 'travel_nursing'
   | 'leadership'
   | 'gear_tools'
-  | 'certifications';
+  | 'certifications'
+  | 'caregiver_support'
+  | 'behind_the_scenes'
+  | 'community_conversations'
+  | 'live_qa'
+  | 'medical_mythbusters'
+  | 'patient_family_guidance'
+  | 'true_stories';
+
+/** Self-selected onboarding audience — not a verified clinical role. */
+export type AudienceRole =
+  | 'healthcare_worker'
+  | 'healthcare_student'
+  | 'exploring_career'
+  | 'caregiver_family'
+  | 'here_to_learn'
+  | 'stories_humor'
+  | 'support_creators';
+
+/** Who a creator primarily makes content for (optional Pulse Page tags). */
+export type CreatorAudienceTag =
+  | 'healthcare_workers'
+  | 'students'
+  | 'caregivers'
+  | 'patients_families'
+  | 'curious_learners'
+  | 'comedy_fans'
+  | 'live_audiences';
 
 /** Monthly Pulse top-5 prize; ring colors drive the live avatar border UI */
 export interface PulseAvatarFrame {
@@ -347,6 +377,26 @@ export interface ProfileUpdateComment {
   editedAt?: string;
 }
 
+/** Visitor shoutout on a Pulse Board (migration 259). */
+export type ProfileBoardShoutoutStatus =
+  | 'active'
+  | 'hidden'
+  | 'deleted'
+  | 'reported'
+  | 'pending';
+
+export interface ProfileBoardShoutout {
+  id: string;
+  profileOwnerId: string;
+  authorId: string;
+  body: string;
+  status: ProfileBoardShoutoutStatus;
+  pinnedAt?: string | null;
+  archivedAt?: string | null;
+  createdAt: string;
+  author?: CreatorSummary;
+}
+
 export interface UserProfile {
   id: string;
   displayName: string;
@@ -415,6 +465,13 @@ export interface UserProfile {
    */
   pulseTier?: string;
   pulseScoreCurrent?: number;
+  /** Durable Today's Pulse status — separate from the 5-update activity rail. */
+  pulseStatusText?: string | null;
+  pulseStatusEmoji?: string | null;
+  pulseStatusUpdatedAt?: string | null;
+  /** Pulse Board visitor shoutout wall — default on (migration 259). */
+  pulseBoardEnabled?: boolean;
+  pulseBoardPostingMode?: string;
   /** Equipped exclusive border from monthly leaderboard prizes; omit/undefined = classic teal */
   selectedPulseAvatarFrameId?: string | null;
   pulseAvatarFrame?: PulseAvatarFrame | null;
@@ -423,6 +480,16 @@ export interface UserProfile {
    * New accounts leave this null until that step; email sign-up no longer pre-fills it from metadata.
    */
   termsPrivacyAcceptedAt?: string | null;
+  /** Self-selected audience from onboarding (not a verified credential). */
+  audienceRole?: AudienceRole | null;
+  /** When post-signup onboarding finished or was skipped. */
+  onboardingCompletedAt?: string | null;
+  /** Caregiver/learn-path medical safety acknowledgment. */
+  medicalSafetyAcknowledgedAt?: string | null;
+  /** Optional creator tags — who this creator makes content for. */
+  creatorAudienceTags?: CreatorAudienceTag[];
+  /** True when the user publishes as a creator (DB `is_creator`). */
+  isCreator?: boolean;
 }
 
 export interface CreatorSummary {
@@ -586,12 +653,27 @@ export interface Community {
   onlineCount?: number;
   /** Up to 5 avatar URLs for presence strip on featured cards */
   presenceAvatars?: string[];
+  /** Parsed from `communities.metadata` (Circle identity). */
+  identity?: CircleIdentityMetadata;
 }
 
 /** Circles tab — same shape as Community in MVP. */
 export type Circle = Community;
 
 export type CircleThreadKind = 'question' | 'story' | 'advice' | 'meme' | 'media';
+
+/** Expanded flair tag on `circle_threads.flair_tag` (migration 269). */
+export type CircleFlairTag =
+  | 'question'
+  | 'story'
+  | 'humor'
+  | 'career_advice'
+  | 'caregiver_support'
+  | 'student_help'
+  | 'education'
+  | 'rant_vent'
+  | 'mythbuster'
+  | 'live_qa';
 
 export type CircleModerationStatus = 'active' | 'hidden' | 'removed' | 'pending_review';
 
@@ -605,6 +687,8 @@ export interface CircleThread {
   /** Present when loaded from API with author join */
   author?: CreatorSummary;
   kind: CircleThreadKind;
+  /** Optional Reddit-style flair beyond coarse `kind`. */
+  flairTag?: CircleFlairTag;
   title: string;
   body: string;
   mediaThumbUrl?: string;
@@ -625,10 +709,21 @@ export interface CircleReply {
   body: string;
   createdAt: string;
   reactionCount?: number;
+  helpfulCount?: number;
   moderationStatus?: CircleModerationStatus;
   /** True when body is replaced by a moderation tombstone for the viewer. */
   isModerationRemoved?: boolean;
 }
+
+/** Joined-circle card activity from get_joined_circle_activity_badges RPC. */
+export type CircleActivityBadgeRow = {
+  communityId: string;
+  newWallPosts: number;
+  newThreads: number;
+  newRepliesOnYours: number;
+  unansweredQuestions: number;
+  isHotToday?: boolean;
+};
 
 /** Circles tab "Your conversations": thread discussions or comments on circle wall posts. */
 export type RecentCircleActivity =
