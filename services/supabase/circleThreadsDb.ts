@@ -4,6 +4,8 @@ import type {
   CircleReply,
   CircleThread,
   CircleThreadKind,
+  CircleFlairTag,
+  CircleActivityBadgeRow,
   CreatorSummary,
   RecentCircleActivity,
   TrendingTopic24h,
@@ -15,6 +17,8 @@ import {
   redactCircleReplyForViewer,
   redactCircleThreadForViewer,
 } from '@/lib/circleViewerPrivacy';
+import { resolveThreadFlairUpdate } from '@/lib/circleFlairs';
+import type { CircleTopHelper } from '@/lib/circleIdentity';
 import { circleContentIsPubliclyVisible } from '@/lib/circleModeration';
 import {
   hydrateReplyRowsWithAuthors,
@@ -67,6 +71,7 @@ function rowToThread(row: any): CircleThread {
     authorId: row.author_id,
     author: authorFromRow(row.author),
     kind: row.kind as CircleThreadKind,
+    flairTag: (row.flair_tag as CircleFlairTag | null) ?? undefined,
     title: row.title,
     body: row.body ?? '',
     mediaThumbUrl: row.media_thumb_url ?? undefined,
@@ -91,6 +96,7 @@ function rowToReply(row: any): CircleReply {
     body: removed ? '' : row.body,
     createdAt: row.created_at,
     reactionCount: row.reaction_count ?? 0,
+    helpfulCount: row.helpful_count ?? 0,
     moderationStatus: status,
     isModerationRemoved: removed,
   };
@@ -128,29 +134,90 @@ export const circleThreadsDb = {
     kind: CircleThreadKind;
     title: string;
     body: string;
+    flairTag?: CircleFlairTag | null;
     mediaThumbUrl?: string | null;
     linkedPostId?: string | null;
+    /** Attribution to a Circle "This Week" prompt (migration 274). Optional. */
+    weeklyPromptId?: string | null;
   }): Promise<CircleThread> {
     const cid = (params.communityId ?? '').trim();
     const aid = (params.authorId ?? '').trim();
     if (!cid || !aid) throw new Error('Missing community or author');
     const title = (params.title.trim() || 'Discussion').slice(0, 500);
     const body = params.body.trim().slice(0, 12000);
-    const { data, error } = await supabase
+    const flairTag = params.flairTag?.trim() || null;
+    const weeklyPromptId = params.weeklyPromptId?.trim() || null;
+
+    const baseRow: Record<string, unknown> = {
+      community_id: cid,
+      author_id: aid,
+      kind: params.kind,
+      flair_tag: flairTag,
+      title,
+      body,
+      media_thumb_url: params.mediaThumbUrl?.trim() || null,
+      linked_post_id: params.linkedPostId ?? null,
+    };
+    // weekly_prompt_id is added in migration 274; cast the insert because the
+    // generated types are regenerated separately (npm run db:types).
+    const fullRow = weeklyPromptId ? { ...baseRow, weekly_prompt_id: weeklyPromptId } : baseRow;
+
+    let attempt = await supabase
       .from('circle_threads')
-      .insert({
-        community_id: cid,
-        author_id: aid,
-        kind: params.kind,
-        title,
-        body,
-        media_thumb_url: params.mediaThumbUrl?.trim() || null,
-        linked_post_id: params.linkedPostId ?? null,
-      })
+      .insert(fullRow as never)
       .select(THREAD_SELECT)
       .single();
-    if (error || !data) throw error ?? new Error('Failed to create discussion');
-    return rowToThread(data);
+
+    /* If the migration adding weekly_prompt_id hasn't run yet, retry without it
+     * so posting never breaks during a deploy window. */
+    const err = attempt.error as { code?: string; message?: string } | null;
+    const unknownColumn =
+      err &&
+      (err.code === '42703' ||
+        /column .* does not exist|could not find .* column/i.test(err.message ?? ''));
+    if (weeklyPromptId && unknownColumn) {
+      attempt = await supabase
+        .from('circle_threads')
+        .insert(baseRow as never)
+        .select(THREAD_SELECT)
+        .single();
+    }
+
+    if (attempt.error || !attempt.data) throw attempt.error ?? new Error('Failed to create discussion');
+    return rowToThread(attempt.data as never);
+  },
+
+  /** Update thread flair — author (own thread) or moderator/staff via RLS. */
+  async updateThreadFlair(
+    threadId: string,
+    flairTag: CircleFlairTag | null,
+    currentKind: CircleThreadKind,
+    viewerId?: string | null,
+  ): Promise<CircleThread> {
+    const id = (threadId ?? '').trim();
+    if (!id) throw new Error('Missing thread id');
+
+    const { flairTag: nextTag, kind: nextKind } = resolveThreadFlairUpdate(flairTag, currentKind);
+
+    const { error } = await supabase
+      .from('circle_threads')
+      .update({
+        flair_tag: nextTag,
+        kind: nextKind,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+    if (error) throw error;
+
+    const { data, error: readErr } = await fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
+      .eq('id', id)
+      .maybeSingle();
+    if (readErr || !data) throw readErr ?? new Error('Thread not found after update');
+
+    const [hydrated] = await hydrateThreadRowsWithRelations([data]);
+    const thread = rowToThread(hydrated ?? data);
+    return redactCircleThreadForViewer(thread, viewerId);
   },
 
   async listByCommunityId(
@@ -496,6 +563,121 @@ export const circleThreadsDb = {
     return { reacted: true };
   },
 
+  async getReplyHelpfulForUser(replyIds: string[], userId: string | null): Promise<Set<string>> {
+    const uid = (userId ?? '').trim();
+    if (!uid || replyIds.length === 0) return new Set();
+    const { data, error } = await supabase
+      .from('circle_reply_reactions')
+      .select('reply_id')
+      .eq('user_id', uid)
+      .eq('reaction_type', 'helpful')
+      .in('reply_id', replyIds);
+    if (error) {
+      if (__DEV__) console.warn('[circleThreadsDb.getReplyHelpfulForUser]', error.message);
+      return new Set();
+    }
+    return new Set((data ?? []).map((r) => String(r.reply_id)));
+  },
+
+  async toggleReplyHelpful(replyId: string): Promise<{ reacted: boolean; helpfulCount: number }> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: replyRow, error: replyErr } = await fromCircleRepliesViewerSafe()
+      .select('author_id, moderation_status, helpful_count')
+      .eq('id', replyId)
+      .maybeSingle();
+    if (replyErr) throw replyErr;
+    if (!replyRow || replyRow.moderation_status !== 'active') {
+      throw new Error('This reply is not available.');
+    }
+
+    const authorId = String((replyRow as { author_id?: string | null }).author_id ?? '');
+    if (authorId && authorId !== user.id && authorId !== ANONYMOUS_PUBLIC_CREATOR_ID) {
+      const block = await getBlockRelationship(user.id, authorId);
+      if (block === 'viewer_blocked' || block === 'blocked_by_viewer') {
+        throw new Error('You cannot react to this reply.');
+      }
+    }
+
+    const { data: existing, error: readErr } = await supabase
+      .from('circle_reply_reactions')
+      .select('id')
+      .eq('reply_id', replyId)
+      .eq('user_id', user.id)
+      .eq('reaction_type', 'helpful')
+      .maybeSingle();
+    if (readErr) throw readErr;
+
+    if (existing?.id) {
+      const { error } = await supabase.from('circle_reply_reactions').delete().eq('id', existing.id);
+      if (error) throw error;
+      const { data: row } = await supabase
+        .from('circle_replies_viewer_safe')
+        .select('helpful_count')
+        .eq('id', replyId)
+        .maybeSingle();
+      return { reacted: false, helpfulCount: Number(row?.helpful_count ?? replyRow.helpful_count ?? 0) };
+    }
+
+    const { error } = await supabase.from('circle_reply_reactions').insert({
+      reply_id: replyId,
+      user_id: user.id,
+      reaction_type: 'helpful',
+    });
+    if (error) {
+      if ((error as { code?: string }).code === '23505') {
+        return { reacted: true, helpfulCount: Number(replyRow.helpful_count ?? 0) };
+      }
+      throw error;
+    }
+
+    const { data: row } = await supabase
+      .from('circle_replies_viewer_safe')
+      .select('helpful_count')
+      .eq('id', replyId)
+      .maybeSingle();
+    return { reacted: true, helpfulCount: Number(row?.helpful_count ?? 0) };
+  },
+
+  async getJoinedCircleActivityBadges(
+    communityIds: string[],
+    sinceByCommunityId: Record<string, string>,
+  ): Promise<Map<string, CircleActivityBadgeRow>> {
+    const ids = communityIds.map((id) => id.trim()).filter(Boolean);
+    const out = new Map<string, CircleActivityBadgeRow>();
+    if (ids.length === 0) return out;
+
+    const { data, error } = await supabase.rpc('get_joined_circle_activity_badges', {
+      p_community_ids: ids,
+      p_since: sinceByCommunityId,
+    });
+    if (error) {
+      if (__DEV__) console.warn('[circleThreadsDb.getJoinedCircleActivityBadges]', error.message);
+      return out;
+    }
+
+    for (const row of data ?? []) {
+      const r = row as {
+        community_id: string;
+        new_wall_posts: number;
+        new_threads: number;
+        new_replies_on_yours: number;
+        unanswered_questions: number;
+      };
+      out.set(String(r.community_id), {
+        communityId: String(r.community_id),
+        newWallPosts: Number(r.new_wall_posts ?? 0),
+        newThreads: Number(r.new_threads ?? 0),
+        newRepliesOnYours: Number(r.new_replies_on_yours ?? 0),
+        unansweredQuestions: Number(r.unanswered_questions ?? 0),
+      });
+    }
+    return out;
+  },
+
   async addReply(threadId: string, body: string): Promise<void> {
     const {
       data: { user },
@@ -611,5 +793,159 @@ export const circleThreadsDb = {
         lastActiveAt: t.updatedAt ?? t.createdAt,
       };
     });
+  },
+
+  /** Replies on threads the user started (excluding their own replies). */
+  async listNewRepliesOnUserThreads(
+    userId: string,
+    limit = 8,
+  ): Promise<
+    Array<{
+      replyId: string;
+      threadId: string;
+      threadTitle: string;
+      circleSlug: string;
+      circleName?: string;
+      bodyPreview: string;
+      createdAt: string;
+    }>
+  > {
+    const uid = (userId ?? '').trim();
+    if (!uid) return [];
+
+    const { data: authored } = await supabase.from('circle_threads').select('id').eq('author_id', uid);
+    const threadIds = (authored ?? []).map((r) => String(r.id));
+    if (threadIds.length === 0) return [];
+
+    const { data: replies, error } = await fromCircleRepliesViewerSafe()
+      .select('id, thread_id, body, created_at, author_id')
+      .in('thread_id', threadIds)
+      .neq('author_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(Math.max(limit * 2, 16));
+    if (error) throw error;
+    if (!replies?.length) return [];
+
+    const threadIdsNeeded = [...new Set(replies.map((r) => String(r.thread_id)))];
+    const { data: threadsRaw, error: tErr } = await fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
+      .in('id', threadIdsNeeded);
+    if (tErr) throw tErr;
+
+    const hydrated = await hydrateThreadRowsWithRelations((threadsRaw ?? []) as any[]);
+    const threadById = new Map<string, CircleThread>();
+    for (const raw of hydrated) {
+      threadById.set(String(raw.id), rowToThread(raw));
+    }
+
+    const out: Array<{
+      replyId: string;
+      threadId: string;
+      threadTitle: string;
+      circleSlug: string;
+      circleName?: string;
+      bodyPreview: string;
+      createdAt: string;
+    }> = [];
+    for (const r of replies) {
+      if (out.length >= limit) break;
+      const tid = String(r.thread_id);
+      const thread = threadById.get(tid);
+      if (!thread?.circleSlug) continue;
+      const body = String(r.body ?? '').trim();
+      out.push({
+        replyId: String(r.id),
+        threadId: tid,
+        threadTitle: thread.title,
+        circleSlug: thread.circleSlug,
+        circleName: thread.circleName,
+        bodyPreview: body.length > 120 ? `${body.slice(0, 117)}…` : body || 'New reply',
+        createdAt: String(r.created_at),
+      });
+    }
+    return out;
+  },
+
+  /** Open questions in joined rooms — real unanswered threads only. */
+  async listUnansweredQuestionsInCommunities(communityIds: string[], limit = 10): Promise<CircleThread[]> {
+    const ids = communityIds.map((id) => id.trim()).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    const { data, error } = await fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
+      .in('community_id', ids)
+      .eq('kind', 'question')
+      .eq('reply_count', 0)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+
+    const hydrated = await hydrateThreadRowsWithRelations((data ?? []) as any[]);
+    return finalizeCircleThreadsForViewer(
+      hydrated.map(rowToThread).filter((t) => t.circleSlug && circleContentIsPubliclyVisible(t.moderationStatus ?? 'active')),
+      null,
+    );
+  },
+
+  /** Pinned welcome thread — only active, viewer-visible rows (no broken links). */
+  async getWelcomeThread(communityId: string, fallbackThreadId?: string | null): Promise<CircleThread | null> {
+    const cid = communityId.trim();
+    if (!cid) return null;
+
+    let threadId: string | null = null;
+
+    const { data: pinRow, error: pinErr } = await supabase
+      .from('community_thread_pins')
+      .select('thread_id')
+      .eq('community_id', cid)
+      .eq('pin_role', 'welcome')
+      .maybeSingle();
+    if (pinErr) {
+      if (__DEV__) console.warn('[circleThreadsDb.getWelcomeThread] pin', pinErr.message);
+    } else if (pinRow?.thread_id) {
+      threadId = String(pinRow.thread_id);
+    }
+
+    if (!threadId && fallbackThreadId?.trim()) {
+      threadId = fallbackThreadId.trim();
+    }
+    if (!threadId) return null;
+
+    const { data, error } = await fromCircleThreadsViewerSafe()
+      .select(THREAD_SELECT_VIEWER)
+      .eq('id', threadId)
+      .eq('community_id', cid)
+      .maybeSingle();
+    if (error || !data) return null;
+    if (!circleContentIsPubliclyVisible(String(data.moderation_status ?? 'active'))) return null;
+    if (data.deleted_at) return null;
+    if (!data.title?.trim()) return null;
+
+    const [hydrated] = await hydrateThreadRowsWithRelations([data as any]);
+    const thread = rowToThread(hydrated ?? data);
+    return finalizeCircleThreadsForViewer([thread], null)[0] ?? null;
+  },
+
+  /** Top helpers this week — empty for confession rooms (RPC guard). */
+  async getTopHelpers(communityId: string, limit = 3): Promise<CircleTopHelper[]> {
+    const cid = communityId.trim();
+    if (!cid) return [];
+
+    const { data, error } = await supabase.rpc('get_circle_top_helpers', {
+      p_community_id: cid,
+      p_limit: limit,
+    });
+    if (error) {
+      if (__DEV__) console.warn('[circleThreadsDb.getTopHelpers]', error.message);
+      return [];
+    }
+
+    return (data ?? [])
+      .map((row: { user_id: string; helpful_count: number; display_name: string }) => ({
+        userId: String(row.user_id),
+        helpfulCount: Number(row.helpful_count ?? 0),
+        displayName: String(row.display_name ?? 'Member').trim() || 'Member',
+      }))
+      .filter((h) => h.helpfulCount > 0);
   },
 };
