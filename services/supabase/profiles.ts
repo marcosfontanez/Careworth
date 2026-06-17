@@ -1,9 +1,10 @@
 import { Platform } from 'react-native';
 import { usernamePassesContentPolicy } from '@/lib/handleContentPolicy';
+import { isValidUsername } from '@/utils/profileHandle';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '@/lib/supabase';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
-import type { PulseAvatarFrame, UserProfile } from '@/types';
+import type { PulseAvatarFrame, UserProfile, CreatorAudienceTag } from '@/types';
 /**
  * Explicit profile column list. We select columns by name (never `*`) so that
  * `role_admin` is NEVER returned to normal authenticated/anon profile reads —
@@ -12,7 +13,7 @@ import type { PulseAvatarFrame, UserProfile } from '@/types';
  * Keep this in sync with public.profiles.
  */
 export const PROFILE_COLUMNS =
-  'avatar_url, banner_url, bio, brand_kit, city, created_at, default_allow_clip_downloads, default_allow_remix, default_allow_viewer_clips, display_name, first_name, follower_count, following_count, hide_pulse_music_player_on_my_page, id, identity_tags, is_creator, is_verified, last_name, like_count, post_count, preferred_locale, privacy_mode, product_digest_email, profile_song_artist, profile_song_artwork_url, profile_song_title, profile_song_url, pulse_score_current, pulse_tier, role, selected_pulse_avatar_frame_id, shift_preference, specialty, state, terms_and_privacy_accepted_at, total_shares, updated_at, username, years_experience';
+  'audience_role, avatar_url, banner_url, bio, brand_kit, city, created_at, creator_audience_tags, default_allow_clip_downloads, default_allow_remix, default_allow_viewer_clips, display_name, first_name, follower_count, following_count, hide_pulse_music_player_on_my_page, id, identity_tags, is_creator, is_verified, last_name, like_count, medical_safety_acknowledged_at, onboarding_completed_at, post_count, preferred_locale, privacy_mode, product_digest_email, profile_song_artist, profile_song_artwork_url, profile_song_title, profile_song_url, pulse_board_enabled, pulse_board_posting_mode, pulse_score_current, pulse_status_emoji, pulse_status_text, pulse_status_updated_at, pulse_tier, role, selected_pulse_avatar_frame_id, shift_preference, specialty, state, terms_and_privacy_accepted_at, total_shares, updated_at, username, years_experience';
 
 export const PROFILE_SELECT_WITH_AVATAR_FRAME =
   `${PROFILE_COLUMNS}, pulse_avatar_frame:pulse_avatar_frames!profiles_selected_pulse_avatar_frame_id_fkey(id, slug, label, subtitle, prize_tier, rarity_tier, acquisition_tag, month_start, ring_color, glow_color, ring_caption)`;
@@ -101,6 +102,17 @@ function rowToProfile(row: any): UserProfile {
     pulseTier: typeof row.pulse_tier === 'string' ? row.pulse_tier : 'murmur',
     pulseScoreCurrent:
       typeof row.pulse_score_current === 'number' ? row.pulse_score_current : 0,
+    pulseStatusText:
+      typeof row.pulse_status_text === 'string' ? row.pulse_status_text.trim() || null : null,
+    pulseStatusEmoji:
+      typeof row.pulse_status_emoji === 'string' ? row.pulse_status_emoji.trim() || null : null,
+    pulseStatusUpdatedAt:
+      row.pulse_status_updated_at != null ? String(row.pulse_status_updated_at) : null,
+    pulseBoardEnabled: row.pulse_board_enabled !== false,
+    pulseBoardPostingMode:
+      typeof row.pulse_board_posting_mode === 'string'
+        ? row.pulse_board_posting_mode
+        : 'everyone',
     selectedPulseAvatarFrameId:
       row.selected_pulse_avatar_frame_id != null
         ? String(row.selected_pulse_avatar_frame_id)
@@ -117,6 +129,17 @@ function rowToProfile(row: any): UserProfile {
         : row.terms_and_privacy_accepted_at === null
           ? null
           : undefined,
+    audienceRole: row.audience_role ?? null,
+    onboardingCompletedAt:
+      row.onboarding_completed_at != null ? String(row.onboarding_completed_at) : null,
+    medicalSafetyAcknowledgedAt:
+      row.medical_safety_acknowledged_at != null
+        ? String(row.medical_safety_acknowledged_at)
+        : null,
+    creatorAudienceTags: Array.isArray(row.creator_audience_tags)
+      ? (row.creator_audience_tags as CreatorAudienceTag[]).filter(Boolean)
+      : [],
+    isCreator: Boolean(row.is_creator),
   };
 }
 
@@ -286,6 +309,14 @@ export const profilesService = {
     default_allow_remix?: boolean;
     default_allow_clip_downloads?: boolean;
     terms_and_privacy_accepted_at?: string | null;
+    audience_role?: string | null;
+    onboarding_completed_at?: string | null;
+    medical_safety_acknowledged_at?: string | null;
+    creator_audience_tags?: string[] | null;
+    pulse_status_text?: string | null;
+    pulse_status_emoji?: string | null;
+    pulse_status_updated_at?: string | null;
+    pulse_board_enabled?: boolean;
   }>) {
     const qb = supabase.from('profiles') as any;
     const { data, error } = await qb
@@ -340,21 +371,37 @@ export const profilesService = {
    * taken. Uses the `check_username_available` RPC so the grammar rules
    * stay in sync with the DB CHECK constraint from migration 048.
    */
-  async isUsernameAvailable(candidate: string): Promise<boolean> {
+  async checkUsernameAvailability(
+    candidate: string,
+  ): Promise<
+    | { status: 'available' }
+    | { status: 'taken' }
+    | { status: 'invalid' }
+    | { status: 'error'; message: string }
+  > {
     const c = candidate.replace(/^@+/, '').trim().toLowerCase();
-    if (!c) return false;
-    if (!usernamePassesContentPolicy(c)) return false;
-    // Cast to `any` — the generated Supabase types in lib/database.types.ts
-    // don't yet include RPCs from migration 048. Regen will erase the cast.
-    const { data, error } = await (supabase.rpc as any)(
-      'check_username_available',
-      { candidate: c },
-    );
+    if (!c) return { status: 'invalid' };
+    if (!usernamePassesContentPolicy(c)) return { status: 'invalid' };
+    if (!isValidUsername(c)) return { status: 'invalid' };
+    const { data, error } = await (supabase.rpc as any)('check_username_available', {
+      candidate: c,
+    });
     if (error) {
-      if (__DEV__) console.warn('[isUsernameAvailable]', error.message);
-      return false;
+      if (__DEV__) console.warn('[checkUsernameAvailability]', error.message);
+      return {
+        status: 'error',
+        message: error.message || 'Could not verify handle availability.',
+      };
     }
-    return Boolean(data);
+    return Boolean(data) ? { status: 'available' } : { status: 'taken' };
+  },
+
+  /** @deprecated Prefer checkUsernameAvailability — false on RPC error conflates with "taken". */
+  async isUsernameAvailable(candidate: string): Promise<boolean> {
+    const r = await profilesService.checkUsernameAvailability(candidate);
+    if (r.status === 'available') return true;
+    if (r.status === 'taken' || r.status === 'invalid') return false;
+    return false;
   },
 
   /** Top creators ranked by follower count — used as the default "browse" list on the search screen. */

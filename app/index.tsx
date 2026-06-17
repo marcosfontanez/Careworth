@@ -16,6 +16,8 @@ function routeHref(gate: ReturnType<typeof resolveAccountEntryGate>): Href | nul
       return null;
     case 'needs_legal_ack':
       return '/auth/legal-ack';
+    case 'needs_onboarding':
+      return '/onboarding';
     case 'ready':
       return '/(tabs)/feed';
     default:
@@ -45,8 +47,9 @@ export default function Index() {
         isAuthenticated,
         profile?.id ?? '',
         profile?.termsPrivacyAcceptedAt ?? '',
+        profile?.onboardingCompletedAt ?? '',
       ].join('\0'),
-    [gate, isLoading, isAuthenticated, profile?.id, profile?.termsPrivacyAcceptedAt],
+    [gate, isLoading, isAuthenticated, profile?.id, profile?.termsPrivacyAcceptedAt, profile?.onboardingCompletedAt],
   );
 
   useEffect(() => {

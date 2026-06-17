@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { usePathname, useSegments } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { canShowAccountRewardGates, isAccountSetupComplete } from '@/lib/accountGate';
 import { rewardDeliveriesService } from '@/services/supabase/rewardDeliveries';
 import { rewardDeliveryKeys } from '@/lib/queryKeys';
 import type { RewardDeliveryRecord } from '@/lib/rewardDelivery/types';
@@ -20,9 +22,17 @@ import { shopQueriesService } from '@/services/shop/shopQueries';
 import { analytics } from '@/lib/analytics';
 
 export function RewardDeliveryProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, profile, isAuthenticated, isLoading } = useAuth();
+  const pathname = usePathname() ?? '';
+  const segments = useSegments();
   const uid = user?.id ?? null;
   const qc = useQueryClient();
+
+  const setupComplete = useMemo(() => isAccountSetupComplete(profile), [profile]);
+  const canPresent = useMemo(
+    () => canShowAccountRewardGates({ profile, pathname, segments }),
+    [profile, pathname, segments],
+  );
 
   useEffect(() => {
     if (!uid) return;
@@ -45,7 +55,8 @@ export function RewardDeliveryProvider({ children }: { children: React.ReactNode
   const pendingQuery = useQuery({
     queryKey: rewardDeliveryKeys.pendingList(uid),
     queryFn: () => rewardDeliveriesService.listPending(),
-    enabled: Boolean(isAuthenticated && uid && !isLoading),
+    /** Fetch once onboarding is done; hold toast/modal until user leaves signup routes. */
+    enabled: Boolean(isAuthenticated && uid && !isLoading && setupComplete),
     staleTime: 12_000,
     /** Keep polling during Pulse Month — only pause while our reveal modal owns the screen. */
     refetchInterval: rewardDeliveryBlocking ? false : 22_000,
@@ -71,10 +82,24 @@ export function RewardDeliveryProvider({ children }: { children: React.ReactNode
   const head = deliveries[0];
 
   const promotedRef = useRef<string | null>(null);
+  const prevCanPresentRef = useRef(false);
+
+  /** When the user lands on Feed after onboarding, surface any queued celebration. */
+  useEffect(() => {
+    if (!uid) return;
+    if (canPresent && !prevCanPresentRef.current) {
+      promotedRef.current = null;
+      void qc.invalidateQueries({ queryKey: rewardDeliveryKeys.pendingList(uid) });
+    }
+    prevCanPresentRef.current = canPresent;
+  }, [canPresent, uid, qc]);
+
   useEffect(() => {
     if (!head || head.status !== 'pending') return;
     /** Don’t advance to toast_shown until the monthly celebration modal is gone — avoids buried toasts. */
     if (pulseMonthCelebrationBlocking) return;
+    /** Don’t toast during signup, legal ack, or onboarding screens. */
+    if (!canPresent) return;
     if (promotedRef.current === head.id) return;
     promotedRef.current = head.id;
     void (async () => {
@@ -86,7 +111,7 @@ export function RewardDeliveryProvider({ children }: { children: React.ReactNode
         if (__DEV__) console.warn('[RewardDelivery] promote toast', e);
       }
     })();
-  }, [head, qc, uid, pulseMonthCelebrationBlocking]);
+  }, [head, qc, uid, pulseMonthCelebrationBlocking, canPresent]);
 
   /** Warm catalog art before reveal opens — creator Sparks gift → Diamonds uses `item_id` as shop item. */
   useEffect(() => {
@@ -143,7 +168,11 @@ export function RewardDeliveryProvider({ children }: { children: React.ReactNode
   }, [deliveries, modalDeliveryId, setRewardDeliveryBlocking]);
 
   const toastVisible = Boolean(
-    head && head.status === 'toast_shown' && !toastPresentationBlocked && !modalDeliveryId,
+    canPresent &&
+      head &&
+      head.status === 'toast_shown' &&
+      !toastPresentationBlocked &&
+      !modalDeliveryId,
   );
 
   const openFromToast = useCallback(async () => {

@@ -36,7 +36,8 @@ export const onboardingDb = {
     const patch: ProfilesUpdate = {
       audience_role: input.audienceRole,
       updated_at: now,
-    };    if (input.displayName?.trim()) patch.display_name = input.displayName.trim();
+    };
+    if (input.displayName?.trim()) patch.display_name = input.displayName.trim();
     if (input.username !== undefined) patch.username = input.username;
     if (input.bio !== undefined) patch.bio = input.bio;
     if (input.city !== undefined) patch.city = input.city;
