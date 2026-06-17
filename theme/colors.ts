@@ -4,6 +4,10 @@ export const colors = {
     royal: '#1E4ED8',
     teal: '#14B8A6',
     gold: '#D4A63A',
+    /** WIP compat — primary cyan chrome; matches `pulseverse.electric` / `semantic.accentCyan`. */
+    accentCyan: '#22D3EE',
+    /** WIP compat — secondary brand blue; matches `primary.royal` / `semantic.accentBlue`. */
+    accentBlue: '#1E4ED8',
   },
   dark: {
     bg: '#060E1A',
@@ -17,6 +21,10 @@ export const colors = {
     borderInner: 'rgba(255,255,255,0.08)',
     elevated: '#182F4A',
     text: '#FFFFFF',
+    /** WIP compat — alias of `dark.text`. */
+    textPrimary: '#FFFFFF',
+    /** WIP compat — alias of `dark.card` / `semantic.surface`. */
+    surface: '#0F1C30',
     /** Body / secondary labels */
     textSecondary: '#A8B8D4',
     /** Quiet metadata, counts */
