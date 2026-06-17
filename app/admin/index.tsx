@@ -17,11 +17,11 @@ import { useToast } from '@/components/ui/Toast';
 import { LAUNCH_LINKS } from '@/constants/launch';
 import { useFeatureFlags, type FeatureFlags } from '@/lib/featureFlags';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
+import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 import { adsService, subscriptionService, creatorTipsService } from '@/services/monetization';
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
 import { circleModerationService } from '@/services/supabase';
 import { hasStaffPermission, normalizeStaffRoles, type StaffPermission, type StaffRole } from '@/lib/staffPermissions';
-import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 
 type Tab = 'reports' | 'users' | 'content' | 'circles' | 'stats' | 'revenue';
 
@@ -85,6 +85,7 @@ export default function AdminPanel() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
+  const adminModListWindow = useMemo(() => getAdminModerationListWindow(), []);
   const [staffRoles, setStaffRoles] = useState<StaffRole[]>([]);
 
   useEffect(() => {
@@ -100,7 +101,6 @@ export default function AdminPanel() {
   }, []);
 
   const [tab, setTab] = useState<Tab>('reports');
-  const adminModListWindow = useMemo(() => getAdminModerationListWindow(), []);
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
