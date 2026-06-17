@@ -7,36 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       ad_campaigns: {
@@ -127,7 +97,29 @@ export type Database = {
           title?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_contact_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ad_placements: {
         Row: {
@@ -173,66 +165,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      campaign_placement_bookings: {
-        Row: {
-          campaign_id: string
-          created_at: string
-          created_by: string | null
-          end_at: string
-          id: string
-          metadata: Json
-          notes: string | null
-          placement_id: string
-          priority: number
-          start_at: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          campaign_id: string
-          created_at?: string
-          created_by?: string | null
-          end_at: string
-          id?: string
-          metadata?: Json
-          notes?: string | null
-          placement_id: string
-          priority?: number
-          start_at: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          campaign_id?: string
-          created_at?: string
-          created_by?: string | null
-          end_at?: string
-          id?: string
-          metadata?: Json
-          notes?: string | null
-          placement_id?: string
-          priority?: number
-          start_at?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaign_placement_bookings_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "ad_campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "campaign_placement_bookings_placement_id_fkey"
-            columns: ["placement_id"]
-            isOneToOne: false
-            referencedRelation: "ad_placements"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       admin_audit_log: {
         Row: {
@@ -590,6 +522,73 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_placement_bookings: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          created_by: string | null
+          end_at: string
+          id: string
+          metadata: Json
+          notes: string | null
+          placement_id: string
+          priority: number
+          start_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          created_by?: string | null
+          end_at: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          placement_id: string
+          priority?: number
+          start_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_at?: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          placement_id?: string
+          priority?: number
+          start_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_placement_bookings_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_placement_bookings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_placement_bookings_placement_id_fkey"
+            columns: ["placement_id"]
+            isOneToOne: false
+            referencedRelation: "ad_placements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       career_milestones: {
         Row: {
           description: string | null
@@ -832,11 +831,56 @@ export type Database = {
           },
         ]
       }
+      circle_prompt_configs: {
+        Row: {
+          audience: string | null
+          banned_topics: string[]
+          circle_id: string
+          circle_slug: string
+          created_at: string
+          prompt_guidance: string | null
+          safety_notes: string | null
+          tone: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience?: string | null
+          banned_topics?: string[]
+          circle_id: string
+          circle_slug: string
+          created_at?: string
+          prompt_guidance?: string | null
+          safety_notes?: string | null
+          tone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience?: string | null
+          banned_topics?: string[]
+          circle_id?: string
+          circle_slug?: string
+          created_at?: string
+          prompt_guidance?: string | null
+          safety_notes?: string | null
+          tone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_prompt_configs_circle_id_fkey"
+            columns: ["circle_id"]
+            isOneToOne: true
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       circle_replies: {
         Row: {
           author_id: string
           body: string
           created_at: string
+          helpful_count: number
           id: string
           moderated_at: string | null
           moderated_by: string | null
@@ -849,6 +893,7 @@ export type Database = {
           author_id: string
           body: string
           created_at?: string
+          helpful_count?: number
           id?: string
           moderated_at?: string | null
           moderated_by?: string | null
@@ -861,6 +906,7 @@ export type Database = {
           author_id?: string
           body?: string
           created_at?: string
+          helpful_count?: number
           id?: string
           moderated_at?: string | null
           moderated_by?: string | null
@@ -896,6 +942,52 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "circle_threads_viewer_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      circle_reply_reactions: {
+        Row: {
+          created_at: string
+          id: string
+          reaction_type: string
+          reply_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reaction_type?: string
+          reply_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reaction_type?: string
+          reply_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_reply_reactions_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "circle_replies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_reply_reactions_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "circle_replies_viewer_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_reply_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -954,6 +1046,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           deleted_by: string | null
+          flair_tag: string | null
           id: string
           kind: string
           linked_post_id: string | null
@@ -967,6 +1060,7 @@ export type Database = {
           share_count: number
           title: string
           updated_at: string
+          weekly_prompt_id: string | null
         }
         Insert: {
           author_id: string
@@ -975,6 +1069,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
+          flair_tag?: string | null
           id?: string
           kind: string
           linked_post_id?: string | null
@@ -988,6 +1083,7 @@ export type Database = {
           share_count?: number
           title: string
           updated_at?: string
+          weekly_prompt_id?: string | null
         }
         Update: {
           author_id?: string
@@ -996,6 +1092,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
+          flair_tag?: string | null
           id?: string
           kind?: string
           linked_post_id?: string | null
@@ -1009,6 +1106,7 @@ export type Database = {
           share_count?: number
           title?: string
           updated_at?: string
+          weekly_prompt_id?: string | null
         }
         Relationships: [
           {
@@ -1056,6 +1154,154 @@ export type Database = {
           {
             foreignKeyName: "circle_threads_moderated_by_fkey"
             columns: ["moderated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_threads_weekly_prompt_id_fkey"
+            columns: ["weekly_prompt_id"]
+            isOneToOne: false
+            referencedRelation: "circle_weekly_prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      circle_weekly_prompt_metrics: {
+        Row: {
+          calculated_at: string
+          circle_id: string
+          circle_join_count: number
+          circle_slug: string
+          comment_count: number
+          engagement_score: number
+          id: string
+          impressions_count: number
+          metadata: Json
+          post_count: number
+          prompt_id: string
+          prompt_style: string | null
+          reaction_count: number
+          unique_participants_count: number
+          week_start_date: string
+        }
+        Insert: {
+          calculated_at?: string
+          circle_id: string
+          circle_join_count?: number
+          circle_slug: string
+          comment_count?: number
+          engagement_score?: number
+          id?: string
+          impressions_count?: number
+          metadata?: Json
+          post_count?: number
+          prompt_id: string
+          prompt_style?: string | null
+          reaction_count?: number
+          unique_participants_count?: number
+          week_start_date: string
+        }
+        Update: {
+          calculated_at?: string
+          circle_id?: string
+          circle_join_count?: number
+          circle_slug?: string
+          comment_count?: number
+          engagement_score?: number
+          id?: string
+          impressions_count?: number
+          metadata?: Json
+          post_count?: number
+          prompt_id?: string
+          prompt_style?: string | null
+          reaction_count?: number
+          unique_participants_count?: number
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_weekly_prompt_metrics_circle_id_fkey"
+            columns: ["circle_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_weekly_prompt_metrics_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: true
+            referencedRelation: "circle_weekly_prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      circle_weekly_prompts: {
+        Row: {
+          approved_at: string | null
+          circle_id: string
+          circle_slug: string
+          created_at: string
+          created_by: string | null
+          generation_source: string
+          id: string
+          metadata: Json
+          model_name: string | null
+          prompt_body: string
+          prompt_cta: string | null
+          prompt_style: string | null
+          prompt_title: string
+          prompt_type: string
+          status: string
+          week_start_date: string
+        }
+        Insert: {
+          approved_at?: string | null
+          circle_id: string
+          circle_slug: string
+          created_at?: string
+          created_by?: string | null
+          generation_source?: string
+          id?: string
+          metadata?: Json
+          model_name?: string | null
+          prompt_body: string
+          prompt_cta?: string | null
+          prompt_style?: string | null
+          prompt_title: string
+          prompt_type?: string
+          status?: string
+          week_start_date: string
+        }
+        Update: {
+          approved_at?: string | null
+          circle_id?: string
+          circle_slug?: string
+          created_at?: string
+          created_by?: string | null
+          generation_source?: string
+          id?: string
+          metadata?: Json
+          model_name?: string | null
+          prompt_body?: string
+          prompt_cta?: string | null
+          prompt_style?: string | null
+          prompt_title?: string
+          prompt_type?: string
+          status?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_weekly_prompts_circle_id_fkey"
+            columns: ["circle_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_weekly_prompts_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1467,7 +1713,9 @@ export type Database = {
           icon: string
           id: string
           member_count: number
+          metadata: Json
           name: string
+          onboarding_topics: string[]
           post_count: number
           profile_open_count: number
           slug: string
@@ -1483,7 +1731,9 @@ export type Database = {
           icon?: string
           id?: string
           member_count?: number
+          metadata?: Json
           name: string
+          onboarding_topics?: string[]
           post_count?: number
           profile_open_count?: number
           slug: string
@@ -1499,7 +1749,9 @@ export type Database = {
           icon?: string
           id?: string
           member_count?: number
+          metadata?: Json
           name?: string
+          onboarding_topics?: string[]
           post_count?: number
           profile_open_count?: number
           slug?: string
@@ -1598,6 +1850,55 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "scheduled_posts_due_v1"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_thread_pins: {
+        Row: {
+          community_id: string
+          created_at: string
+          id: string
+          pin_role: string
+          sort_order: number
+          thread_id: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          id?: string
+          pin_role?: string
+          sort_order?: number
+          thread_id: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          id?: string
+          pin_role?: string
+          sort_order?: number
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_thread_pins_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_thread_pins_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "circle_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_thread_pins_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "circle_threads_viewer_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2322,6 +2623,27 @@ export type Database = {
           status?: string
           subject_id?: string | null
           subject_type?: string | null
+        }
+        Relationships: []
+      }
+      hashtag_counts: {
+        Row: {
+          created_at: string
+          last_used_at: string
+          tag: string
+          usage_count: number
+        }
+        Insert: {
+          created_at?: string
+          last_used_at?: string
+          tag: string
+          usage_count?: number
+        }
+        Update: {
+          created_at?: string
+          last_used_at?: string
+          tag?: string
+          usage_count?: number
         }
         Relationships: []
       }
@@ -3731,9 +4053,10 @@ export type Database = {
           thumbnail_url: string | null
           type: string
           video_look_id: string | null
-          video_overlay_text: string | null
           video_overlay_style: Json | null
+          video_overlay_text: string | null
           view_count: number
+          weekly_prompt_id: string | null
         }
         Insert: {
           additional_media?: string[] | null
@@ -3795,9 +4118,10 @@ export type Database = {
           thumbnail_url?: string | null
           type?: string
           video_look_id?: string | null
-          video_overlay_text?: string | null
           video_overlay_style?: Json | null
+          video_overlay_text?: string | null
           view_count?: number
+          weekly_prompt_id?: string | null
         }
         Update: {
           additional_media?: string[] | null
@@ -3859,9 +4183,10 @@ export type Database = {
           thumbnail_url?: string | null
           type?: string
           video_look_id?: string | null
-          video_overlay_text?: string | null
           video_overlay_style?: Json | null
+          video_overlay_text?: string | null
           view_count?: number
+          weekly_prompt_id?: string | null
         }
         Relationships: [
           {
@@ -3974,6 +4299,73 @@ export type Database = {
             columns: ["stitch_source_post_id"]
             isOneToOne: false
             referencedRelation: "scheduled_posts_due_v1"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_weekly_prompt_id_fkey"
+            columns: ["weekly_prompt_id"]
+            isOneToOne: false
+            referencedRelation: "circle_weekly_prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_board_shoutouts: {
+        Row: {
+          archived_at: string | null
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          hidden_at: string | null
+          id: string
+          pinned_at: string | null
+          profile_owner_id: string
+          reported_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          author_id: string
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          hidden_at?: string | null
+          id?: string
+          pinned_at?: string | null
+          profile_owner_id: string
+          reported_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          author_id?: string
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          hidden_at?: string | null
+          id?: string
+          pinned_at?: string | null
+          profile_owner_id?: string
+          reported_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_board_shoutouts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_board_shoutouts_profile_owner_id_fkey"
+            columns: ["profile_owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4196,12 +4588,14 @@ export type Database = {
       }
       profiles: {
         Row: {
+          audience_role: string | null
           avatar_url: string | null
           banner_url: string | null
           bio: string
           brand_kit: Json
           city: string
           created_at: string
+          creator_audience_tags: string[]
           default_allow_clip_downloads: boolean
           default_allow_remix: boolean
           default_allow_viewer_clips: boolean
@@ -4216,6 +4610,8 @@ export type Database = {
           is_verified: boolean
           last_name: string | null
           like_count: number
+          medical_safety_acknowledged_at: string | null
+          onboarding_completed_at: string | null
           post_count: number
           preferred_locale: string
           privacy_mode: string
@@ -4224,19 +4620,19 @@ export type Database = {
           profile_song_artwork_url: string | null
           profile_song_title: string | null
           profile_song_url: string | null
+          pulse_board_enabled: boolean
+          pulse_board_posting_mode: string
           pulse_score_current: number
           pulse_status_emoji: string | null
           pulse_status_text: string | null
           pulse_status_updated_at: string | null
           pulse_tier: string
-          push_token: string | null
-          push_token_updated_at: string | null
           role: string
           role_admin: boolean
-          staff_roles: Database["public"]["Enums"]["staff_role"][]
           selected_pulse_avatar_frame_id: string | null
           shift_preference: string
           specialty: string
+          staff_roles: Database["public"]["Enums"]["staff_role"][]
           state: string
           terms_and_privacy_accepted_at: string | null
           total_shares: number
@@ -4245,12 +4641,14 @@ export type Database = {
           years_experience: number
         }
         Insert: {
+          audience_role?: string | null
           avatar_url?: string | null
           banner_url?: string | null
           bio?: string
           brand_kit?: Json
           city?: string
           created_at?: string
+          creator_audience_tags?: string[]
           default_allow_clip_downloads?: boolean
           default_allow_remix?: boolean
           default_allow_viewer_clips?: boolean
@@ -4265,6 +4663,8 @@ export type Database = {
           is_verified?: boolean
           last_name?: string | null
           like_count?: number
+          medical_safety_acknowledged_at?: string | null
+          onboarding_completed_at?: string | null
           post_count?: number
           preferred_locale?: string
           privacy_mode?: string
@@ -4273,19 +4673,19 @@ export type Database = {
           profile_song_artwork_url?: string | null
           profile_song_title?: string | null
           profile_song_url?: string | null
+          pulse_board_enabled?: boolean
+          pulse_board_posting_mode?: string
           pulse_score_current?: number
           pulse_status_emoji?: string | null
           pulse_status_text?: string | null
           pulse_status_updated_at?: string | null
           pulse_tier?: string
-          push_token?: string | null
-          push_token_updated_at?: string | null
           role?: string
           role_admin?: boolean
-          staff_roles?: Database["public"]["Enums"]["staff_role"][]
           selected_pulse_avatar_frame_id?: string | null
           shift_preference?: string
           specialty?: string
+          staff_roles?: Database["public"]["Enums"]["staff_role"][]
           state?: string
           terms_and_privacy_accepted_at?: string | null
           total_shares?: number
@@ -4294,12 +4694,14 @@ export type Database = {
           years_experience?: number
         }
         Update: {
+          audience_role?: string | null
           avatar_url?: string | null
           banner_url?: string | null
           bio?: string
           brand_kit?: Json
           city?: string
           created_at?: string
+          creator_audience_tags?: string[]
           default_allow_clip_downloads?: boolean
           default_allow_remix?: boolean
           default_allow_viewer_clips?: boolean
@@ -4314,6 +4716,8 @@ export type Database = {
           is_verified?: boolean
           last_name?: string | null
           like_count?: number
+          medical_safety_acknowledged_at?: string | null
+          onboarding_completed_at?: string | null
           post_count?: number
           preferred_locale?: string
           privacy_mode?: string
@@ -4322,19 +4726,19 @@ export type Database = {
           profile_song_artwork_url?: string | null
           profile_song_title?: string | null
           profile_song_url?: string | null
+          pulse_board_enabled?: boolean
+          pulse_board_posting_mode?: string
           pulse_score_current?: number
           pulse_status_emoji?: string | null
           pulse_status_text?: string | null
           pulse_status_updated_at?: string | null
           pulse_tier?: string
-          push_token?: string | null
-          push_token_updated_at?: string | null
           role?: string
           role_admin?: boolean
-          staff_roles?: Database["public"]["Enums"]["staff_role"][]
           selected_pulse_avatar_frame_id?: string | null
           shift_preference?: string
           specialty?: string
+          staff_roles?: Database["public"]["Enums"]["staff_role"][]
           state?: string
           terms_and_privacy_accepted_at?: string | null
           total_shares?: number
@@ -4408,6 +4812,8 @@ export type Database = {
           platform: string
           processed_at: string | null
           receipt_payload: Json
+          refund_reason: string | null
+          refunded_at: string | null
           shop_item_id: string | null
           store_product_id: string
           user_id: string
@@ -4420,6 +4826,8 @@ export type Database = {
           platform: string
           processed_at?: string | null
           receipt_payload?: Json
+          refund_reason?: string | null
+          refunded_at?: string | null
           shop_item_id?: string | null
           store_product_id: string
           user_id: string
@@ -4432,6 +4840,8 @@ export type Database = {
           platform?: string
           processed_at?: string | null
           receipt_payload?: Json
+          refund_reason?: string | null
+          refunded_at?: string | null
           shop_item_id?: string | null
           store_product_id?: string
           user_id?: string
@@ -5709,27 +6119,6 @@ export type Database = {
           },
         ]
       }
-      user_push_tokens: {
-        Row: {
-          platform: string | null
-          token: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          platform?: string | null
-          token: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          platform?: string | null
-          token?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       user_inventory: {
         Row: {
           acquired_at: string
@@ -5985,6 +6374,27 @@ export type Database = {
           },
         ]
       }
+      user_push_tokens: {
+        Row: {
+          platform: string | null
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          platform?: string | null
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          platform?: string | null
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_skills: {
         Row: {
           category: string
@@ -6221,6 +6631,50 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_destinations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_types: string[]
+          id: string
+          is_active: boolean
+          metadata: Json
+          name: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_types?: string[]
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_types?: string[]
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_destinations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_outbox: {
         Row: {
           attempts: number
@@ -6271,50 +6725,6 @@ export type Database = {
           },
         ]
       }
-      webhook_destinations: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          event_types: string[]
-          id: string
-          is_active: boolean
-          metadata: Json
-          name: string
-          updated_at: string
-          url: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          event_types?: string[]
-          id?: string
-          is_active?: boolean
-          metadata?: Json
-          name: string
-          updated_at?: string
-          url: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          event_types?: string[]
-          id?: string
-          is_active?: boolean
-          metadata?: Json
-          name?: string
-          updated_at?: string
-          url?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "webhook_destinations_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       webhook_worker_state: {
         Row: {
           last_run_at: string | null
@@ -6346,6 +6756,7 @@ export type Database = {
           author_id: string | null
           body: string | null
           created_at: string | null
+          helpful_count: number | null
           id: string | null
           moderated_at: string | null
           moderated_by: string | null
@@ -6386,6 +6797,7 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           deleted_by: string | null
+          flair_tag: string | null
           id: string | null
           kind: string | null
           linked_post_id: string | null
@@ -6407,6 +6819,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          flair_tag?: string | null
           id?: string | null
           kind?: string | null
           linked_post_id?: string | null
@@ -6428,6 +6841,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          flair_tag?: string | null
           id?: string | null
           kind?: string | null
           linked_post_id?: string | null
@@ -6620,8 +7034,8 @@ export type Database = {
           thumbnail_url: string | null
           type: string | null
           video_look_id: string | null
-          video_overlay_text: string | null
           video_overlay_style: Json | null
+          video_overlay_text: string | null
           view_count: number | null
         }
         Insert: {
@@ -6684,8 +7098,8 @@ export type Database = {
           thumbnail_url?: string | null
           type?: string | null
           video_look_id?: string | null
-          video_overlay_text?: string | null
           video_overlay_style?: Json | null
+          video_overlay_text?: string | null
           view_count?: number | null
         }
         Update: {
@@ -6748,8 +7162,8 @@ export type Database = {
           thumbnail_url?: string | null
           type?: string | null
           video_look_id?: string | null
-          video_overlay_text?: string | null
           video_overlay_style?: Json | null
+          video_overlay_text?: string | null
           view_count?: number | null
         }
         Relationships: [
@@ -6926,32 +7340,25 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: undefined
       }
-      webhook_outbox_claim_batch: {
-        Args: {
-          p_limit?: number
-          p_max_attempts?: number
-          p_min_age_seconds?: number
-          p_stale_lock_seconds?: number
-        }
+      admin_economy_pipeline_summary: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
+      admin_list_profiles: {
+        Args: { p_admins_only?: boolean; p_limit?: number; p_search?: string }
         Returns: {
-          attempts: number
+          avatar_url: string
           created_at: string
-          delivered_at: string | null
-          destination_id: string | null
-          event_type: string
+          display_name: string
+          follower_count: number
           id: string
-          last_attempted_at: string | null
-          last_error: string | null
-          next_attempt_at: string | null
-          payload: Json
-          status: string
+          is_verified: boolean
+          post_count: number
+          role: string
+          role_admin: boolean
+          staff_roles: Database["public"]["Enums"]["staff_role"][]
+          username: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "webhook_outbox"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       admin_post_set_privacy_mode: {
         Args: { p_post_id: string; p_privacy_mode: string }
@@ -6963,6 +7370,13 @@ export type Database = {
       }
       admin_profile_set_role_admin: {
         Args: { p_role_admin: boolean; p_target_user_id: string }
+        Returns: undefined
+      }
+      admin_profile_set_staff_roles: {
+        Args: {
+          p_staff_roles: Database["public"]["Enums"]["staff_role"][]
+          p_target_user_id: string
+        }
         Returns: undefined
       }
       admin_shop_border_stats: {
@@ -6996,6 +7410,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_pulse_board_auto_archive: {
+        Args: { p_profile_owner_id: string }
+        Returns: number
+      }
       border_catalog_leaderboard_rank_defaults: {
         Args: { p_rank: number }
         Returns: {
@@ -7009,6 +7427,14 @@ export type Database = {
         Returns: undefined
       }
       bump_streak: { Args: never; Returns: undefined }
+      calc_circle_weekly_prompt_metrics: {
+        Args: { p_week_start?: string }
+        Returns: Json
+      }
+      caller_has_staff_role: {
+        Args: { p_role: Database["public"]["Enums"]["staff_role"] }
+        Returns: boolean
+      }
       can_moderate_circle: {
         Args: { p_community_id: string }
         Returns: boolean
@@ -7034,6 +7460,7 @@ export type Database = {
       }
       circle_digest_window_minutes: { Args: never; Returns: number }
       circle_notify_direct_max: { Args: never; Returns: number }
+      circle_week_start: { Args: { p_ts?: string }; Returns: string }
       claim_next_creator_media_job: {
         Args: never
         Returns: {
@@ -7080,6 +7507,7 @@ export type Database = {
           tier: string
         }[]
       }
+      count_staff_owners: { Args: never; Returns: number }
       create_creator_tip_and_apply_earnings: {
         Args: {
           p_amount: number
@@ -7106,6 +7534,12 @@ export type Database = {
         Args: { p_duration_seconds?: number; p_stream_id: string }
         Returns: Json
       }
+      current_user_role_admin: { Args: never; Returns: boolean }
+      current_user_staff_roles: {
+        Args: never
+        Returns: Database["public"]["Enums"]["staff_role"][]
+      }
+      delete_own_account: { Args: never; Returns: undefined }
       economy_accept_pending_border_gift: {
         Args: { p_border_gift_id: string }
         Returns: Json
@@ -7118,6 +7552,10 @@ export type Database = {
           p_shop_item_id: string
         }
         Returns: Json
+      }
+      economy_assert_gift_not_blocked: {
+        Args: { p_recipient: string; p_sender: string }
+        Returns: undefined
       }
       economy_claim_free_shop_border: {
         Args: { p_shop_item_id: string }
@@ -7150,9 +7588,17 @@ export type Database = {
         Returns: string
       }
       economy_release_pending_diamonds: { Args: never; Returns: number }
+      economy_revoke_purchase: {
+        Args: {
+          p_external_transaction_id: string
+          p_platform: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
       economy_send_creator_gift: {
         Args: {
-          p_context_id?: string | null
+          p_context_id: string
           p_context_type: string
           p_creator_user_id: string
           p_gift_item_id: string
@@ -7172,8 +7618,24 @@ export type Database = {
         }
         Returns: string
       }
+      effective_staff_roles: {
+        Args: { p_user_id: string }
+        Returns: Database["public"]["Enums"]["staff_role"][]
+      }
       end_live_stream: { Args: { p_stream_id: string }; Returns: Json }
+      end_stale_live_streams: {
+        Args: { p_stale_after?: string }
+        Returns: number
+      }
       extract_handles: { Args: { body: string }; Returns: string[] }
+      feed_interest_match_topics: {
+        Args: { p_interest: string }
+        Returns: string[]
+      }
+      fetch_eligible_sponsored_placement: {
+        Args: { p_device: string; p_slot_key?: string; p_surface: string }
+        Returns: Json
+      }
       finalize_current_month: { Args: never; Returns: number }
       format_circle_digest_message: {
         Args: {
@@ -7188,6 +7650,14 @@ export type Database = {
         Args: { fallback_seed?: string; preferred_seed: string }
         Returns: string
       }
+      get_circle_top_helpers: {
+        Args: { p_community_id: string; p_limit?: number }
+        Returns: {
+          display_name: string
+          helpful_count: number
+          user_id: string
+        }[]
+      }
       get_clip_gift_earnings_snapshot: {
         Args: { p_creator_id: string }
         Returns: Json
@@ -7201,6 +7671,33 @@ export type Database = {
           online_count: number
           post_count: number
         }[]
+      }
+      get_current_circle_weekly_prompt: {
+        Args: { p_circle_slug: string }
+        Returns: {
+          approved_at: string | null
+          circle_id: string
+          circle_slug: string
+          created_at: string
+          created_by: string | null
+          generation_source: string
+          id: string
+          metadata: Json
+          model_name: string | null
+          prompt_body: string
+          prompt_cta: string | null
+          prompt_style: string | null
+          prompt_title: string
+          prompt_type: string
+          status: string
+          week_start_date: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "circle_weekly_prompts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_current_pulse_score: {
         Args: { p_user_id?: string }
@@ -7224,18 +7721,20 @@ export type Database = {
         }[]
       }
       get_feed_exclusions: { Args: { viewer_uuid: string }; Returns: Json }
-      fetch_eligible_sponsored_placement: {
-        Args: {
-          p_surface: string
-          p_device: string
-          p_slot_key?: string
-        }
-        Returns: Json
-      }
       get_for_you_post_ids: {
         Args: { result_limit?: number; viewer_uuid: string }
         Returns: {
           id: string
+        }[]
+      }
+      get_joined_circle_activity_badges: {
+        Args: { p_community_ids: string[]; p_since?: Json }
+        Returns: {
+          community_id: string
+          new_replies_on_yours: number
+          new_threads: number
+          new_wall_posts: number
+          unanswered_questions: number
         }[]
       }
       get_live_clip_download_url: { Args: { p_clip_id: string }; Returns: Json }
@@ -7245,7 +7744,26 @@ export type Database = {
           creator_id: string
         }[]
       }
+      get_my_pulse_weekly_recap: { Args: { p_user_id?: string }; Returns: Json }
       get_post_reactions: { Args: { p_post_id: string }; Returns: Json }
+      get_post_share_public: {
+        Args: { p_id: string }
+        Returns: {
+          caption: string
+          comment_count: number
+          creator_display_name: string
+          creator_username: string
+          is_anonymous: boolean
+          like_count: number
+          media_url: string
+          thumbnail_url: string
+          type: string
+        }[]
+      }
+      get_profile_board_shoutouts: {
+        Args: { p_profile_owner_id: string }
+        Returns: Json
+      }
       get_pulse_history: {
         Args: { p_user_id?: string }
         Returns: {
@@ -7307,6 +7825,20 @@ export type Database = {
           source: string
         }[]
       }
+      get_ranked_feed_v4: {
+        Args: {
+          exclude_post_ids?: string[]
+          feed_limit?: number
+          jitter_strength?: number
+          seen_lookback_days?: number
+          viewer_id: string
+        }
+        Returns: {
+          post_id: string
+          score: number
+          source: string
+        }[]
+      }
       get_top_current_pulse: {
         Args: { p_circle_id?: string; p_limit?: number }
         Returns: {
@@ -7339,46 +7871,6 @@ export type Database = {
           user_id: string
           username: string
         }[]
-      }
-      admin_list_profiles: {
-        Args: { p_search?: string | null; p_admins_only?: boolean; p_limit?: number }
-        Returns: {
-          id: string
-          display_name: string
-          username: string | null
-          avatar_url: string | null
-          role: string
-          is_verified: boolean
-          role_admin: boolean
-          staff_roles: Database["public"]["Enums"]["staff_role"][]
-          created_at: string
-          post_count: number
-          follower_count: number
-        }[]
-      }
-      admin_profile_set_staff_roles: {
-        Args: { p_target_user_id: string; p_staff_roles: Database["public"]["Enums"]["staff_role"][] }
-        Returns: undefined
-      }
-      caller_has_staff_role: {
-        Args: { p_role: Database["public"]["Enums"]["staff_role"] }
-        Returns: boolean
-      }
-      count_staff_owners: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      current_user_role_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      current_user_staff_roles: {
-        Args: Record<PropertyKey, never>
-        Returns: Database["public"]["Enums"]["staff_role"][]
-      }
-      effective_staff_roles: {
-        Args: { p_user_id: string }
-        Returns: Database["public"]["Enums"]["staff_role"][]
       }
       get_top_today: {
         Args: { feed_limit?: number }
@@ -7437,6 +7929,7 @@ export type Database = {
         Args: { p_community_id: string; p_user_id: string }
         Returns: boolean
       }
+      is_sponsored_placement_delivery_enabled: { Args: never; Returns: boolean }
       is_valid_username: { Args: { s: string }; Returns: boolean }
       live_fanout_go_live_notifications: {
         Args: { p_stream_id: string }
@@ -7481,6 +7974,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      moderate_profile_board_shoutout: {
+        Args: { p_action: string; p_shoutout_id: string }
+        Returns: undefined
+      }
+      normalize_hashtag: { Args: { p_tag: string }; Returns: string }
       notification_message_preview: {
         Args: { p_fallback: string; p_max_len?: number; p_raw: string }
         Returns: string
@@ -7495,6 +7993,29 @@ export type Database = {
         Returns: undefined
       }
       pin_profile_update: { Args: { p_update_id: string }; Returns: undefined }
+      post_profile_board_shoutout: {
+        Args: { p_body: string; p_profile_owner_id: string }
+        Returns: {
+          archived_at: string | null
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          hidden_at: string | null
+          id: string
+          pinned_at: string | null
+          profile_owner_id: string
+          reported_at: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profile_board_shoutouts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       process_circle_post_notification_fanout: {
         Args: { p_job_limit?: number }
         Returns: number
@@ -7641,6 +8162,10 @@ export type Database = {
         Args: { p_community_id: string; p_user_id: string }
         Returns: boolean
       }
+      user_can_react_to_circle_reply: {
+        Args: { p_reply_id: string }
+        Returns: boolean
+      }
       user_can_react_to_circle_thread: {
         Args: { p_thread_id: string }
         Returns: boolean
@@ -7671,6 +8196,14 @@ export type Database = {
         Args: { p_creator_id: string; p_privacy_mode: string }
         Returns: boolean
       }
+      viewer_can_read_profile_surface: {
+        Args: { p_owner_id: string }
+        Returns: boolean
+      }
+      viewer_can_view_pulse_board: {
+        Args: { p_profile_owner_id: string }
+        Returns: boolean
+      }
       viewer_is_staff: { Args: never; Returns: boolean }
       viewer_safe_circle_author_id: {
         Args: { p_author_id: string; p_community_id: string }
@@ -7679,6 +8212,33 @@ export type Database = {
       viewer_safe_creator_id: {
         Args: { p_creator_id: string; p_is_anonymous: boolean }
         Returns: string
+      }
+      webhook_outbox_claim_batch: {
+        Args: {
+          p_limit?: number
+          p_max_attempts?: number
+          p_min_age_seconds?: number
+          p_stale_lock_seconds?: number
+        }
+        Returns: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          destination_id: string | null
+          event_type: string
+          id: string
+          last_attempted_at: string | null
+          last_error: string | null
+          next_attempt_at: string | null
+          payload: Json
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "webhook_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
@@ -7816,10 +8376,19 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
-    Enums: {},
+    Enums: {
+      staff_role: [
+        "owner",
+        "admin",
+        "moderator",
+        "community",
+        "marketing",
+        "support",
+        "analyst",
+        "economy",
+      ],
+    },
   },
 } as const
+
