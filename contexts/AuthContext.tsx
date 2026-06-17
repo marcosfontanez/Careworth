@@ -18,10 +18,9 @@ import {
   withProfileTimeout,
 } from '@/services/supabase/profiles';
 import { mapPulseAvatarFrameEmbed } from '@/lib/pulseAvatarFrameMap';
-import { tryRecoverStoredSession, validateServerAuthSession } from '@/lib/authSessionGuard';
+import { validateServerAuthSession } from '@/lib/authSessionGuard';
 import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
 import { queryClient } from '@/lib/queryClient';
-import { hydrateJoinedCommunitiesFromServer } from '@/lib/hydrateJoinedCommunities';
 
 interface AuthState {
   session: Session | null;
@@ -421,29 +420,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? undefined
           : mapPulseAvatarFrameEmbed(pr.pulse_avatar_frame) ?? null,
       termsPrivacyAcceptedAt,
-      audienceRole: pr.audience_role ?? null,
-      onboardingCompletedAt:
-        pr.onboarding_completed_at != null ? String(pr.onboarding_completed_at) : null,
-      medicalSafetyAcknowledgedAt:
-        pr.medical_safety_acknowledged_at != null
-          ? String(pr.medical_safety_acknowledged_at)
-          : null,
-      creatorAudienceTags: Array.isArray(pr.creator_audience_tags)
-        ? pr.creator_audience_tags.filter(Boolean)
-        : [],
-      isCreator: Boolean(pr.is_creator),
     };
-
-    void hydrateJoinedCommunitiesFromServer(userId)
-      .then((ids) => {
-        setState((prev) => {
-          if (prev.user?.id !== userId || !prev.profile) return prev;
-          return { ...prev, profile: { ...prev.profile, communitiesJoined: ids } };
-        });
-      })
-      .catch((e) => {
-        if (__DEV__) console.warn('[auth] community_members eager hydrate failed', e);
-      });
 
     return enrichProfileEquippedFrame(profile);
   }, [setState]);
@@ -547,17 +524,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /** Resume / flaky cell: don’t wipe the shell if PostgREST hiccups (My Pulse tab stuck on spinner). */
           profile: profile ?? prev.profile,
         }));
-        if (state.user?.id) {
-          try {
-            const ids = await hydrateJoinedCommunitiesFromServer(state.user.id);
-            setState((prev) => {
-              if (!prev.profile || prev.user?.id !== state.user!.id) return prev;
-              return { ...prev, profile: { ...prev.profile, communitiesJoined: ids } };
-            });
-          } catch (e) {
-            if (__DEV__) console.warn('[auth] refreshProfile joined communities', e);
-          }
-        }
       } catch (e) {
         if (__DEV__) console.warn('[auth] refreshProfile failed', e);
       } finally {
@@ -657,7 +623,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     /** Defer first server check until auto-refresh has had time to run after cold boot. */
     const t = setTimeout(() => {
       void (async () => {
-        const r = await validateServerAuthSession({ strict: true });
+        const r = await validateServerAuthSession();
         if (cancelled || r === 'ok') return;
         await signOut();
       })();
@@ -674,7 +640,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionGuardBusy.current = true;
       void (async () => {
         try {
-          const r = await validateServerAuthSession({ strict });
+          const r = await validateServerAuthSession();
           if (r !== 'ok') await signOut();
         } finally {
           sessionGuardBusy.current = false;
@@ -768,6 +734,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }));
         }
         void (async () => {
+          if (!session?.access_token) return;
           let profile: UserProfile | null = null;
           try {
             profile = await hydrateProfileWithFallback(fetchProfile, user.id, session.access_token);
@@ -837,19 +804,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!user) {
           if (event === 'SIGNED_OUT' && intentionalSignOutRef.current) {
             intentionalSignOutRef.current = false;
-          } else {
-            const recovered =
-              event === 'SIGNED_OUT' ? await tryRecoverStoredSession() : null;
-            if (recovered?.user && !cancelled) {
-              setState((prev) => ({
-                ...prev,
-                session: recovered,
-                user: recovered.user,
-                isAuthenticated: true,
-                isLoading: prev.profile ? false : prev.isLoading,
-              }));
-              return;
-            }
           }
 
           authHydrateGenerationRef.current = 0;
@@ -937,6 +891,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let profile: UserProfile | null = null;
         try {
+          if (!session?.access_token) return;
           profile = await hydrateProfileWithFallback(fetchProfile, user.id, session.access_token);
         } catch (e) {
           console.error('[auth] onAuthStateChange profile hydrate', e);

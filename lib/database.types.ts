@@ -7224,6 +7224,14 @@ export type Database = {
         }[]
       }
       get_feed_exclusions: { Args: { viewer_uuid: string }; Returns: Json }
+      fetch_eligible_sponsored_placement: {
+        Args: {
+          p_surface: string
+          p_device: string
+          p_slot_key?: string
+        }
+        Returns: Json
+      }
       get_for_you_post_ids: {
         Args: { result_limit?: number; viewer_uuid: string }
         Returns: {

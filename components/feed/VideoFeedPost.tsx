@@ -529,7 +529,6 @@ function VideoFeedPostInner({
 
       <FeedActionRail
         post={post}
-        isFeedCellActive={isActive}
         bottomInset={chromeBottom.rail}
         isLiked={isLiked}
         isSaved={isSaved}

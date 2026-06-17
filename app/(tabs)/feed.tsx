@@ -31,7 +31,6 @@ import { useFeatureFlags } from '@/lib/featureFlags';
 import { adsService } from '@/services/monetization';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBorderGovernorScreenFocus } from '@/hooks/useBorderGovernorScreenFocus';
 import { useToast } from '@/components/ui/Toast';
 import { colors } from '@/theme';
 import { queryClient } from '@/lib/queryClient';
@@ -74,7 +73,6 @@ export default function FeedScreen() {
   const feedListWindow = useMemo(() => getFeedVideoListWindow(), []);
   const router = useRouter();
   const isFocused = useIsFocused();
-  useBorderGovernorScreenFocus();
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const insets = useSafeAreaInsets();
   const { user, isLoading: authLoading } = useAuth();
