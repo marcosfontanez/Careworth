@@ -1,4 +1,4 @@
-/** Shared sponsored placement delivery rules — keep in sync with `lib/sponsored-placement-delivery-shared.ts`. */
+/** Shared sponsored placement delivery rules — canonical copy for mobile EAS builds. */
 
 export const SPONSORED_DISCLOSURE_LABEL = "Sponsored" as const;
 
