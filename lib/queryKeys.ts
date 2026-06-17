@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Central React Query key factory.
  *
  * Why this exists:
@@ -190,6 +190,14 @@ export const circleContentKeys = {
     ['circleThread', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId] as const,
   replies: (threadId: string) =>
     ['circleReplies', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId] as const,
+  viewerReplyHelpful: (threadId: string, viewerId: string, replyIdsSig: string) =>
+    ['circleReplyHelpful', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId, viewerId, replyIdsSig] as const,
+  joinedActivityBadges: (communityIdsKey: string, viewerId: string) =>
+    ['circles', 'joinedActivityBadges', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityIdsKey, viewerId] as const,
+  welcomeThread: (communityId: string) =>
+    ['circleWelcomeThread', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId] as const,
+  topHelpers: (communityId: string) =>
+    ['circleTopHelpers', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────

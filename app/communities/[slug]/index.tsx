@@ -17,22 +17,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useCommunity, useCommunityPosts, useCircleThreads, useLikedPostIds, useCircleViewerPostReactions } from '@/hooks/useQueries';
-import { CircleThreadCard } from '@/components/circles/CircleThreadCard';
+import { useCircleWelcomeThread, useCircleTopHelpers } from '@/hooks/useCircleQueries';
+import {
+  PublicHealthGuardrailBanner,
+  shouldShowPublicHealthGuardrail,
+} from '@/components/community/PublicHealthGuardrailBanner';
 import { CircleRoomHeader } from '@/components/circles/CircleRoomHeader';
 import { CircleHighlightsRow } from '@/components/circles/CircleHighlightsRow';
 import { CircleModeChips, type CircleMode } from '@/components/circles/CircleModeChips';
 import { CirclePostCard } from '@/components/circles/CirclePostCard';
+import { CircleThreadCard } from '@/components/circles/CircleThreadCard';
+import { CircleFlairFilterChips } from '@/components/circles/CircleFlairFilterChips';
+import { CircleStartHereCard } from '@/components/circles/CircleStartHereCard';
+import { CircleActiveVoicesCard } from '@/components/circles/CircleActiveVoicesCard';
+import { CircleWeeklyPromptCard } from '@/components/circles/CircleWeeklyPromptCard';
 import { EditPostCaptionModal } from '@/components/posts/EditPostCaptionModal';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { communityService } from '@/services';
 import { communitiesService, postsService } from '@/services/supabase';
-import { colors } from '@/theme';
+import { colors, rhythm } from '@/theme';
 import { shareCommunity, sharePostMenu } from '@/lib/share';
 import { useToast } from '@/components/ui/Toast';
 import { isAnonymousConfessionCircle, CIRCLE_JOIN_BETA_NOTE, CONFESSIONS_BETA_DISCLOSURE } from '@/lib/anonymousCircle';
 import { getCircleAccent } from '@/lib/circleAccents';
+import { filterThreadsByFlair, visibleFlairOptionsForThreads, type CircleFlairFilter } from '@/lib/circleFlairs';
+import { getWeeklyCirclePrompt } from '@/lib/circleWeeklyPrompts';
+import { resolveCircleRules, resolveWelcomeCopy, resolveWeeklyPromptOverride } from '@/lib/circleIdentity';
 import { patchPostReactionCounts } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
 import { circleContentKeys, communityKeys, likedPostKeys } from '@/lib/queryKeys';
@@ -45,6 +57,7 @@ import {
   getThreadReadReplyCount,
   hasSeenCircleQuestionsHint,
   setCircleQuestionsHintSeen,
+  setCircleLastVisitAt,
   isCommunityMuted,
   setCommunityMuted,
 } from '@/lib/circleExperience';
@@ -244,6 +257,8 @@ export default function CommunityDetailScreen() {
   const feedCreatorGifting = useFeatureFlags((s) => s.feedCreatorGifting);
 
   const [mode, setMode] = useState<CircleMode>(isAnonRoom ? 'questions' : 'top');
+  const [threadFlairFilter, setThreadFlairFilter] = useState<CircleFlairFilter>('all');
+  const [weeklyPromptDismissed, setWeeklyPromptDismissed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const popularityBumpKeyRef = useRef<string | null>(null);
@@ -253,6 +268,17 @@ export default function CommunityDetailScreen() {
   const wallListRef = useRef<FlatList<Post | CircleThread>>(null);
   const focusScrollDoneRef = useRef<string | null>(null);
   const [jumpHighlightPostId, setJumpHighlightPostId] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const cid = activeCommunity?.id;
+      if (!cid) return undefined;
+      return () => {
+        void setCircleLastVisitAt(cid);
+        void queryClient.invalidateQueries({ queryKey: ['circles', 'joinedActivityBadges'] });
+      };
+    }, [activeCommunity?.id, queryClient]),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -291,6 +317,7 @@ export default function CommunityDetailScreen() {
     data: circleThreadsRaw,
     refetch: refetchThreads,
     isThreadsInitialLoading,
+    isError: threadsError,
     fetchNextPage: fetchNextThreadsPage,
     hasNextPage: hasNextThreadsPage,
     isFetchingNextPage: isFetchingNextThreadsPage,
@@ -397,11 +424,63 @@ export default function CommunityDetailScreen() {
   });
 
   const threadsSorted = useMemo(() => {
-    return [...circleThreads].sort(
+    const sorted = [...circleThreads].sort(
       (a, b) =>
         b.reactionCount + b.replyCount * 2 - (a.reactionCount + a.replyCount * 2),
     );
-  }, [circleThreads]);
+    return filterThreadsByFlair(sorted, threadFlairFilter);
+  }, [circleThreads, threadFlairFilter]);
+
+  const visibleFlairOptions = useMemo(
+    () => visibleFlairOptionsForThreads(circleThreads),
+    [circleThreads],
+  );
+
+  useEffect(() => {
+    if (threadFlairFilter === 'all') return;
+    if (!visibleFlairOptions.some((o) => o.id === threadFlairFilter)) {
+      setThreadFlairFilter('all');
+    }
+  }, [threadFlairFilter, visibleFlairOptions]);
+
+  const circleIdentity = activeCommunity?.identity;
+  const welcomeCopy = useMemo(
+    () => resolveWelcomeCopy(slug, circleIdentity),
+    [slug, circleIdentity],
+  );
+  const circleRules = useMemo(
+    () =>
+      resolveCircleRules(
+        slug,
+        activeCommunity?.categories ?? [],
+        circleIdentity,
+        activeCommunity
+          ? getCircleAccent(slug, activeCommunity.accentColor)
+          : undefined,
+      ),
+    [slug, activeCommunity, circleIdentity],
+  );
+
+  const { data: welcomeThread } = useCircleWelcomeThread(
+    activeCommunity?.id,
+    circleIdentity?.welcomeThreadId,
+  );
+  const isAnonCircleEarly = isAnonymousConfessionCircle(slug);
+  const { data: topHelpers } = useCircleTopHelpers(activeCommunity?.id, !isAnonCircleEarly);
+
+  /** Static/metadata weekly prompt only — DB AI prompts stay off until cron phase. */
+  const weeklyPrompt = useMemo(() => {
+    if (!activeCommunity) return null;
+    const accentLocal = getCircleAccent(slug, activeCommunity.accentColor);
+    return getWeeklyCirclePrompt(
+      slug,
+      accentLocal,
+      resolveWeeklyPromptOverride(circleIdentity),
+    );
+  }, [slug, activeCommunity, circleIdentity]);
+
+  /** DB prompt attribution disabled until weekly-prompt automation phase. */
+  const weeklyPromptId = null;
 
   const postsList = useMemo(() => {
     const raw = [...(allPosts ?? [])];
@@ -613,7 +692,10 @@ export default function CommunityDetailScreen() {
   ]);
 
   const handleCreatePost = useCallback(
-    async (intent?: 'meme' | 'thread' | 'question' | 'video') => {
+    async (
+      intent?: 'meme' | 'thread' | 'question' | 'video',
+      opts?: { weeklyPromptId?: string | null },
+    ) => {
       if (!activeCommunity) return;
       if (!user) {
         router.push('/auth/login');
@@ -627,6 +709,9 @@ export default function CommunityDetailScreen() {
           communitySlug: activeCommunity.slug,
         });
         if (intent) params.set('intent', intent);
+        /* Only attribute the post to a weekly prompt when the user started
+         * from the "This Week" card (Part 7). Other create buttons omit it. */
+        if (opts?.weeklyPromptId) params.set('weeklyPromptId', opts.weeklyPromptId);
         router.push(`/communities/create-post?${params.toString()}`);
       };
 
@@ -940,6 +1025,11 @@ export default function CommunityDetailScreen() {
           accent={accent.color}
           description={activeCommunity.description}
           categories={activeCommunity.categories}
+          etiquette={accent.etiquette}
+          rules={circleRules}
+          memberCount={memberCountLive}
+          postCount={liveStats?.postCount ?? activeCommunity.postCount}
+          onlineCount={onlineCount}
           isMember={isJoined}
           notificationsMuted={roomMuted}
           showConfessionsDisclosure={isAnonCircle}
@@ -972,6 +1062,27 @@ export default function CommunityDetailScreen() {
         <Text style={styles.joinBetaHint}>{CIRCLE_JOIN_BETA_NOTE}</Text>
       ) : null}
 
+      {shouldShowPublicHealthGuardrail(activeCommunity.slug) ? (
+        <PublicHealthGuardrailBanner />
+      ) : null}
+
+      <CircleStartHereCard
+        copy={welcomeCopy}
+        accent={accent}
+        welcomeThread={welcomeThread}
+        isConfessions={isAnonCircle}
+        onOpenThread={(threadId) => router.push(hrefCommunityThread(activeCommunity.slug, threadId))}
+      />
+
+      {!isAnonCircle && !weeklyPromptDismissed && weeklyPrompt ? (
+        <CircleWeeklyPromptCard
+          prompt={weeklyPrompt}
+          accent={accent}
+          onPress={() => handleCreatePost('thread', { weeklyPromptId })}
+          onDismiss={() => setWeeklyPromptDismissed(true)}
+        />
+      ) : null}
+
       <CircleHighlightsRow
         posts={allPosts ?? []}
         threads={circleThreads}
@@ -994,6 +1105,14 @@ export default function CommunityDetailScreen() {
         onSelectCreator={(uid) => openPulsePage(router, uid)}
       />
 
+      {!isAnonCircle ? (
+        <CircleActiveVoicesCard
+          helpers={topHelpers ?? []}
+          accent={accent}
+          onOpenProfile={(uid) => openPulsePage(router, uid)}
+        />
+      ) : null}
+
       {/* Confessions rooms are a single anonymous thread feed — the wall sort
           chips (Top / Fresh / Video / Questions) only fragment the room, so we
           hide them and keep the user on the thread feed. */}
@@ -1005,6 +1124,15 @@ export default function CommunityDetailScreen() {
           hideVideo={videoPostCount === 0}
         />
       )}
+
+      {!isAnonCircle && mode === 'questions' ? (
+        <CircleFlairFilterChips
+          active={threadFlairFilter}
+          accent={accent}
+          options={visibleFlairOptions}
+          onSelect={setThreadFlairFilter}
+        />
+      ) : null}
 
       {!isAnonCircle && mode === 'questions' && showQuestionsHint ? (
         <View style={styles.hintBanner}>
@@ -1040,6 +1168,15 @@ export default function CommunityDetailScreen() {
       user?.id,
       showQuestionsHint,
       mode,
+      threadFlairFilter,
+      weeklyPromptDismissed,
+      weeklyPrompt,
+      weeklyPromptId,
+      welcomeCopy,
+      welcomeThread,
+      topHelpers,
+      circleRules,
+      visibleFlairOptions,
       allPosts,
       circleThreads,
       videoPostCount,
@@ -1218,10 +1355,36 @@ export default function CommunityDetailScreen() {
         }
         ListEmptyComponent={
           mode === 'questions' ? (
-            questionsThreadsLoading ? (
+            threadsError ? (
+              <View style={styles.empty}>
+                <Ionicons name="cloud-offline-outline" size={40} color={colors.neutral.midGray} />
+                <Text style={styles.emptyTitle}>Couldn’t load questions</Text>
+                <Text style={styles.emptySubtitle}>Check your connection and try again.</Text>
+                <TouchableOpacity
+                  onPress={() => void refetchThreads()}
+                  activeOpacity={0.85}
+                  style={[styles.emptyCta, { backgroundColor: accent.color }]}
+                >
+                  <Text style={styles.emptyCtaText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : questionsThreadsLoading ? (
               <View style={styles.empty}>
                 <ActivityIndicator size="large" color={accent.color} />
                 <Text style={styles.emptyLoadingLabel}>Loading threads…</Text>
+              </View>
+            ) : threadFlairFilter !== 'all' ? (
+              <View style={styles.empty}>
+                <Ionicons name="filter-outline" size={40} color={colors.neutral.midGray} />
+                <Text style={styles.emptyTitle}>No threads match this filter</Text>
+                <Text style={styles.emptySubtitle}>Try another flair or start a new discussion.</Text>
+                <TouchableOpacity
+                  onPress={() => setThreadFlairFilter('all')}
+                  activeOpacity={0.85}
+                  style={[styles.emptyCta, { backgroundColor: accent.color }]}
+                >
+                  <Text style={styles.emptyCtaText}>Show all</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.empty}>
@@ -1236,7 +1399,7 @@ export default function CommunityDetailScreen() {
                 <Text style={styles.emptySubtitle}>
                   {isAnonCircle
                     ? 'Share something anonymously — your name stays hidden from other users.'
-                    : 'Ask a question or tell a story — your crew shows up fast.'}
+                    : weeklyPrompt?.body || 'Ask a question or tell a story — your crew shows up fast.'}
                 </Text>
                 <TouchableOpacity
                   onPress={() => handleCreatePost('thread')}
@@ -1291,7 +1454,7 @@ export default function CommunityDetailScreen() {
               <Text style={styles.emptySubtitle}>
                 {mode === 'video'
                   ? 'Be the first to share a clip or photo in this room.'
-                  : 'Be the first to start a conversation!'}
+                  : (!isAnonCircle && weeklyPrompt?.body) || 'Be the first to start a conversation!'}
               </Text>
               <TouchableOpacity
                 onPress={() => handleCreatePost(mode === 'video' ? 'video' : undefined)}
@@ -1351,6 +1514,11 @@ function AboutSheet({
   accent,
   description,
   categories,
+  etiquette,
+  rules,
+  memberCount,
+  postCount,
+  onlineCount,
   isMember,
   notificationsMuted,
   showConfessionsDisclosure,
@@ -1360,18 +1528,17 @@ function AboutSheet({
   accent: string;
   description: string;
   categories: string[];
+  etiquette?: string;
+  rules: string[];
+  memberCount?: number;
+  postCount?: number;
+  onlineCount?: number;
   isMember: boolean;
   notificationsMuted: boolean;
   showConfessionsDisclosure?: boolean;
   onToggleNotificationsMuted: (muted: boolean) => void;
   onClose: () => void;
 }) {
-  const RULES = [
-    'Be respectful and supportive of fellow healthcare workers',
-    'No patient information — protect HIPAA at all times',
-    'Stay on topic — keep discussions relevant to the community',
-    'No spam, self-promotion, or recruiting without approval',
-  ];
   return (
     <View style={aboutStyles.card}>
       <View style={aboutStyles.header}>
@@ -1381,6 +1548,20 @@ function AboutSheet({
         </TouchableOpacity>
       </View>
       <Text style={aboutStyles.desc}>{description}</Text>
+      {typeof memberCount === 'number' || typeof postCount === 'number' ? (
+        <View style={aboutStyles.statsRow}>
+          {typeof memberCount === 'number' ? (
+            <Text style={aboutStyles.statChip}>{memberCount.toLocaleString()} members</Text>
+          ) : null}
+          {typeof onlineCount === 'number' && onlineCount > 0 ? (
+            <Text style={aboutStyles.statChip}>{onlineCount} online now</Text>
+          ) : null}
+          {typeof postCount === 'number' ? (
+            <Text style={aboutStyles.statChip}>{postCount.toLocaleString()} wall posts</Text>
+          ) : null}
+        </View>
+      ) : null}
+      {etiquette ? <Text style={aboutStyles.etiquette}>{etiquette}</Text> : null}
       {showConfessionsDisclosure ? (
         <View style={aboutStyles.disclosureBox}>
           <Text style={aboutStyles.disclosureText}>{CONFESSIONS_BETA_DISCLOSURE}</Text>
@@ -1418,7 +1599,7 @@ function AboutSheet({
       )}
       <View style={aboutStyles.divider} />
       <Text style={aboutStyles.section}>Guidelines</Text>
-      {RULES.map((rule, i) => (
+      {rules.map((rule, i) => (
         <View key={i} style={aboutStyles.ruleRow}>
           <View style={[aboutStyles.ruleNum, { backgroundColor: `${accent}20` }]}>
             <Text style={[aboutStyles.ruleNumText, { color: accent }]}>{i + 1}</Text>
@@ -1445,17 +1626,34 @@ function AboutSheet({
 
 const aboutStyles = StyleSheet.create({
   card: {
-    marginHorizontal: 12,
-    marginTop: 10,
+    marginHorizontal: rhythm.circleRoomHorizontalInset,
+    marginTop: rhythm.cardGap,
     backgroundColor: colors.dark.card,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: rhythm.cardRadius,
+    padding: rhythm.circlePanelPadding,
     borderWidth: 1,
     borderColor: colors.dark.border,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   title: { fontSize: 15, fontWeight: '800', color: colors.dark.text },
   desc: { fontSize: 13.5, color: colors.dark.textSecondary, lineHeight: 19 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  statChip: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  etiquette: {
+    fontSize: 12,
+    color: colors.dark.textMuted,
+    marginTop: 8,
+    fontStyle: 'italic',
+    lineHeight: 17,
+  },
   betaNote: {
     fontSize: 12,
     color: colors.dark.textMuted,
@@ -1509,10 +1707,10 @@ const styles = StyleSheet.create({
   },
   shellLoadingText: { fontSize: 14, fontWeight: '600', color: colors.dark.textMuted },
   hintBanner: {
-    marginHorizontal: 12,
-    marginTop: 6,
-    padding: 12,
-    borderRadius: 12,
+    marginHorizontal: rhythm.circleRoomHorizontalInset,
+    marginTop: rhythm.cardGap,
+    padding: rhythm.circlePanelPadding,
+    borderRadius: rhythm.cardRadius,
     backgroundColor: 'rgba(20,184,166,0.10)',
     borderWidth: 1,
     borderColor: 'rgba(20,184,166,0.28)',
@@ -1522,7 +1720,13 @@ const styles = StyleSheet.create({
   },
   hintText: { flex: 1, fontSize: 12, lineHeight: 17, color: colors.dark.textSecondary, fontWeight: '600' },
   hintDismiss: { fontSize: 12, fontWeight: '900' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10, paddingHorizontal: 24 },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: rhythm.myPulseEmptyPaddingVertical,
+    gap: 10,
+    paddingHorizontal: rhythm.pageHorizontalPaddingWide,
+    minHeight: rhythm.cardMinHeightLarge * 2,
+  },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.dark.text },
   emptySubtitle: { fontSize: 14, color: colors.dark.textMuted, textAlign: 'center' },
   emptyLoadingLabel: { fontSize: 14, fontWeight: '600', color: colors.dark.textMuted, marginTop: 8 },

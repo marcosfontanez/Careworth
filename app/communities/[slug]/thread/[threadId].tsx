@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,17 +9,22 @@ import {
   Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
+import { EquippedBorderRenderer } from '@/components/borders/EquippedBorderRenderer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
+import { hrefCommunity } from '@/lib/communityRoutes';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCircleThread, useCircleThreadReplies, useCommunity, useCanModerateCircle, useCircleThreadReaction } from '@/hooks/useQueries';
+import { useCircleReplyHelpfulMap } from '@/hooks/useCircleQueries';
 import { circleModerationService } from '@/services/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { CircleReplyItem } from '@/components/circles/CircleReplyItem';
+import { CircleReplySortBar, type CircleReplySort } from '@/components/circles/CircleReplySortBar';
+import { CircleEditFlairSheet } from '@/components/circles/CircleEditFlairSheet';
 import { ShareToMyPulseButton } from '@/components/circles/ShareToMyPulseButton';
 import { ReportModal } from '@/components/ui/ReportModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,8 +32,10 @@ import { useAppStore } from '@/store/useAppStore';
 import { communityService } from '@/services';
 import { colors, borderRadius } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
-import type { CircleReply, CircleThreadKind, CreatorSummary } from '@/types';
+import type { CircleReply, CreatorSummary } from '@/types';
 import { circleContentService } from '@/services/circleContent';
+import { sortCircleReplies } from '@/lib/circleReplySort';
+import { circleContentKeys } from '@/lib/queryKeys';
 import { looksLikeRlsPolicyDenial } from '@/services/supabase/posts';
 import { shareCircleThread } from '@/lib/share';
 import { setThreadReadReplyCount } from '@/lib/circleExperience';
@@ -41,18 +48,14 @@ import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 import { composerDockPadding } from '@/lib/keyboardAware';
 import { CommentRichText } from '@/components/ui/CommentRichText';
 import { isAnonymousConfessionCircle, anonymousDisplayName } from '@/lib/anonymousCircle';
-import { CIRCLE_THREAD_REMOVED_MESSAGE, CIRCLE_PENDING_REVIEW_MESSAGE } from '@/lib/circleModeration';
+import { CIRCLE_THREAD_REMOVED_MESSAGE, CIRCLE_PENDING_REVIEW_MESSAGE, circleContentIsPubliclyVisible } from '@/lib/circleModeration';
+import { flairLabelForThread, type CircleFlairTag } from '@/lib/circleFlairs';
 import { getCircleAccent } from '@/lib/circleAccents';
+import { invalidateCircleThreadFlairCaches, patchCircleThreadInCaches } from '@/lib/circleThreadCache';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 
-const KIND_LABEL: Record<CircleThreadKind, string> = {
-  question: 'Question',
-  story: 'Discussion',
-  advice: 'Advice',
-  meme: 'Meme',
-  media: 'Media',
-};
+const EMPTY_HELPFUL_SET = new Set<string>();
 
 export default function CircleThreadDetailScreen() {
   const { slug: slugRaw, threadId: threadIdRaw } = useLocalSearchParams<{ slug: string; threadId: string }>();
@@ -65,7 +68,7 @@ export default function CircleThreadDetailScreen() {
   const { user } = useAuth();
   const joinedIds = useAppStore((s) => s.joinedCommunityIds);
   const setCommunityJoined = useAppStore((s) => s.setCommunityJoined);
-  const { data: thread, isLoading, refetch } = useCircleThread(threadId);
+  const { data: thread, isLoading, isError: threadError, refetch } = useCircleThread(threadId);
   const { data: community } = useCommunity(slug);
   const modCommunityId = community?.id ?? '';
   const { data: canModerate = false } = useCanModerateCircle(modCommunityId);
@@ -85,6 +88,31 @@ export default function CircleThreadDetailScreen() {
   const [draft, setDraft] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReplyId, setReportReplyId] = useState<string | null>(null);
+  const [replySort, setReplySort] = useState<CircleReplySort>('new');
+  const [helpfulOverrides, setHelpfulOverrides] = useState<
+    Record<string, { marked: boolean; count: number }>
+  >({});
+  const [helpfulTogglingId, setHelpfulTogglingId] = useState<string | null>(null);
+  const [showEditFlair, setShowEditFlair] = useState(false);
+  const [savingFlair, setSavingFlair] = useState(false);
+
+  const replyIds = useMemo(() => replies.map((r) => r.id), [replies]);
+  const replyIdsSig = useMemo(() => [...replyIds].sort().join(','), [replyIds]);
+  const { data: helpfulMarkedIds } = useCircleReplyHelpfulMap(threadId, replyIds);
+  const helpfulMarkedSet = helpfulMarkedIds ?? EMPTY_HELPFUL_SET;
+
+  const sortedReplies = useMemo(() => {
+    const merged = replies.map((r) => {
+      const o = helpfulOverrides[r.id];
+      if (!o) return r;
+      return { ...r, helpfulCount: o.count };
+    });
+    return sortCircleReplies(merged, replySort);
+  }, [replies, replySort, helpfulOverrides]);
+
+  useEffect(() => {
+    setHelpfulOverrides({});
+  }, [replyIdsSig]);
 
   const threadReplyMax = 2000;
 
@@ -105,6 +133,10 @@ export default function CircleThreadDetailScreen() {
     if (!threadId) return;
     Alert.alert('Moderate discussion', 'Choose an action for this thread.', [
       { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Edit flair',
+        onPress: () => setShowEditFlair(true),
+      },
       {
         text: 'Queue for review',
         onPress: () => {
@@ -207,14 +239,99 @@ export default function CircleThreadDetailScreen() {
     }
   }, [threadId, user, reacted, reactionCount, queryClient, refetch, router]);
 
-  if (isLoading) return <LoadingState />;
+  const toggleReplyHelpful = useCallback(
+    async (reply: CircleReply) => {
+      if (!user) {
+        Alert.alert('Sign in required', 'Sign in to mark replies as Helpful.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign in', onPress: () => router.push('/auth/login') },
+        ]);
+        return;
+      }
+      if (reply.isModerationRemoved || helpfulTogglingId === reply.id) return;
+
+      const prevMarked = helpfulOverrides[reply.id]?.marked ?? helpfulMarkedSet.has(reply.id);
+      const prevCount = helpfulOverrides[reply.id]?.count ?? reply.helpfulCount ?? 0;
+      const nextMarked = !prevMarked;
+      const nextCount = Math.max(0, prevCount + (nextMarked ? 1 : -1));
+
+      setHelpfulTogglingId(reply.id);
+      setHelpfulOverrides((m) => ({
+        ...m,
+        [reply.id]: { marked: nextMarked, count: nextCount },
+      }));
+
+      try {
+        const result = await circleContentService.toggleReplyHelpful(reply.id);
+        setHelpfulOverrides((m) => ({
+          ...m,
+          [reply.id]: { marked: result.reacted, count: result.helpfulCount },
+        }));
+        void queryClient.invalidateQueries({
+          queryKey: circleContentKeys.viewerReplyHelpful(threadId!, user.id, replyIdsSig),
+        });
+        void refetchReplies();
+      } catch (e: unknown) {
+        setHelpfulOverrides((m) => {
+          const next = { ...m };
+          delete next[reply.id];
+          return next;
+        });
+        const msg = e instanceof Error ? e.message : 'Could not update Helpful mark.';
+        Alert.alert('Helpful failed', msg);
+      } finally {
+        setHelpfulTogglingId(null);
+      }
+    },
+    [
+      user,
+      helpfulOverrides,
+      helpfulMarkedSet,
+      helpfulTogglingId,
+      queryClient,
+      threadId,
+      replyIdsSig,
+      refetchReplies,
+      router,
+    ],
+  );
+
+  if (isLoading) return <LoadingState message="Loading thread…" />;
+  if (threadError) {
+    return (
+      <View style={[styles.flex, { paddingTop: insets.top }]}>
+        <ErrorState
+          title="Couldn’t load this thread"
+          subtitle="Check your connection and try again."
+          onRetry={() => void refetch()}
+        />
+        <TouchableOpacity
+          onPress={() => router.replace(hrefCommunity(slug))}
+          style={styles.backLink}
+          accessibilityRole="button"
+        >
+          <Text style={styles.backLinkText}>Back to Circle</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
   if (!thread) {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
-        <Text style={styles.errTitle}>{CIRCLE_THREAD_REMOVED_MESSAGE}</Text>
-        <Text style={styles.errSub}>{CIRCLE_PENDING_REVIEW_MESSAGE}</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
-          <Text style={styles.backLinkText}>Go back</Text>
+        <ErrorState
+          title="Thread not found"
+          subtitle={CIRCLE_PENDING_REVIEW_MESSAGE}
+          icon="document-text-outline"
+        />
+        <TouchableOpacity
+          onPress={() => router.replace(hrefCommunity(slug))}
+          style={styles.backLink}
+          accessibilityRole="button"
+        >
+          <Text style={styles.backLinkText}>Back to Circle</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => void refetch()} style={styles.backLink}>
+          <Text style={[styles.backLinkText, { color: colors.primary.teal }]}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -245,6 +362,35 @@ export default function CircleThreadDetailScreen() {
   const circleName = community?.name ?? thread.circleSlug;
   const circleId = thread.circleId ?? community?.id ?? '';
   const isJoined = circleId ? joinedIds.has(circleId) : false;
+  const isAuthor = !!user?.id && thread.authorId === user.id;
+  const canEditFlair =
+    !!user &&
+    (canModerate ||
+      (isAuthor && circleContentIsPubliclyVisible(thread.moderationStatus ?? 'active')));
+
+  const handleSaveFlair = async (flairTag: CircleFlairTag | null) => {
+    if (!threadId || !user) return;
+    setSavingFlair(true);
+    try {
+      const updated = await circleContentService.updateThreadFlair(
+        threadId,
+        flairTag,
+        thread.kind,
+        user.id,
+      );
+      patchCircleThreadInCaches(queryClient, updated);
+      invalidateCircleThreadFlairCaches(queryClient, updated);
+      setShowEditFlair(false);
+    } catch (e: unknown) {
+      if (looksLikeRlsPolicyDenial(e)) {
+        Alert.alert('Cannot edit flair', 'You do not have permission to change this flair.');
+        return;
+      }
+      Alert.alert('Could not save flair', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setSavingFlair(false);
+    }
+  };
 
   const promptJoinToReply = useCallback(() => {
     if (!circleId) return;
@@ -342,21 +488,25 @@ export default function CircleThreadDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open profile"
                 >
-                  <AvatarDisplay
+                  <EquippedBorderRenderer
                     size={40}
                     avatarUrl={author.avatarUrl}
                     prioritizeRemoteAvatar
                     ringColor={colors.dark.border}
-                    pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+                    pulseAvatarFrame={author.pulseAvatarFrame}
+                    userId={author.id}
+                    priority="circle-thread-header"
                   />
                 </TouchableOpacity>
               ) : (
-                <AvatarDisplay
+                <EquippedBorderRenderer
                   size={40}
                   avatarUrl={author.avatarUrl}
                   prioritizeRemoteAvatar
                   ringColor={colors.dark.border}
-                  pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+                  pulseAvatarFrame={author.pulseAvatarFrame}
+                  userId={author.id}
+                  priority="circle-thread-header"
                 />
               )
             )}
@@ -379,9 +529,22 @@ export default function CircleThreadDetailScreen() {
           </View>
 
           <View style={styles.pillRow}>
-            <View style={[styles.kindPill, { borderColor: accent + '55' }]}>
-              <Text style={[styles.kindText, { color: accent }]}>{KIND_LABEL[thread.kind]}</Text>
-            </View>
+            {canEditFlair ? (
+              <TouchableOpacity
+                style={[styles.kindPill, styles.kindPillEditable, { borderColor: accent + '55' }]}
+                onPress={() => setShowEditFlair(true)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit flair: ${flairLabelForThread(thread)}`}
+              >
+                <Text style={[styles.kindText, { color: accent }]}>{flairLabelForThread(thread)}</Text>
+                <Ionicons name="create-outline" size={12} color={accent} />
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.kindPill, { borderColor: accent + '55' }]}>
+                <Text style={[styles.kindText, { color: accent }]}>{flairLabelForThread(thread)}</Text>
+              </View>
+            )}
           </View>
 
           <Text style={styles.title}>{thread.title}</Text>
@@ -425,10 +588,12 @@ export default function CircleThreadDetailScreen() {
           ) : null}
         </View>
 
+        <CircleReplySortBar active={replySort} accent={String(accent)} onSelect={setReplySort} />
+
         <Text style={styles.repliesHead}>
           Replies ({formatCount(thread.replyCount)})
         </Text>
-        {replies
+        {sortedReplies
           .filter(
             (r): r is CircleReply =>
               r != null && typeof r === 'object' && typeof r.id === 'string',
@@ -439,6 +604,11 @@ export default function CircleThreadDetailScreen() {
               reply={r}
               circleSlug={slug}
               threadId={thread.id}
+              accent={String(accent)}
+              helpfulCount={helpfulOverrides[r.id]?.count ?? r.helpfulCount ?? 0}
+              markedHelpful={helpfulOverrides[r.id]?.marked ?? helpfulMarkedSet.has(r.id)}
+              onToggleHelpful={() => void toggleReplyHelpful(r)}
+              helpfulDisabled={helpfulTogglingId === r.id}
               onReport={() => setReportReplyId(r.id)}
               canModerate={canModerate}
               onModerate={canModerate ? () => openReplyModeratorActions(r.id) : undefined}
@@ -552,6 +722,18 @@ export default function CircleThreadDetailScreen() {
         targetType="circle_reply"
         targetId={reportReplyId ?? ''}
       />
+
+      <CircleEditFlairSheet
+        visible={showEditFlair}
+        onClose={() => !savingFlair && setShowEditFlair(false)}
+        accent={composerAccent}
+        slug={slug}
+        categories={community?.categories}
+        initialFlairTag={thread.flairTag ?? null}
+        isConfessions={isAnonRoom}
+        saving={savingFlair}
+        onSave={handleSaveFlair}
+      />
     </KeyboardAwareRoot>
   );
 }
@@ -600,6 +782,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.chip,
     borderWidth: 1,
     backgroundColor: colors.dark.bg,
+  },
+  kindPillEditable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   kindText: { fontSize: 11, fontWeight: '800' },
   title: {

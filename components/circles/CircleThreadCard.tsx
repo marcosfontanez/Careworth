@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
-import { colors, borderRadius } from '@/theme';
+import { colors, borderRadius, rhythm } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import type { CircleThread, CreatorSummary } from '@/types';
 import { ShareToMyPulseButton } from './ShareToMyPulseButton';
@@ -11,13 +11,7 @@ import { isAnonymousConfessionCircle, anonymousDisplayName } from '@/lib/anonymo
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { pulseImageCircleWallProps } from '@/lib/pulseImage';
 
-const KIND_SHORT: Record<CircleThread['kind'], string> = {
-  question: 'Ask',
-  story: 'Story',
-  advice: 'Tips',
-  meme: 'Humor',
-  media: 'Clip',
-};
+import { flairLabelForThread } from '@/lib/circleFlairs';
 
 type Props = {
   thread: CircleThread;
@@ -102,6 +96,8 @@ export function CircleThreadCard({
               ringColor={colors.dark.border}
               pulseAvatarFrame={author.pulseAvatarFrame}
               ownerDisplayName={displayName}
+              userId={author.id}
+              priority="circle-list"
               onPress={onProfile}
             />
           ) : (
@@ -111,6 +107,8 @@ export function CircleThreadCard({
               ringColor={colors.dark.border}
               pulseAvatarFrame={author.pulseAvatarFrame}
               ownerDisplayName={displayName}
+              userId={author.id}
+              priority="circle-list"
               disableLongPressInfo={isAnonymousRoom}
             />
           )}
@@ -135,7 +133,7 @@ export function CircleThreadCard({
         <Text style={styles.circleLine} numberOfLines={1}>
           <Text style={[styles.circleName, { color: accent }]}>{circleName}</Text>
           <Text style={styles.sep}> · </Text>
-          <Text style={styles.kindShort}>{KIND_SHORT[thread.kind]}</Text>
+          <Text style={styles.kindShort}>{flairLabelForThread(thread)}</Text>
         </Text>
 
         <Text style={styles.title} numberOfLines={2}>
@@ -184,15 +182,16 @@ export function CircleThreadCard({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginHorizontal: 12,
-    marginTop: 10,
-    borderRadius: borderRadius['2xl'],
+    marginHorizontal: rhythm.circleRoomHorizontalInset,
+    marginTop: rhythm.cardGap,
+    borderRadius: rhythm.cardRadius,
     backgroundColor: colors.dark.card,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.07)',
     overflow: 'hidden',
+    minHeight: rhythm.cardMinHeightLarge,
   },
-  card: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 12 },
+  card: { paddingHorizontal: rhythm.cardPaddingMedium, paddingTop: rhythm.cardPaddingSmall, paddingBottom: rhythm.cardPaddingMedium },
   discussionStripe: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -242,16 +241,18 @@ const styles = StyleSheet.create({
     letterSpacing: -0.25,
     lineHeight: 21,
     marginBottom: 4,
+    minHeight: 42,
   },
   body: {
     fontSize: 13,
     lineHeight: 19,
     color: colors.dark.textSecondary,
     fontWeight: '500',
+    minHeight: 38,
   },
   thumb: {
     marginTop: 10,
-    height: 118,
+    height: rhythm.circleThreadThumbHeight,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.dark.cardAlt,
   },

@@ -163,8 +163,8 @@ export function CircleRoomHeader({
               size={isJoined ? 17 : 16}
               color={isJoined ? colors.onVideo.primary : accent.color}
             />
-            <Text style={[styles.joinText, { color: isJoined ? colors.onVideo.primary : accent.color }]}>
-              {isJoined ? 'Saved' : 'Join for updates and posting'}
+            <Text style={[styles.joinText, { color: isJoined ? colors.onVideo.primary : accent.color }]} numberOfLines={1}>
+              {isJoined ? 'Joined' : 'Join Circle'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -379,13 +379,16 @@ const styles = StyleSheet.create({
     }),
   },
 
-  actions: { flexDirection: 'row', gap: 10 },
+  actions: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
   joinBtn: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingHorizontal: 10,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderRadius: borderRadius.button ?? 24,
     paddingVertical: 12,
@@ -409,13 +412,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  joinText: { fontSize: 14, fontWeight: '800', letterSpacing: 0.1 },
+  joinText: { flexShrink: 1, fontSize: 13, fontWeight: '800', letterSpacing: 0.1 },
   /** Create Post — wrapper holds the elevation, inner gradient holds
    *  the fill. The double-stop dark gradient gives the button a real
    *  surface (not just a flat color) so it reads premium against the
    *  banner gradient without breaking room identity. */
   createBtn: {
-    flex: 1.05,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     borderRadius: borderRadius.button ?? 24,
     overflow: 'hidden',
     borderWidth: 1,

@@ -37,7 +37,9 @@ import {
   type CirclePostSettings,
 } from '@/components/circles/CircleSettingsCard';
 import { CircleContextFooter } from '@/components/circles/CircleContextFooter';
+import { CircleComposerFlairPicker } from '@/components/circles/CircleComposerFlairPicker';
 import { AccentComposerFrame, AccentCharCount } from '@/components/ui/AccentComposerFrame';
+import { resolveThreadCreateFlair, type CircleFlairTag } from '@/lib/circleFlairs';
 import { PHIGuardrailBanner } from '@/components/create/PHIGuardrailBanner';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { scanForPhi, highestSeverity } from '@/lib/phiGuardrail';
@@ -131,6 +133,8 @@ export default function CommunityCreatePostScreen() {
     communityName: string;
     communitySlug: string;
     intent?: string;
+    /** Set when the composer was opened from a Circle "This Week" prompt card. */
+    weeklyPromptId?: string;
   }>();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
@@ -139,6 +143,8 @@ export default function CommunityCreatePostScreen() {
 
   const communityName = params.communityName ?? 'Community';
   const slug = (params.communitySlug ?? '').toLowerCase();
+  /** Attribution to a "This Week" prompt (Part 7) — null for normal posts. */
+  const weeklyPromptId = (params.weeklyPromptId ?? '').trim() || null;
   const isConfessionsRoom = isAnonymousConfessionCircle(slug);
   const accent = useMemo(() => getCircleAccent(slug), [slug]);
   const initialType: CirclePostType = useMemo(() => {
@@ -188,7 +194,10 @@ export default function CommunityCreatePostScreen() {
     pinToHighlights: false,
   });
   const [phiAck, setPhiAck] = useState(false);
+  const [threadFlairTag, setThreadFlairTag] = useState<CircleFlairTag | null>(null);
   const circleVideoPosting = useFeatureFlags((s) => s.circleVideoPosting);
+
+  const isThreadComposer = postType === 'thread' || postType === 'question';
 
   /** Video tile + chip is fully gated by `circleVideoPosting` (safety-net flag). */
   const videoTypeAvailable = circleVideoPosting;
@@ -225,6 +234,13 @@ export default function CommunityCreatePostScreen() {
       setPostType('thread');
     }
   }, [postType, videoTypeAvailable]);
+
+  /** Soft default when switching to Question — user can clear via chip toggle. */
+  React.useEffect(() => {
+    if (postType === 'question') {
+      setThreadFlairTag((prev) => (prev == null ? 'question' : prev));
+    }
+  }, [postType]);
 
   const phiFindings = useMemo(() => scanForPhi(body, overlayLine), [body, overlayLine]);
   const phiSev = highestSeverity(phiFindings);
@@ -355,15 +371,20 @@ export default function CommunityCreatePostScreen() {
         }
         const threadBody = body.trim().slice(0, 12000);
         const title = deriveCircleThreadTitle(threadBody);
-        const threadKind = postType === 'question' ? ('question' as const) : ('story' as const);
+        const { kind: threadKind, flairTag } = resolveThreadCreateFlair({
+          postType: postType === 'question' ? 'question' : 'thread',
+          flairTag: threadFlairTag,
+        });
         let createdThread;
         try {
           createdThread = await circleContentService.createThread({
             communityId: params.communityId,
             authorId: user.id,
             kind: threadKind,
+            flairTag,
             title,
             body: threadBody,
+            weeklyPromptId,
           });
         } catch (e: unknown) {
           if (looksLikeRlsPolicyDenial(e)) {
@@ -572,6 +593,7 @@ export default function CommunityCreatePostScreen() {
         feed_type_eligible: ['community'],
         privacy_mode: 'public',
         is_anonymous: isConfessions,
+        weekly_prompt_id: weeklyPromptId ?? undefined,
         comments_disabled: !settings.allowComments || undefined,
         /* Circle videos don't run through the creator-media-jobs queue (that's
          * for stitch/broll on the Feed composer). Setting the column to null
@@ -713,6 +735,18 @@ export default function CommunityCreatePostScreen() {
             <Ionicons name="shield-outline" size={16} color={accent.color} />
             <Text style={styles.confessionsDisclosureText}>{CONFESSIONS_BETA_DISCLOSURE}</Text>
           </View>
+        ) : null}
+
+        {isThreadComposer ? (
+          <CircleComposerFlairPicker
+            accent={accent}
+            slug={slug}
+            categories={community?.categories}
+            selected={threadFlairTag}
+            onSelect={setThreadFlairTag}
+            isConfessions={isConfessionsRoom}
+            disabled={posting}
+          />
         ) : null}
 
         {/* ===================== MAIN COMPOSER ====================== */}
