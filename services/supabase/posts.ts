@@ -1,13 +1,14 @@
 import { supabase } from '@/lib/supabase';
 import { feedPerfLane, feedPerfLog, feedPerfNow } from '@/lib/feedPerf';
 import { finalizePostsForViewer } from '@/lib/postViewerPrivacy';
-import { hydratePostRowsWithProfiles } from '@/lib/postgrestViewerSafeEmbeds';
+import { hydratePostRowsWithProfiles, stripProfileEmbeds } from '@/lib/postgrestViewerSafeEmbeds';
 import { normalizeDuetLayoutMode } from '@/lib/duetLayoutMode';
 import { clampVideoOverlayText } from '@/lib/videoOverlayText';
 import { parseOverlayStyle, serializeOverlayStyle, type VideoOverlayStyle } from '@/lib/videoOverlayStyle';
 import { normalizeVideoLookId } from '@/lib/videoFilters';
-import { mergePinnedCommunityPosts, type CommunityPostPinRow } from '@/lib/communityPostPins';
+import { enrichPostsWithLinkedCommunityMeta } from '@/lib/enrichPostsLinkedCommunity';
 import { COMMUNITY_WALL_PAGE_SIZE } from '@/lib/communityWallPostsCache';
+import { mergePinnedCommunityPosts, type CommunityPostPinRow } from '@/lib/communityPostPins';
 import type { Post, FeedType, PostType, SoundLibraryRow, ViralSoundRow, Role, Specialty, PostReactionCounts, PostReactionKind } from '@/types';
 import { normalizePostReactionKind } from '@/lib/postReactions';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
@@ -545,6 +546,43 @@ function withFeedPrivacy(query: any, viewerId?: string) {
   return query.eq('privacy_mode', 'public');
 }
 
+/** Circle wall rows — prefer posts_viewer_safe; fall back to base posts table on PostgREST/view errors. */
+async function fetchCommunityWallRows(
+  communityId: string,
+  limit: number,
+  cursor: string | null,
+  viewerId?: string | null,
+): Promise<Record<string, unknown>[]> {
+  let q = fromPostsViewerSafe()
+    .select('*')
+    .contains('communities', [communityId])
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (cursor) q = q.lt('created_at', cursor);
+
+  const { data, error } = await q;
+  if (!error) return (data ?? []) as Record<string, unknown>[];
+
+  if (__DEV__) {
+    console.warn(
+      '[postsService.fetchCommunityWallRows] posts_viewer_safe failed, using posts table',
+      error.message,
+    );
+  }
+
+  let q2 = supabase
+    .from('posts')
+    .select(stripProfileEmbeds(POST_SELECT))
+    .contains('communities', [communityId]);
+  q2 = withFeedPrivacy(q2, viewerId ?? undefined);
+  q2 = q2.order('created_at', { ascending: false }).limit(limit);
+  if (cursor) q2 = q2.lt('created_at', cursor);
+
+  const { data: data2, error: error2 } = await q2;
+  if (error2) throw error2;
+  return (data2 ?? []) as unknown as Record<string, unknown>[];
+}
+
 /** Profile-level private mode + blocks — used before reading posts on Pulse Page. */
 async function profilePostsReadableForViewer(
   profileUserId: string,
@@ -643,6 +681,11 @@ async function fetchFollowingFeedPosts(args: {
  * Personalized ranker call with documented fallback chain.
  *
  * Try order (each tier is additive on the prior):
+ *   0. get_ranked_feed_v4  (migration 278) — v3 + seen-aware soft exclusion with
+ *                                            backfill (don't replay watched/liked
+ *                                            posts unless content is scarce;
+ *                                            re-shows rotate) + per-open jitter
+ *                                            so the feed varies on every open.
  *   1. get_ranked_feed_v3  (migration 234) — paginatable via exclude_post_ids;
  *                                            SQL-level viewer exclusions;
  *                                            graduated quick-skip penalty;
@@ -669,7 +712,24 @@ async function callRankedRpc(
   const excludeSet = new Set(excludeArray);
   const headroom = excludeArray.length;
 
-  /* Tier 1: v3 — preferred. Supports exclude_post_ids natively. */
+  /* Tier 0: v4 — preferred. Seen-aware (won't replay watched/liked posts unless
+     content is scarce; re-shows rotate) + per-open jitter for variety. Supports
+     exclude_post_ids natively, same as v3.
+     Cast: get_ranked_feed_v4 is newer than the committed lib/database.types.ts;
+     run `npm run db:types` after applying migration 278 to drop this cast. */
+  const v4 = await supabase.rpc('get_ranked_feed_v4' as never, {
+    viewer_id: viewerId,
+    feed_limit: feedLimit,
+    exclude_post_ids: excludeArray,
+  } as never);
+  if (!v4.error && (v4.data as unknown[] | null)?.length) {
+    return v4.data as { post_id: string; score: number; source?: string }[];
+  }
+  if (__DEV__ && v4.error) {
+    console.warn('get_ranked_feed_v4 unavailable, falling back to v3:', v4.error.message);
+  }
+
+  /* Tier 1: v3. Supports exclude_post_ids natively. */
   const v3 = await supabase.rpc('get_ranked_feed_v3', {
     viewer_id: viewerId,
     feed_limit: feedLimit,
@@ -850,14 +910,20 @@ async function runRankedForYouFeed(viewerId: string): Promise<Post[]> {
   }
 
   const mergeT0 = feedPerfNow();
+  /* Order: seen-aware, jittered RANKED band leads (v4 already gives brand-new
+     posts a strong recency + freshness boost, so fresh content surfaces here
+     while the order varies on each open and watched posts are de-prioritized).
+     The chronological `recentPosts` slice is appended only as a DEDUP BACKFILL
+     so any brand-new post the ranker missed still appears — but it no longer
+     pins the same newest clip to the very top on every app open. */
   const seen = new Set<string>();
   const merged: Post[] = [];
-  for (const p of recentPosts) {
+  for (const p of rankedPosts) {
     if (seen.has(p.id)) continue;
     seen.add(p.id);
     merged.push(p);
   }
-  for (const p of rankedPosts) {
+  for (const p of recentPosts) {
     if (seen.has(p.id)) continue;
     seen.add(p.id);
     merged.push(p);
@@ -1057,6 +1123,19 @@ async function runTopTodayFeed(viewerId?: string | null): Promise<Post[]> {
   return diversifyByCreator(mapped, 50, 3);
 }
 
+async function fetchLikedPostIdsForUser(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('post_likes')
+    .select('post_id')
+    .eq('user_id', userId)
+    .limit(2000);
+  if (error) {
+    if (__DEV__) console.warn('[fetchLikedPostIdsForUser]', error.message);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r: { post_id: string }) => r.post_id));
+}
+
 export const postsService = {
   async getFeed(type: FeedType, userId?: string): Promise<Post[]> {
     const __feedT0 = __DEV__ && typeof performance !== 'undefined' ? performance.now() : 0;
@@ -1131,12 +1210,7 @@ export const postsService = {
   },
 
   async getLikedPostIdsForUser(userId: string): Promise<Set<string>> {
-    const { data, error } = await supabase.from('post_likes').select('post_id').eq('user_id', userId).limit(2000);
-    if (error) {
-      if (__DEV__) console.warn('[getLikedPostIdsForUser]', error.message);
-      return new Set();
-    }
-    return new Set((data ?? []).map((r: { post_id: string }) => r.post_id));
+    return fetchLikedPostIdsForUser(userId);
   },
 
   async getSavedPostIdsForUser(userId: string): Promise<Set<string>> {
@@ -1403,7 +1477,20 @@ export const postsService = {
         return true;
       });
     }
-    return finalizePostsForViewer(posts, viewerId);
+    posts = finalizePostsForViewer(posts, viewerId);
+
+    const viewerKey = viewerId?.trim();
+    if (viewerKey && posts.length > 0) {
+      const likedIds = await fetchLikedPostIdsForUser(viewerKey);
+      posts = posts.map((p) => ({
+        ...p,
+        isLiked: likedIds.has(p.id),
+      }));
+    }
+
+    posts = await enrichPostsWithLinkedCommunityMeta(posts);
+
+    return posts;
   },
 
   async getByCommunity(
@@ -1415,15 +1502,7 @@ export const postsService = {
     const cursor = opts?.cursor?.trim() || null;
     const isFirstPage = !cursor;
 
-    let postsQuery = fromPostsViewerSafe()
-      .select('*')
-      .contains('communities', [communityId])
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (cursor) {
-      postsQuery = postsQuery.lt('created_at', cursor);
-    }
+    const wallRows = await fetchCommunityWallRows(communityId, limit, cursor, viewerId);
 
     const pinsPromise = isFirstPage
       ? supabase
@@ -1432,9 +1511,7 @@ export const postsService = {
           .eq('community_id', communityId)
       : Promise.resolve({ data: [] as CommunityPostPinRow[], error: null });
 
-    const [{ data, error }, pinsResult] = await Promise.all([postsQuery, pinsPromise]);
-
-    if (error) throw error;
+    const pinsResult = await pinsPromise;
 
     let pins: CommunityPostPinRow[] = [];
     if (!pinsResult.error && pinsResult.data) {
@@ -1443,7 +1520,7 @@ export const postsService = {
       console.warn('[postsService.getByCommunity] community_post_pins:', pinsResult.error.message);
     }
 
-    const hydrated = await hydratePostRowsWithProfiles(data ?? []);
+    const hydrated = await hydratePostRowsWithProfiles(wallRows);
     let posts = finalizePostsForViewer(
       hydrated.map(rowToPost).filter(postIsLiveForPublicSurface),
       viewerId,
@@ -1649,6 +1726,9 @@ export const postsService = {
     media_processing_status?: 'queued' | 'running' | 'failed' | null;
     media_processing_job_id?: string | null;
     media_processing_error?: string | null;
+    /** Attribution to a Circle "This Week" prompt (migration 274). Optional;
+     *  stripped on retry if the column isn't present yet. */
+    weekly_prompt_id?: string | null;
   }): Promise<Post> {
     let roleCtx = post.role_context;
     let specCtx = post.specialty_context;
@@ -1703,6 +1783,7 @@ export const postsService = {
       media_processing_status: mediaProcessingStatusIn,
       media_processing_job_id: mediaProcessingJobIdIn,
       media_processing_error: mediaProcessingErrorIn,
+      weekly_prompt_id: weeklyPromptIdIn,
       ...postRest
     } = post;
 
@@ -1850,6 +1931,9 @@ export const postsService = {
       extensionPayload.clip_end_seconds = Number(clipEndSecondsIn);
     }
 
+    const weeklyPromptId = weeklyPromptIdIn != null ? String(weeklyPromptIdIn).trim() : '';
+    if (weeklyPromptId) extensionPayload.weekly_prompt_id = weeklyPromptId;
+
     const fullPayload = { ...insertPayload, ...extensionPayload };
 
     let inserted: { data: unknown; error: unknown } = await supabase
@@ -1964,12 +2048,15 @@ export const postsService = {
       .order('saved_at', { ascending: false });
 
     if (error) throw error;
-    return finalizePostsForViewer(
+    let posts = finalizePostsForViewer(
       (data ?? [])
         .filter((r: any) => r.posts)
         .map((r: any) => rowToPost(r.posts)),
       userId,
     );
+    const likedIds = await fetchLikedPostIdsForUser(userId);
+    posts = posts.map((p) => ({ ...p, isLiked: likedIds.has(p.id) }));
+    return enrichPostsWithLinkedCommunityMeta(posts);
   },
 
   async getLikedPosts(userId: string): Promise<Post[]> {
