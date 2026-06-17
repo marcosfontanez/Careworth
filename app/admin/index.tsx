@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, TextInput, RefreshControl,
@@ -21,8 +21,7 @@ import { adsService, subscriptionService, creatorTipsService } from '@/services/
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
 import { circleModerationService } from '@/services/supabase';
 import { hasStaffPermission, normalizeStaffRoles, type StaffPermission, type StaffRole } from '@/lib/staffPermissions';
-
-const ADMIN_MOD_LIST_WINDOW = getAdminModerationListWindow();
+import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 
 type Tab = 'reports' | 'users' | 'content' | 'circles' | 'stats' | 'revenue';
 
@@ -101,6 +100,7 @@ export default function AdminPanel() {
   }, []);
 
   const [tab, setTab] = useState<Tab>('reports');
+  const adminModListWindow = useMemo(() => getAdminModerationListWindow(), []);
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
@@ -633,14 +633,16 @@ export default function AdminPanel() {
     revenue: 'economy.read',
   };
 
-  const TABS: { key: Tab; label: string; icon: string }[] = [
+  const ALL_TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'reports', label: 'Reports', icon: 'flag-outline' },
     { key: 'users', label: 'Users', icon: 'people-outline' },
     { key: 'content', label: 'Content', icon: 'document-text-outline' },
     { key: 'circles', label: 'Circles', icon: 'globe-outline' },
     { key: 'stats', label: 'Stats', icon: 'bar-chart-outline' },
     { key: 'revenue', label: 'Revenue', icon: 'cash-outline' },
-  ].filter((t) => hasStaffPermission(staffRoles, TAB_PERMISSIONS[t.key]));
+  ];
+
+  const TABS = ALL_TABS.filter((t) => hasStaffPermission(staffRoles, TAB_PERMISSIONS[t.key]));
 
   const REPORT_FILTERS: { key: ReportFilter; label: string }[] = [
     { key: 'pending', label: 'Pending' },
@@ -1012,9 +1014,9 @@ export default function AdminPanel() {
               <FlatList
                 data={reports}
                 keyExtractor={(item) => item.id}
-                initialNumToRender={ADMIN_MOD_LIST_WINDOW.initialNumToRender}
-                maxToRenderPerBatch={ADMIN_MOD_LIST_WINDOW.maxToRenderPerBatch}
-                windowSize={ADMIN_MOD_LIST_WINDOW.windowSize}
+                initialNumToRender={adminModListWindow.initialNumToRender}
+                maxToRenderPerBatch={adminModListWindow.maxToRenderPerBatch}
+                windowSize={adminModListWindow.windowSize}
                 updateCellsBatchingPeriod={50}
                 removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
@@ -1105,9 +1107,9 @@ export default function AdminPanel() {
               <FlatList
                 data={users}
                 keyExtractor={(item) => item.id}
-                initialNumToRender={ADMIN_MOD_LIST_WINDOW.initialNumToRender}
-                maxToRenderPerBatch={ADMIN_MOD_LIST_WINDOW.maxToRenderPerBatch}
-                windowSize={ADMIN_MOD_LIST_WINDOW.windowSize}
+                initialNumToRender={adminModListWindow.initialNumToRender}
+                maxToRenderPerBatch={adminModListWindow.maxToRenderPerBatch}
+                windowSize={adminModListWindow.windowSize}
                 updateCellsBatchingPeriod={50}
                 removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
@@ -1181,9 +1183,9 @@ export default function AdminPanel() {
               <FlatList
                 data={content}
                 keyExtractor={(item) => item.id}
-                initialNumToRender={ADMIN_MOD_LIST_WINDOW.initialNumToRender}
-                maxToRenderPerBatch={ADMIN_MOD_LIST_WINDOW.maxToRenderPerBatch}
-                windowSize={ADMIN_MOD_LIST_WINDOW.windowSize}
+                initialNumToRender={adminModListWindow.initialNumToRender}
+                maxToRenderPerBatch={adminModListWindow.maxToRenderPerBatch}
+                windowSize={adminModListWindow.windowSize}
                 updateCellsBatchingPeriod={50}
                 removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.teal} />}
