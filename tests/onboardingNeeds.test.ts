@@ -3,6 +3,7 @@ import {
   isHealthcareProfessionalPath,
   needsMedicalSafetyStep,
   needsOnboarding,
+  canSkipOnboardingWithoutSafety,
 } from '@/lib/onboarding/needsOnboarding';
 import type { UserProfile } from '@/types';
 
@@ -89,5 +90,25 @@ describe('isHealthcareProfessionalPath', () => {
     expect(isHealthcareProfessionalPath('healthcare_worker')).toBe(true);
     expect(isHealthcareProfessionalPath('healthcare_student')).toBe(true);
     expect(isHealthcareProfessionalPath('support_creators')).toBe(false);
+  });
+});
+
+describe('canSkipOnboardingWithoutSafety', () => {
+  it('blocks skip when the safety step is required', () => {
+    expect(
+      canSkipOnboardingWithoutSafety({ audienceRole: 'caregiver_family', interests: [] }),
+    ).toBe(false);
+    expect(
+      canSkipOnboardingWithoutSafety({ audienceRole: null, interests: ['education'] }),
+    ).toBe(false);
+  });
+
+  it('allows skip for general paths that do not require safety acknowledgement', () => {
+    expect(
+      canSkipOnboardingWithoutSafety({ audienceRole: 'stories_humor', interests: ['humor'] }),
+    ).toBe(true);
+    expect(
+      canSkipOnboardingWithoutSafety({ audienceRole: 'support_creators', interests: [] }),
+    ).toBe(true);
   });
 });

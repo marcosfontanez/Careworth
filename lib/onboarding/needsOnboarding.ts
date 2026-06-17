@@ -32,3 +32,11 @@ export function needsMedicalSafetyStep(input: {
 export function isHealthcareProfessionalPath(audienceRole: AudienceRole | null): boolean {
   return audienceRole === 'healthcare_worker' || audienceRole === 'healthcare_student';
 }
+
+/** True when "Skip for now" may complete onboarding without the safety acknowledgement step. */
+export function canSkipOnboardingWithoutSafety(input: {
+  audienceRole: AudienceRole | null;
+  interests: ContentInterest[];
+}): boolean {
+  return !needsMedicalSafetyStep(input);
+}

@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { createClient, processLock } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 import { supabaseAuthStorage } from './authStorage';
+import { warnOnboardingWipProductionSupabaseTarget } from './onboarding/devSupabaseTargetWarning';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? '';
@@ -12,6 +13,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
     '[supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY — check .env and restart Metro.',
   );
 }
+
+warnOnboardingWipProductionSupabaseTarget(supabaseUrl);
 
 /**
  * Valid-looking placeholders keep the client constructible when env is misconfigured;

@@ -33,6 +33,7 @@ import {
 import {
   isHealthcareProfessionalPath,
   needsMedicalSafetyStep,
+  canSkipOnboardingWithoutSafety,
 } from '@/lib/onboarding/needsOnboarding';
 import { schedulePostSignInNavigation } from '@/lib/postSignInNavigation';
 import { analytics } from '@/lib/analytics';
@@ -75,6 +76,10 @@ export default function OnboardingScreen() {
   const showProFields = isHealthcareProfessionalPath(audienceRole);
   const showSafetyStep = useMemo(
     () => needsMedicalSafetyStep({ audienceRole, interests }),
+    [audienceRole, interests],
+  );
+  const canSkipAll = useMemo(
+    () => canSkipOnboardingWithoutSafety({ audienceRole, interests }),
     [audienceRole, interests],
   );
 
@@ -245,6 +250,14 @@ export default function OnboardingScreen() {
 
   const skipAll = async () => {
     if (!user?.id) return;
+    if (!canSkipAll) {
+      Alert.alert(
+        'Safety note required',
+        'Your selections include education or caregiver paths — please review the safety note before entering PulseVerse.',
+      );
+      if (activeSteps.includes('safety')) setStep('safety');
+      return;
+    }
     setSubmitting(true);
     try {
       await onboardingService.skipOnboarding(user.id);
@@ -492,9 +505,11 @@ export default function OnboardingScreen() {
               style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]}
             />
           </View>
-          <TouchableOpacity onPress={() => void skipAll()} disabled={submitting} style={styles.skipTop}>
-            <Text style={styles.skipTopText}>Skip for now</Text>
-          </TouchableOpacity>
+          {canSkipAll ? (
+            <TouchableOpacity onPress={() => void skipAll()} disabled={submitting} style={styles.skipTop}>
+              <Text style={styles.skipTopText}>Skip for now</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <ScrollView
