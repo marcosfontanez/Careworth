@@ -16,7 +16,13 @@ begin
   limit 1;
 
   if v_staff is null then
-    raise exception '280_webhook_backlog_cleanup: no staff profile for audit attribution';
+    -- Fresh/local installs may have no profiles yet; still disable delivery flag.
+    update public.feature_flags
+    set enabled = false,
+        updated_at = now()
+    where key = 'webhook_delivery';
+    raise notice '280_webhook_backlog_cleanup: no staff profile; skipped audit trail (fresh install)';
+    return;
   end if;
 
   update public.feature_flags
