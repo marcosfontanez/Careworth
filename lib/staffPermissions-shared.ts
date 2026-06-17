@@ -1,6 +1,6 @@
 /**
  * Staff role tiers + permission matrix (shared web + mobile).
- * Keep in sync with `lib/staffPermissions-shared.ts` (mobile canonical copy for EAS builds).
+ * Canonical copy: `lib/staffPermissions-shared.ts` (mobile + EAS). Keep this file in sync.
  * Legacy `profiles.role_admin = true` with empty staff_roles is treated as owner.
  */
 

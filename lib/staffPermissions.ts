@@ -1,2 +1,2 @@
-/** Re-export for mobile — keep in sync with `web/src/lib/staffPermissions-shared.ts`. */
-export * from "../web/src/lib/staffPermissions-shared";
+/** Re-export for mobile — canonical module is `lib/staffPermissions-shared.ts`. */
+export * from './staffPermissions-shared';
