@@ -16,12 +16,14 @@ export function isValidUsername(s: string): boolean {
 }
 
 /** Fallback when `username` is not set — for display only (not guaranteed unique). */
-export function fallbackHandle(p: UserProfile): string {
+export function fallbackHandle(
+  p: Pick<UserProfile, 'id' | 'displayName' | 'firstName' | 'lastName'>,
+): string {
   const fl = [p.firstName, p.lastName].filter(Boolean).join('.').toLowerCase();
   const cleaned = fl.replace(/[^a-z0-9.]+/g, '.').replace(/^\.+|\.+$/g, '').replace(/\.{2,}/g, '.');
   if (cleaned.length >= 3) return cleaned.slice(0, 30);
 
-  const fromDisplay = p.displayName
+  const fromDisplay = (p.displayName ?? '')
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '.')
@@ -29,12 +31,15 @@ export function fallbackHandle(p: UserProfile): string {
     .replace(/\.{2,}/g, '.');
   if (fromDisplay.length >= 3) return fromDisplay.slice(0, 30);
 
-  const idPart = p.id.replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'user';
-  return `user.${idPart}`.slice(0, 30);
+  const idPart = (p.id ?? '').replace(/[^a-z0-9]/gi, '').slice(0, 10);
+  if (idPart.length >= 3) return `user.${idPart}`.slice(0, 30);
+  return 'pulseverse.user';
 }
 
 /** Always returns a handle with one leading @ for UI (mock: @lexi.rn under name). */
-export function profileHandleDisplay(p: UserProfile): string {
+export function profileHandleDisplay(
+  p: Pick<UserProfile, 'id' | 'displayName' | 'username' | 'firstName' | 'lastName'>,
+): string {
   const stored = p.username?.trim() ? sanitizeUsername(p.username) : null;
   const raw = stored ?? fallbackHandle(p);
   return `@${raw}`;
@@ -54,22 +59,5 @@ export function profileHandleLineForCreator(c: {
     username: c.username,
     firstName: c.firstName ?? '',
     lastName: c.lastName ?? '',
-    role: '',
-    specialty: '',
-    city: '',
-    state: '',
-    yearsExperience: 0,
-    bio: '',
-    avatarUrl: '',
-    followerCount: 0,
-    followingCount: 0,
-    likeCount: 0,
-    postCount: 0,
-    badges: [],
-    communitiesJoined: [],
-    privacyMode: 'public',
-    interests: [],
-    isVerified: false,
-    shiftPreference: 'No Preference',
   });
 }

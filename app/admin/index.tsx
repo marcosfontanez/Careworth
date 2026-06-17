@@ -224,7 +224,7 @@ export default function AdminPanel() {
         // role_admin is no longer client-readable on profiles (migration 247);
         // the staff-gated RPC returns it after verifying the caller is admin.
         const { data, error: usersErr } = await supabase.rpc('admin_list_profiles', {
-          p_search: userSearch.trim() || null,
+          p_search: userSearch.trim() || undefined,
           p_admins_only: false,
           p_limit: 200,
         });
