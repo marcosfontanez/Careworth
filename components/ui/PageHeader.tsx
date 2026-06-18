@@ -17,6 +17,8 @@ export type PageHeaderProps = {
   layout?: LayoutMode;
   /** Right slot on the top row (e.g. Sparks pill). `split` only. */
   trailing?: React.ReactNode;
+  /** Extra top inset beyond safe area (shop header with wallet pills). */
+  splitTopInsetExtra?: number;
   /** Fixed width on the right for optical balance when `layout="balanced"` and no trailing. */
   balancedEndWidth?: number;
   backAccessibilityLabel?: string;
@@ -35,6 +37,7 @@ export function PageHeader({
   trailing,
   balancedEndWidth = 40,
   backAccessibilityLabel = 'Back',
+  splitTopInsetExtra = 8,
 }: PageHeaderProps) {
   const showBack = !!onBack;
 
@@ -58,7 +61,7 @@ export function PageHeader({
   }
 
   return (
-    <View style={{ paddingTop: insetTop + 8 }}>
+    <View style={{ paddingTop: insetTop + splitTopInsetExtra }}>
       <View style={styles.splitTopRow}>
         {showBack ? (
           <TouchableOpacity
@@ -119,7 +122,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.dark.borderSubtle,
   },
-  trailingWrap: { alignItems: 'flex-end' },
+  trailingWrap: { alignItems: 'flex-end', flexShrink: 1, maxWidth: '56%' },
   shopTitle: {
     ...typography.h1,
     fontSize: 27,

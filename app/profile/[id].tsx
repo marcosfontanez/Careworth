@@ -75,21 +75,14 @@ export default function ProfileByIdScreen() {
         ['creatorPostNotifications', authUser?.id ?? '', profileUserId],
         next,
       );
-      toast.show(
-        next
-          ? 'You will receive notifications when this user posts new content.'
-          : 'You will no longer receive notifications for this user’s new content.',
-        'success',
-      );
-    },
-    onError: () => {
-      toast.show('Could not update notifications', 'error');
     },
   });
 
-  const handleToggleCreatorPostNotify = () => {
-    if (!authUser?.id || !profileUserId || creatorPostNotifyLoading) return;
-    creatorPostNotifyMutation.mutate(!creatorPostNotifyOn);
+  const handleToggleCreatorPostNotify = async (next: boolean) => {
+    if (!authUser?.id || !profileUserId || creatorPostNotifyLoading) {
+      throw new Error('missing');
+    }
+    await creatorPostNotifyMutation.mutateAsync(next);
   };
 
   if (!profileUserId) return <LoadingState />;

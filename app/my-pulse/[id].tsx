@@ -59,7 +59,6 @@ import { MY_PULSE_VISUALS } from '@/components/mypage/cards/MyPulseCardShell';
 import { CirclesOrbitIcon } from '@/components/mypage/cards/icons/CirclesOrbitIcon';
 import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
-import { EquippedBorderRenderer } from '@/components/borders/EquippedBorderRenderer';
 import * as ImagePicker from 'expo-image-picker';
 import { PulsePhotoViewerModal } from '@/components/mypage/PulsePhotoViewerModal';
 import { buildPulseUpdatePhotoGallery } from '@/lib/media/pulsePhotoGallery';
@@ -587,14 +586,13 @@ export default function MyPulseDetailScreen() {
               style={styles.authorRow}
             >
               {author?.avatarUrl ? (
-                <EquippedBorderRenderer
+                <BorderedAvatar
                   size={40}
                   avatarUrl={author.avatarUrl}
                   prioritizeRemoteAvatar
                   ringColor={colors.dark.border}
                   pulseAvatarFrame={author.pulseAvatarFrame}
-                  userId={author.id}
-                  priority="circle-list"
+                  onPress={author.id ? () => router.push(`/profile/${author.id}`) : undefined}
                 />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}>

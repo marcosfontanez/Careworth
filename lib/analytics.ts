@@ -56,7 +56,10 @@ type EventName =
   | 'live_gift_sent'
   | 'scheduled_live_created'
   | 'reminder_clicked'
-  | 'live_stream_ended';
+  | 'live_stream_ended'
+  | 'onboarding_step'
+  | 'onboarding_complete'
+  | 'onboarding_skip';
 
 class AnalyticsService {
   private userId: string | null = null;

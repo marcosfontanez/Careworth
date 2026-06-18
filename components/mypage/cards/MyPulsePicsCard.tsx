@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ interface Props {
   onDelete?: () => Promise<void> | void;
   readOnly?: boolean;
   onPress?: () => void;
+  onPhotoPress?: (index: number) => void;
   onLike?: () => void;
   onComment?: () => void;
   /** Owner-only pin toggle forwarded to the shared shell menu. */
@@ -50,6 +51,7 @@ export function MyPulsePicsCard({
   onTogglePin,
   readOnly,
   onPress,
+  onPhotoPress,
   onLike,
   onComment,
   onEdit,
@@ -93,7 +95,7 @@ export function MyPulsePicsCard({
         />
       ) : null}
 
-      <PicsStrip urls={urls} gradeTint={picsGradeTint} />
+      <PicsStrip urls={urls} gradeTint={picsGradeTint} onPhotoPress={onPhotoPress} />
 
       {total > 1 ? (
         <View style={styles.countChip} pointerEvents="none">
@@ -107,7 +109,15 @@ export function MyPulsePicsCard({
   );
 }
 
-function PicsStrip({ urls, gradeTint }: { urls: string[]; gradeTint: string | null }) {
+function PicsStrip({
+  urls,
+  gradeTint,
+  onPhotoPress,
+}: {
+  urls: string[];
+  gradeTint: string | null;
+  onPhotoPress?: (index: number) => void;
+}) {
   if (urls.length === 0) {
     return (
       <View style={[styles.heroSingle, styles.tileEmpty]}>
@@ -119,7 +129,13 @@ function PicsStrip({ urls, gradeTint }: { urls: string[]; gradeTint: string | nu
 
   if (urls.length === 1) {
     return (
-      <View style={styles.heroSingle}>
+      <Pressable
+        style={styles.heroSingle}
+        onPress={onPhotoPress ? () => onPhotoPress(0) : undefined}
+        disabled={!onPhotoPress}
+        accessibilityRole={onPhotoPress ? 'button' : undefined}
+        accessibilityLabel={onPhotoPress ? 'View photo' : undefined}
+      >
         <ExpoImage
           source={{ uri: urls[0] }}
           style={styles.fill}
@@ -131,7 +147,12 @@ function PicsStrip({ urls, gradeTint }: { urls: string[]; gradeTint: string | nu
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
           style={styles.heroScrim}
         />
-      </View>
+        {onPhotoPress ? (
+          <View style={styles.expandHint} pointerEvents="none">
+            <Ionicons name="expand-outline" size={14} color="#FFF" />
+          </View>
+        ) : null}
+      </Pressable>
     );
   }
 
@@ -147,12 +168,16 @@ function PicsStrip({ urls, gradeTint }: { urls: string[]; gradeTint: string | nu
       contentContainerStyle={styles.strip}
     >
       {urls.map((url, idx) => (
-        <View
+        <Pressable
           key={`${url}-${idx}`}
           style={[
             styles.thumb,
             idx > 0 ? { marginLeft: GAP } : null,
           ]}
+          onPress={onPhotoPress ? () => onPhotoPress(idx) : undefined}
+          disabled={!onPhotoPress}
+          accessibilityRole={onPhotoPress ? 'button' : undefined}
+          accessibilityLabel={onPhotoPress ? `View photo ${idx + 1}` : undefined}
         >
           <ExpoImage
             source={{ uri: url }}
@@ -163,7 +188,7 @@ function PicsStrip({ urls, gradeTint }: { urls: string[]; gradeTint: string | nu
           <FeedGradeTintOverlay tint={gradeTint} />
           {/* subtle inner border so each tile feels distinct */}
           <View style={styles.thumbBorder} pointerEvents="none" />
-        </View>
+        </Pressable>
       ))}
 
       {/* Trailing chevron cue when scrollable */}
@@ -269,5 +294,18 @@ const styles = StyleSheet.create({
     color: '#FFF',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  expandHint: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(9,14,24,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(20,184,166,0.35)',
   },
 });

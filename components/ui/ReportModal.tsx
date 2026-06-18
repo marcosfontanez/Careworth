@@ -31,7 +31,7 @@ const REASONS = [
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  targetType: 'post' | 'comment' | 'profile' | 'circle_thread' | 'circle_reply' | 'live_stream' | 'stream_message';
+  targetType: 'post' | 'comment' | 'profile' | 'circle_thread' | 'circle_reply' | 'live_stream' | 'stream_message' | 'profile_board_shoutout';
   targetId: string;
 }
 
@@ -47,6 +47,8 @@ function targetLabel(
       return 'live stream';
     case 'stream_message':
       return 'chat message';
+    case 'profile_board_shoutout':
+      return 'Pulse Board shoutout';
     default:
       return targetType;
   }

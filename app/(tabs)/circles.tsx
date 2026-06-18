@@ -34,7 +34,6 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
 import { colors, touchTarget, spacing, pulseverse, pvKit, layout, tabBarScrollPaddingBottom, rhythm } from '@/theme';
 import { borderRadius } from '@/theme/spacing';
-import { useBorderGovernorScreenFocus } from '@/hooks/useBorderGovernorScreenFocus';
 import { PVPageBackground } from '@/components/pv/PVPageBackground';
 import { PVSegmentedTabs } from '@/components/pv/PVSegmentedTabs';
 import { PVSearchBar } from '@/components/pv/PVSearchBar';
@@ -68,7 +67,6 @@ function compactDesc(s: string, max = 80) {
 }
 
 export default function CirclesScreen() {
-  useBorderGovernorScreenFocus();
   const router = useRouter();
   const { scope: scopeParam } = useLocalSearchParams<{ scope?: string }>();
   const navigation = useNavigation();

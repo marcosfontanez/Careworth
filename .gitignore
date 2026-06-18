@@ -6,6 +6,8 @@ node_modules/
 # Expo
 .eas-inspect-out/
 .expo/
+.expo-export-ios-audit/
+.expo-export-ios-rc/
 dist/
 dist-verify/
 dist-web-test/
@@ -50,3 +52,10 @@ lib/*.generated.tmp
 /android
 
 .vercel
+
+# Local audit / build artifacts (Phase 11 triage)
+.eas-build.json
+.eas-build-clean.json
+.typecheck-*.txt
+web/.lhci-tmp/
+web/deno.lock

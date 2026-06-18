@@ -90,7 +90,6 @@ import {
 } from '@/lib/shop/storeKitDiagnostics';
 import { iapDiag, IAP_EVENTS, setStaffIapDiagnostics } from '@/lib/shop/iapDiagnostics';
 import { copyTextWithFallback } from '@/lib/copyLink';
-import { useBorderGovernorScreenFocus } from '@/hooks/useBorderGovernorScreenFocus';
 
 /** Shown as native browser tooltip on web when hovering the Diamonds balance pill. */
 const DIAMONDS_PILL_TOOLTIP_WEB =
@@ -111,7 +110,6 @@ const TABS: { key: ShopTabKey; label: string; icon: keyof typeof Ionicons.glyphM
 type Celebration = null | PulseShopCelebrationPayload;
 
 export default function PulseShopScreen() {
-  useBorderGovernorScreenFocus();
   const router = useRouter();
   const shopScreenFocused = useIsFocused();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();

@@ -4,6 +4,7 @@ export { typography } from './typography';
 export { typeRoles } from './typographyRoles';
 export { iconSize, touchTarget } from './sizes';
 export { layout, tabBarScrollPaddingBottom } from './layout';
+export { rhythm } from './rhythm';
 export { shadows } from './shadows';
 export { exportEndCardTokens } from './exportEndCard';
 export { ROLE_COLORS, roleColor } from './roleColors';

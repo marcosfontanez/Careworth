@@ -28,6 +28,12 @@ export type BorderedAvatarProps = {
   prioritizeRemoteAvatar?: boolean;
   /** Small green presence dot. */
   showOnlineDot?: boolean;
+  /** Reserved for border-governor builds — ignored in RC (optional props keep Circles compile-clean). */
+  userId?: string | null;
+  priority?: string;
+  mode?: string;
+  isVisible?: boolean;
+  isFocused?: boolean;
 };
 
 /**

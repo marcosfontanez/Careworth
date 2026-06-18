@@ -7,6 +7,8 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   /** Render a card-shaped skeleton block. */
   card?: boolean;
+  /** Match destination card min-height to reduce layout shift. */
+  minHeight?: number;
 };
 
 function SkeletonLine({ width }: { width: `${number}%` | number }) {
@@ -14,10 +16,14 @@ function SkeletonLine({ width }: { width: `${number}%` | number }) {
 }
 
 /** Premium loading placeholder — static skeleton blocks (no animation dependency). */
-export function PulseLoadingSkeleton({ lines = 3, style, card = false }: Props) {
+export function PulseLoadingSkeleton({ lines = 3, style, card = false, minHeight }: Props) {
   if (card) {
     return (
-      <View style={[styles.card, style]} accessibilityRole="progressbar" accessibilityLabel="Loading">
+      <View
+        style={[styles.card, minHeight != null ? { minHeight } : null, style]}
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading"
+      >
         <SkeletonLine width="42%" />
         <SkeletonLine width="88%" />
         <SkeletonLine width="72%" />

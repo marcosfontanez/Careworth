@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { EquippedBorderRenderer } from '@/components/borders/EquippedBorderRenderer';
+import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { hrefCommunity } from '@/lib/communityRoutes';
@@ -488,25 +488,24 @@ export default function CircleThreadDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open profile"
                 >
-                  <EquippedBorderRenderer
+                  <BorderedAvatar
                     size={40}
                     avatarUrl={author.avatarUrl}
                     prioritizeRemoteAvatar
                     ringColor={colors.dark.border}
                     pulseAvatarFrame={author.pulseAvatarFrame}
-                    userId={author.id}
-                    priority="circle-thread-header"
+                    ownerDisplayName={author.displayName}
+                    onPress={() => openPulsePage(router, author.id)}
                   />
                 </TouchableOpacity>
               ) : (
-                <EquippedBorderRenderer
+                <BorderedAvatar
                   size={40}
                   avatarUrl={author.avatarUrl}
                   prioritizeRemoteAvatar
                   ringColor={colors.dark.border}
                   pulseAvatarFrame={author.pulseAvatarFrame}
-                  userId={author.id}
-                  priority="circle-thread-header"
+                  ownerDisplayName={author.displayName}
                 />
               )
             )}
