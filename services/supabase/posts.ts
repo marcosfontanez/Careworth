@@ -16,6 +16,7 @@ import { feedSignalsService } from '@/services/supabase/feedSignals';
 import { profilesService } from '@/services/supabase/profiles';
 import { getBlockRelationship } from '@/services/supabase/blocks';
 import { profileRowToCreatorSummary, unknownCreatorSummary } from '@/services/supabase/profileRowMapper';
+import { callRankedFeedRpc } from '@/lib/feedRankerRpc';
 
 /** Read path masks anonymous creator_id (migration 215). Writes stay on `posts`. */
 function fromPostsViewerSafe() {
@@ -681,7 +682,7 @@ async function fetchFollowingFeedPosts(args: {
  * Personalized ranker call with documented fallback chain.
  *
  * Try order (each tier is additive on the prior):
- *   0. get_ranked_feed_v4  (migration 278) — v3 + seen-aware soft exclusion with
+ *   0. get_ranked_feed_v4  (migration 298/304) — v3 + seen-aware soft exclusion with
  *                                            backfill (don't replay watched/liked
  *                                            posts unless content is scarce;
  *                                            re-shows rotate) + per-open jitter
@@ -706,64 +707,17 @@ async function callRankedRpc(
   feedLimit: number,
   excludeIds: readonly string[] = [],
 ): Promise<{ post_id: string; score: number; source?: string }[]> {
-  const excludeArray = excludeIds.length
-    ? Array.from(new Set(excludeIds))
-    : ([] as string[]);
-  const excludeSet = new Set(excludeArray);
-  const headroom = excludeArray.length;
-
-  /* Tier 0: v4 — preferred. Seen-aware (won't replay watched/liked posts unless
-     content is scarce; re-shows rotate) + per-open jitter for variety. Supports
-     exclude_post_ids natively, same as v3.
-     Cast: get_ranked_feed_v4 is newer than the committed lib/database.types.ts;
-     run `npm run db:types` after applying migration 278 to drop this cast. */
-  const v4 = await supabase.rpc('get_ranked_feed_v4' as never, {
-    viewer_id: viewerId,
-    feed_limit: feedLimit,
-    exclude_post_ids: excludeArray,
-  } as never);
-  if (!v4.error && (v4.data as unknown[] | null)?.length) {
-    return v4.data as { post_id: string; score: number; source?: string }[];
-  }
-  if (__DEV__ && v4.error) {
-    console.warn('get_ranked_feed_v4 unavailable, falling back to v3:', v4.error.message);
-  }
-
-  /* Tier 1: v3. Supports exclude_post_ids natively. */
-  const v3 = await supabase.rpc('get_ranked_feed_v3', {
-    viewer_id: viewerId,
-    feed_limit: feedLimit,
-    exclude_post_ids: excludeArray,
-  });
-  if (!v3.error && v3.data?.length) {
-    return v3.data as { post_id: string; score: number; source?: string }[];
-  }
-  if (__DEV__ && v3.error) {
-    console.warn('get_ranked_feed_v3 unavailable, falling back to v2:', v3.error.message);
-  }
-
-  /* Tier 2: v2 — personalization without exclude_post_ids. Ask for headroom
-     equal to the number of already-seen ids so dedupe leaves enough rows. */
-  const v2 = await supabase.rpc('get_ranked_feed_v2', {
-    viewer_id: viewerId,
-    feed_limit: feedLimit + headroom,
-  });
-  if (!v2.error && v2.data?.length) {
-    const rows = v2.data as { post_id: string; score: number }[];
-    return rows.filter((r) => !excludeSet.has(r.post_id));
-  }
-  if (__DEV__ && v2.error) {
-    console.warn('get_ranked_feed_v2 unavailable, falling back to v1:', v2.error.message);
-  }
-
-  /* Tier 3: v1 — baseline scorer. */
-  const v1 = await supabase.rpc('get_ranked_feed', {
-    viewer_id: viewerId,
-    feed_limit: feedLimit + headroom,
-  });
-  if (v1.error) throw v1.error;
-  const v1Rows = (v1.data ?? []) as { post_id: string; score: number }[];
-  return v1Rows.filter((r) => !excludeSet.has(r.post_id));
+  return callRankedFeedRpc(
+    {
+      rpc: async (fn, args) => {
+        const result = await supabase.rpc(fn as never, args as never);
+        return { data: result.data, error: result.error };
+      },
+    },
+    viewerId,
+    feedLimit,
+    excludeIds,
+  );
 }
 
 /** Lightweight Top-Today fetch for stitching trending posts into the For You stream. */
