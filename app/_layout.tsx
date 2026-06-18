@@ -320,6 +320,7 @@ function AppShell() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="auth" />
         <Stack.Screen name="notifications" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="search" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

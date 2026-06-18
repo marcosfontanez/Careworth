@@ -110,6 +110,7 @@ export type CustomizeRowsCardProps = {
   songArtist: string;
   songArtworkUrl: string;
   hidePulseMusicPlayerOnMyPage: boolean;
+  pulseBoardEnabled: boolean;
   uploadingBanner: boolean;
   uploadingAvatar: boolean;
   onChangeBanner: () => void;
@@ -119,6 +120,7 @@ export type CustomizeRowsCardProps = {
   onChangeVibe: () => void;
   onClearVibe: () => void;
   onToggleHidePulseMusicPlayer: (value: boolean) => void;
+  onTogglePulseBoardEnabled: (value: boolean) => void;
 };
 
 export function CustomizeRowsCard({
@@ -132,6 +134,7 @@ export function CustomizeRowsCard({
   songArtist,
   songArtworkUrl,
   hidePulseMusicPlayerOnMyPage,
+  pulseBoardEnabled,
   uploadingBanner,
   uploadingAvatar,
   onChangeBanner,
@@ -141,6 +144,7 @@ export function CustomizeRowsCard({
   onChangeVibe,
   onClearVibe,
   onToggleHidePulseMusicPlayer,
+  onTogglePulseBoardEnabled,
 }: CustomizeRowsCardProps) {
   const introTrim = pageIntroValue.trim();
   const tagsPreview = neonTags.slice(0, 3);
@@ -239,14 +243,14 @@ export function CustomizeRowsCard({
 
       <RowDivider />
 
-      {/* Page Intro */}
+      {/* Today's Pulse (header intro) */}
       <CustomizeRow
-        iconName="chatbubble-ellipses-outline"
+        iconName="pulse"
         iconColor="#22D3EE"
         iconBgColor="rgba(34,211,238,0.12)"
         iconBorderColor="rgba(34,211,238,0.32)"
-        label="Page Intro"
-        sublabel={introTrim.length === 0 ? 'Your space. Your story.' : undefined}
+        label="Today's Pulse"
+        sublabel={introTrim.length === 0 ? "What's your Pulse today?" : undefined}
         onPress={onEditPageIntro}
         rightSlot={
           introTrim.length > 0 ? (
@@ -326,6 +330,39 @@ export function CustomizeRowsCard({
             trackColor={{ false: 'rgba(148,163,184,0.35)', true: colors.primary.teal + 'AA' }}
             thumbColor={
               hidePulseMusicPlayerOnMyPage
+                ? colors.primary.teal
+                : Platform.OS === 'android'
+                  ? 'rgba(241,245,249,0.95)'
+                  : undefined
+            }
+            style={Platform.OS === 'ios' ? { transform: [{ scale: 0.85 }] } : undefined}
+          />
+        }
+      />
+
+      <RowDivider />
+
+      {/* Pulse Board — visitors can leave shoutouts on your Pulse Page. */}
+      <CustomizeRow
+        iconName="chatbubbles-outline"
+        iconColor="#67E8F9"
+        iconBgColor="rgba(34,211,238,0.10)"
+        iconBorderColor="rgba(34,211,238,0.28)"
+        label="Pulse Board for visitors"
+        sublabel={
+          pulseBoardEnabled
+            ? 'Visitors can see and leave shoutouts'
+            : 'Hidden from visitors — you can still review past shoutouts'
+        }
+        hideChevron
+        disabled
+        rightSlot={
+          <Switch
+            value={pulseBoardEnabled}
+            onValueChange={onTogglePulseBoardEnabled}
+            trackColor={{ false: 'rgba(148,163,184,0.35)', true: colors.primary.teal + 'AA' }}
+            thumbColor={
+              pulseBoardEnabled
                 ? colors.primary.teal
                 : Platform.OS === 'android'
                   ? 'rgba(241,245,249,0.95)'

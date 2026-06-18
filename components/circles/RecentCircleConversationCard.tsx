@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, borderRadius, typography } from '@/theme';
+import { colors, borderRadius, rhythm, typography } from '@/theme';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import { formatCount, timeAgo } from '@/utils/format';
 import { isDemoCatalogMediaUrl } from '@/utils/postPreviewMedia';
@@ -44,7 +44,11 @@ function PreviewLead({
   );
 }
 
-export function RecentCircleConversationCard({ item, accent, onPress }: Props) {
+export const RecentCircleConversationCard = memo(function RecentCircleConversationCard({
+  item,
+  accent,
+  onPress,
+}: Props) {
   if (item.kind === 'thread') {
     const { thread, lastInvolvedAt } = item;
     const previewRaw = (thread.body ?? '').trim().slice(0, 100);
@@ -58,12 +62,9 @@ export function RecentCircleConversationCard({ item, accent, onPress }: Props) {
             <Text style={styles.title} numberOfLines={2}>
               {thread.title}
             </Text>
-            {previewRaw.length > 0 ? (
-              <Text style={styles.preview} numberOfLines={1}>
-                {previewRaw}
-                {previewRaw.length >= 100 ? '…' : ''}
-              </Text>
-            ) : null}
+            <Text style={styles.preview} numberOfLines={1}>
+              {previewRaw.length > 0 ? `${previewRaw}${previewRaw.length >= 100 ? '…' : ''}` : '\u00a0'}
+            </Text>
             <View style={styles.metaRow}>
               <Text style={[styles.circle, { color: accent }]} numberOfLines={1}>
                 {circleLabel}
@@ -94,11 +95,9 @@ export function RecentCircleConversationCard({ item, accent, onPress }: Props) {
           <Text style={styles.title} numberOfLines={2}>
             {w.title}
           </Text>
-          {previewTrim.length > 0 && previewTrim !== w.title ? (
-            <Text style={styles.preview} numberOfLines={1}>
-              {previewTrim}
-            </Text>
-          ) : null}
+          <Text style={styles.preview} numberOfLines={1}>
+            {previewTrim.length > 0 && previewTrim !== w.title ? previewTrim : '\u00a0'}
+          </Text>
           <View style={styles.metaRow}>
             <Text style={[styles.circle, { color: accent }]} numberOfLines={1}>
               {circleLabel}
@@ -115,23 +114,24 @@ export function RecentCircleConversationCard({ item, accent, onPress }: Props) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
-  touch: { borderRadius: borderRadius['2xl'] },
+  touch: { borderRadius: rhythm.cardRadius },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius['2xl'],
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 10,
+    borderRadius: rhythm.cardRadius,
+    paddingVertical: rhythm.cardPaddingMedium,
+    paddingHorizontal: rhythm.cardPaddingMedium,
+    gap: rhythm.cardPaddingMedium,
     borderWidth: 1,
     backgroundColor: colors.dark.cardAlt,
+    minHeight: rhythm.circleConversationMinHeight,
   },
   leadWrap: {
-    width: 44,
-    height: 44,
+    width: rhythm.avatarSizeMedium,
+    height: rhythm.avatarSizeMedium,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     alignItems: 'center',
@@ -150,12 +150,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.dark.text,
     letterSpacing: -0.2,
+    lineHeight: 20,
+    minHeight: 40,
   },
   preview: {
     fontSize: 12,
     color: colors.dark.textSecondary,
     marginTop: 4,
     lineHeight: 16,
+    minHeight: 16,
     opacity: 0.9,
   },
   metaRow: {
@@ -163,7 +166,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
-    marginTop: 8,
+    marginTop: 6,
+    minHeight: 16,
   },
   circle: {
     fontSize: 11,

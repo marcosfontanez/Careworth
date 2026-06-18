@@ -78,7 +78,18 @@ import { buildBorderRewardMetadata } from '@/lib/rewardDelivery/buildBorderMetad
 import { readPurchaseReceiptId, readUserInventoryId } from '@/lib/rewardDelivery/fulfillmentPayload';
 import { rewardDeliveryDebug } from '@/lib/rewardDelivery/debugLog';
 import { supabaseMessage } from '@/utils/supabaseErrors';
-import { useGooglePlayProductPrefetch } from '@/hooks/useGooglePlayProductPrefetch';
+import { useStoreProductAvailability } from '@/hooks/useStoreProductAvailability';
+import {
+  formatShopStorePrice,
+  isSparkPackPurchasableInStore,
+  storeSkuForShopItem,
+} from '@/lib/shop/storeProductUi';
+import {
+  buildStoreKitDiagnosticPayload,
+  formatStoreKitDiagnosticsText,
+} from '@/lib/shop/storeKitDiagnostics';
+import { iapDiag, IAP_EVENTS, setStaffIapDiagnostics } from '@/lib/shop/iapDiagnostics';
+import { copyTextWithFallback } from '@/lib/copyLink';
 
 /** Shown as native browser tooltip on web when hovering the Diamonds balance pill. */
 const DIAMONDS_PILL_TOOLTIP_WEB =
@@ -126,7 +137,27 @@ export default function PulseShopScreen() {
   useEnsureShopWallets(userId);
 
   const catalogQ = useShopCatalog();
-  useGooglePlayProductPrefetch(catalogQ.data, shopScreenFocused);
+  const showStaffStoreDiagnostics = profile?.roleAdmin === true || __DEV__;
+
+  useEffect(() => {
+    if (showStaffStoreDiagnostics) setStaffIapDiagnostics(true);
+    iapDiag(IAP_EVENTS.SHOP_MOUNT, { platform: Platform.OS, tab: initialTab });
+    return () => {
+      if (showStaffStoreDiagnostics) setStaffIapDiagnostics(false);
+    };
+  }, [initialTab, showStaffStoreDiagnostics]);
+  const {
+    isStoreSkuMissing,
+    getStoreProduct,
+    storeCatalogReady,
+    platform: storePlatform,
+    missingStoreProductIds,
+    lastRequestedProductIds,
+    lastReturnedProductIds,
+    storeProductsById,
+  } = useStoreProductAvailability(catalogQ.data, shopScreenFocused, {
+    staffDiagnostics: showStaffStoreDiagnostics,
+  });
   const walletQ = useSparkWallet(userId);
   const diamondQ = useDiamondWallet(userId);
   const sparkBalance = useSparkBalanceNumber(walletQ.data);
@@ -137,16 +168,17 @@ export default function PulseShopScreen() {
   const shopReceipts: PurchaseReceiptRow[] = (receiptsQ.data ?? []) as PurchaseReceiptRow[];
 
   /**
-   * Recovery pass (once per session): if a previous purchase was charged but
-   * never granted — e.g. a transient failure, or store secrets were missing —
-   * re-validate it server-side and credit it now. No-ops on web and when there
-   * is nothing pending.
+   * Android-only auto-recovery on Shop focus: Play stuck consumables without
+   * Apple-style auth loops. iOS pending recovery is user-initiated (Restore /
+   * Recover) to avoid repeated Apple ID password prompts on Shop load.
    */
-  const reconciledRef = useRef(false);
+  const lastReconcileAtRef = useRef(0);
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    if (!shopScreenFocused || !userId || reconciledRef.current) return;
-    reconciledRef.current = true;
+    if (Platform.OS !== 'android') return;
+    if (!shopScreenFocused || !userId) return;
+    const now = Date.now();
+    if (now - lastReconcileAtRef.current < 12_000) return;
+    lastReconcileAtRef.current = now;
     void (async () => {
       try {
         const r = await purchaseService.reconcilePendingStorePurchases(catalogQ.data);
@@ -164,6 +196,36 @@ export default function PulseShopScreen() {
   }, [shopScreenFocused, userId, catalogQ.data, refreshAfterPurchase, showToast]);
 
   const { borders, packs, gifts, featured, browseBorders } = useShopDerived(catalogQ.data);
+
+  const displaySparkPacks = useMemo(() => {
+    if (Platform.OS === 'web') return packs;
+    if (showStaffStoreDiagnostics) return packs;
+    return packs.filter((pack) =>
+      isSparkPackPurchasableInStore(pack, storePlatform, {
+        storeCatalogReady,
+        isStoreSkuMissing,
+      }),
+    );
+  }, [packs, showStaffStoreDiagnostics, storePlatform, storeCatalogReady, isStoreSkuMissing]);
+
+  const copyStoreKitDiagnostics = useCallback(async () => {
+    const products = [...storeProductsById.values()];
+    const missing = [...missingStoreProductIds];
+    const text = formatStoreKitDiagnosticsText(
+      buildStoreKitDiagnosticPayload(lastRequestedProductIds, products, missing),
+    );
+    try {
+      await copyTextWithFallback(text);
+      showToast('StoreKit diagnostics copied — paste into Cursor or Notes', 'success');
+    } catch {
+      showToast('Could not copy diagnostics', 'error');
+    }
+  }, [
+    lastRequestedProductIds,
+    missingStoreProductIds,
+    showToast,
+    storeProductsById,
+  ]);
 
   const giftsByTier = useMemo(() => groupGiftsByTier(gifts), [gifts]);
 
@@ -260,6 +322,18 @@ export default function PulseShopScreen() {
       );
       return;
     }
+    const borderSku = storeSkuForShopItem(b, storePlatform);
+    if (isStoreSkuMissing(borderSku)) {
+      if (showStaffStoreDiagnostics) {
+        showToast(
+          Platform.OS === 'ios'
+            ? `StoreKit did not return ${borderSku ?? 'SKU'}. Check App Store Connect or wait for propagation.`
+            : `Play Billing did not return ${borderSku ?? 'SKU'}. Check Play Console.`,
+          'info',
+        );
+      }
+      return;
+    }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     analytics.track('border_purchase_started', { shop_item_id: b.id, surface: 'shop' });
     analytics.track('border_viewed', { shop_item_id: b.id, name: b.name });
@@ -325,6 +399,7 @@ export default function PulseShopScreen() {
       >
         <PageHeader
           insetTop={insets.top}
+          splitTopInsetExtra={10}
           onBack={() => router.back()}
           title="Pulse Shop"
           subtitle="Borders checkout in your app store · Sparks for gifts & creator support"
@@ -831,19 +906,81 @@ export default function PulseShopScreen() {
                   <Text style={styles.creditsHeroSub}>Use Sparks for gifts and creator support.</Text>
                 </View>
                 <Text style={styles.packSectionTitle}>Top up</Text>
-                {packs.length === 0 ? (
-                  <Text style={styles.emptyText}>No Spark packs available yet.</Text>
+                {Platform.OS !== 'web' && !storeCatalogReady ? (
+                  <View style={styles.storeCatalogLoadingRow}>
+                    <ActivityIndicator size="small" color={pulseverse.electricSoft} />
+                    <Text style={styles.storeCatalogLoadingText}>Loading App Store prices…</Text>
+                  </View>
+                ) : null}
+                {showStaffStoreDiagnostics && Platform.OS !== 'web' && storeCatalogReady ? (
+                  <TouchableOpacity
+                    style={styles.staffStoreDiagBanner}
+                    onPress={() => void copyStoreKitDiagnostics()}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Staff: copy StoreKit diagnostics"
+                  >
+                    <Ionicons name="construct-outline" size={16} color={colors.primary.teal} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.staffStoreDiagText}>
+                        Staff/dev StoreKit · returned {lastReturnedProductIds.length} / requested{' '}
+                        {lastRequestedProductIds.length}
+                        {missingStoreProductIds.size > 0
+                          ? ` · ${missingStoreProductIds.size} missing`
+                          : ' · all requested SKUs returned'}
+                      </Text>
+                      <Text style={styles.staffStoreDiagLink}>Tap to copy full diagnostics block</Text>
+                    </View>
+                    <Ionicons name="copy-outline" size={16} color={colors.primary.teal} />
+                  </TouchableOpacity>
+                ) : null}
+                {displaySparkPacks.length === 0 ? (
+                  <Text style={styles.emptyText}>
+                    {Platform.OS === 'web'
+                      ? 'No Spark packs available yet.'
+                      : storeCatalogReady
+                        ? 'Spark packs will appear here when your app store returns them.'
+                        : 'Loading Spark packs…'}
+                  </Text>
                 ) : (
-                  packs.map((pack, idx) => {
-                    const tag = sparkPackLabel(pack.spark_amount ?? 0, idx, packs.length);
+                  displaySparkPacks.map((pack, idx) => {
+                    const tag = sparkPackLabel(pack.spark_amount ?? 0, idx, displaySparkPacks.length);
+                    const storeSku = storeSkuForShopItem(pack, storePlatform);
+                    const storePreview = getStoreProduct(storeSku);
+                    const purchasable = isSparkPackPurchasableInStore(pack, storePlatform, {
+                      storeCatalogReady,
+                      isStoreSkuMissing,
+                    });
+                    const staffMissing = showStaffStoreDiagnostics && !purchasable && Platform.OS !== 'web';
+                    const priceLabel = formatShopStorePrice(storePreview, pack.real_money_display_price);
                     return (
                       <TouchableOpacity
                         key={pack.id}
-                        style={[styles.packCard, styles.packCardSparks]}
+                        style={[
+                          styles.packCard,
+                          styles.packCardSparks,
+                          staffMissing ? styles.packCardStoreUnavailable : null,
+                        ]}
                         onPress={() => {
+                          if (Platform.OS === 'web') {
+                            setCreditItem(pack);
+                            return;
+                          }
+                          if (!purchasable) {
+                            if (staffMissing) {
+                              showToast(
+                                storeSku
+                                  ? `StoreKit has not returned ${storeSku} yet (propagating or missing in App Store Connect).`
+                                  : 'This pack has no iOS product ID in the catalog.',
+                                'info',
+                              );
+                            }
+                            return;
+                          }
                           setCreditItem(pack);
                         }}
-                        activeOpacity={0.9}
+                        activeOpacity={purchasable || Platform.OS === 'web' ? 0.9 : 1}
+                        disabled={Platform.OS !== 'web' && !purchasable && !staffMissing}
                       >
                         <View style={styles.packLeft}>
                           {tag ? (
@@ -859,15 +996,26 @@ export default function PulseShopScreen() {
                           <Text style={styles.packSparks}>
                             {(pack.spark_amount ?? 0).toLocaleString()} Sparks
                           </Text>
-                          {pack.real_money_display_price ? (
-                            <Text style={styles.packFine}>About {pack.real_money_display_price}</Text>
-                          ) : (
-                            <Text style={styles.packFine}>Billed via App Store or Google Play</Text>
-                          )}
+                          <Text style={styles.packFine}>{priceLabel}</Text>
+                          {staffMissing ? (
+                            <Text style={styles.packStaffDiag}>
+                              Staff: StoreKit unavailable · {storeSku ?? 'no SKU'}
+                            </Text>
+                          ) : null}
                         </View>
-                        <View style={styles.packCta}>
-                          <Text style={styles.packCtaText}>{Platform.OS === 'web' ? 'App only' : 'Purchase'}</Text>
-                          <Ionicons name="chevron-forward" size={16} color={pulseverse.onElectric} />
+                        <View style={[styles.packCta, !purchasable && Platform.OS !== 'web' ? styles.packCtaDisabled : null]}>
+                          <Text style={[styles.packCtaText, !purchasable && Platform.OS !== 'web' ? styles.packCtaTextDisabled : null]}>
+                            {Platform.OS === 'web'
+                              ? 'App only'
+                              : staffMissing
+                                ? 'Propagating'
+                                : 'Purchase'}
+                          </Text>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={16}
+                            color={purchasable || Platform.OS === 'web' ? pulseverse.onElectric : colors.dark.textMuted}
+                          />
                         </View>
                       </TouchableOpacity>
                     );
@@ -1256,6 +1404,14 @@ export default function PulseShopScreen() {
             : undefined
         }
         staffSparkPackCatalog={profile?.roleAdmin ? packs : undefined}
+        storeDisplayPrice={
+          creditItem && Platform.OS !== 'web'
+            ? formatShopStorePrice(
+                getStoreProduct(storeSkuForShopItem(creditItem, storePlatform)),
+                creditItem.real_money_display_price,
+              )
+            : undefined
+        }
         onPurchase={
           Platform.OS === 'web'
             ? undefined
@@ -1264,6 +1420,11 @@ export default function PulseShopScreen() {
                 analytics.track('spark_pack_purchase_started', { shop_item_id: creditItem.id });
                 return await purchaseService.purchaseSparkPack(creditItem, opts);
               }
+        }
+        onRecoverStuck={
+          Platform.OS === 'web' || !creditItem
+            ? undefined
+            : async () => purchaseService.forceRecoverSparkPack(creditItem)
         }
         onSuccess={
           Platform.OS === 'web'
@@ -1990,6 +2151,66 @@ const styles = StyleSheet.create({
     backgroundColor: pulseverse.electric,
   },
   packCtaText: { fontSize: 13, fontWeight: '900', color: pulseverse.onElectric },
+  packCtaDisabled: {
+    backgroundColor: 'rgba(34,211,238,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.28)',
+  },
+  packCtaTextDisabled: { color: 'rgba(255,255,255,0.55)' },
+  packCardStoreUnavailable: {
+    opacity: 0.72,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderLeftColor: 'rgba(34,211,238,0.35)',
+  },
+  packStaffDiag: {
+    marginTop: 6,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: colors.primary.teal,
+  },
+  storeCatalogLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(12,18,32,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.12)',
+  },
+  storeCatalogLoadingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.dark.textMuted,
+  },
+  staffStoreDiagBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(34,211,238,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.22)',
+  },
+  staffStoreDiagText: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: colors.dark.textSecondary,
+  },
+  staffStoreDiagLink: {
+    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: colors.primary.teal,
+  },
   creditsLegal: {
     marginTop: 8,
     fontSize: 11,

@@ -4,15 +4,15 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { featuredCardSchemeForSlug } from '@/constants/featuredCircleSchemes';
-import { borderRadius, colors, pulseverse, spacing, pvKit } from '@/theme';
+import { borderRadius, colors, pulseverse, spacing, pvKit, rhythm } from '@/theme';
 import { formatCount } from '@/utils/format';
 import type { Community } from '@/types';
 import { pulseImageListThumbProps } from '@/lib/pulseImage';
 
 /** Tall enough for 2-line title + 2-line blurb + meta + avatar stack without clipping (fixed height + overflow:hidden). */
-const CARD_HEIGHT = 322;
+const CARD_HEIGHT = rhythm.carouselCardHeight;
 const BUBBLE = 82;
-const CARD_WIDTH = 180;
+const CARD_WIDTH = rhythm.carouselCardWidth;
 
 const TOP_WASH_ALPHA = Math.round(pvKit.circles.featured.topWashOpacity * 255)
   .toString(16)

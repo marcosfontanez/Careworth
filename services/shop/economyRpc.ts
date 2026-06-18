@@ -30,5 +30,11 @@ export function rpcEconomySendCreatorGift(params: {
   p_context_id: string | null;
   p_idempotency_key: string;
 }) {
-  return supabase.rpc('economy_send_creator_gift', params);
+  return supabase.rpc('economy_send_creator_gift', {
+    p_creator_user_id: params.p_creator_user_id,
+    p_gift_item_id: params.p_gift_item_id,
+    p_context_type: params.p_context_type,
+    p_context_id: params.p_context_id ?? '',
+    p_idempotency_key: params.p_idempotency_key,
+  });
 }

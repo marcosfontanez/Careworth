@@ -118,8 +118,12 @@ export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: winW } = useWindowDimensions();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; next?: string }>();
   const mode = useMemo(() => (typeof params.mode === 'string' ? params.mode : undefined), [params.mode]);
+  const postSignInNext = useMemo(
+    () => (typeof params.next === 'string' ? params.next : undefined),
+    [params.next],
+  );
 
   const {
     signInWithEmail,
@@ -139,7 +143,7 @@ export default function LoginScreen() {
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
   const [handleStatus, setHandleStatus] = useState<
-    'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'disallowed'
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'disallowed' | 'check_failed'
   >('idle');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -177,8 +181,12 @@ export default function LoginScreen() {
         return;
       }
       setHandleStatus('checking');
-      const ok = await profilesService.isUsernameAvailable(raw);
-      if (!cancelled) setHandleStatus(ok ? 'available' : 'taken');
+      const result = await profilesService.checkUsernameAvailability(raw);
+      if (cancelled) return;
+      if (result.status === 'available') setHandleStatus('available');
+      else if (result.status === 'taken') setHandleStatus('taken');
+      else if (result.status === 'invalid') setHandleStatus('invalid');
+      else setHandleStatus('check_failed');
     };
     const t = setTimeout(() => void kick(), 350);
     return () => {
@@ -223,7 +231,7 @@ export default function LoginScreen() {
         ),
       ]);
       if (error) Alert.alert('Login failed', mapAuthErrorForAlert(error.message));
-      else schedulePostSignInNavigation(router);
+      else schedulePostSignInNavigation(router, postSignInNext);
     } finally {
       setLoading(false);
     }
@@ -267,7 +275,11 @@ export default function LoginScreen() {
       return;
     }
     if (handleStatus !== 'available') {
-      Alert.alert('Handle not available', 'Pick a different @handle or wait until the availability check finishes.');
+      const msg =
+        handleStatus === 'check_failed'
+          ? 'We could not verify that handle right now. Check your connection and try again.'
+          : 'Pick a different @handle or wait until the availability check finishes.';
+      Alert.alert('Handle not available', msg);
       return;
     }
     setLoading(true);
@@ -299,7 +311,7 @@ export default function LoginScreen() {
     const { error } = await signInWithGoogle();
     setLoading(false);
     if (error) Alert.alert('Google failed', error.message);
-    else schedulePostSignInNavigation(router);
+    else schedulePostSignInNavigation(router, postSignInNext);
   };
 
   const handleApple = async () => {
@@ -307,7 +319,7 @@ export default function LoginScreen() {
     const { error } = await signInWithApple();
     setLoading(false);
     if (error) Alert.alert('Apple failed', error.message);
-    else schedulePostSignInNavigation(router);
+    else schedulePostSignInNavigation(router, postSignInNext);
   };
 
   const logoW = Math.min(winW - spacing['2xl'] * 2, 340);
@@ -615,7 +627,7 @@ function SignupHandleHint({
   status,
 }: {
   handle: string;
-  status: 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'disallowed';
+  status: 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'disallowed' | 'check_failed';
 }) {
   const raw = handle.trim().toLowerCase();
   let icon: keyof typeof Ionicons.glyphMap | null = null;
@@ -643,6 +655,10 @@ function SignupHandleHint({
     icon = 'close-circle';
     tint = colors.status.error;
     message = `@${raw} is already taken — try another.`;
+  } else if (status === 'check_failed') {
+    icon = 'cloud-offline-outline';
+    tint = colors.status.error;
+    message = 'Could not check handle availability — check your connection and try again.';
   } else if (status === 'available') {
     icon = 'checkmark-circle';
     tint = colors.primary.teal;

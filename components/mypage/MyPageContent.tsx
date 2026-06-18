@@ -6,16 +6,18 @@
  * sit on {@link MyPulseGlassPanel} frosted glass for consistency with Creator Hub / Shop.
  *
  * Layout (top → bottom):
- *   1. Banner + floating back/more
- *   2. Profile Header (avatar, name, handle, neon tags, one-line intro)
+ *   1. Owner: search + notifications / menu (below search, not on banner)
+ *   2. Banner + floating back (visitors only — no menu on banner)
+ *   3. Profile Header (avatar, name, handle, neon tags, Today's Pulse intro line)
  *   3. PulseStatsRow — three boxed cards (Followers · Following · Pulse Score)
  *   4. Visitor actions (Follow / Message / Share) — visitors only
  *   5. Current Vibe music player (owners can hide via Customize)
- *   6. My Pulse (composer chips + rolling 5 cards)
- *   7. Media Hub (videos / favorites / photos strip) — last, so visitors scroll
- *      through your story before browsing media.
+ *   6. Pulse Board — visitor shoutouts (floating glass board)
+ *   7. My Pulse (composer chips + rolling 5 cards)
+ *   8. Media Hub (videos / favorites / photos strip)
+ *   9. Pulse Snapshot — owner-only private insights (last section)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -42,24 +44,38 @@ import {
   touchTarget,
   shadows,
   pulseverse,
+  rhythm,
 } from '@/theme';
 import { profileHandleDisplay } from '@/utils/profileHandle';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { shareProfile } from '@/lib/share';
 import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import { FeaturedSoundCard } from '@/components/mypage/FeaturedSoundCard';
+import { PulseBoardSection } from '@/components/mypage/PulseBoardSection';
+import {
+  PulseWeeklyRecapCard,
+  pulseWeeklyRecapFeatureHint,
+} from '@/components/mypage/PulseWeeklyRecapCard';
 import { MediaHubSection } from '@/components/mypage/MediaHubSection';
 import { useUnreadCount, useLinkedPostsMap } from '@/hooks/useQueries';
 import { ProfileNeonPills } from '@/components/mypage/ProfileNeonPills';
 import { MyPulseSection } from '@/components/mypage/MyPulseSection';
+import { MyPulseIntroLine } from '@/components/mypage/MyPulseIntroLine';
 import { PulseStatsRow } from '@/components/mypage/PulseStatsRow';
 import { PVPageBackground } from '@/components/pv/PVPageBackground';
 import { PVSearchBarTrigger } from '@/components/pv/PVSearchBar';
 import type { Post, ProfileUpdate, UserProfile } from '@/types';
 import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
+import {
+  canVisitorViewPulseBoard,
+  isPulseBoardEnabled,
+  shouldShowPulseBoardSection,
+} from '@/lib/pulseBoardVisibility';
 import { canVisitorSeeProfilePosts } from '@/utils/mypagePosts';
 import type { ProfileContentBlockState } from '@/utils/mypagePosts';
 import { MyPulseGlassPanel } from '@/components/mypage/MyPulseGlassPanel';
+import { PulsePhotoViewerProvider } from '@/contexts/PulsePhotoViewerContext';
+import { useToast } from '@/components/ui/Toast';
 
 /**
  * Compact hero avatar for My Pulse. Deliberately smaller than tab profile so
@@ -67,6 +83,11 @@ import { MyPulseGlassPanel } from '@/components/mypage/MyPulseGlassPanel';
  * handle / neon pill column to its right (mock-accurate layout).
  */
 const MY_PULSE_AVATAR_SIZE = 88;
+
+const MY_PULSE_PANEL = {
+  padding: rhythm.myPulsePanelPadding,
+  blurIntensity: rhythm.myPulsePanelBlur,
+} as const;
 
 export type MyPageContentProps = {
   user: UserProfile;
@@ -92,15 +113,18 @@ export type MyPageContentProps = {
    * just open the sheet without the celebration card.
    */
   highlightShareTier?: boolean;
-  /** Visitor: opt-in bell under portrait — notify when this user posts new content. */
+  /** Visitor: opt-in bell — notify when this user posts new content. */
   creatorPostNotificationsOn?: boolean;
-  onToggleCreatorPostNotifications?: () => void;
+  /** Persist the new opt-in state; MyPageContent shows success/error toasts after this resolves. */
+  onToggleCreatorPostNotifications?: (nextEnabled: boolean) => Promise<void>;
   creatorPostNotificationsBusy?: boolean;
   /** Visitor: open Pulse Shop creator gifts (Sparks) for this profile. */
   onOpenCreatorGifts?: () => void;
   /** When false, content surfaces (My Pulse, Media Hub, vibe, pulse history) are locked for visitors. */
   profileContentVisible?: boolean;
   blockRelationship?: ProfileContentBlockState;
+  /** Owner: block a Pulse Board commenter by user id. */
+  onBlockBoardUser?: (userId: string) => void | Promise<void>;
 };
 
 export function MyPageContent({
@@ -121,9 +145,11 @@ export function MyPageContent({
   onOpenCreatorGifts,
   profileContentVisible,
   blockRelationship = 'none',
+  onBlockBoardUser,
 }: MyPageContentProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   // Only query unread notifications for owners — visitors shouldn't trigger
   // a server round-trip when visiting another user's Pulse page.
   const { data: unreadCountRaw } = useUnreadCount();
@@ -136,6 +162,21 @@ export function MyPageContent({
   const visitorContentVisible =
     profileContentVisible ??
     canVisitorSeeProfilePosts(user, isOwner, { blockRelationship });
+
+  const pulseBoardBlockRelationship =
+    blockRelationship === 'viewer_blocked' ||
+    blockRelationship === 'blocked_by_viewer' ||
+    blockRelationship === 'none'
+      ? blockRelationship
+      : 'unknown';
+
+  const showPulseBoardSection = shouldShowPulseBoardSection(user, isOwner, {
+    blockRelationship: pulseBoardBlockRelationship,
+  });
+
+  const pulseBoardVisibleToVisitor = canVisitorViewPulseBoard(user, isOwner, {
+    blockRelationship: pulseBoardBlockRelationship,
+  });
 
   const postsVisibleOnProfile = useMemo(() => {
     const posts = userPosts ?? [];
@@ -196,12 +237,7 @@ export function MyPageContent({
       if (Platform.OS === 'ios') {
         ActionSheetIOS.showActionSheetWithOptions(
           {
-            options: [
-              'Share profile',
-              'Customize My Pulse',
-              'Settings',
-              'Cancel',
-            ],
+            options: ['Share profile', 'Customize My Pulse', 'Settings', 'Cancel'],
             cancelButtonIndex: 3,
           },
           (i) => {
@@ -247,12 +283,8 @@ export function MyPageContent({
     } else {
       Alert.alert(user.displayName, undefined, [
         { text: 'Share profile', onPress: share },
-        ...(report
-          ? [{ text: 'Report profile', onPress: report }]
-          : []),
-        ...(block
-          ? [{ text: 'Block', style: 'destructive' as const, onPress: block }]
-          : []),
+        ...(report ? [{ text: 'Report profile', onPress: report }] : []),
+        ...(block ? [{ text: 'Block', style: 'destructive' as const, onPress: block }] : []),
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
@@ -263,12 +295,69 @@ export function MyPageContent({
     else router.replace('/(tabs)/feed');
   }, [router]);
 
+  const handleCreatorPostNotifyPress = useCallback(async () => {
+    if (!onToggleCreatorPostNotifications || creatorPostNotificationsBusy) return;
+    const nextEnabled = !creatorPostNotificationsOn;
+    const name = user.displayName?.trim() || 'this creator';
+    try {
+      await onToggleCreatorPostNotifications(nextEnabled);
+      toast.show(
+        nextEnabled
+          ? `Notifications on — you'll be alerted when ${name} posts.`
+          : `Notifications off for ${name}.`,
+        'success',
+      );
+    } catch {
+      toast.show('Could not update notifications. Try again.', 'error');
+    }
+  }, [
+    creatorPostNotificationsBusy,
+    creatorPostNotificationsOn,
+    onToggleCreatorPostNotifications,
+    toast,
+    user.displayName,
+  ]);
+
   /** Stack profiles (not My Pulse tab): show back to return to feed/previous. Tab owner has no back. */
   const showVisitorBack = !isOwner;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const bodyScrollY = useRef(0);
+  const pulseBoardRelativeY = useRef(0);
+  const mediaHubRelativeY = useRef(0);
+
+  const scrollToTodaysPulse = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
+  const scrollToPulseBoard = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, bodyScrollY.current + pulseBoardRelativeY.current - spacing.md),
+      animated: true,
+    });
+  }, []);
+
+  const scrollToMediaHub = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, bodyScrollY.current + mediaHubRelativeY.current - spacing.md),
+      animated: true,
+    });
+  }, []);
+
+  const photoViewerCreator = useMemo(
+    () => ({
+      id: user.id,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+    }),
+    [user.id, user.displayName, user.avatarUrl],
+  );
+
   return (
+    <PulsePhotoViewerProvider creator={photoViewerCreator}>
     <PVPageBackground style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: tabBarScrollPaddingBottom(insets.bottom) }}
@@ -290,7 +379,7 @@ export function MyPageContent({
             </MyPulseGlassPanel>
           </View>
         ) : null}
-        {/* Banner: no title header — float back (visitors) + menu only */}
+        {/* Banner: visitors get back only — actions live in the row below stats */}
         <View style={styles.coverWrap}>
           {hasBanner ? (
             <ImageBackground
@@ -411,32 +500,6 @@ export function MyPageContent({
                 ) : null}
               </View>
             )}
-            {!isOwner && onToggleCreatorPostNotifications ? (
-              <TouchableOpacity
-                style={[
-                  styles.portraitNotifyBell,
-                  creatorPostNotificationsBusy ? styles.portraitNotifyBellDisabled : null,
-                ]}
-                onPress={onToggleCreatorPostNotifications}
-                disabled={creatorPostNotificationsBusy}
-                activeOpacity={0.85}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  creatorPostNotificationsOn
-                    ? 'Stop notifications for new posts from this user'
-                    : 'Get notifications when this user posts new content'
-                }
-              >
-                <Ionicons
-                  name={creatorPostNotificationsOn ? 'notifications' : 'notifications-outline'}
-                  size={20}
-                  color={
-                    creatorPostNotificationsOn ? colors.primary.teal : colors.dark.textMuted
-                  }
-                />
-              </TouchableOpacity>
-            ) : null}
           </View>
 
           <View style={styles.infoCol}>
@@ -456,33 +519,20 @@ export function MyPageContent({
               {profileHandleDisplay(user)}
             </Text>
             <ProfileNeonPills tags={neonPillTags} />
-            {(user.bio?.trim() || isOwner) ? (
-              <View style={styles.pageIntroWrap}>
-                <Text
-                  style={[
-                    styles.pageIntro,
-                    !user.bio?.trim() && isOwner ? styles.pageIntroPlaceholder : null,
-                  ]}
-                  numberOfLines={2}
-                >
-                  {user.bio?.trim()
-                    ? user.bio.trim()
-                    : isOwner
-                      ? 'Add a short intro in Customize My Pulse (below your neon tags).'
-                      : '\u00A0'}
-                </Text>
-              </View>
-            ) : null}
+            <MyPulseIntroLine
+              user={user}
+              isOwner={isOwner}
+              contentVisible={visitorContentVisible}
+            />
           </View>
         </View>
 
         {/* Flat 3-stat strip — glass panel allows Pulse tooltip to extend upward */}
         <View style={{ paddingHorizontal: layout.screenPadding }}>
           <MyPulseGlassPanel
-            padding={spacing.sm}
-            blurIntensity={36}
+            {...MY_PULSE_PANEL}
             overflowVisible
-            style={{ marginBottom: spacing.xs }}
+            style={{ marginBottom: rhythm.sectionGap }}
           >
             <PulseStatsRow
               userId={user.id}
@@ -506,38 +556,49 @@ export function MyPageContent({
         </View>
 
         {!isOwner ? (
-          <View style={{ paddingHorizontal: layout.screenPadding, marginTop: spacing.sm + 2 }}>
-            <MyPulseGlassPanel padding={spacing.sm} blurIntensity={32}>
+          <View style={{ paddingHorizontal: layout.screenPadding, marginTop: rhythm.sectionGap }}>
+            <MyPulseGlassPanel {...MY_PULSE_PANEL}>
               <View style={styles.visitorActions}>
                 <TouchableOpacity
                   style={[
-                    styles.followBtn,
+                    styles.visitorPrimaryBtn,
                     isFollowing ? styles.followBtnOutline : styles.followBtnPrimary,
                   ]}
                   onPress={onToggleFollow}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={isFollowing ? 'Unfollow' : 'Follow'}
                 >
                   <Ionicons
                     name={isFollowing ? 'checkmark' : 'person-add'}
-                    size={17}
+                    size={16}
                     color={isFollowing ? colors.primary.teal : '#FFF'}
                   />
                   <Text
                     style={[
-                      styles.followBtnText,
-                      isFollowing && { color: colors.primary.teal },
+                      styles.visitorPrimaryBtnText,
+                      isFollowing && styles.visitorPrimaryBtnTextOutline,
                     ]}
+                    numberOfLines={1}
                   >
                     {isFollowing ? 'Following' : 'Follow'}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.msgBtn} onPress={onMessage} activeOpacity={0.85}>
-                  <Ionicons name="chatbubble-outline" size={17} color={colors.primary.teal} />
-                  <Text style={styles.msgBtnText}>Message</Text>
+                <TouchableOpacity
+                  style={[styles.visitorPrimaryBtn, styles.msgBtn]}
+                  onPress={onMessage}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Message"
+                >
+                  <Ionicons name="chatbubble-outline" size={16} color={colors.primary.teal} />
+                  <Text style={[styles.visitorPrimaryBtnText, styles.msgBtnText]} numberOfLines={1}>
+                    Message
+                  </Text>
                 </TouchableOpacity>
                 {onOpenCreatorGifts ? (
                   <TouchableOpacity
-                    style={styles.shareIconBtn}
+                    style={styles.visitorIconChip}
                     onPress={onOpenCreatorGifts}
                     activeOpacity={0.85}
                     accessibilityLabel="Send a gift with Sparks"
@@ -545,13 +606,40 @@ export function MyPageContent({
                     <Ionicons name="gift-outline" size={18} color={colors.primary.teal} />
                   </TouchableOpacity>
                 ) : null}
+                {onToggleCreatorPostNotifications ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.visitorIconChip,
+                      creatorPostNotificationsOn ? styles.visitorNotifyBtnActive : null,
+                      creatorPostNotificationsBusy ? styles.visitorActionBtnDisabled : null,
+                    ]}
+                    onPress={() => void handleCreatorPostNotifyPress()}
+                    disabled={creatorPostNotificationsBusy}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      creatorPostNotificationsOn
+                        ? 'Stop notifications for new posts from this user'
+                        : 'Get notifications when this user posts new content'
+                    }
+                  >
+                    <Ionicons
+                      name={creatorPostNotificationsOn ? 'notifications' : 'notifications-outline'}
+                      size={18}
+                      color={
+                        creatorPostNotificationsOn ? colors.primary.teal : colors.dark.text
+                      }
+                    />
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
-                  style={styles.shareIconBtn}
-                  onPress={() => shareProfile(user.id, user.displayName)}
+                  style={styles.visitorIconChip}
+                  onPress={openPageMenu}
                   activeOpacity={0.85}
-                  accessibilityLabel="Share profile"
+                  accessibilityRole="button"
+                  accessibilityLabel="More options"
                 >
-                  <Ionicons name="share-outline" size={18} color={colors.dark.text} />
+                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.dark.text} />
                 </TouchableOpacity>
               </View>
             </MyPulseGlassPanel>
@@ -561,11 +649,18 @@ export function MyPageContent({
         <View
           style={[
             styles.body,
-            { paddingHorizontal: layout.screenPaddingWide, gap: spacing.lg },
+            {
+              paddingHorizontal: rhythm.pageHorizontalPaddingWide,
+              gap: rhythm.myPulseSectionGap,
+              paddingTop: rhythm.sectionGapLarge,
+            },
           ]}
+          onLayout={(e) => {
+            bodyScrollY.current = e.nativeEvent.layout.y;
+          }}
         >
           {visitorContentVisible && !(isOwner && user.hidePulseMusicPlayerOnMyPage) ? (
-            <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+            <MyPulseGlassPanel {...MY_PULSE_PANEL}>
               <FeaturedSoundCard
                 user={user}
                 accent={pulseverse.electric}
@@ -579,7 +674,7 @@ export function MyPageContent({
               />
             </MyPulseGlassPanel>
           ) : !isOwner && !visitorContentVisible ? (
-            <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+            <MyPulseGlassPanel {...MY_PULSE_PANEL}>
               <ProfileContentLockedNotice
                 title="Current Vibe is private"
                 body="This creator keeps their profile music private."
@@ -587,7 +682,27 @@ export function MyPageContent({
             </MyPulseGlassPanel>
           ) : null}
 
-          <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+          {showPulseBoardSection ? (
+            <View
+              onLayout={(e) => {
+                pulseBoardRelativeY.current = e.nativeEvent.layout.y;
+              }}
+            >
+            <MyPulseGlassPanel {...MY_PULSE_PANEL}>
+              <PulseBoardSection
+                profileOwnerId={user.id}
+                profileOwnerDisplayName={user.displayName}
+                isOwner={isOwner}
+                contentLocked={!isOwner && !pulseBoardVisibleToVisitor}
+                boardEnabled={isPulseBoardEnabled(user)}
+                blockRelationship={pulseBoardBlockRelationship}
+                onBlockUser={isOwner ? onBlockBoardUser : undefined}
+              />
+            </MyPulseGlassPanel>
+            </View>
+          ) : null}
+
+          <MyPulseGlassPanel {...MY_PULSE_PANEL}>
             <MyPulseSection
               updates={pulseUpdatesForVisitor}
               userId={user.id}
@@ -597,7 +712,12 @@ export function MyPageContent({
             />
           </MyPulseGlassPanel>
 
-          <MyPulseGlassPanel padding={spacing.md} blurIntensity={34}>
+          <View
+            onLayout={(e) => {
+              mediaHubRelativeY.current = e.nativeEvent.layout.y;
+            }}
+          >
+          <MyPulseGlassPanel {...MY_PULSE_PANEL}>
             <MediaHubSection
               userId={user.id}
               userPosts={postsVisibleOnProfile}
@@ -606,9 +726,25 @@ export function MyPageContent({
               contentLocked={!isOwner && !visitorContentVisible}
             />
           </MyPulseGlassPanel>
+          </View>
+
+          {isOwner ? (
+            <MyPulseGlassPanel {...MY_PULSE_PANEL}>
+              <PulseWeeklyRecapCard
+                user={user}
+                profileUpdates={profileUpdates}
+                isOwner={isOwner}
+                onScrollToTodaysPulse={scrollToTodaysPulse}
+                onScrollToPulseBoard={scrollToPulseBoard}
+                onScrollToMediaHub={scrollToMediaHub}
+                onFeatureMomentHint={pulseWeeklyRecapFeatureHint}
+              />
+            </MyPulseGlassPanel>
+          ) : null}
         </View>
       </ScrollView>
     </PVPageBackground>
+    </PulsePhotoViewerProvider>
   );
 }
 
@@ -627,9 +763,10 @@ function ProfileContentLockedNotice({ title, body }: { title: string; body: stri
 const profileLockedStyles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: rhythm.sectionGap,
+    paddingHorizontal: rhythm.cardPaddingSmall,
     gap: spacing.xs,
+    minHeight: rhythm.cardMinHeightLarge,
   },
   iconWrap: {
     width: 40,
@@ -660,6 +797,7 @@ function BannerChrome({
   onMenu,
   onNotifications,
   unreadCount = 0,
+  showHeaderActions = true,
 }: {
   topInset: number;
   showBack: boolean;
@@ -667,10 +805,11 @@ function BannerChrome({
   onMenu: () => void;
   onNotifications?: () => void;
   unreadCount?: number;
+  /** When false, menu + bell stay off the banner (owner actions live under search). */
+  showHeaderActions?: boolean;
 }) {
-  // Right-side icon stack: [bell] (owner only) → [ellipsis]. The bell sits
-  // 44pt to the left of the ellipsis to mirror the Circles tab treatment.
-  const hasBell = !!onNotifications;
+  const hasBell = showHeaderActions && !!onNotifications;
+  const showMenu = showHeaderActions;
   const badgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
 
   return (
@@ -714,17 +853,19 @@ function BannerChrome({
         </TouchableOpacity>
       ) : null}
 
-      <TouchableOpacity
-        style={[
-          styles.bannerIconBtn,
-          styles.bannerFloat,
-          { top: topInset + 8, right: 8 },
-        ]}
-        onPress={onMenu}
-        accessibilityLabel="More options"
-      >
-        <Ionicons name="ellipsis-vertical" size={22} color="#FFF" />
-      </TouchableOpacity>
+      {showMenu ? (
+        <TouchableOpacity
+          style={[
+            styles.bannerIconBtn,
+            styles.bannerFloat,
+            { top: topInset + 8, right: 8 },
+          ]}
+          onPress={onMenu}
+          accessibilityLabel="More options"
+        >
+          <Ionicons name="ellipsis-vertical" size={22} color="#FFF" />
+        </TouchableOpacity>
+      ) : null}
       <View style={styles.bannerFill} pointerEvents="none" />
     </View>
   );
@@ -734,6 +875,59 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   /** Web: default scroll view can paint an opaque surface and hide {@link PVPageBackground}. */
   scrollView: { flex: 1, backgroundColor: 'transparent' },
+  ownerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  ownerSearchFlex: { flex: 1, minWidth: 0 },
+  ownerHeaderIconBtnCompact: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  ownerHeaderActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  ownerHeaderIconBtn: {
+    width: touchTarget.min,
+    height: touchTarget.min,
+    borderRadius: touchTarget.min / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  headerBellDot: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.primary.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.dark.bg,
+  },
+  headerBellDotText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#021627',
+    lineHeight: 12,
+  },
   coverWrap: { width: '100%', height: 200 },
   coverImg: { flex: 1 },
   coverImgStyle: { width: '100%', height: '100%' },
@@ -789,11 +983,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.md,
     marginTop: -56,
-    marginBottom: spacing.sm,
+    marginBottom: rhythm.sectionGap,
   },
   /** Column: avatar + optional bell under portrait (visitor). */
   avatarStack: {
     alignItems: 'center',
+    overflow: 'visible',
   },
   avatarInner: { position: 'relative' },
   avatarPressable: { alignSelf: 'flex-start' },
@@ -837,20 +1032,6 @@ const styles = StyleSheet.create({
     // Muted teal when already following — still tappable to unfollow.
     backgroundColor: 'rgba(20,184,166,0.55)',
   },
-  portraitNotifyBell: {
-    marginTop: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  portraitNotifyBellDisabled: {
-    opacity: 0.45,
-  },
   /** Starts at the avatar's TOP — name aligns with the top of the photo */
   infoCol: {
     flex: 1,
@@ -877,35 +1058,32 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.2,
   },
-  pageIntroWrap: {
-    marginTop: 10,
-    paddingVertical: 2,
-  },
-  pageIntro: {
-    fontSize: 13.5,
-    lineHeight: 19,
-    fontWeight: '600',
-    color: colors.dark.textSecondary,
-    letterSpacing: -0.1,
-  },
-  pageIntroPlaceholder: {
-    color: colors.dark.textMuted,
-    fontStyle: 'italic',
-    fontWeight: '500',
-  },
   visitorActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'center',
+    alignItems: 'stretch',
+    gap: spacing.xs,
   },
-  followBtn: {
-    flex: 1.2,
+  visitorPrimaryBtn: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
+    gap: 5,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.xs,
     borderRadius: borderRadius.button,
+    minHeight: touchTarget.min,
+  },
+  visitorPrimaryBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  visitorPrimaryBtnTextOutline: {
+    color: colors.primary.teal,
   },
   followBtnPrimary: {
     backgroundColor: colors.primary.teal,
@@ -916,34 +1094,30 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary.teal + '55',
   },
-  followBtnText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
   msgBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
-    borderRadius: borderRadius.button,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
   msgBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
     color: colors.primary.teal,
-    letterSpacing: -0.15,
   },
-  shareIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  visitorIconChip: {
+    width: touchTarget.min,
+    flexShrink: 0,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: { paddingTop: layout.sectionGapLarge },
+  visitorNotifyBtnActive: {
+    borderColor: colors.primary.teal + '55',
+    backgroundColor: colors.primary.teal + '12',
+  },
+  visitorActionBtnDisabled: {
+    opacity: 0.5,
+  },
+  body: {},
 });

@@ -26,7 +26,7 @@ import { profileUpdatesService } from '@/services/profileUpdates';
 import { postsService } from '@/services/supabase';
 import { userService } from '@/services/user';
 import { withPulseVerseCta } from '@/lib/share';
-import { postKeys, profileUpdateKeys, userKeys } from '@/lib/queryKeys';
+import { postKeys, profileUpdateKeys, pulseWeeklyRecapKeys, userKeys } from '@/lib/queryKeys';
 import { navigateToCircleRoom, navigateToCircleThread } from '@/lib/communityCache';
 import { liveStreamHref } from '@/lib/navigation/liveRoutes';
 import { hrefPost } from '@/lib/communityRoutes';
@@ -59,8 +59,10 @@ import { MY_PULSE_VISUALS } from '@/components/mypage/cards/MyPulseCardShell';
 import { CirclesOrbitIcon } from '@/components/mypage/cards/icons/CirclesOrbitIcon';
 import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { PulseTierBadge } from '@/components/badges/PulseTierBadge';
-import { AvatarDisplay, pulseFrameFromUser } from '@/components/profile/AvatarBuilder';
 import * as ImagePicker from 'expo-image-picker';
+import { PulsePhotoViewerModal } from '@/components/mypage/PulsePhotoViewerModal';
+import { buildPulseUpdatePhotoGallery } from '@/lib/media/pulsePhotoGallery';
+import type { PulsePhotoViewerCreator } from '@/lib/media/pulsePhotoViewerTypes';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -69,7 +71,10 @@ const MY_PULSE_MEDIA_MAX_H = Math.min(SCREEN_H * 0.82, SCREEN_W * 2.2);
 const CLIP_DETAIL_MEDIA_H = Math.min((SCREEN_W * 11) / 16, MY_PULSE_MEDIA_MAX_H);
 
 export default function MyPulseDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, focusComments: focusCommentsRaw } = useLocalSearchParams<{
+    id: string;
+    focusComments?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardBottomInset();
@@ -220,6 +225,7 @@ export default function MyPulseDetailScreen() {
       queryClient.invalidateQueries({ queryKey: profileUpdateKeys.detailForViewer(id!, viewerId) });
       if (update?.userId) {
         queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(update.userId) });
+        queryClient.invalidateQueries({ queryKey: pulseWeeklyRecapKeys.forUser(update.userId) });
       }
     },
     onError: (e: any) => {
@@ -296,6 +302,15 @@ export default function MyPulseDetailScreen() {
   const [draft, setDraft] = useState('');
   const [pendingAttach, setPendingAttach] = useState<{ uri: string; mime?: string } | null>(null);
   const inputRef = useRef<MentionRef>(null);
+  const shouldFocusComments =
+    typeof focusCommentsRaw === 'string' &&
+    ['1', 'true', 'yes'].includes(focusCommentsRaw.toLowerCase());
+
+  useEffect(() => {
+    if (!shouldFocusComments || !update || isLoading) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 450);
+    return () => clearTimeout(t);
+  }, [shouldFocusComments, update, isLoading]);
 
   const pickCommentAttach = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -571,12 +586,13 @@ export default function MyPulseDetailScreen() {
               style={styles.authorRow}
             >
               {author?.avatarUrl ? (
-                <AvatarDisplay
+                <BorderedAvatar
                   size={40}
                   avatarUrl={author.avatarUrl}
                   prioritizeRemoteAvatar
                   ringColor={colors.dark.border}
-                  pulseFrame={pulseFrameFromUser(author.pulseAvatarFrame)}
+                  pulseAvatarFrame={author.pulseAvatarFrame}
+                  onPress={author.id ? () => router.push(`/profile/${author.id}`) : undefined}
                 />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}>
@@ -622,9 +638,23 @@ export default function MyPulseDetailScreen() {
             {/* Main body — type aware */}
             <TypedBody
               update={update}
+              linkedPost={linkedPost ?? undefined}
               linkedPostTitle={linkedPost?.caption}
               linkedPostThumbUrl={linkedPost?.thumbnailUrl ?? linkedPost?.mediaUrl}
               onOpenSource={openSource}
+              photoViewerCreator={
+                author
+                  ? {
+                      id: author.id,
+                      displayName: author.displayName,
+                      avatarUrl: author.avatarUrl,
+                    }
+                  : {
+                      id: update.userId,
+                      displayName: 'Someone',
+                      avatarUrl: null,
+                    }
+              }
             />
 
             {/* Source deep-link CTA (when the update references other content) */}
@@ -975,14 +1005,18 @@ function Header({
 
 function TypedBody({
   update: u,
+  linkedPost,
   linkedPostTitle,
   linkedPostThumbUrl,
   onOpenSource,
+  photoViewerCreator,
 }: {
   update: import('@/types').ProfileUpdate;
+  linkedPost?: import('@/types').Post;
   linkedPostTitle?: string;
   linkedPostThumbUrl?: string;
   onOpenSource: () => void;
+  photoViewerCreator: PulsePhotoViewerCreator;
 }) {
   const display = getMyPulseDisplayType(u);
   const caption = (u.content?.trim() || '').slice(0, 1000);
@@ -996,7 +1030,12 @@ function TypedBody({
         {caption ? (
           <CaptionWithMentions text={caption} style={styles.body} />
         ) : null}
-        <PhotosGrid urls={urls} />
+        <PhotosGrid
+          urls={urls}
+          update={u}
+          linkedPost={linkedPost}
+          creator={photoViewerCreator}
+        />
       </View>
     );
   }
@@ -1113,7 +1152,22 @@ function TypedBody({
 //  PhotosGrid — mirrors the card layout but at full detail size
 // ════════════════════════════════════════════════════════════════════
 
-function PhotosGrid({ urls }: { urls: string[] }) {
+function PhotosGrid({
+  urls,
+  update,
+  linkedPost,
+  creator,
+}: {
+  urls: string[];
+  update: import('@/types').ProfileUpdate;
+  linkedPost?: import('@/types').Post;
+  creator: PulsePhotoViewerCreator;
+}) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const galleryItems = useMemo(
+    () => buildPulseUpdatePhotoGallery(update, linkedPost),
+    [update, linkedPost],
+  );
   const [soloAspect, setSoloAspect] = useState<number | null>(null);
   const soloUri = urls[0] ?? '';
 
@@ -1129,35 +1183,69 @@ function PhotosGrid({ urls }: { urls: string[] }) {
         ? Math.min(SCREEN_W / soloAspect, MY_PULSE_MEDIA_MAX_H)
         : Math.min(SCREEN_W, MY_PULSE_MEDIA_MAX_H * 0.85);
     return (
-      <ExpoImage
-        source={{ uri: urls[0] }}
-        style={[styles.gridSolo, { height: soloH }]}
-        contentFit="contain"
-        onLoad={(e) => {
-          const w = e.source?.width;
-          const h = e.source?.height;
-          if (typeof w === 'number' && typeof h === 'number' && h > 0) {
-            setSoloAspect(w / h);
-          }
-        }}
-        {...pulseImageFeedHeroProps}
-      />
+      <>
+        <Pressable
+          onPress={() => setOpenIndex(0)}
+          accessibilityRole="button"
+          accessibilityLabel="View photo"
+        >
+          <ExpoImage
+            source={{ uri: urls[0] }}
+            style={[styles.gridSolo, { height: soloH }]}
+            contentFit="contain"
+            onLoad={(e) => {
+              const w = e.source?.width;
+              const h = e.source?.height;
+              if (typeof w === 'number' && typeof h === 'number' && h > 0) {
+                setSoloAspect(w / h);
+              }
+            }}
+            {...pulseImageFeedHeroProps}
+          />
+        </Pressable>
+        {openIndex != null ? (
+          <PulsePhotoViewerModal
+            visible
+            items={galleryItems}
+            initialIndex={openIndex}
+            creator={creator}
+            onClose={() => setOpenIndex(null)}
+          />
+        ) : null}
+      </>
     );
   }
 
   // 2+ → responsive grid. 2 per row, trailing single when count is odd.
   return (
-    <View style={styles.gridWrap}>
-      {urls.map((u, i) => (
-        <ExpoImage
-          key={`${u}-${i}`}
-          source={{ uri: u }}
-          style={styles.gridTile}
-          contentFit="contain"
-          {...pulseImageListThumbProps}
+    <>
+      <View style={styles.gridWrap}>
+        {urls.map((u, i) => (
+          <Pressable
+            key={`${u}-${i}`}
+            onPress={() => setOpenIndex(i)}
+            accessibilityRole="button"
+            accessibilityLabel={`View photo ${i + 1}`}
+          >
+            <ExpoImage
+              source={{ uri: u }}
+              style={styles.gridTile}
+              contentFit="contain"
+              {...pulseImageListThumbProps}
+            />
+          </Pressable>
+        ))}
+      </View>
+      {openIndex != null ? (
+        <PulsePhotoViewerModal
+          visible
+          items={galleryItems}
+          initialIndex={openIndex}
+          creator={creator}
+          onClose={() => setOpenIndex(null)}
         />
-      ))}
-    </View>
+      ) : null}
+    </>
   );
 }
 
@@ -1216,6 +1304,8 @@ function CommentRow({
         ringColor={colors.dark.border}
         pulseAvatarFrame={comment.authorPulseAvatarFrame}
         ownerDisplayName={comment.authorName ?? 'Someone'}
+        userId={comment.authorId}
+        priority="comment"
         onPress={onPressAuthor}
       />
       <View style={styles.commentBody}>

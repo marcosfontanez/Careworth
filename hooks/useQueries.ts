@@ -13,6 +13,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { streaksService } from '@/services/social/streaks';
 import type { FeedType, Post, CircleThread } from '@/types';
 import { postsService, profilesService, circleModerationService } from '@/services/supabase';
+import { postHasDemoCatalogMedia } from '@/utils/postPreviewMedia';
+import { profileBoardShoutoutsService } from '@/services/supabase/profileBoardShoutouts';
+import { coerceProfileBoardFeed } from '@/lib/pulseBoardRetention';
+import { pulseWeeklyRecapService } from '@/services/supabase/pulseWeeklyRecap';
 import {
   circleContentKeys,
   commentKeys,
@@ -20,6 +24,8 @@ import {
   feedKeys,
   likedPostKeys,
   postKeys,
+  profileBoardKeys,
+  pulseWeeklyRecapKeys,
   profileUpdateKeys,
   userKeys,
 } from '@/lib/queryKeys';
@@ -47,11 +53,35 @@ export { useLiveStreams, useStream } from '@/hooks/useLiveQueries';
  * new domain hooks (e.g. `hooks/useLiveQueries.ts`, `hooks/queries/feed.ts`) and re-exporting here.
  */
 
-/** Mirrors `postsService.getById` eligibility — non-live posts only resolve for the author. */
-function linkedPostResolvableForViewer(post: Post, viewerId: string | null): boolean {
-  const s = (post.scheduledStatus ?? 'live').trim().toLowerCase();
-  if (s === 'live') return true;
-  return viewerId != null && viewerId === post.creatorId;
+/** My Pulse / Media Hub pins — owner chose to link; RLS governs access, hide demo seeds only. */
+function linkedPostUsableForProfilePin(post: Post): boolean {
+  return !postHasDemoCatalogMedia(post);
+}
+
+/**
+ * Resolve a feed post referenced by a My Pulse pin when the parent map
+ * misses (batch lag, id not in owner posts, etc.).
+ */
+export function useResolvedLinkedPost(
+  linkedPostId: string | undefined,
+  resolveFromParent?: (id: string) => Post | undefined,
+): Post | undefined {
+  const { user } = useAuth();
+  const viewerId = user?.id ?? null;
+  const id = linkedPostId?.trim() ?? '';
+  const fromParent = id ? resolveFromParent?.(id) : undefined;
+
+  const { data: fetched } = useQuery({
+    queryKey: postKeys.detail(id, viewerId),
+    queryFn: async () => (await postsService.getById(id, viewerId)) ?? null,
+    enabled: Boolean(id) && !fromParent,
+    staleTime: 60_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
+  });
+
+  if (fromParent) return fromParent;
+  return fetched ?? undefined;
 }
 
 /** React Query cache may hold a plain object instead of Map — normalize before `.get`. */
@@ -249,10 +279,8 @@ export function useLinkedPostsMap(ids: readonly (string | null | undefined)[]): 
     const idList = idsKey.split(',');
     for (const id of idList) {
       const post = batchMap.get(id);
-      if (post && linkedPostResolvableForViewer(post, viewerId)) {
+      if (post && linkedPostUsableForProfilePin(post)) {
         queryClient.setQueryData(postKeys.detail(id, viewerId), post);
-      } else {
-        queryClient.setQueryData(postKeys.detail(id, viewerId), null);
       }
     }
   }, [batchMap, batchMapRaw, idsKey, queryClient, viewerId]);
@@ -263,12 +291,12 @@ export function useLinkedPostsMap(ids: readonly (string | null | undefined)[]): 
     const idList = idsKey.split(',');
     for (const id of idList) {
       const fromBatch = batchMap.get(id);
-      if (fromBatch && linkedPostResolvableForViewer(fromBatch, viewerId)) {
+      if (fromBatch && linkedPostUsableForProfilePin(fromBatch)) {
         m.set(id, fromBatch);
         continue;
       }
       const cached = queryClient.getQueryData(postKeys.detail(id, viewerId));
-      if (cached != null && typeof cached === 'object' && linkedPostResolvableForViewer(cached as Post, viewerId)) {
+      if (cached != null && typeof cached === 'object' && linkedPostUsableForProfilePin(cached as Post)) {
         m.set(id, cached as Post);
       }
     }
@@ -314,7 +342,6 @@ export function useCommunityPosts(communityId: string) {
   };
 }
 
-/** Viewer’s selected reaction emoji per post in a circle wall (batch over current list). */
 export function useCircleViewerPostReactions(communityId: string, postIds: string[]) {
   const { user } = useAuth();
   const sig = useMemo(() => [...postIds].sort().join(','), [postIds]);
@@ -612,6 +639,49 @@ export function useProfileUpdates(userId: string | undefined) {
     queryFn: () => profileUpdatesService.getLatestForUser(userId!, 5, viewerId),
     enabled: !!userId,
     staleTime: 30_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
+  });
+}
+
+/** Pics updates for Media Hub — wider than the 5-slot My Pulse rail. */
+export function useMediaHubPicsUpdates(userId: string, enabled = true) {
+  const { user: authUser } = useAuth();
+  const viewerId = authUser?.id ?? null;
+  return useQuery({
+    queryKey: profileUpdateKeys.mediaHubPics(userId, viewerId),
+    queryFn: () => profileUpdatesService.getPicsForMediaHub(userId, 40, viewerId),
+    enabled: !!userId && enabled,
+    staleTime: 30_000,
+    gcTime: 1000 * 60 * 15,
+    refetchOnMount: false,
+  });
+}
+
+/** Visitor shoutouts on a Pulse Board (migration 259). */
+export function useProfileBoardFeed(profileOwnerId: string, enabled = true) {
+  return useQuery({
+    queryKey: profileBoardKeys.forProfile(profileOwnerId),
+    queryFn: () => profileBoardShoutoutsService.getFeed(profileOwnerId),
+    select: (data) => coerceProfileBoardFeed(data) ?? { pinned: null, items: [], isOwnerView: false },
+    enabled: !!profileOwnerId && enabled,
+    staleTime: 20_000,
+    gcTime: 1000 * 60 * 10,
+    refetchOnMount: 'always',
+  });
+}
+
+/** @deprecated Use useProfileBoardFeed */
+export function useProfileBoardShoutouts(profileOwnerId: string, enabled = true) {
+  return useProfileBoardFeed(profileOwnerId, enabled);
+}
+
+export function usePulseWeeklyRecap(userId: string, enabled = true) {
+  return useQuery({
+    queryKey: pulseWeeklyRecapKeys.forUser(userId),
+    queryFn: () => pulseWeeklyRecapService.getForUser(userId),
+    enabled: !!userId && enabled,
+    staleTime: 60_000,
     gcTime: 1000 * 60 * 15,
     refetchOnMount: false,
   });

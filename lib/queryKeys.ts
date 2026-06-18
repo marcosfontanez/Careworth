@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Central React Query key factory.
  *
  * Why this exists:
@@ -142,6 +142,25 @@ export const profileUpdateKeys = {
     ['profileUpdate', id, maybe(viewerId)] as const,
   /** Comments for a single My Pulse update. */
   comments: (id: string) => ['profileUpdateComments', id] as const,
+  /** All pics updates for Media Hub (beyond the 5-slot rail). */
+  mediaHubPics: (ownerUserId: string, viewerId: Nullable<string>) =>
+    ['profileUpdates', 'mediaHubPics', ownerUserId, maybe(viewerId)] as const,
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Pulse Board (visitor shoutouts on My Pulse)
+// ─────────────────────────────────────────────────────────────────────
+export const profileBoardKeys = {
+  root: () => ['profileBoardShoutouts'] as const,
+  forProfile: (ownerUserId: string) =>
+    ['profileBoardShoutouts', 'feed', ownerUserId] as const,
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// My Pulse weekly recap (owner ritual)
+// ─────────────────────────────────────────────────────────────────────
+export const pulseWeeklyRecapKeys = {
+  forUser: (userId: Nullable<string>) => ['pulseWeeklyRecap', maybe(userId)] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -190,6 +209,17 @@ export const circleContentKeys = {
     ['circleThread', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId] as const,
   replies: (threadId: string) =>
     ['circleReplies', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId] as const,
+  viewerReplyHelpful: (threadId: string, viewerId: string, replyIdsSig: string) =>
+    ['circleReplyHelpful', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, threadId, viewerId, replyIdsSig] as const,
+  joinedActivityBadges: (communityIdsKey: string, viewerId: string) =>
+    ['circles', 'joinedActivityBadges', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityIdsKey, viewerId] as const,
+  welcomeThread: (communityId: string) =>
+    ['circleWelcomeThread', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId] as const,
+  topHelpers: (communityId: string) =>
+    ['circleTopHelpers', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId] as const,
+  /** Current week's DB-backed prompt for a Circle room (slug-scoped). */
+  weeklyPrompt: (circleSlug: string) =>
+    ['circleWeeklyPrompt', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, circleSlug] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────

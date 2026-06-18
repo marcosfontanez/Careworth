@@ -12,7 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
-import { colors, borderRadius } from '@/theme';
+import { colors, borderRadius, rhythm, spacing } from '@/theme';
 import { formatCount, timeAgo } from '@/utils/format';
 import { anonymousDisplayName } from '@/lib/anonymousCircle';
 import { postHasDownloadableMedia, shareDownloadedPostMedia } from '@/lib/postMediaActions';
@@ -139,6 +139,8 @@ export const CirclePostCard = React.memo(function CirclePostCard({
                 ringColor={colors.dark.border}
                 pulseAvatarFrame={post.creator?.pulseAvatarFrame}
                 ownerDisplayName={displayName}
+                userId={post.creator?.id}
+                priority="circle-list"
                 onPress={() => onProfile()}
               />
             ) : (
@@ -148,6 +150,8 @@ export const CirclePostCard = React.memo(function CirclePostCard({
                 ringColor={colors.dark.border}
                 pulseAvatarFrame={post.creator?.pulseAvatarFrame}
                 ownerDisplayName={displayName}
+                userId={post.creator?.id}
+                priority="circle-list"
                 disableLongPressInfo={isAnonymousRoom}
               />
             )}
@@ -363,12 +367,12 @@ function ActionButton({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.dark.card,
-    marginHorizontal: 12,
-    marginTop: 10,
-    borderRadius: borderRadius.card ?? 16,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 2,
+    marginHorizontal: rhythm.circleRoomHorizontalInset,
+    marginTop: rhythm.cardGap,
+    borderRadius: rhythm.cardRadius,
+    paddingHorizontal: rhythm.circlePanelPadding,
+    paddingTop: rhythm.cardPaddingMedium,
+    paddingBottom: rhythm.cardPaddingSmall / 2,
     borderWidth: 1,
     borderColor: colors.dark.border,
     borderLeftWidth: 3.5,
@@ -391,9 +395,15 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  cardMainPress: { borderRadius: (borderRadius.card ?? 16) - 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  creatorRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
+  cardMainPress: { borderRadius: rhythm.cardRadius - 1 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: rhythm.cardGap },
+  creatorRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: rhythm.cardGap,
+    minWidth: 0,
+  },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.dark.cardAlt },
   anonAvatar: {
     alignItems: 'center',
@@ -402,26 +412,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
   anonGlyph: { fontSize: 15, fontWeight: '900', color: colors.dark.textSecondary },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, flexWrap: 'wrap' },
   name: { fontSize: 13.5, fontWeight: '800', color: colors.dark.text, letterSpacing: -0.2 },
   neonPillsInCard: { marginTop: 0, marginBottom: 2, alignSelf: 'flex-start' },
   metaLine: { fontSize: 11, color: colors.dark.textMuted, marginTop: 1 },
-  moreBtn: { padding: 4 },
+  moreBtn: { padding: rhythm.cardPaddingSmall / 2 },
 
-  body: { marginTop: 5, gap: 2 },
-  clipAttributionRow: { marginTop: 6, marginBottom: 2 },
+  body: { marginTop: spacing.xs + 1, gap: 2 },
+  clipAttributionRow: { marginTop: spacing.xs + 2, marginBottom: 2 },
   title: { fontSize: 14.5, fontWeight: '800', color: colors.dark.text, lineHeight: 19 },
   caption: { fontSize: 13, color: colors.dark.textSecondary, lineHeight: 18 },
 
   mediaWrapVideo: {
-    marginTop: 7,
+    marginTop: spacing.xs + 3,
     borderRadius: borderRadius.md ?? 10,
     overflow: 'hidden',
     height: 168,
     backgroundColor: colors.dark.cardAlt,
   },
   mediaWrapPhoto: {
-    marginTop: 7,
+    marginTop: spacing.xs + 3,
     borderRadius: borderRadius.md ?? 10,
     overflow: 'hidden',
     width: '100%',
@@ -436,13 +446,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
 
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 5 },
-  tagChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, marginTop: spacing.xs + 1 },
+  tagChip: { paddingHorizontal: rhythm.cardPaddingSmall, paddingVertical: 2, borderRadius: 999 },
   tagText: { fontSize: 11, fontWeight: '700' },
 
   reactionsSection: {
-    marginTop: 6,
-    paddingTop: 6,
+    marginTop: spacing.xs + 2,
+    paddingTop: spacing.xs + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
   },
@@ -451,9 +461,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 6,
-    paddingBottom: 4,
+    marginTop: rhythm.cardPaddingSmall / 2,
+    paddingTop: spacing.xs + 2,
+    paddingBottom: rhythm.cardPaddingSmall / 2,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.dark.border,
   },
@@ -462,8 +472,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 4,
+    gap: spacing.xs + 1,
+    paddingVertical: rhythm.cardPaddingSmall / 2,
   },
   actionText: { fontSize: 12, fontWeight: '700' },
 });

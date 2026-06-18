@@ -35,6 +35,8 @@ import {
 } from '@/components/mypage/CustomizeMoreTabs';
 import { CustomizeRowsCard } from '@/components/mypage/CustomizeRowsCard';
 import { CustomizeTextEditorSheet } from '@/components/mypage/CustomizeTextEditorSheet';
+import { PulseStatusEditorSheet } from '@/components/mypage/PulseStatusEditorSheet';
+import { resolveMyPulseIntroLine } from '@/lib/pulseStatusDisplay';
 import { EquippedBorderPanel } from '@/components/borders/EquippedBorderPanel';
 import { BordersCollectionStrip } from '@/components/borders/inventory/BordersCollectionStrip';
 import { useOwnedBorderEntries } from '@/hooks/useOwnedBorderEntries';
@@ -97,7 +99,7 @@ export default function MyPageAppearanceScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ focus?: string; collectionId?: string }>();
   const insets = useSafeAreaInsets();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, applyProfilePatch } = useAuth();
   const { accentColor } = useProfileCustomization();
   const moreRef = useRef<CustomizeMoreTabsHandle>(null);
   const lookScrollRef = useRef<ScrollView>(null);
@@ -106,6 +108,8 @@ export default function MyPageAppearanceScreen() {
 
   const focusBorders =
     params.focus === 'borders' || (Array.isArray(params.focus) && params.focus[0] === 'borders');
+  const focusIntro =
+    params.focus === 'intro' || (Array.isArray(params.focus) && params.focus[0] === 'intro');
 
   useEffect(() => {
     didScrollToBorders.current = false;
@@ -134,17 +138,25 @@ export default function MyPageAppearanceScreen() {
   const [uploading, setUploading] = useState<'banner' | 'avatar' | null>(null);
   const [avatarCropAsset, setAvatarCropAsset] = useState<MediaAsset | null>(null);
   const [identityTagsInput, setIdentityTagsInput] = useState('');
-  const [pageIntroLine, setPageIntroLine] = useState('');
   const [hidePulseMusicPlayerOnMyPage, setHidePulseMusicPlayerOnMyPage] = useState(false);
+  const [pulseBoardEnabled, setPulseBoardEnabled] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   /** Per-field editor sheets for the text rows. */
   const [tagsSheetOpen, setTagsSheetOpen] = useState(false);
   const [introSheetOpen, setIntroSheetOpen] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
-  const [savingIntro, setSavingIntro] = useState(false);
-  /** Light debounce for the music-player visibility switch so a quick toggle doesn't double-fire. */
+
+  useEffect(() => {
+    if (focusIntro) {
+      setMainTab('look');
+      setIntroSheetOpen(true);
+    }
+  }, [focusIntro]);
+
+  /** Light debounce for visibility switches so a quick toggle doesn't double-fire. */
   const hideMusicPlayerPendingRef = useRef<NodeJS.Timeout | null>(null);
+  const pulseBoardPendingRef = useRef<NodeJS.Timeout | null>(null);
 
   const getSongFields = useCallback(
     () => ({
@@ -165,9 +177,108 @@ export default function MyPageAppearanceScreen() {
     setBannerPreview(profile.bannerUrl ?? null);
     setAvatarPreview(profile.avatarUrl || null);
     setIdentityTagsInput((profile.identityTags ?? []).join(', '));
-    setPageIntroLine(profile.bio?.trim() ? profile.bio : '');
     setHidePulseMusicPlayerOnMyPage(Boolean(profile.hidePulseMusicPlayerOnMyPage));
+    setPulseBoardEnabled(profile.pulseBoardEnabled !== false);
   }, [profile]);
+
+  const onAvatarCropComplete = useCallback(
+    async (asset: MediaAsset) => {
+      if (!uid) return;
+      setAvatarCropAsset(null);
+      try {
+        setUploading('avatar');
+        const normalized = await normalizeRasterForUpload(asset, 'avatar');
+        const url = await storageService.uploadAvatar(uid, {
+          uri: normalized.uri,
+          type: normalized.mimeType,
+          name: normalized.fileName,
+        });
+        setAvatarPreview(url);
+        await profilesService.update(uid, { avatar_url: url });
+        await refreshProfile();
+      } catch (e: unknown) {
+        Alert.alert('Upload failed', supabaseMessage(e));
+      } finally {
+        setUploading(null);
+      }
+    },
+    [uid, refreshProfile],
+  );
+
+  const handleSaveTags = useCallback(
+    async (raw: string) => {
+      if (!uid) return;
+      setSavingTags(true);
+      try {
+        const tags = parseIdentityTags(raw);
+        await profilesService.update(uid, { identity_tags: tags });
+        setIdentityTagsInput(raw);
+        await refreshProfile();
+        setTagsSheetOpen(false);
+      } catch (e: unknown) {
+        Alert.alert('Could not save tags', supabaseMessage(e));
+      } finally {
+        setSavingTags(false);
+      }
+    },
+    [uid, refreshProfile],
+  );
+
+  const persistVibe = useCallback(
+    async (next: { title: string; artist: string; url: string; artworkUrl: string }) => {
+      if (!uid) return;
+      try {
+        await profilesService.update(uid, {
+          profile_song_title: next.title.trim() || null,
+          profile_song_artist: next.artist.trim() || null,
+          profile_song_url: next.url.trim() || null,
+          profile_song_artwork_url: next.artworkUrl.trim() || null,
+        });
+        await refreshProfile();
+      } catch (e: unknown) {
+        Alert.alert('Could not save song', supabaseMessage(e));
+      }
+    },
+    [uid, refreshProfile],
+  );
+
+  const onToggleHidePulseMusicPlayer = useCallback(
+    (next: boolean) => {
+      if (!uid) return;
+      setHidePulseMusicPlayerOnMyPage(next);
+      if (hideMusicPlayerPendingRef.current) clearTimeout(hideMusicPlayerPendingRef.current);
+      hideMusicPlayerPendingRef.current = setTimeout(async () => {
+        try {
+          await profilesService.update(uid, { hide_pulse_music_player_on_my_page: next });
+          await refreshProfile();
+        } catch (e: unknown) {
+          Alert.alert('Could not save preference', supabaseMessage(e));
+          setHidePulseMusicPlayerOnMyPage(!next);
+        }
+      }, 220);
+    },
+    [uid, refreshProfile],
+  );
+
+  const onTogglePulseBoardEnabled = useCallback(
+    (next: boolean) => {
+      if (!uid) return;
+      setPulseBoardEnabled(next);
+      applyProfilePatch({ pulseBoardEnabled: next });
+      if (pulseBoardPendingRef.current) clearTimeout(pulseBoardPendingRef.current);
+      pulseBoardPendingRef.current = setTimeout(async () => {
+        try {
+          await profilesService.update(uid, { pulse_board_enabled: next });
+          await refreshProfile();
+        } catch (e: unknown) {
+          Alert.alert('Could not save preference', supabaseMessage(e));
+          setPulseBoardEnabled(!next);
+          applyProfilePatch({ pulseBoardEnabled: !next });
+        }
+      }, 220);
+    },
+    [uid, refreshProfile, applyProfilePatch],
+  );
 
   if (!uid || !profile) {
     return (
@@ -176,6 +287,12 @@ export default function MyPageAppearanceScreen() {
       </View>
     );
   }
+
+  const { text: pulseIntroText, emoji: pulseIntroEmoji } = resolveMyPulseIntroLine(profile);
+  const pulseIntroPreview =
+    pulseIntroEmoji && pulseIntroText
+      ? `${pulseIntroEmoji} ${pulseIntroText}`
+      : pulseIntroText;
 
   const pickBanner = async () => {
     try {
@@ -221,83 +338,6 @@ export default function MyPageAppearanceScreen() {
     }
   };
 
-  const onAvatarCropComplete = useCallback(
-    async (asset: MediaAsset) => {
-      setAvatarCropAsset(null);
-      try {
-        setUploading('avatar');
-        const normalized = await normalizeRasterForUpload(asset, 'avatar');
-        const url = await storageService.uploadAvatar(uid, {
-          uri: normalized.uri,
-          type: normalized.mimeType,
-          name: normalized.fileName,
-        });
-        setAvatarPreview(url);
-        await profilesService.update(uid, { avatar_url: url });
-        await refreshProfile();
-      } catch (e: unknown) {
-        Alert.alert('Upload failed', supabaseMessage(e));
-      } finally {
-        setUploading(null);
-      }
-    },
-    [uid, refreshProfile],
-  );
-
-  /** Save tags and intro independently — each opens its own editor sheet. */
-  const handleSaveTags = useCallback(
-    async (raw: string) => {
-      setSavingTags(true);
-      try {
-        const tags = parseIdentityTags(raw);
-        await profilesService.update(uid, { identity_tags: tags });
-        setIdentityTagsInput(raw);
-        await refreshProfile();
-        setTagsSheetOpen(false);
-      } catch (e: unknown) {
-        Alert.alert('Could not save tags', supabaseMessage(e));
-      } finally {
-        setSavingTags(false);
-      }
-    },
-    [uid, refreshProfile],
-  );
-
-  const handleSaveIntro = useCallback(
-    async (raw: string) => {
-      setSavingIntro(true);
-      try {
-        const trimmed = raw.trim();
-        await profilesService.update(uid, { bio: trimmed });
-        setPageIntroLine(trimmed);
-        await refreshProfile();
-        setIntroSheetOpen(false);
-      } catch (e: unknown) {
-        Alert.alert('Could not save intro', supabaseMessage(e));
-      } finally {
-        setSavingIntro(false);
-      }
-    },
-    [uid, refreshProfile],
-  );
-
-  const persistVibe = useCallback(
-    async (next: { title: string; artist: string; url: string; artworkUrl: string }) => {
-      try {
-        await profilesService.update(uid, {
-          profile_song_title: next.title.trim() || null,
-          profile_song_artist: next.artist.trim() || null,
-          profile_song_url: next.url.trim() || null,
-          profile_song_artwork_url: next.artworkUrl.trim() || null,
-        });
-        await refreshProfile();
-      } catch (e: unknown) {
-        Alert.alert('Could not save song', supabaseMessage(e));
-      }
-    },
-    [uid, refreshProfile],
-  );
-
   const onPickSong = (song: PickedSong) => {
     setSongTitle(song.title);
     setSongArtist(song.artist);
@@ -319,33 +359,6 @@ export default function MyPageAppearanceScreen() {
     void persistVibe({ title: '', artist: '', url: '', artworkUrl: '' });
   };
 
-  /**
-   * Current Vibe player visibility (owner My Pulse only): optimistic local
-   * update + debounced persist so tapping the switch feels instant.
-   */
-  const onToggleHidePulseMusicPlayer = useCallback(
-    (next: boolean) => {
-      setHidePulseMusicPlayerOnMyPage(next);
-      if (hideMusicPlayerPendingRef.current) clearTimeout(hideMusicPlayerPendingRef.current);
-      hideMusicPlayerPendingRef.current = setTimeout(async () => {
-        try {
-          await profilesService.update(uid, { hide_pulse_music_player_on_my_page: next });
-          await refreshProfile();
-        } catch (e: unknown) {
-          Alert.alert('Could not save preference', supabaseMessage(e));
-          /** Revert the optimistic update so the UI matches the server. */
-          setHidePulseMusicPlayerOnMyPage(!next);
-        }
-      }, 220);
-    },
-    [uid, refreshProfile],
-  );
-
-  /**
-   * Profile tab still has bulk fields (handle, name, role, etc.) so it
-   * keeps a global Save button. Look tab saves per-row, so the header
-   * action is hidden when the Look tab is active.
-   */
   const handleHeaderSave = async () => {
     if (mainTab === 'look') return;
     setMoreSaving(true);
@@ -450,11 +463,12 @@ export default function MyPageAppearanceScreen() {
               fallbackBannerUrl={DEFAULT_BANNER}
               fallbackAvatarUrl={DEFAULT_AVATAR_PLACEHOLDER}
               neonTags={parsedTags}
-              pageIntroValue={pageIntroLine}
+              pageIntroValue={pulseIntroPreview}
               songTitle={songTitle}
               songArtist={songArtist}
               songArtworkUrl={songArtworkUrl}
               hidePulseMusicPlayerOnMyPage={hidePulseMusicPlayerOnMyPage}
+              pulseBoardEnabled={pulseBoardEnabled}
               uploadingBanner={uploading === 'banner'}
               uploadingAvatar={uploading === 'avatar'}
               onChangeBanner={pickBanner}
@@ -464,6 +478,7 @@ export default function MyPageAppearanceScreen() {
               onChangeVibe={() => setPickerOpen(true)}
               onClearVibe={clearSong}
               onToggleHidePulseMusicPlayer={onToggleHidePulseMusicPlayer}
+              onTogglePulseBoardEnabled={onTogglePulseBoardEnabled}
             />
 
             <View
@@ -532,19 +547,13 @@ export default function MyPageAppearanceScreen() {
         }}
       />
 
-      <CustomizeTextEditorSheet
+      <PulseStatusEditorSheet
         visible={introSheetOpen}
-        title="Page intro"
-        kicker="Your space"
-        helperText="One or two short lines that appear under your tags on My Pulse — who you are, what you create, or your vibe."
-        initialValue={pageIntroLine}
-        placeholder="Aspiring nurse creator · Night shift · Coffee first"
-        maxLength={200}
-        multiline
-        showCounter
-        saving={savingIntro}
-        onCancel={() => setIntroSheetOpen(false)}
-        onSave={handleSaveIntro}
+        userId={uid}
+        initialText={profile.pulseStatusText ?? profile.bio}
+        initialEmoji={profile.pulseStatusEmoji}
+        onClose={() => setIntroSheetOpen(false)}
+        onSaved={refreshProfile}
       />
 
       <CircularAvatarCropModal

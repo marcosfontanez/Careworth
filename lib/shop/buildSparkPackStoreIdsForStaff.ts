@@ -1,4 +1,5 @@
 import type { ShopItemRow } from '@/lib/shop/types';
+import { APP_STORE_SPARK_PACK_PRODUCTS } from '@/lib/shop/appStoreProducts';
 
 /**
  * Human-readable IAP SKU list for staff (App Store Connect / Play Console).
@@ -11,6 +12,11 @@ export function buildSparkPackStoreIdsForStaff(packs: ShopItemRow[]): string {
 
   const lines: string[] = [
     'Pulse Shop spark packs — create consumables with these exact product IDs:',
+    '',
+    'iOS checklist (lib/shop/appStoreProducts.ts):',
+    ...APP_STORE_SPARK_PACK_PRODUCTS.map((p) => `  · ${p.productId} (${p.label})`),
+    '',
+    'Catalog rows (shop_items):',
     '',
   ];
 

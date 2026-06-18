@@ -4,6 +4,7 @@ const MUTED = '@pulseverse_circles_muted_ids';
 const RECENT_SEARCH = '@pulseverse_circles_recent_search';
 const QUESTIONS_HINT = '@pulseverse_circles_questions_hint_v1';
 const THREAD_READ_PREFIX = '@pulseverse_circle_thread_read_';
+const VISIT_PREFIX = '@pulseverse_circle_visit_';
 
 function parseJsonSet(raw: string | null): Set<string> {
   if (!raw) return new Set();
@@ -88,4 +89,32 @@ export async function setThreadReadReplyCount(threadId: string, replyCount: numb
   try {
     await AsyncStorage.setItem(THREAD_READ_PREFIX + threadId, String(replyCount));
   } catch {}
+}
+
+/** Last time the viewer opened a circle room — drives “new since visit” badges. */
+export async function getCircleLastVisitAt(communityId: string): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(VISIT_PREFIX + communityId);
+    return raw?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCircleLastVisitAt(communityId: string, at: string = new Date().toISOString()): Promise<void> {
+  try {
+    await AsyncStorage.setItem(VISIT_PREFIX + communityId, at);
+  } catch {}
+}
+
+/** Batch-read last visit timestamps for joined circles. */
+export async function getCircleLastVisitMap(communityIds: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  await Promise.all(
+    communityIds.map(async (id) => {
+      const at = await getCircleLastVisitAt(id);
+      if (at) out[id] = at;
+    }),
+  );
+  return out;
 }

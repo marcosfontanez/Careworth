@@ -21,6 +21,8 @@ export const borderRadius = {
   card: 22,
   chip: 14,
   button: 16,
+  /** WIP compat — capsule pills/chips; same radius as `full`. */
+  pill: 9999,
   sheet: 28,
   full: 9999,
 } as const;

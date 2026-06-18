@@ -4,12 +4,13 @@ import { useRouter } from 'expo-router';
 import { openPulsePage } from '@/lib/navigation/pulsePageRoutes';
 import { BorderedAvatar } from '@/components/borders/BorderedAvatar';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { colors, rhythm } from '@/theme';
 import { timeAgo } from '@/utils/format';
 import { isAnonymousConfessionCircle, anonymousDisplayName } from '@/lib/anonymousCircle';
 import { CIRCLE_REPLY_REMOVED_TOMBSTONE } from '@/lib/circleModeration';
 import { buildNeonPillTags } from '@/lib/buildNeonPillTags';
 import { CommentRichText } from '@/components/ui/CommentRichText';
+import { CircleReplyHelpfulButton } from '@/components/circles/CircleReplyHelpfulButton';
 import type { CircleReply, CreatorSummary } from '@/types';
 
 type Props = {
@@ -20,9 +21,26 @@ type Props = {
   onReport?: () => void;
   canModerate?: boolean;
   onModerate?: () => void;
+  helpfulCount?: number;
+  markedHelpful?: boolean;
+  onToggleHelpful?: () => void;
+  helpfulDisabled?: boolean;
+  accent?: string;
 };
 
-export function CircleReplyItem({ reply, circleSlug, threadId, onReport, canModerate, onModerate }: Props) {
+export function CircleReplyItem({
+  reply,
+  circleSlug,
+  threadId,
+  onReport,
+  canModerate,
+  onModerate,
+  helpfulCount,
+  markedHelpful = false,
+  onToggleHelpful,
+  helpfulDisabled,
+  accent,
+}: Props) {
   const isAnonRoom = isAnonymousConfessionCircle(circleSlug);
   const router = useRouter();
   const author: CreatorSummary = useMemo(
@@ -68,6 +86,8 @@ export function CircleReplyItem({ reply, circleSlug, threadId, onReport, canMode
           ringColor={colors.dark.border}
           pulseAvatarFrame={author.pulseAvatarFrame}
           ownerDisplayName={displayName}
+          userId={author.id}
+          priority="reply"
           onPress={() => openPulsePage(router, author.id)}
         />
       ) : (
@@ -77,6 +97,8 @@ export function CircleReplyItem({ reply, circleSlug, threadId, onReport, canMode
           ringColor={colors.dark.border}
           pulseAvatarFrame={author.pulseAvatarFrame}
           ownerDisplayName={displayName}
+          userId={author.id}
+          priority="reply"
           disableLongPressInfo={isAnonRoom}
         />
       )}
@@ -96,6 +118,15 @@ export function CircleReplyItem({ reply, circleSlug, threadId, onReport, canMode
           mentionsInteractive={!isAnonRoom && !reply.isModerationRemoved}
           linksInteractive={!isAnonRoom && !reply.isModerationRemoved}
         />
+        {!reply.isModerationRemoved && onToggleHelpful ? (
+          <CircleReplyHelpfulButton
+            count={helpfulCount ?? reply.helpfulCount ?? 0}
+            marked={markedHelpful}
+            accent={accent}
+            disabled={helpfulDisabled}
+            onPress={onToggleHelpful}
+          />
+        ) : null}
         {onReport && !reply.isModerationRemoved ? (
           <TouchableOpacity onPress={onReport} hitSlop={8} style={styles.reportBtn}>
             <Text style={styles.reportBtnText}>Report</Text>
@@ -116,16 +147,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    gap: rhythm.cardPaddingMedium,
+    paddingVertical: rhythm.cardPaddingMedium,
+    paddingHorizontal: rhythm.cardPaddingSmall,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.dark.border,
+    minHeight: rhythm.cardMinHeightMedium,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: rhythm.avatarSizeSmall,
+    height: rhythm.avatarSizeSmall,
+    borderRadius: rhythm.avatarSizeSmall / 2,
     backgroundColor: colors.dark.cardAlt,
     alignItems: 'center',
     justifyContent: 'center',

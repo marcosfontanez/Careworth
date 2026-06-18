@@ -40,6 +40,7 @@ import {
   readSponsorMeta,
 } from '@/lib/borders/category';
 import { readCampaignWindow } from '@/lib/borders/campaignWindow';
+import { shopItemUsesPremiumAnimatedOverlay } from '@/lib/borders/premiumBorderPreview';
 
 export type BorderDetailModalProps = {
   visible: boolean;
@@ -112,6 +113,7 @@ export function BorderDetailModal({
   const sponsor = category === 'advertiser' ? readSponsorMeta(item) : null;
   const campaign = readCampaignWindow(item);
   const showCountdown = !!(campaign.releaseAt || campaign.expiresAt);
+  const premiumShopPreview = shopItemUsesPremiumAnimatedOverlay(item);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -143,11 +145,12 @@ export function BorderDetailModal({
                 ) : null}
                 <BorderPreviewPlate
                   ringColor={ring}
-                  size={112}
+                  size={premiumShopPreview ? 128 : 112}
                   rankPlace={item.rank_place}
                   showMotionHint={motionHint}
                   locked={lockedPreview}
                   shopItem={item}
+                  frame={premiumShopPreview ? 'podium' : 'boxed'}
                 />
               </View>
 

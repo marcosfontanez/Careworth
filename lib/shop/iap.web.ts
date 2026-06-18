@@ -82,8 +82,25 @@ export async function prefetchStoreProducts(
   return { ok: false, message: 'Store product prefetch is only available in the iOS/Android app.' };
 }
 
+export async function listAllPendingStorePurchasesAggressive(): Promise<
+  Array<{ productId?: string; purchaseToken?: string | null }>
+> {
+  return [];
+}
+
 export async function reconcilePendingPurchases(
   _reFulfill: (p: PendingStorePurchase) => Promise<ReconcileDecision>,
+  _opts?: { userInitiated?: boolean },
 ): Promise<{ finished: number; left: number }> {
   return { finished: 0, left: 0 };
+}
+
+export function abortActivePurchase(): void {}
+
+export async function recoverPendingPurchaseForSku(_params: {
+  sku: string;
+  isConsumable?: boolean;
+  aggressive?: boolean;
+}): Promise<IapPurchaseResult | { ok: false; code: 'NO_PENDING'; message: string }> {
+  return { ok: false, code: 'NO_PENDING', message: 'Not available on web.' };
 }

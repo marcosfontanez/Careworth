@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, InteractionManager, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStore } from '@/store/useAppStore';
 import { profilesService } from '@/services/supabase/profiles';
+import { blockUser } from '@/services/supabase/blocks';
+import { profileBoardKeys } from '@/lib/queryKeys';
+import { useToast } from '@/components/ui/Toast';
 import { useUserPosts, useProfileUpdates } from '@/hooks/useQueries';
 import { MyPageContent } from '@/components/mypage/MyPageContent';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -23,6 +26,7 @@ export default function MyPulseTabScreen() {
     tierUp?: string;
   }>();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { profile: authProfile, user: authUser, isLoading: authLoading, applyProfilePatch, refreshProfile } = useAuth();
   const storeUser = useAppStore((s) => s.currentUser);
 
@@ -92,6 +96,10 @@ export default function MyPulseTabScreen() {
         profileShareCount: row.profileShareCount,
         selectedPulseAvatarFrameId: row.selectedPulseAvatarFrameId,
         pulseAvatarFrame: row.pulseAvatarFrame,
+        pulseStatusText: row.pulseStatusText,
+        pulseStatusEmoji: row.pulseStatusEmoji,
+        pulseStatusUpdatedAt: row.pulseStatusUpdatedAt,
+        pulseBoardEnabled: row.pulseBoardEnabled,
       });
     } catch {
       /* non-fatal — stat strip keeps last cached values */
@@ -187,6 +195,30 @@ export default function MyPulseTabScreen() {
     return <LoadingState />;
   }
 
+  const handleBlockBoardUser = (blockedId: string) => {
+    if (!authUser?.id) return;
+    Alert.alert('Block visitor', 'Block this visitor from your Pulse Board?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Block',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await blockUser(authUser.id, blockedId);
+              toast.show('Visitor blocked', 'success');
+              await queryClient.invalidateQueries({
+                queryKey: profileBoardKeys.forProfile(authUser.id),
+              });
+            } catch {
+              toast.show('Could not block visitor', 'error');
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
   return (
     <MyPageContent
       user={user}
@@ -195,6 +227,7 @@ export default function MyPulseTabScreen() {
       isOwner
       initialOpenPulseHistory={openPulseHistory === '1'}
       highlightShareTier={tierUp === '1'}
+      onBlockBoardUser={handleBlockBoardUser}
     />
   );
 }

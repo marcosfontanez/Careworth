@@ -25,6 +25,16 @@ export const GOOGLE_PLAY_LAUNCH_PRODUCTS: readonly GooglePlayLaunchProduct[] = [
 
 export const GOOGLE_PLAY_LAUNCH_PRODUCT_IDS = GOOGLE_PLAY_LAUNCH_PRODUCTS.map((p) => p.productId);
 
+/** Prefetch legacy IDs too so Play Billing cache includes stuck purchases. */
+export const GOOGLE_PLAY_PREFETCH_PRODUCT_IDS = [
+  ...GOOGLE_PLAY_LAUNCH_PRODUCT_IDS,
+  'com.pulseverse.sparks.100.android',
+  'com.pulseverse.sparks.500.android',
+  'com.pulseverse.sparks.1200.android',
+  'com.pulseverse.sparks.2500.android',
+  'com.pulseverse.sparks.6500.android',
+] as const;
+
 const consumableIds = new Set(
   GOOGLE_PLAY_LAUNCH_PRODUCTS.filter((p) => p.kind === 'consumable').map((p) => p.productId),
 );

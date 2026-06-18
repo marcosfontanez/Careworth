@@ -19,10 +19,12 @@ export function JoinButton({ joined, onToggle, compact }: Props) {
       {joined ? (
         <View style={styles.joinedInner}>
           <Ionicons name="checkmark-circle" size={16} color={pulseverse.electricSoft} />
-          <Text style={styles.txtJoined}>Saved</Text>
+          <Text style={styles.txtJoined}>Joined</Text>
         </View>
       ) : (
-        <Text style={styles.txtJoin}>Join for updates and posting</Text>
+        <Text style={styles.txtJoin} numberOfLines={1}>
+          Join Circle
+        </Text>
       )}
     </TouchableOpacity>
   );
@@ -30,12 +32,13 @@ export function JoinButton({ joined, onToggle, compact }: Props) {
 
 const styles = StyleSheet.create({
   btn: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: borderRadius.button,
     borderWidth: 1.5,
     borderColor: `${pulseverse.electric}99`,
     backgroundColor: 'transparent',
+    maxWidth: '100%',
   },
   btnCompact: {
     paddingHorizontal: 14,

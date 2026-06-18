@@ -8,6 +8,10 @@ import { colors } from './colors';
 export const pulseverse = {
   /** Primary UI chrome (tabs, pills, outlines, links) */
   electric: '#22D3EE',
+  /** WIP compat — alias of `electric` / `semantic.accentCyan`. */
+  accentCyan: '#22D3EE',
+  /** WIP compat — gradient partner blue; matches `primary.royal` / `semantic.accentBlue`. */
+  accentBlue: '#1E4ED8',
   /** Secondary icon / label on dark surfaces */
   electricSoft: '#67E8F9',
   /** Muted cyan for secondary emphasis */

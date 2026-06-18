@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { escapePostgrestIlike } from '@/lib/searchQuery';
+import { parseCircleMetadata, type CircleTopHelper } from '@/lib/circleIdentity';
 import type { Community } from '@/types';
 
 export function rowToCommunity(row: any): Community {
@@ -18,6 +19,7 @@ export function rowToCommunity(row: any): Community {
     trendingTopics: row.trending_topics ?? [],
     featuredOrder: row.featured_order ?? null,
     profileOpenCount: row.profile_open_count ?? 0,
+    identity: parseCircleMetadata(row.metadata),
   };
 }
 

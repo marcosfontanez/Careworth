@@ -14,7 +14,12 @@
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { err, jsonResponse, mapRpcException, ok, optionsResponse } from "../_shared/pulse-shop/responses.ts";
 import { verifyAppleReceipt } from "../_shared/pulse-shop/validate-apple.ts";
-import { verifyGoogleProduct } from "../_shared/pulse-shop/validate-google.ts";
+import { verifyAppleTransactionJws } from "../_shared/pulse-shop/validate-apple-jws.ts";
+import {
+  isAllowedAndroidStoreProductId,
+  playProductIdForGoogleVerify,
+} from "../_shared/pulse-shop/android-product-aliases.ts";
+import { verifyGoogleProduct, consumeGoogleConsumable } from "../_shared/pulse-shop/validate-google.ts";
 import {
   getSupabasePublishableKey,
   getSupabaseSecretKey,
@@ -39,7 +44,12 @@ type RequestBody = {
   shop_item_id: string;
   platform?: "ios" | "android";
   receipt?: {
-    ios?: { receipt_data_base64: string };
+    ios?: {
+      /** StoreKit 2 transaction JWS (react-native-iap v14 `purchase.purchaseToken`). Preferred. */
+      jws?: string;
+      /** Legacy base64 app receipt (StoreKit 1). Fallback for older clients. */
+      receipt_data_base64?: string;
+    };
     android?: { purchase_token: string; product_id?: string };
   };
   border_gift?: {
@@ -203,6 +213,7 @@ async function ensurePurchaseReceiptAndFulfill(params: {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return optionsResponse(req);
 
+  try {
   const supabaseUrl = getSupabaseUrl();
   const publishableKey = getSupabasePublishableKey();
   const secretKey = getSupabaseSecretKey();
@@ -278,34 +289,59 @@ Deno.serve(async (req: Request) => {
     let storeProductId = expectedPid;
     let externalId: string;
     let receiptPayload: Record<string, unknown>;
+    let androidPurchaseToken: string | null = null;
 
     if (platform === "ios") {
-      const secret = requireEnv("APPLE_IAP_SHARED_SECRET");
-      if (!secret) {
-        return jsonResponse(req, err("STORE_NOT_CONFIGURED", "APPLE_IAP_SHARED_SECRET is not set."), 503);
-      }
+      const jws = body.receipt?.ios?.jws?.trim();
       const b64 = body.receipt?.ios?.receipt_data_base64?.trim();
-      if (!b64) {
-        return jsonResponse(req, err("INVALID_INPUT", "receipt.ios.receipt_data_base64 is required."), 400);
+      if (jws) {
+        /** StoreKit 2 path (react-native-iap v14). No shared secret, no receipt refresh. */
+        const bundleId = requireEnv("APPLE_BUNDLE_ID") || "com.pulseverse.app";
+        const vr = await verifyAppleTransactionJws(jws, bundleId, expectedPid);
+        if (!vr.ok) {
+          return jsonResponse(req,
+            err("INVALID_RECEIPT", vr.message, { apple_status: vr.status }),
+            422,
+          );
+        }
+        if (vr.purchase.productId !== expectedPid) {
+          return jsonResponse(req, err("PRODUCT_MISMATCH", "Receipt product does not match catalog item."), 422);
+        }
+        storeProductId = vr.purchase.productId;
+        externalId = vr.purchase.transactionId;
+        receiptPayload = {
+          source: "apple_jws_storekit2",
+          transaction_id: vr.purchase.transactionId,
+          product_id: vr.purchase.productId,
+          environment: vr.purchase.environment,
+        };
+      } else if (b64) {
+        /** Legacy StoreKit 1 app receipt path (older app builds). */
+        const secret = requireEnv("APPLE_IAP_SHARED_SECRET");
+        if (!secret) {
+          return jsonResponse(req, err("STORE_NOT_CONFIGURED", "APPLE_IAP_SHARED_SECRET is not set."), 503);
+        }
+        const vr = await verifyAppleReceipt(b64, secret, expectedPid);
+        if (!vr.ok) {
+          return jsonResponse(req,
+            err("INVALID_RECEIPT", vr.message, { apple_status: vr.status }),
+            422,
+          );
+        }
+        if (vr.purchase.productId !== expectedPid) {
+          return jsonResponse(req, err("PRODUCT_MISMATCH", "Receipt product does not match catalog item."), 422);
+        }
+        storeProductId = vr.purchase.productId;
+        externalId = vr.purchase.transactionId;
+        receiptPayload = {
+          source: "apple_verifyReceipt",
+          transaction_id: vr.purchase.transactionId,
+          product_id: vr.purchase.productId,
+          raw_status: vr.purchase.rawStatus,
+        };
+      } else {
+        return jsonResponse(req, err("INVALID_INPUT", "receipt.ios.jws or receipt.ios.receipt_data_base64 is required."), 400);
       }
-      const vr = await verifyAppleReceipt(b64, secret, expectedPid);
-      if (!vr.ok) {
-        return jsonResponse(req,
-          err("INVALID_RECEIPT", vr.message, { apple_status: vr.status }),
-          422,
-        );
-      }
-      if (vr.purchase.productId !== expectedPid) {
-        return jsonResponse(req, err("PRODUCT_MISMATCH", "Receipt product does not match catalog item."), 422);
-      }
-      storeProductId = vr.purchase.productId;
-      externalId = vr.purchase.transactionId;
-      receiptPayload = {
-        source: "apple_verifyReceipt",
-        transaction_id: vr.purchase.transactionId,
-        product_id: vr.purchase.productId,
-        raw_status: vr.purchase.rawStatus,
-      };
     } else {
       const pkg = requireEnv("GOOGLE_PLAY_PACKAGE_NAME");
       const saJson = requireEnv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON");
@@ -319,18 +355,20 @@ Deno.serve(async (req: Request) => {
       if (!token) {
         return jsonResponse(req, err("INVALID_INPUT", "receipt.android.purchase_token is required."), 400);
       }
+      androidPurchaseToken = token;
       const clientProductId = body.receipt?.android?.product_id?.trim() || expectedPid;
-      if (clientProductId !== expectedPid) {
+      if (!isAllowedAndroidStoreProductId(clientProductId, expectedPid)) {
         return jsonResponse(req, err("PRODUCT_MISMATCH", "product_id does not match catalog."), 422);
       }
-      const vg = await verifyGoogleProduct(pkg, expectedPid, token, saJson);
+      const playProductId = playProductIdForGoogleVerify(clientProductId, expectedPid);
+      const vg = await verifyGoogleProduct(pkg, playProductId, token, saJson);
       if (!vg.ok) {
         return jsonResponse(req,
           err("STORE_REJECTED", vg.message, { http: vg.httpStatus }),
           422,
         );
       }
-      if (vg.purchase.productId !== expectedPid) {
+      if (!isAllowedAndroidStoreProductId(vg.purchase.productId, expectedPid)) {
         return jsonResponse(req, err("PRODUCT_MISMATCH", "Play purchase product mismatch."), 422);
       }
       storeProductId = vg.purchase.productId;
@@ -339,7 +377,8 @@ Deno.serve(async (req: Request) => {
         source: "google_androidpublisher",
         order_id: vg.purchase.transactionId,
         product_id: vg.purchase.productId,
-        purchase_token_prefix: token.slice(0, 12) + "…",
+        catalog_product_id: expectedPid,
+        purchase_token: token,
       };
     }
 
@@ -358,6 +397,20 @@ Deno.serve(async (req: Request) => {
             p_purchase_receipt_id: receiptId,
           }),
       });
+      if (
+        platform === "android" &&
+        androidPurchaseToken &&
+        typeof result === "object" &&
+        result !== null &&
+        "ok" in result &&
+        (result as { ok: boolean }).ok === true
+      ) {
+        const pkg = requireEnv("GOOGLE_PLAY_PACKAGE_NAME");
+        const saJson = requireEnv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON");
+        if (pkg && saJson) {
+          await consumeGoogleConsumable(pkg, storeProductId, androidPurchaseToken, saJson);
+        }
+      }
       return jsonResponse(req, result as never);
     }
 
@@ -453,4 +506,9 @@ Deno.serve(async (req: Request) => {
   }
 
   return jsonResponse(req, err("INVALID_INPUT", `Unknown action: ${action}`), 400);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[pulse-shop-fulfillment] unhandled:", detail);
+    return jsonResponse(req, err("FULFILLMENT_FAILED", `Pulse Shop fulfillment error: ${detail}`), 422);
+  }
 });

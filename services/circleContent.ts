@@ -1,5 +1,6 @@
-import type { Community, CircleThread, CircleThreadKind, Post, TrendingTopic24h } from '@/types';
+import type { AudienceRole, Community, CircleFlairTag, CircleThread, CircleThreadKind, ContentInterest, Post, TrendingTopic24h } from '@/types';
 import { FEATURED_CIRCLE_SLUGS_ORDER, PROMOTED_NEW_CIRCLE_SLUGS } from '@/constants/circleDiscovery';
+import { suggestOnboardingCircleSlugs } from '@/lib/onboarding/circleSuggestions';
 import { communitiesService, postsService, circleThreadsDb } from './supabase';
 
 function trendingScoreThread(t: TrendingTopic24h): number {
@@ -48,6 +49,7 @@ function postToTrending24h(
 async function runGroupedSearch(query: string): Promise<{
   directory: Community[];
   fromDiscussions: Community[];
+  failed?: boolean;
 }> {
   const s = query.trim();
   if (!s) return { directory: [], fromDiscussions: [] };
@@ -60,7 +62,7 @@ async function runGroupedSearch(query: string): Promise<{
     const fromDiscussions = byThreads.filter((c) => !metaIds.has(c.id));
     return { directory: byMeta, fromDiscussions };
   } catch {
-    return { directory: [], fromDiscussions: [] };
+    return { directory: [], fromDiscussions: [], failed: true };
   }
 }
 
@@ -73,6 +75,7 @@ async function searchCirclesAndTopicsGroupedFn(query: string): Promise<{
   directory: Community[];
   fromDiscussions: Community[];
   didYouMean?: string;
+  failed?: boolean;
 }> {
   const raw = query.trim();
   if (!raw) return { directory: [], fromDiscussions: [] };
@@ -289,17 +292,19 @@ export const circleContentService = {
   },
 
   /**
-   * “New circles” row: curated slugs first (so fresh rooms surface even when older
-   * communities have newer `created_at` from admin edits), then recently created.
+   * “New circles” row: actual newest-created Circles first (ordered by `created_at`
+   * desc) so the spotlight always reflects the most recently created rooms. The
+   * curated PROMOTED_NEW_CIRCLE_SLUGS list is only used as backfill if there aren’t
+   * enough recent rooms to fill the longer “more new & recent” list.
    */
   async getNewCircles(): Promise<Community[]> {
     try {
-      const promoted = await communitiesService.getBySlugsOrdered([...PROMOTED_NEW_CIRCLE_SLUGS]);
       const recent = await communitiesService.getRecentlyAdded(32);
-      const promotedSet = new Set<string>([...PROMOTED_NEW_CIRCLE_SLUGS]);
-      const rest = recent.filter((c) => !promotedSet.has(c.slug));
-      /** Extra rows feed the “More new & recent” list; the Circles tab only spotlights the first 3. */
-      return [...promoted, ...rest].slice(0, 28);
+      const seen = new Set<string>(recent.map((c) => c.slug));
+      const promoted = await communitiesService.getBySlugsOrdered([...PROMOTED_NEW_CIRCLE_SLUGS]);
+      const backfill = promoted.filter((c) => !seen.has(c.slug));
+      /** Newest-created spotlight (first 3); promoted rooms only backfill the tail. */
+      return [...recent, ...backfill].slice(0, 28);
     } catch {
       return [];
     }
@@ -319,8 +324,11 @@ export const circleContentService = {
     kind: CircleThreadKind;
     title: string;
     body: string;
+    flairTag?: CircleFlairTag | null;
     mediaThumbUrl?: string | null;
     linkedPostId?: string | null;
+    /** Attribution to a Circle "This Week" prompt (migration 274). */
+    weeklyPromptId?: string | null;
   }): Promise<CircleThread> {
     return circleThreadsDb.createThread(params);
   },
@@ -359,6 +367,38 @@ export const circleContentService = {
     return circleThreadsDb.toggleThreadReaction(threadId);
   },
 
+  async getReplyHelpfulForUser(replyIds: string[], userId: string | null): Promise<Set<string>> {
+    return circleThreadsDb.getReplyHelpfulForUser(replyIds, userId);
+  },
+
+  async toggleReplyHelpful(replyId: string): Promise<{ reacted: boolean; helpfulCount: number }> {
+    return circleThreadsDb.toggleReplyHelpful(replyId);
+  },
+
+  async getJoinedCircleActivityBadges(
+    communityIds: string[],
+    sinceByCommunityId: Record<string, string>,
+  ) {
+    return circleThreadsDb.getJoinedCircleActivityBadges(communityIds, sinceByCommunityId);
+  },
+
+  async getWelcomeThread(communityId: string, fallbackThreadId?: string | null) {
+    return circleThreadsDb.getWelcomeThread(communityId, fallbackThreadId);
+  },
+
+  async getTopHelpers(communityId: string, limit = 3) {
+    return circleThreadsDb.getTopHelpers(communityId, limit);
+  },
+
+  async updateThreadFlair(
+    threadId: string,
+    flairTag: CircleFlairTag | null,
+    currentKind: CircleThreadKind,
+    viewerId?: string | null,
+  ) {
+    return circleThreadsDb.updateThreadFlair(threadId, flairTag, currentKind, viewerId);
+  },
+
   async searchCirclesAndTopics(query: string): Promise<Community[]> {
     const grouped = await searchCirclesAndTopicsGroupedFn(query);
     const seen = new Set<string>();
@@ -372,4 +412,14 @@ export const circleContentService = {
   },
 
   searchCirclesAndTopicsGrouped: searchCirclesAndTopicsGroupedFn,
+
+  /** Onboarding / discover: interest + audience aware Circle suggestions. */
+  async getOnboardingSuggestedCircles(input: {
+    audienceRole: AudienceRole | null;
+    interests: ContentInterest[];
+    limit?: number;
+  }): Promise<Community[]> {
+    const slugs = suggestOnboardingCircleSlugs(input);
+    return communitiesService.getBySlugsOrdered(slugs);
+  },
 };

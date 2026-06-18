@@ -17,11 +17,11 @@ import { useToast } from '@/components/ui/Toast';
 import { LAUNCH_LINKS } from '@/constants/launch';
 import { useFeatureFlags, type FeatureFlags } from '@/lib/featureFlags';
 import { pulseImageFeedHeroProps, pulseImageListThumbProps } from '@/lib/pulseImage';
+import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 import { adsService, subscriptionService, creatorTipsService } from '@/services/monetization';
 import { AdminCirclesPanel } from '@/components/admin/AdminCirclesPanel';
 import { circleModerationService } from '@/services/supabase';
 import { hasStaffPermission, normalizeStaffRoles, type StaffPermission, type StaffRole } from '@/lib/staffPermissions';
-import { getAdminModerationListWindow } from '@/lib/feedVideoListWindow';
 
 type Tab = 'reports' | 'users' | 'content' | 'circles' | 'stats' | 'revenue';
 
@@ -85,6 +85,7 @@ export default function AdminPanel() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
+  const adminModListWindow = useMemo(() => getAdminModerationListWindow(), []);
   const [staffRoles, setStaffRoles] = useState<StaffRole[]>([]);
 
   useEffect(() => {
@@ -100,7 +101,6 @@ export default function AdminPanel() {
   }, []);
 
   const [tab, setTab] = useState<Tab>('reports');
-  const adminModListWindow = useMemo(() => getAdminModerationListWindow(), []);
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
@@ -224,7 +224,7 @@ export default function AdminPanel() {
         // role_admin is no longer client-readable on profiles (migration 247);
         // the staff-gated RPC returns it after verifying the caller is admin.
         const { data, error: usersErr } = await supabase.rpc('admin_list_profiles', {
-          p_search: userSearch.trim() || null,
+          p_search: userSearch.trim() || undefined,
           p_admins_only: false,
           p_limit: 200,
         });
