@@ -19,7 +19,12 @@ export type PulseShopRequest = {
   shop_item_id: string;
   platform?: 'ios' | 'android';
   receipt?: {
-    ios?: { receipt_data_base64: string };
+    ios?: {
+      /** StoreKit 2 transaction JWS (`purchase.purchaseToken` on react-native-iap v14). Preferred. */
+      jws?: string;
+      /** Legacy base64 app receipt (StoreKit 1). Fallback for older builds. */
+      receipt_data_base64?: string;
+    };
     android?: { purchase_token: string; product_id?: string };
   };
   border_gift?: {
@@ -120,7 +125,15 @@ export async function invokePulseShopFulfillment<T extends Record<string, unknow
     clearTimeout(timeout);
   }
 
-  const json = (await res.json().catch(() => null)) as unknown;
+  const rawText = await res.text().catch(() => '');
+  let json: unknown = null;
+  if (rawText.trim()) {
+    try {
+      json = JSON.parse(rawText) as unknown;
+    } catch {
+      json = null;
+    }
+  }
   const parsed = parsePulseShopFulfillmentJson(json);
   const bodyWasNotJson = json === null;
 
@@ -129,11 +142,13 @@ export async function invokePulseShopFulfillment<T extends Record<string, unknow
       res.status === 404
         ? ' Deploy the pulse-shop-fulfillment Edge Function (Supabase Dashboard → Edge Functions, or `npx supabase functions deploy pulse-shop-fulfillment`). Also confirm EXPO_PUBLIC_SUPABASE_URL is your project root (e.g. https://xxxx.supabase.co) with no extra path.'
         : '';
+    const snippet = rawText.trim().slice(0, 180);
+    const detail = snippet ? ` ${snippet}` : '';
     return {
       ok: false,
       error: {
         code: 'FULFILLMENT_FAILED',
-        message: `Could not reach Pulse Shop fulfillment (HTTP ${res.status}).${deployHint}`,
+        message: `Could not reach Pulse Shop fulfillment (HTTP ${res.status}).${deployHint}${detail}`,
         details: null,
       },
     };

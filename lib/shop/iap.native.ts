@@ -5,7 +5,14 @@
 
 import { Platform } from 'react-native';
 import { isExpoGoClient } from '@/lib/compressorAvailability';
-import { GOOGLE_PLAY_LAUNCH_PRODUCT_IDS } from '@/lib/shop/googlePlayProducts';
+import { GOOGLE_PLAY_PREFETCH_PRODUCT_IDS } from '@/lib/shop/googlePlayProducts';
+import { allAndroidStoreIdsForItem } from '@/lib/shop/legacyAndroidSkus';
+import {
+  isConcurrentPurchaseBlocked,
+  purchaseProcessKey,
+  storeProductMatchesCatalogSku,
+} from '@/lib/shop/iapPurchaseGuards';
+import { iapDiag, IAP_EVENTS } from '@/lib/shop/iapDiagnostics';
 
 export type PurchasePlatform = 'ios' | 'android';
 
@@ -23,7 +30,7 @@ export type PrefetchStoreProductsResult =
 export type IapPurchaseResult =
   | {
       ok: true;
-      /** iOS: base64 receipt; Android: purchaseToken */
+      /** iOS: StoreKit 2 transaction JWS (`purchase.purchaseToken`); Android: purchaseToken */
       receiptPayload: string;
       productId: string;
       transactionId?: string;
@@ -43,12 +50,30 @@ export type PendingStorePurchase = {
   productId: string;
   purchaseToken?: string | null;
   transactionId?: string | null;
-  /** Full iOS app receipt (base64) — same receipt validates any iOS product. */
+  /** iOS StoreKit 2 transaction JWS for this specific purchase (server-verifiable). */
+  iosJws?: string | null;
+  /** Legacy iOS app receipt (base64). Unused on StoreKit 2 builds; kept for back-compat. */
   receiptIosBase64?: string | null;
 };
 
 /** What the caller's re-fulfillment decided for a pending purchase. */
 export type ReconcileDecision = { outcome: 'granted' | 'leave'; isConsumable: boolean };
+
+export type IapPurchaseStage =
+  | 'requesting'
+  | 'awaiting_store'
+  | 'validating'
+  | 'fulfilled'
+  | 'cancelled'
+  | 'failed'
+  | 'pending';
+
+type StorePurchaseRecord = {
+  productId?: string;
+  purchaseToken?: string | null;
+  transactionId?: string | null;
+  transactionReceipt?: string;
+};
 
 type RNIap = typeof import('react-native-iap');
 
@@ -64,8 +89,337 @@ function loadModule(): RNIap | null {
 }
 
 let connectionReady = false;
+let globalListenersAttached = false;
 
-export async function initIapConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
+/**
+ * Max time we block the UI on a store acknowledge/consume. The server grant has
+ * already succeeded by the time we call this, so the user has their Sparks/border
+ * regardless. On Android, `finishTransaction({ isConsumable: true })` (Play
+ * consume) can occasionally stall in react-native-iap v14; without a ceiling the
+ * purchase modal hangs on "Crediting Sparks…" even though fulfillment is done.
+ * If the consume hasn't finished in time we stop waiting and let it complete in
+ * the background — any leftover unconsumed purchase is cleaned up by
+ * `reconcilePendingPurchases` on the next Shop open (server fulfillment is
+ * idempotent, so the user is never charged or granted twice).
+ */
+const FINALIZE_TIMEOUT_MS = 8_000;
+
+/**
+ * Run `finishTransaction` but never block the caller for more than
+ * FINALIZE_TIMEOUT_MS. The finish promise carries its own catch so a late
+ * rejection after the timeout can't surface as an unhandled rejection.
+ */
+async function finishTransactionBounded(
+  mod: RNIap,
+  purchase: StorePurchaseRecord,
+  isConsumable: boolean,
+  productIdForDiag: string,
+): Promise<void> {
+  iapDiag(IAP_EVENTS.IAP_FINISH_TRANSACTION_START, { productId: productIdForDiag, isConsumable });
+  const finish = Promise.resolve()
+    .then(() =>
+      mod.finishTransaction({
+        purchase: purchase as unknown as Parameters<RNIap['finishTransaction']>[0]['purchase'],
+        isConsumable,
+      }),
+    )
+    .then(() => iapDiag(IAP_EVENTS.IAP_FINISH_TRANSACTION_DONE, { productId: productIdForDiag }))
+    .catch((e) =>
+      iapDiag(IAP_EVENTS.IAP_FINISH_TRANSACTION_DONE, {
+        productId: productIdForDiag,
+        failed: true,
+        message: e instanceof Error ? e.message.slice(0, 80) : 'unknown',
+      }),
+    );
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ceiling = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      iapDiag('finishTransaction timeout — continuing, reconcile will finish it', {
+        productId: productIdForDiag,
+      });
+      resolve();
+    }, FINALIZE_TIMEOUT_MS);
+  });
+
+  await Promise.race([finish, ceiling]);
+  if (timer) clearTimeout(timer);
+}
+
+type ActivePurchaseSlot = {
+  sku: string;
+  isConsumable: boolean;
+  settled: boolean;
+  emit: (stage: IapPurchaseStage) => void;
+  resolve: (result: IapPurchaseResult) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+  cleanup: () => void;
+};
+
+let activePurchaseSlot: ActivePurchaseSlot | null = null;
+const processedPurchaseKeys = new Set<string>();
+
+/** v14 requestPurchase / listener payloads — normalize to our internal store record shape. */
+function coerceStorePurchaseRecord(raw: unknown, expectedSku: string): StorePurchaseRecord | null {
+  if (raw == null) return null;
+  const items = Array.isArray(raw) ? raw : [raw];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = item as Record<string, unknown>;
+    const productId =
+      typeof rec.productId === 'string'
+        ? rec.productId.trim()
+        : typeof rec.id === 'string'
+          ? rec.id.trim()
+          : '';
+    if (!productId || !storeProductMatchesCatalogSku(productId, expectedSku)) continue;
+    return {
+      productId,
+      transactionId:
+        typeof rec.transactionId === 'string'
+          ? rec.transactionId
+          : typeof rec.transactionId === 'number'
+            ? String(rec.transactionId)
+            : null,
+      purchaseToken: typeof rec.purchaseToken === 'string' ? rec.purchaseToken : null,
+      transactionReceipt:
+        typeof rec.transactionReceipt === 'string' ? rec.transactionReceipt : undefined,
+    };
+  }
+  return null;
+}
+
+function attachGlobalPurchaseListeners(mod: RNIap): void {
+  if (globalListenersAttached) return;
+
+  mod.purchaseUpdatedListener(async (purchase) => {
+    const slot = activePurchaseSlot;
+    const pid = typeof purchase.productId === 'string' ? purchase.productId : '';
+    const dedupeKey = purchaseProcessKey(purchase as StorePurchaseRecord);
+    if (dedupeKey && processedPurchaseKeys.has(dedupeKey)) {
+      iapDiag(IAP_EVENTS.IAP_PURCHASE_CALLBACK, { productId: pid, deduped: true });
+      return;
+    }
+    iapDiag(IAP_EVENTS.IAP_PURCHASE_CALLBACK, {
+      productId: pid || null,
+      transactionId: purchase.transactionId ?? null,
+      hasActiveSlot: Boolean(slot && !slot.settled),
+    });
+    if (!slot || slot.settled || !storeProductMatchesCatalogSku(pid, slot.sku)) {
+      if (pid) {
+        iapDiag('purchase update ignored (no active slot or sku mismatch)', {
+          productId: pid,
+          activeSku: slot?.sku ?? null,
+        });
+      }
+      return;
+    }
+    await settleActivePurchaseFromStoreRecord(mod, purchase as StorePurchaseRecord);
+  });
+
+  mod.purchaseErrorListener((e) => {
+    const slot = activePurchaseSlot;
+    if (!slot || slot.settled) return;
+
+    slot.settled = true;
+    slot.cleanup();
+
+    const rawCode = (e as { code?: string }).code ?? '';
+    const msg = (e as { message?: string }).message ?? String(e);
+    iapDiag(IAP_EVENTS.IAP_PURCHASE_ERROR, { code: rawCode || null, message: msg.slice(0, 120) });
+
+    const cancelled =
+      rawCode === 'E_USER_CANCELLED' ||
+      rawCode === 'user-cancelled' ||
+      /cancel/i.test(msg);
+    if (cancelled) {
+      slot.emit('cancelled');
+      slot.resolve({ ok: false, code: 'USER_CANCELLED', message: 'Purchase cancelled.' });
+      return;
+    }
+    const deferred =
+      rawCode === 'E_DEFERRED_PAYMENT' ||
+      /deferred|pending/i.test(msg);
+    if (deferred) {
+      slot.emit('pending');
+      slot.resolve({
+        ok: false,
+        code: 'PURCHASE_PENDING',
+        message: 'Purchase is pending approval (Ask to Buy / parental approval). It will unlock once approved.',
+      });
+      return;
+    }
+    const duplicatePending =
+      /duplicate purchase update skipped/i.test(msg) ||
+      /getAvailablePurchases to recover/i.test(msg);
+    const alreadyOwned =
+      rawCode === 'already-owned' ||
+      rawCode === 'E_ALREADY_OWNED' ||
+      /already.?owned/i.test(msg) ||
+      /item.?already.?owned/i.test(msg);
+    const code = duplicatePending
+      ? 'PENDING_STORE_PURCHASE'
+      : alreadyOwned
+        ? 'ITEM_ALREADY_OWNED'
+        : rawCode === 'sku-not-found' || /sku\s*not\s*found/i.test(msg)
+          ? 'SKU_NOT_FOUND'
+          : rawCode || 'IAP_ERROR';
+    slot.emit('failed');
+    slot.resolve({ ok: false, code, message: msg });
+  });
+
+  globalListenersAttached = true;
+  iapDiag(IAP_EVENTS.IAP_LISTENERS_REGISTERED);
+}
+
+/** Resolve the active purchase slot from a StoreKit record (listener or iOS poll fallback). */
+async function settleActivePurchaseFromStoreRecord(
+  mod: RNIap,
+  purchase: StorePurchaseRecord,
+): Promise<boolean> {
+  const slot = activePurchaseSlot;
+  if (!slot || slot.settled) return false;
+
+  const pid = typeof purchase.productId === 'string' ? purchase.productId : '';
+  if (!storeProductMatchesCatalogSku(pid, slot.sku)) return false;
+
+  const dedupeKey = purchaseProcessKey(purchase);
+  if (dedupeKey && processedPurchaseKeys.has(dedupeKey)) return false;
+  if (dedupeKey) processedPurchaseKeys.add(dedupeKey);
+
+  slot.settled = true;
+  slot.cleanup();
+
+  try {
+    slot.emit('validating');
+    const built = await buildPurchaseResultFromStoreRecord(
+      mod,
+      purchase,
+      slot.sku,
+      slot.isConsumable,
+    );
+    if (!built.ok) slot.emit('failed');
+    slot.resolve(built);
+  } catch (e) {
+    slot.emit('failed');
+    slot.resolve({
+      ok: false,
+      code: 'IAP_ERROR',
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return true;
+}
+
+function expectedStoreProductIds(catalogSku: string): Set<string> {
+  const ids = Platform.OS === 'android' ? allAndroidStoreIdsForItem(catalogSku) : [catalogSku];
+  return new Set(ids.filter(Boolean));
+}
+
+/** When purchaseUpdatedListener stays silent, poll the store queue (iOS + Android). */
+async function pollStorePurchaseAfterRequest(mod: RNIap, sku: string): Promise<void> {
+  const slot = activePurchaseSlot;
+  if (!slot || slot.settled || slot.sku !== sku) return;
+
+  const equivalent = expectedStoreProductIds(sku);
+  const waitSchedule =
+    Platform.OS === 'android'
+      ? [400, 1000, 2000, 4000, 8000, 12_000]
+      : [350, 900, 1800, 3500, 6000, 10_000];
+
+  for (const waitMs of waitSchedule) {
+    if (!activePurchaseSlot || activePurchaseSlot.settled) return;
+    await new Promise((r) => setTimeout(r, waitMs));
+    if (!activePurchaseSlot || activePurchaseSlot.settled) return;
+
+    if (Platform.OS === 'android') {
+      const listenerHits = await collectPurchaseUpdateEvents(mod, 900);
+      for (const hit of listenerHits) {
+        const pid = typeof hit.productId === 'string' ? hit.productId : '';
+        if (!pid || !equivalent.has(pid)) continue;
+        iapDiag('android purchase listener sweep matched transaction', { sku, productId: pid });
+        const settled = await settleActivePurchaseFromStoreRecord(mod, hit);
+        if (settled) return;
+      }
+    }
+
+    const list = await queryAvailablePurchasesOnce(mod, { publishToListener: true });
+    const match = list.find((p) => {
+      const pid = typeof p.productId === 'string' ? p.productId : '';
+      return pid && equivalent.has(pid);
+    });
+    if (!match) continue;
+
+    iapDiag(`${Platform.OS} purchase poll matched pending transaction`, {
+      sku,
+      productId: match.productId ?? null,
+    });
+    const settled = await settleActivePurchaseFromStoreRecord(mod, match);
+    if (settled) return;
+  }
+
+  if (Platform.OS === 'ios') {
+    await tryIosAppReceiptFallback(mod, sku);
+  }
+}
+
+/**
+ * StoreKit 2 transaction JWS for a single product (iOS). Safe to call after a
+ * purchase: it reads the already-completed transaction's signature without
+ * triggering a receipt refresh / Apple ID prompt.
+ */
+async function getIosTransactionJws(mod: RNIap, sku: string): Promise<string | null> {
+  if (Platform.OS !== 'ios') return null;
+  try {
+    const fn = (mod as { getTransactionJwsIOS?: (s: string) => Promise<string | null> })
+      .getTransactionJwsIOS;
+    if (typeof fn !== 'function') return null;
+    const jws = await fn(sku);
+    const s = typeof jws === 'string' ? jws.trim() : '';
+    return s.length > 0 ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Last resort when StoreKit paid but never delivered purchaseUpdatedListener / getAvailablePurchases. */
+async function tryIosAppReceiptFallback(mod: RNIap, sku: string): Promise<boolean> {
+  if (Platform.OS !== 'ios') return false;
+  const slot = activePurchaseSlot;
+  if (!slot || slot.settled || slot.sku !== sku) return false;
+
+  /** StoreKit 2: pull this transaction's JWS — never a receipt refresh (auth loop). */
+  const jws = await getIosTransactionJws(mod, sku);
+  if (!jws) return false;
+
+  iapDiag('ios transaction jws fallback after store silence', { sku });
+  return settleActivePurchaseFromStoreRecord(mod, {
+    productId: sku,
+    transactionId: null,
+    purchaseToken: jws,
+  });
+}
+
+/** Close the purchase modal without waiting for the 120s StoreKit timeout. */
+export function abortActivePurchase(): void {
+  const slot = activePurchaseSlot;
+  if (!slot || slot.settled) return;
+  slot.settled = true;
+  slot.cleanup();
+  slot.emit('cancelled');
+  slot.resolve({
+    ok: false,
+    code: 'USER_CANCELLED',
+    message: 'Purchase cancelled.',
+  });
+  iapDiag('purchase aborted from UI', { sku: slot.sku });
+}
+
+export async function initIapConnection(options?: {
+  /** Shop prefetch only needs product metadata — defer listeners until user taps Purchase. */
+  attachPurchaseListeners?: boolean;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  iapDiag(IAP_EVENTS.IAP_INIT_START, { attachListeners: options?.attachPurchaseListeners !== false });
   const mod = loadModule();
   if (!mod) {
     return {
@@ -75,15 +429,26 @@ export async function initIapConnection(): Promise<{ ok: true } | { ok: false; m
         : 'Store purchases are only available on the iOS/Android app build.',
     };
   }
-  if (connectionReady) return { ok: true };
-  try {
-    await mod.initConnection();
-    connectionReady = true;
-    return { ok: true };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, message: msg };
+  const wantListeners = options?.attachPurchaseListeners !== false;
+  if (!connectionReady) {
+    try {
+      await mod.initConnection();
+      connectionReady = true;
+      iapDiag(IAP_EVENTS.IAP_INIT_DONE);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, message: msg };
+    }
   }
+  /**
+   * Shop prefetch calls init with `attachPurchaseListeners: false`. A later purchase must
+   * still register listeners — otherwise StoreKit completes payment but we hang forever
+   * on "Waiting for Apple to confirm payment…".
+   */
+  if (wantListeners && !globalListenersAttached) {
+    attachGlobalPurchaseListeners(mod);
+  }
+  return { ok: true };
 }
 
 /**
@@ -104,28 +469,40 @@ export async function initIapConnection(): Promise<{ ok: true } | { ok: false; m
  */
 export async function reconcilePendingPurchases(
   reFulfill: (p: PendingStorePurchase) => Promise<ReconcileDecision>,
+  opts?: { userInitiated?: boolean },
 ): Promise<{ finished: number; left: number }> {
   const mod = loadModule();
   if (!mod) return { finished: 0, left: 0 };
-  const init = await initIapConnection();
+  const init = await initIapConnection({ attachPurchaseListeners: false });
   if (!init.ok) return { finished: 0, left: 0 };
+
+  iapDiag('reconcile start', {
+    platform: Platform.OS,
+    userInitiated: opts?.userInitiated === true,
+  });
 
   let finished = 0;
   let left = 0;
   try {
     const fn = mod.getAvailablePurchases as
       | ((opts?: { alsoPublishToEventListenerIOS?: boolean; onlyIncludeActiveItemsIOS?: boolean }) => Promise<
-          Array<{ productId?: string; purchaseToken?: string | null; transactionId?: string | null }>
+          StorePurchaseRecord[]
         >)
       | undefined;
     if (typeof fn !== 'function') return { finished: 0, left: 0 };
-    const list = await fn({
-      alsoPublishToEventListenerIOS: false,
-      onlyIncludeActiveItemsIOS: false,
-    }).catch(() => [] as Array<{ productId?: string; purchaseToken?: string | null; transactionId?: string | null }>);
-    if (!Array.isArray(list) || list.length === 0) return { finished: 0, left: 0 };
+    const list =
+      Platform.OS === 'android'
+        ? await listPendingStorePurchases(true)
+        : await fn({
+            alsoPublishToEventListenerIOS: false,
+            onlyIncludeActiveItemsIOS: false,
+          }).catch(() => [] as StorePurchaseRecord[]);
+    if (!Array.isArray(list) || list.length === 0) {
+      iapDiag('reconcile none pending');
+      return { finished: 0, left: 0 };
+    }
 
-    const iosReceipt = Platform.OS === 'ios' ? await getIosReceiptBase64() : null;
+    iapDiag('reconcile pending count', { count: list.length });
 
     for (const purchase of list) {
       const productId = typeof purchase.productId === 'string' ? purchase.productId : '';
@@ -133,22 +510,27 @@ export async function reconcilePendingPurchases(
         left += 1;
         continue;
       }
+
+      /**
+       * StoreKit 2: each pending purchase record already carries its transaction
+       * JWS in `purchaseToken`. No getReceiptIOS()/refresh (which caused Apple ID loops).
+       */
+      const iosJws =
+        Platform.OS === 'ios'
+          ? (purchase.purchaseToken?.trim() || null) ??
+            (opts?.userInitiated ? await getIosTransactionJws(mod, productId) : null)
+          : null;
+
       try {
         const decision = await reFulfill({
           productId,
           purchaseToken: purchase.purchaseToken ?? null,
           transactionId: purchase.transactionId ?? null,
-          receiptIosBase64: iosReceipt,
+          iosJws,
+          receiptIosBase64: null,
         });
         if (decision.outcome === 'granted') {
-          try {
-            await mod.finishTransaction({
-              purchase: purchase as unknown as Parameters<RNIap['finishTransaction']>[0]['purchase'],
-              isConsumable: decision.isConsumable,
-            });
-          } catch {
-            /* best effort — grant already recorded; queue clears on next pass */
-          }
+          await finishTransactionBounded(mod, purchase, decision.isConsumable, productId);
           finished += 1;
         } else {
           left += 1;
@@ -160,6 +542,7 @@ export async function reconcilePendingPurchases(
   } catch {
     /* best effort */
   }
+  iapDiag('reconcile done', { finished, left });
   return { finished, left };
 }
 
@@ -183,7 +566,7 @@ export function platformPrefix(): PurchasePlatform {
  * Safe to call on shop mount; no-ops on web / Expo Go.
  */
 export async function prefetchStoreProducts(
-  skus: string[] = GOOGLE_PLAY_LAUNCH_PRODUCT_IDS,
+  skus: string[] = [...GOOGLE_PLAY_PREFETCH_PRODUCT_IDS],
 ): Promise<PrefetchStoreProductsResult> {
   const mod = loadModule();
   const unique = [...new Set(skus.map((s) => s.trim()).filter(Boolean))];
@@ -198,8 +581,10 @@ export async function prefetchStoreProducts(
         : 'Store purchases are only available on the iOS/Android app build.',
     };
   }
-  const init = await initIapConnection();
+  const init = await initIapConnection({ attachPurchaseListeners: false });
   if (!init.ok) return { ok: false, message: init.message };
+
+  iapDiag(IAP_EVENTS.IAP_FETCH_PRODUCTS_START, { count: unique.length });
 
   try {
     const rows = await mod.fetchProducts({ skus: unique, type: 'in-app' });
@@ -214,6 +599,11 @@ export async function prefetchStoreProducts(
       }),
     );
     const missingProductIds = unique.filter((id) => !foundIds.has(id));
+    iapDiag(IAP_EVENTS.IAP_FETCH_PRODUCTS_DONE, {
+      requested: unique.length,
+      returned: products.length,
+      missing: missingProductIds.length,
+    });
     return { ok: true, products, missingProductIds };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -237,18 +627,28 @@ export async function restorePurchasesFromStore(): Promise<
         : 'Store purchases are only available on the iOS/Android app build.',
     };
   }
-  const init = await initIapConnection();
+  const init = await initIapConnection({ attachPurchaseListeners: false });
   if (!init.ok) return { ok: false, message: init.message };
   try {
-    await mod.restorePurchases();
-    const list = await mod.getAvailablePurchases({
-      alsoPublishToEventListenerIOS: false,
-      onlyIncludeActiveItemsIOS: true,
-    });
-    const purchases = list.map((p: { productId: string; purchaseToken?: string | null }) => ({
-      productId: p.productId,
-      purchaseToken: p.purchaseToken ?? null,
-    }));
+    iapDiag(IAP_EVENTS.IAP_RESTORE_START, { platform: Platform.OS });
+    /** iOS: getAvailablePurchases only — restorePurchases() triggers Apple ID sync/auth loops. */
+    if (Platform.OS === 'android') {
+      await mod.restorePurchases();
+    }
+    const list =
+      Platform.OS === 'android'
+        ? await listPendingStorePurchases(true)
+        : await mod.getAvailablePurchases({
+            alsoPublishToEventListenerIOS: false,
+            onlyIncludeActiveItemsIOS: true,
+          });
+    const purchases = (list as StorePurchaseRecord[])
+      .map((p) => ({
+        productId: typeof p.productId === 'string' ? p.productId : '',
+        purchaseToken: p.purchaseToken ?? null,
+      }))
+      .filter((p) => p.productId.length > 0);
+    iapDiag(IAP_EVENTS.IAP_RESTORE_DONE, { count: purchases.length });
     return { ok: true, purchases };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -261,7 +661,7 @@ export async function getIosReceiptBase64(): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
   const mod = loadModule();
   if (!mod) return null;
-  const init = await initIapConnection();
+  const init = await initIapConnection({ attachPurchaseListeners: false });
   if (!init.ok) return null;
   try {
     const fn = mod.getReceiptIOS as (() => Promise<string>) | undefined;
@@ -274,14 +674,193 @@ export async function getIosReceiptBase64(): Promise<string | null> {
   }
 }
 
-export type IapPurchaseStage =
-  | 'requesting'
-  | 'awaiting_store'
-  | 'validating'
-  | 'fulfilled'
-  | 'cancelled'
-  | 'failed'
-  | 'pending';
+async function buildPurchaseResultFromStoreRecord(
+  mod: RNIap,
+  purchase: StorePurchaseRecord,
+  sku: string,
+  isConsumable: boolean,
+): Promise<IapPurchaseResult> {
+  const pid = typeof purchase.productId === 'string' ? purchase.productId : '';
+  if (!storeProductMatchesCatalogSku(pid, sku)) {
+    return {
+      ok: false,
+      code: 'PRODUCT_MISMATCH',
+      message: `Store returned ${pid || 'unknown'} but expected ${sku}.`,
+    };
+  }
+
+  const finalize = async () => {
+    await finishTransactionBounded(mod, purchase, isConsumable, pid);
+  };
+
+  if (Platform.OS === 'ios') {
+    /**
+     * StoreKit 2 (react-native-iap v14): the unified `purchaseToken` IS the
+     * transaction JWS. We send that to the server. We deliberately never call
+     * getReceiptIOS()/requestReceiptRefreshIOS() here — a receipt refresh is what
+     * triggered the repeated "Sign in to Apple Account" prompts (the purchase loop).
+     */
+    let jws = purchase.purchaseToken?.trim();
+    if (!jws) {
+      jws = (await getIosTransactionJws(mod, pid)) ?? undefined;
+    }
+    if (!jws) {
+      return {
+        ok: false,
+        code: 'MISSING_RECEIPT',
+        message: 'App Store did not return a transaction signature. Try Restore Purchases or contact support.',
+      };
+    }
+    return {
+      ok: true,
+      receiptPayload: jws,
+      productId: pid,
+      transactionId: purchase.transactionId ?? undefined,
+      finalize,
+    };
+  }
+
+  const token = purchase.purchaseToken;
+  if (!token) {
+    return { ok: false, code: 'MISSING_TOKEN', message: 'Missing Play purchase token.' };
+  }
+  return {
+    ok: true,
+    receiptPayload: token,
+    productId: pid,
+    transactionId: purchase.transactionId ?? undefined,
+    finalize,
+  };
+}
+
+function purchaseDedupeKey(p: StorePurchaseRecord): string {
+  return (p.purchaseToken ?? p.transactionId ?? p.productId ?? '').trim();
+}
+
+function mergePendingPurchases(...lists: StorePurchaseRecord[][]): StorePurchaseRecord[] {
+  const seen = new Set<string>();
+  const out: StorePurchaseRecord[] = [];
+  for (const list of lists) {
+    for (const p of list) {
+      const key = purchaseDedupeKey(p);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+async function queryAvailablePurchasesOnce(
+  mod: RNIap,
+  opts?: { publishToListener?: boolean },
+): Promise<StorePurchaseRecord[]> {
+  const fn = mod.getAvailablePurchases as
+    | ((opts?: { alsoPublishToEventListenerIOS?: boolean; onlyIncludeActiveItemsIOS?: boolean }) => Promise<
+        StorePurchaseRecord[]
+      >)
+    | undefined;
+  if (typeof fn !== 'function') return [];
+  const list = await fn({
+    alsoPublishToEventListenerIOS: opts?.publishToListener === true,
+    onlyIncludeActiveItemsIOS: false,
+  }).catch(() => [] as StorePurchaseRecord[]);
+  return Array.isArray(list) ? list : [];
+}
+
+/** Brief listener sweep — Play sometimes only re-delivers purchases via the update stream. */
+async function collectPurchaseUpdateEvents(mod: RNIap, timeoutMs: number): Promise<StorePurchaseRecord[]> {
+  const collected: StorePurchaseRecord[] = [];
+  const seen = new Set<string>();
+  return new Promise((resolve) => {
+    let sub: { remove: () => void } | null = null;
+    try {
+      sub = mod.purchaseUpdatedListener((purchase) => {
+        const rec = purchase as StorePurchaseRecord;
+        const key = purchaseDedupeKey(rec);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        collected.push(rec);
+      });
+    } catch {
+      resolve([]);
+      return;
+    }
+    setTimeout(() => {
+      try {
+        sub?.remove();
+      } catch {
+        /* noop */
+      }
+      resolve(collected);
+    }, timeoutMs);
+  });
+}
+
+async function listPendingStorePurchases(aggressive = false): Promise<StorePurchaseRecord[]> {
+  const mod = loadModule();
+  if (!mod) return [];
+  const init = await initIapConnection({ attachPurchaseListeners: false });
+  if (!init.ok) return [];
+  try {
+    if (!aggressive) {
+      return queryAvailablePurchasesOnce(mod);
+    }
+
+    const listenerFirst = await collectPurchaseUpdateEvents(mod, 2200);
+    const attempts = 3;
+    const queried: StorePurchaseRecord[][] = [];
+    for (let i = 0; i < attempts; i += 1) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, 900 + i * 400));
+      }
+      queried.push(await queryAvailablePurchasesOnce(mod));
+    }
+    const listenerLast = await collectPurchaseUpdateEvents(mod, 1200);
+    return mergePendingPurchases(listenerFirst, ...queried, listenerLast);
+  } catch {
+    return [];
+  }
+}
+
+/** Exported for stuck-pack recovery (retries + purchase update listener). */
+export async function listAllPendingStorePurchasesAggressive(): Promise<StorePurchaseRecord[]> {
+  return listPendingStorePurchases(true);
+}
+
+/**
+ * If Apple/Google still hold an unfinished transaction for this SKU (charged but
+ * not consumed because server grant failed earlier), return it for re-fulfillment
+ * instead of opening a new purchase sheet (avoids "duplicate purchase update" errors).
+ */
+export async function recoverPendingPurchaseForSku(params: {
+  sku: string;
+  isConsumable?: boolean;
+  /** iOS: keep false unless user tapped Restore / Recover (avoids StoreKit auth loops). */
+  aggressive?: boolean;
+}): Promise<IapPurchaseResult | { ok: false; code: 'NO_PENDING'; message: string }> {
+  const { sku, isConsumable = false, aggressive = Platform.OS === 'android' } = params;
+  const mod = loadModule();
+  if (!mod) {
+    return { ok: false, code: 'NO_PENDING', message: 'IAP unavailable.' };
+  }
+  const init = await initIapConnection({ attachPurchaseListeners: false });
+  if (!init.ok) return { ok: false, code: 'NO_PENDING', message: init.message };
+
+  iapDiag('recover pending for sku', { sku, aggressive });
+  const pending = await listPendingStorePurchases(aggressive);
+  const equivalent = new Set(allAndroidStoreIdsForItem(sku));
+  equivalent.add(sku);
+  const match = pending.find((p) => {
+    const pid = typeof p.productId === 'string' ? p.productId : '';
+    return pid && equivalent.has(pid);
+  });
+  if (!match) {
+    return { ok: false, code: 'NO_PENDING', message: 'No pending store transaction for this product.' };
+  }
+  const resolvedSku = typeof match.productId === 'string' && match.productId ? match.productId : sku;
+  return buildPurchaseResultFromStoreRecord(mod, match, resolvedSku, isConsumable);
+}
 
 /**
  * Request purchase for a single SKU; resolves when purchase update delivers matching productId.
@@ -312,8 +891,10 @@ export async function purchaseSku(params: {
     };
   }
 
-  const init = await initIapConnection();
+  const init = await initIapConnection({ attachPurchaseListeners: true });
   if (!init.ok) return { ok: false, code: 'IAP_INIT_FAILED', message: init.message };
+
+  iapDiag(IAP_EVENTS.IAP_PURCHASE_REQUEST_START, { productId: sku, isConsumable });
 
   try {
     const products = await mod.fetchProducts({ skus: [sku], type: 'in-app' });
@@ -331,123 +912,48 @@ export async function purchaseSku(params: {
     return { ok: false, code: 'FETCH_PRODUCTS_FAILED', message: msg };
   }
 
+  if (isConcurrentPurchaseBlocked(activePurchaseSlot)) {
+    return {
+      ok: false,
+      code: 'PURCHASE_IN_PROGRESS',
+      message: 'A purchase is already in progress. Wait for it to finish.',
+    };
+  }
+
   return new Promise((resolve) => {
-    let settled = false;
-    /** Cleanup helper — must always remove BOTH subscriptions so the next
-     * call gets a clean slate. Previous bug: success path called `sub.remove()`
-     * but never `errSub.remove()` → native listener leaked every purchase. */
-    let cleanup = () => {};
-
-    const sub = mod.purchaseUpdatedListener(async (purchase) => {
-      try {
-        const pid = purchase.productId;
-        if (pid !== sku || settled) return;
-        settled = true;
-        cleanup();
-        emit('validating');
-
-        /**
-         * Acknowledge/consume the transaction. We deliberately do NOT call this
-         * here — the caller invokes it only after the server grant succeeds, so
-         * a failed grant leaves the purchase recoverable instead of consumed.
-         */
-        const finalize = async () => {
-          try {
-            await mod.finishTransaction({ purchase, isConsumable });
-          } catch {
-            /* best effort — reconcile on next Shop open will retry the ack */
-          }
-        };
-
-        if (Platform.OS === 'ios') {
-          const p = purchase as {
-            transactionReceipt?: string;
-            transactionId?: string | null;
-          };
-          const receipt = p.transactionReceipt ?? (await mod.getReceiptIOS?.());
-          if (!receipt) {
-            emit('failed');
-            resolve({ ok: false, code: 'MISSING_RECEIPT', message: 'Could not read App Store receipt.' });
-            return;
-          }
-          resolve({
-            ok: true,
-            receiptPayload: receipt,
-            productId: pid,
-            transactionId: p.transactionId ?? undefined,
-            finalize,
-          });
-          return;
-        }
-
-        const token = purchase.purchaseToken;
-        if (!token) {
-          emit('failed');
-          resolve({ ok: false, code: 'MISSING_TOKEN', message: 'Missing Play purchase token.' });
-          return;
-        }
-        resolve({
-          ok: true,
-          receiptPayload: token,
-          productId: pid,
-          transactionId: purchase.transactionId ?? undefined,
-          finalize,
-        });
-      } catch (e) {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          emit('failed');
-          resolve({
-            ok: false,
-            code: 'IAP_ERROR',
-            message: e instanceof Error ? e.message : String(e),
-          });
-        }
+    let slotRef: ActivePurchaseSlot;
+    const cleanup = () => {
+      clearTimeout(slotRef.timeoutId);
+      if (activePurchaseSlot === slotRef) {
+        activePurchaseSlot = null;
+        iapDiag(IAP_EVENTS.IAP_LOADING_CLEARED, { sku });
       }
-    });
+    };
 
-    const errSub = mod.purchaseErrorListener((e) => {
-      if (settled) return;
-      settled = true;
+    const timeoutId = setTimeout(() => {
+      if (slotRef.settled) return;
+      slotRef.settled = true;
       cleanup();
-      const rawCode = (e as { code?: string }).code ?? '';
-      const msg = (e as { message?: string }).message ?? String(e);
-      const cancelled =
-        rawCode === 'E_USER_CANCELLED' ||
-        rawCode === 'user-cancelled' ||
-        /cancel/i.test(msg);
-      if (cancelled) {
-        emit('cancelled');
-        resolve({ ok: false, code: 'USER_CANCELLED', message: 'Purchase cancelled.' });
-        return;
-      }
-      const deferred =
-        rawCode === 'E_DEFERRED_PAYMENT' ||
-        /deferred|pending/i.test(msg);
-      if (deferred) {
-        emit('pending');
-        resolve({
-          ok: false,
-          code: 'PURCHASE_PENDING',
-          message: 'Purchase is pending approval (Ask to Buy / parental approval). It will unlock once approved.',
-        });
-        return;
-      }
-      const code =
-        rawCode === 'sku-not-found' || /sku\s*not\s*found/i.test(msg) ? 'SKU_NOT_FOUND' : rawCode || 'IAP_ERROR';
       emit('failed');
       resolve({
         ok: false,
-        code,
-        message: msg,
+        code: 'IAP_TIMEOUT',
+        message:
+          'Store did not complete the purchase in time. Try again — if your card was charged, use Restore Purchases.',
       });
-    });
+    }, 120_000);
 
-    cleanup = () => {
-      try { sub.remove(); } catch { /* noop */ }
-      try { errSub.remove(); } catch { /* noop */ }
+    slotRef = {
+      sku,
+      isConsumable,
+      settled: false,
+      emit,
+      resolve,
+      timeoutId,
+      cleanup,
     };
+    activePurchaseSlot = slotRef;
+    iapDiag('purchase slot active', { sku, isConsumable });
 
     emit('requesting');
     mod
@@ -458,33 +964,35 @@ export async function purchaseSku(params: {
           android: { skus: [sku] },
         },
       } as Parameters<RNIap['requestPurchase']>[0])
-      .then(() => {
-        if (!settled) emit('awaiting_store');
+      .then(async (directResult) => {
+        if (slotRef.settled) return;
+
+        /** v14 often resolves with Purchase here even when purchaseUpdatedListener stays silent. */
+        const direct = coerceStorePurchaseRecord(directResult, sku);
+        if (direct) {
+          iapDiag('requestPurchase returned purchase directly', { sku });
+          await settleActivePurchaseFromStoreRecord(mod, direct);
+          return;
+        }
+
+        if (!slotRef.settled) emit('awaiting_store');
+        void pollStorePurchaseAfterRequest(mod, sku);
       })
       .catch((e: unknown) => {
-        if (settled) return;
-        settled = true;
+        if (slotRef.settled) return;
+        slotRef.settled = true;
         cleanup();
+        const msg = e instanceof Error ? e.message : String(e);
+        const alreadyOwned =
+          /already.?owned/i.test(msg) ||
+          /item.?already.?owned/i.test(msg) ||
+          /E_ALREADY_OWNED/i.test(msg);
         emit('failed');
         resolve({
           ok: false,
-          code: 'REQUEST_FAILED',
-          message: e instanceof Error ? e.message : String(e),
+          code: alreadyOwned ? 'ITEM_ALREADY_OWNED' : 'REQUEST_FAILED',
+          message: msg,
         });
       });
-
-    /**
-     * Safety timeout — after Apple/Play's payment sheet completes, the native
-     * `purchaseUpdatedListener` should fire within seconds. 120s is generous
-     * for slow networks but still bounded so the UI cannot spin forever (the
-     * original beta-blocker symptom).
-     */
-    setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      emit('failed');
-      resolve({ ok: false, code: 'IAP_TIMEOUT', message: 'Store did not complete the purchase in time. Try again — if your card was charged, use Restore Purchases.' });
-    }, 120_000);
   });
 }

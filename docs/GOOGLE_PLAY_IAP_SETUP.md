@@ -109,3 +109,24 @@ npm run db:push
 - IAP does **not** work in Expo Go — use EAS **development** or **production** Android build.
 - Products can take **up to a few hours** to propagate after creation in Play Console.
 - If `SKU_NOT_FOUND`, verify product is **Active**, app package matches, and tester is on internal track.
+
+## Charged but “store could not validate” (no Sparks)
+
+Google took payment, but **Supabase could not verify** the purchase with the Android Publisher API. The app **does not** consume the transaction until Sparks are granted, so:
+
+1. **Fix server verification** (most common):
+   - Supabase → **Edge Functions** → **Secrets**: `GOOGLE_PLAY_PACKAGE_NAME` = `com.pulseverse.app`
+   - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` = full service-account JSON (one line)
+   - **Play Console** → **Users and permissions** → invite that service account (View financial data + release access)
+   - **Google Cloud** → enable **Google Play Android Developer API**
+   - Redeploy: `npx supabase functions deploy pulse-shop-fulfillment`
+2. **Recover your Sparks**: in the pack dialog tap **Recover Sparks (don’t buy again)**, reopen **Pulse Shop**, or **Settings → Restore Purchases**.
+3. **“Item already owned” but no Sparks**: you may have bought under a **legacy** Play product id (`com.pulseverse.sparks.500.android`) while the catalog uses `sparks_500`. Redeploy `pulse-shop-fulfillment` after pulling latest (server accepts both). Install a new app build with the same recovery UI.
+4. **Product ID mismatch**: run in Supabase SQL editor:
+   ```sql
+   select slug, store_product_id_android from shop_items where type = 'spark_pack' and is_active;
+   ```
+   Each `store_product_id_android` must match Play Console **exactly** (e.g. `sparks_500`, not `com.pulseverse.sparks.500.android` unless that is what you created in Play). Apply migration **227** if Android IDs are still the old `com.pulseverse.*` form.
+5. If validation never succeeds, Google typically **refunds** an unconsumed consumable within a few days; you are not meant to be charged without delivery once verification is fixed.
+
+**Staff manual credit** (after confirming payment in Play Console): Supabase SQL → find `shop_items.id` for the pack → call `economy_admin_grant_shop_item(recipient, shop_item_id, 'Play stuck purchase')` as an admin user, or use Admin console if wired.

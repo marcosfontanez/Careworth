@@ -7,6 +7,9 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     passWithNoTests: true,
   },
+  define: {
+    __DEV__: true,
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),

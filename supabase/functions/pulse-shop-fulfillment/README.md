@@ -14,9 +14,19 @@ Uses **JWT verification** (default): the caller must send `Authorization: Bearer
 
 | Secret | Purpose |
 |--------|---------|
-| `APPLE_IAP_SHARED_SECRET` | App Store Connect → app → App-Specific Shared Secret |
+| `APPLE_BUNDLE_ID` | Optional. iOS app bundle id (defaults to `com.pulseverse.app`). Checked against the decoded StoreKit 2 transaction. |
+| `APPLE_IAP_SHARED_SECRET` | Legacy only. App Store Connect → app → App-Specific Shared Secret. Used for old StoreKit 1 base64 receipts. |
 | `GOOGLE_PLAY_PACKAGE_NAME` | Android `applicationId` (same as Play Console package) |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Full JSON for a service account with **Google Play Android Developer** access |
+
+**iOS uses StoreKit 2** (react-native-iap v14). The app sends the transaction
+**JWS** (`receipt.ios.jws`). It is verified with `jose` (Web Crypto, Deno-native)
+against Apple's certificate chain with root pinning — no App Store shared secret
+and no client receipt refresh (the refresh caused the repeated "Sign in to Apple
+Account" purchase loop). Note: the Node-only `@apple/app-store-server-library`
+returns `VERIFICATION_FAILURE` on the Deno Edge runtime, so it is intentionally
+not used. The legacy `receipt.ios.receipt_data_base64` path still works for older
+app builds.
 
 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, and `SUPABASE_SECRET_KEYS` are provided automatically (legacy anon/service_role still supported).
 
@@ -27,7 +37,8 @@ All actions require `shop_item_id` (UUID from `shop_items.id`).
 ### `fulfill_spark_pack`
 
 - `platform`: `"ios"` | `"android"`
-- `receipt.ios.receipt_data_base64`: legacy App Store receipt (base64)
+- `receipt.ios.jws`: StoreKit 2 transaction JWS (`purchase.purchaseToken`) — preferred
+- `receipt.ios.receipt_data_base64`: legacy StoreKit 1 App Store receipt (base64) — fallback
 - `receipt.android.purchase_token` + optional `product_id` (must match catalog)
 
 ### `fulfill_border_self`

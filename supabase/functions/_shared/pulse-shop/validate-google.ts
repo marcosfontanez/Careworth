@@ -84,10 +84,23 @@ export async function verifyGoogleProduct(
   const j = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {
     const e = j.error;
-    const message =
+    const raw =
       typeof e === "object" && e !== null && "message" in e
         ? String((e as { message?: string }).message)
         : String(e ?? res.statusText);
+    let message = raw;
+    if (res.status === 401) {
+      message =
+        "Google Play API rejected the service account (401). Check GOOGLE_PLAY_SERVICE_ACCOUNT_JSON in Supabase secrets.";
+    } else if (res.status === 403) {
+      message =
+        "Google Play API denied access (403). In Play Console → Users and permissions, invite the service account with financial/release access for com.pulseverse.app.";
+    } else if (res.status === 404) {
+      message =
+        `Google Play has no purchase for product "${productId}" on package "${packageName}" (404). Ensure Play Console product ID matches shop_items.store_product_id_android exactly.`;
+    } else if (res.status >= 500) {
+      message = `Google Play API error (${res.status}): ${raw}`;
+    }
     return {
       ok: false,
       message,
@@ -114,4 +127,42 @@ export async function verifyGoogleProduct(
       purchaseState,
     },
   };
+}
+
+/** Consumable Sparks packs — call after server grant so Play allows repurchase. */
+export async function consumeGoogleConsumable(
+  packageName: string,
+  productId: string,
+  purchaseToken: string,
+  serviceAccountJson: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  let sa: ServiceAccount;
+  try {
+    sa = JSON.parse(serviceAccountJson) as ServiceAccount;
+  } catch {
+    return { ok: false, message: "Invalid GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" };
+  }
+  const access = await getGoogleAccessToken(sa);
+  if (!access) {
+    return { ok: false, message: "Failed to obtain Google OAuth access token for consume" };
+  }
+
+  const url =
+    `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}` +
+    `/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}:consume`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access}` },
+  });
+
+  if (res.ok) return { ok: true };
+
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const e = j.error;
+  const raw =
+    typeof e === "object" && e !== null && "message" in e
+      ? String((e as { message?: string }).message)
+      : res.statusText;
+  return { ok: false, message: `Consume failed (${res.status}): ${raw}` };
 }

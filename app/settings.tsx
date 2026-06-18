@@ -20,16 +20,16 @@ import { LAUNCH_LINKS } from '@/constants/launch';
 import { sendSentryTestEvent } from '@/lib/monitoring';
 import { useFeatureFlags } from '@/lib/featureFlags';
 import { userHasEmailPasswordIdentity } from '@/lib/authIdentity';
-import { resetRootIndexRedirectDedupe } from '@/lib/rootIndexRedirect';
+import { navigateToLoginAfterSignOut } from '@/lib/authExitNavigation';
 import { purchaseService } from '@/services/shop/purchaseService';
 import { useQueryClient } from '@tanstack/react-query';
 import { useShopRefetchers } from '@/hooks/useShopEconomy';
 import { shopKeys } from '@/lib/shop/queryKeys';
+import { setStaffIapDiagnostics } from '@/lib/shop/iapDiagnostics';
 
 /** After sign-out, jump to login. Avoid `router.dismiss(1)` loops — they dispatch POP and warn when no modal stack exists. */
 function replaceWithLogin(router: Router) {
-  resetRootIndexRedirectDedupe();
-  router.replace('/auth/login');
+  navigateToLoginAfterSignOut(router);
 }
 
 export default function SettingsScreen() {
@@ -48,14 +48,30 @@ export default function SettingsScreen() {
   const [privacySaving, setPrivacySaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [restorePurchasesBusy, setRestorePurchasesBusy] = useState(false);
+  const [signOutBusy, setSignOutBusy] = useState(false);
 
   useEffect(() => {
     setPrivateProfile(profile?.privacyMode === 'private');
   }, [profile?.id, profile?.privacyMode]);
 
+  useEffect(() => {
+    if (profile?.roleAdmin) setStaffIapDiagnostics(true);
+    return () => {
+      if (profile?.roleAdmin) setStaffIapDiagnostics(false);
+    };
+  }, [profile?.roleAdmin]);
+
   const handleSignOut = async () => {
-    await signOut();
-    replaceWithLogin(router);
+    if (signOutBusy) return;
+    setSignOutBusy(true);
+    try {
+      await signOut();
+    } catch (e) {
+      console.warn('[settings] signOut failed', e);
+    } finally {
+      setSignOutBusy(false);
+      replaceWithLogin(router);
+    }
   };
 
   const handleClearCache = async () => {
@@ -101,25 +117,62 @@ export default function SettingsScreen() {
     }
     setRestorePurchasesBusy(true);
     try {
-      const outcome = await purchaseService.restoreStorePurchases();
+      const outcome = await Promise.race([
+        purchaseService.restoreStorePurchases(),
+        new Promise<{ ok: false; code: string; message: string }>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                ok: false,
+                code: 'RESTORE_TIMEOUT',
+                message: 'Restore timed out. Try again when the App Store dialog is dismissed.',
+              }),
+            120_000,
+          ),
+        ),
+      ]);
       if (!outcome.ok) {
-        toast.show(outcome.message, 'error');
+        toast.show(
+          outcome.code === 'RESTORE_FAILED'
+            ? 'Could not restore purchases. Try again.'
+            : outcome.message,
+          'error',
+        );
         return;
       }
       await refreshAfterPurchase();
       await queryClient.invalidateQueries({ queryKey: shopKeys.catalog() });
       const d = outcome.data;
       const synced = Number(d.border_entitlements_synced ?? 0);
+      const sparksRecovered = Number(d.sparks_recovered ?? 0);
       const found = Number(d.store_purchases_found ?? 0);
-      if (synced > 0) {
+      const sparkSeen = Number(d.spark_purchases_seen ?? 0);
+      if (sparksRecovered > 0) {
         toast.show(
-          `Restored ${synced} border purchase${synced === 1 ? '' : 's'}. Spark packs are not restored.`,
+          `Recovered ${sparksRecovered} Spark purchase${sparksRecovered === 1 ? '' : 's'} — your balance is updated.`,
           'success',
         );
+      } else if (synced > 0) {
+        toast.show(`Restored ${synced} border purchase${synced === 1 ? '' : 's'}.`, 'success');
       } else if (found === 0) {
-        toast.show('No active store purchases found on this device for your account.', 'info');
+        toast.show(
+          Platform.OS === 'ios'
+            ? 'No restorable purchases found on this Apple ID. If you were charged for Sparks, open Pulse Shop → your pack and try again, or use a Sandbox tester on TestFlight.'
+            : 'Google Play did not return any purchase on this device. If you were charged for Sparks, open Pulse Shop → your pack → Recover Sparks (do not buy again).',
+          'info',
+        );
+      } else if (sparkSeen > 0) {
+        toast.show(
+          'Found a Spark purchase but could not credit it yet. Open Pulse Shop → your pack → Recover Sparks, and ensure the app is on the latest build.',
+          'info',
+        );
       } else {
-        toast.show('Store purchases checked — your border access is up to date.', 'success');
+        toast.show(
+          Platform.OS === 'ios'
+            ? 'Borders are up to date. Restore re-syncs paid borders; stuck Spark packs may need another purchase attempt after server recovery.'
+            : 'Borders are up to date. Restore does not list stuck Spark packs when Play hides them — use Pulse Shop → Recover Sparks if you were charged.',
+          'info',
+        );
       }
     } finally {
       setRestorePurchasesBusy(false);
@@ -135,23 +188,25 @@ export default function SettingsScreen() {
         {
           text: 'Delete My Account',
           style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              const result = await invokeDeleteAccount();
-              if (!result.ok) {
-                Alert.alert('Could not delete account', result.message);
-                return;
+          onPress: () => {
+            void (async () => {
+              setDeleting(true);
+              try {
+                const result = await invokeDeleteAccount();
+                if (!result.ok) {
+                  Alert.alert('Could not delete account', result.message);
+                  return;
+                }
+                await signOut();
+                replaceWithLogin(router);
+              } catch (err: unknown) {
+                const message =
+                  err instanceof Error ? err.message : 'Failed to delete account. Please contact support.';
+                Alert.alert('Error', message);
+              } finally {
+                setDeleting(false);
               }
-              await signOut();
-              replaceWithLogin(router);
-            } catch (err: unknown) {
-              const message =
-                err instanceof Error ? err.message : 'Failed to delete account. Please contact support.';
-              Alert.alert('Error', message);
-            } finally {
-              setDeleting(false);
-            }
+            })();
           },
         },
       ],
@@ -438,8 +493,17 @@ export default function SettingsScreen() {
         <View style={{ height: 24 }} />
 
         <View style={styles.card}>
-          <TouchableOpacity style={styles.actionRow} onPress={handleSignOut} activeOpacity={0.7}>
-            <Ionicons name="log-out-outline" size={iconSize.sm} color={colors.primary.teal} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={handleSignOut}
+            disabled={signOutBusy}
+            activeOpacity={0.7}
+          >
+            {signOutBusy ? (
+              <ActivityIndicator size="small" color={colors.primary.teal} />
+            ) : (
+              <Ionicons name="log-out-outline" size={iconSize.sm} color={colors.primary.teal} />
+            )}
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
@@ -454,23 +518,6 @@ export default function SettingsScreen() {
             </>
           )}
         </TouchableOpacity>
-
-        {__DEV__ ? (
-          <View style={styles.devLinks}>
-            <Text style={styles.devPreviewText}>
-              Dev Supabase:{' '}
-              {(process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'missing')
-                .replace(/^https:\/\//, '')
-                .replace(/\/$/, '') || 'missing'}
-            </Text>
-            <Text style={styles.devPreviewText} selectable>
-              User id: {user?.id ?? '—'}
-            </Text>
-            <Text style={styles.devPreviewHint}>
-              Compare this user id to the one in your SQL query. They must match exactly.
-            </Text>
-          </View>
-        ) : null}
 
         {__DEV__ && profile?.roleAdmin ? (
           <View style={styles.devLinks}>
@@ -575,13 +622,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.dark.textSecondary,
-  },
-  devPreviewHint: {
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: '500',
-    color: colors.dark.textMuted,
-    marginTop: 4,
   },
 
   version: {

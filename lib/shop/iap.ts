@@ -16,8 +16,11 @@ export {
   endIapConnection,
   platformPrefix,
   purchaseSku,
+  abortActivePurchase,
+  recoverPendingPurchaseForSku,
   restorePurchasesFromStore,
   getIosReceiptBase64,
   prefetchStoreProducts,
   reconcilePendingPurchases,
+  listAllPendingStorePurchasesAggressive,
 } from './iap.native';

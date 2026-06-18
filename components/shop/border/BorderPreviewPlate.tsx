@@ -9,11 +9,15 @@ import { pulseImageListThumbProps } from '@/lib/pulseImage';
 import {
   rasterRingOuterBoxSide,
   shopItemBundledRasterPreview,
-  shopItemIsEmeraldRenewalMay2026,
-  shopItemIsClassOf2026,
 } from '@/lib/pulseRingRasterAssets';
 import { EmeraldRenewalRingMotion } from '@/components/profile/EmeraldRenewalRingMotion';
 import { PremiumBorderOverlay } from '@/components/profile/PremiumAnimatedProfileBorder';
+import { pulseFrameStyleForShopBorder } from '@/lib/borders/frameSlug';
+import {
+  shopItemUsesPremiumAnimatedOverlay,
+} from '@/lib/borders/premiumBorderPreview';
+import { useResolvedBorderMotion } from '@/lib/borders/useResolvedBorderMotion';
+import type { BorderRenderPriority } from '@/lib/borders/borderPerformanceTypes';
 import { hexWithAlpha, ringBloomStyle } from '@/components/shop/border/previewPlateUtils';
 import { WaterPodiumBackdrop } from '@/components/shop/border/WaterPodiumBackdrop';
 
@@ -82,6 +86,66 @@ type Props = {
   frame?: 'boxed' | 'podium';
 };
 
+function BundledRasterShopPreview({
+  inner,
+  outer,
+  bundled,
+  shopItem,
+  isPodium,
+}: {
+  inner: number;
+  outer: number;
+  bundled: NonNullable<ReturnType<typeof shopItemBundledRasterPreview>>;
+  shopItem: ShopItemRow;
+  isPodium: boolean;
+}) {
+  const pulseStyle = pulseFrameStyleForShopBorder(shopItem);
+  const premiumOverlay = shopItemUsesPremiumAnimatedOverlay(shopItem);
+  const priority: BorderRenderPriority =
+    isPodium || premiumOverlay || outer >= 120 ? 'shop-preview' : 'shop-grid';
+  const { motion } = useResolvedBorderMotion({
+    pulseFrame: pulseStyle,
+    size: inner,
+    priority,
+    mode: premiumOverlay ? 'full' : 'auto',
+    instanceId: shopItem.id,
+  });
+  const fullPremiumPreview =
+    premiumOverlay &&
+    motion.showClassOf2026Overlay &&
+    motion.visualMode === 'full';
+  const shopHeroPreview = premiumOverlay && priority === 'shop-preview';
+  const showClassOverlay =
+    premiumOverlay && (motion.showClassOf2026Overlay || shopHeroPreview);
+
+  return (
+    <>
+      <Image
+        source={bundled.source}
+        style={{ width: outer, height: outer }}
+        contentFit="contain"
+        pointerEvents="none"
+        {...pulseImageListThumbProps}
+      />
+      {motion.showEmeraldRenewal ? (
+        <EmeraldRenewalRingMotion
+          ringDiameter={outer}
+          active={motion.visualMode !== 'static'}
+        />
+      ) : null}
+      {showClassOverlay ? (
+        <PremiumBorderOverlay
+          box={outer}
+          premiumType="classOf2026"
+          animationIntensity={1}
+          previewMode={shopHeroPreview || fullPremiumPreview}
+          showCelebrationBurst
+        />
+      ) : null}
+    </>
+  );
+}
+
 export function BorderPreviewPlate({
   ringColor,
   size = 72,
@@ -133,21 +197,23 @@ export function BorderPreviewPlate({
         </View>
         <View style={[styles.rasterBloomClip, { width: outer, height: outer }]}>
           <View style={[styles.rasterBloom, bloom, { width: outer, height: outer }]}>
-            <Image
-              source={bundled.source}
-              style={{ width: outer, height: outer }}
-              contentFit="contain"
-              pointerEvents="none"
-              {...pulseImageListThumbProps}
-            />
-            {shopItem && shopItemIsEmeraldRenewalMay2026(shopItem) ? (
-              <EmeraldRenewalRingMotion ringDiameter={outer} active />
-            ) : null}
-            {/* Class of 2026 celebration — full overlay on featured/hero + large
-                previews; compact grid cards stay static (perf) with the motion hint. */}
-            {shopItem && shopItemIsClassOf2026(shopItem) && (isPodium || outer >= 150) ? (
-              <PremiumBorderOverlay box={outer} premiumType="classOf2026" />
-            ) : null}
+            {shopItem ? (
+              <BundledRasterShopPreview
+                inner={inner}
+                outer={outer}
+                bundled={bundled}
+                shopItem={shopItem}
+                isPodium={isPodium}
+              />
+            ) : (
+              <Image
+                source={bundled.source}
+                style={{ width: outer, height: outer }}
+                contentFit="contain"
+                pointerEvents="none"
+                {...pulseImageListThumbProps}
+              />
+            )}
           </View>
         </View>
       </View>

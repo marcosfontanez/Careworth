@@ -22,11 +22,73 @@ import type { ShopItemRow, GiftContext } from '@/lib/shop/types';
 import { buildSparkPackStoreIdsForStaff } from '@/lib/shop/buildSparkPackStoreIdsForStaff';
 import type { PurchaseOutcome } from '@/services/shop/purchaseService';
 import type { IapPurchaseStage } from '@/lib/shop/iap';
+import { abortActivePurchase } from '@/lib/shop/iap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileByHandle } from '@/hooks/useShopEconomy';
 import { profilesService } from '@/services/supabase/profiles';
 import type { UserProfile } from '@/types';
-import { shopErrorHint } from '@/lib/shop/shopErrors';
+import { shopErrorHint, shopPurchaseErrorMessage } from '@/lib/shop/shopErrors';
+
+function canDismissPurchaseModal(busy: boolean, stage: IapPurchaseStage | null): boolean {
+  if (!busy) return true;
+  return stage === 'requesting' || stage === 'awaiting_store' || stage === null;
+}
+
+function dismissPurchaseModal(
+  busy: boolean,
+  realStage: IapPurchaseStage | null,
+  onClose: () => void,
+  setBusy: (v: boolean) => void,
+) {
+  if (!canDismissPurchaseModal(busy, realStage)) return;
+  if (busy) {
+    abortActivePurchase();
+    setBusy(false);
+  }
+  onClose();
+}
+
+/**
+ * Store name for purchase copy. Three-way so the label is correct on every
+ * runtime — Android shows "Google Play", iOS shows "the App Store", and the web
+ * build (Platform.OS === 'web') shows a neutral "the store" instead of wrongly
+ * saying "Apple". If you ever see "Apple" on an Android device, the app is
+ * running a stale JS bundle from before this change — reload/rebuild it.
+ */
+function storeDisplayName(): string {
+  if (Platform.OS === 'android') return 'Google Play';
+  if (Platform.OS === 'ios') return 'the App Store';
+  return 'the store';
+}
+
+function iapRealStageLabel(
+  stage: IapPurchaseStage | null,
+  opts?: { validatingLabel?: string },
+): string | null {
+  const store = storeDisplayName();
+  switch (stage) {
+    case 'requesting':
+      return `Opening ${store}…`;
+    case 'awaiting_store':
+      return `Waiting for ${store} to confirm payment…`;
+    case 'validating':
+      return opts?.validatingLabel ?? 'Verifying purchase…';
+    case 'fulfilled':
+      return 'Almost done…';
+    case 'pending':
+      return 'Purchase pending approval…';
+    default:
+      return null;
+  }
+}
+
+function iapWatchdogStageLabel(watchdogStage: 0 | 1 | 2 | 3): string | null {
+  if (watchdogStage === 0) return null;
+  if (watchdogStage === 1) return `Connecting to ${storeDisplayName()}…`;
+  if (watchdogStage === 2) return 'Verifying purchase…';
+  return 'Still waiting on the store…';
+}
+
 import { ringPreviewColor } from '@/lib/shop/catalogUtils';
 import { BorderRarityBadge } from '@/components/shop/border/BorderRarityBadge';
 import { BorderCompactMetaRow } from '@/components/shop/border/BorderCompactMetaRow';
@@ -109,27 +171,8 @@ export function BorderBuyConfirmModal({
     };
   }, [busy]);
 
-  const realStageLabel: string | null =
-    realStage === 'requesting'
-      ? 'Opening App Store…'
-      : realStage === 'awaiting_store'
-        ? 'Waiting for Apple to confirm payment…'
-        : realStage === 'validating'
-          ? 'Verifying purchase…'
-          : realStage === 'fulfilled'
-            ? 'Almost done…'
-            : realStage === 'pending'
-              ? 'Purchase pending approval…'
-              : null;
-
-  const watchdogStageLabel =
-    watchdogStage === 0
-      ? null
-      : watchdogStage === 1
-        ? 'Connecting to App Store…'
-        : watchdogStage === 2
-          ? 'Verifying purchase…'
-          : 'Still waiting on the store…';
+  const realStageLabel = iapRealStageLabel(realStage);
+  const watchdogStageLabel = iapWatchdogStageLabel(watchdogStage);
 
   /** Real stage takes precedence — fall back to watchdog if real stage hasn't arrived. */
   const stageLabel = realStageLabel ?? watchdogStageLabel;
@@ -141,8 +184,9 @@ export function BorderBuyConfirmModal({
     try {
       const r = await onPurchase({ onStage: (s) => setRealStage(s) });
       if (!r.ok) {
+        if (r.code === 'USER_CANCELLED') return;
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setErr(shopErrorHint(r.code) || r.message);
+        setErr(shopPurchaseErrorMessage(r.code, r.message));
         return;
       }
       onSuccess?.(r.data);
@@ -152,9 +196,11 @@ export function BorderBuyConfirmModal({
     }
   };
 
+  const dismiss = () => dismissPurchaseModal(busy, realStage, onClose, setBusy);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={busy ? undefined : onClose}>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={dismiss}>
+      <Pressable style={styles.backdrop} onPress={busy ? undefined : dismiss}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable onPress={(e) => e.stopPropagation()} style={styles.sheet}>
             <LinearGradient
@@ -187,8 +233,8 @@ export function BorderBuyConfirmModal({
               <Text style={styles.stageLabel}>{stageLabel}</Text>
             ) : null}
             <View style={styles.sheetActions}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={dismiss} activeOpacity={0.88}>
+                <Text style={styles.secondaryBtnText}>{busy && !canDismissPurchaseModal(busy, realStage) ? 'Please wait…' : 'Cancel'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
@@ -438,7 +484,7 @@ export function BorderGiftRecipientModal({
       const r = await onPurchaseGift(normalized, note.trim() || null);
       if (!r.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setError(shopErrorHint(r.code, true) || r.message);
+        setError(shopPurchaseErrorMessage(r.code, r.message, true));
         return;
       }
       onSuccess?.(disp);
@@ -720,10 +766,14 @@ type CreditPackProps = {
    */
   mode?: 'purchase' | 'web_info';
   onPurchase?: PurchaseRunner;
+  /** Deep recovery when Play reports "already owned" (Android legacy SKU / empty purchase cache). */
+  onRecoverStuck?: () => Promise<PurchaseOutcome>;
   /** Fulfilled purchase payload from Edge/RPC (e.g. `purchase_receipt_id`). Not used for `web_info`. */
   onSuccess?: (data: Record<string, unknown>) => void;
   /** When set (e.g. `profiles.role_admin`), show a staff-only link to copy spark-pack IAP IDs from catalog. */
   staffSparkPackCatalog?: ShopItemRow[] | null;
+  /** StoreKit / Play localized price when available (native purchase mode). */
+  storeDisplayPrice?: string;
 };
 
 export function CreditPackConfirmModal({
@@ -734,11 +784,14 @@ export function CreditPackConfirmModal({
   tag,
   mode = 'purchase',
   onPurchase,
+  onRecoverStuck,
   onSuccess,
   staffSparkPackCatalog,
+  storeDisplayPrice,
 }: CreditPackProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [lastErrCode, setLastErrCode] = useState<string | null>(null);
   const [realStage, setRealStage] = useState<IapPurchaseStage | null>(null);
   const [watchdogStage, setWatchdogStage] = useState<0 | 1 | 2 | 3>(0);
   const toast = useToast((s) => s.show);
@@ -751,6 +804,7 @@ export function CreditPackConfirmModal({
     if (!visible) {
       setBusy(false);
       setErr(null);
+      setLastErrCode(null);
       setRealStage(null);
       setWatchdogStage(0);
     }
@@ -772,40 +826,26 @@ export function CreditPackConfirmModal({
     };
   }, [busy]);
 
-  const realStageLabel: string | null =
-    realStage === 'requesting'
-      ? 'Opening App Store…'
-      : realStage === 'awaiting_store'
-        ? 'Waiting for Apple to confirm payment…'
-        : realStage === 'validating'
-          ? 'Crediting Sparks to your wallet…'
-          : realStage === 'fulfilled'
-            ? 'Almost done…'
-            : realStage === 'pending'
-              ? 'Purchase pending approval…'
-              : null;
-
-  const watchdogStageLabel =
-    watchdogStage === 0
-      ? null
-      : watchdogStage === 1
-        ? 'Connecting to App Store…'
-        : watchdogStage === 2
-          ? 'Verifying purchase…'
-          : 'Still waiting on the store…';
+  const realStageLabel = iapRealStageLabel(realStage, {
+    validatingLabel: 'Crediting Sparks to your wallet…',
+  });
+  const watchdogStageLabel = iapWatchdogStageLabel(watchdogStage);
 
   const stageLabel = realStageLabel ?? watchdogStageLabel;
 
   const run = async () => {
     if (!onPurchase) return;
     setErr(null);
+    setLastErrCode(null);
     setBusy(true);
     setRealStage(null);
     try {
       const r = await onPurchase({ onStage: (s) => setRealStage(s) });
       if (!r.ok) {
+        if (r.code === 'USER_CANCELLED') return;
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setErr(shopErrorHint(r.code) || r.message);
+        setLastErrCode(r.code);
+        setErr(shopPurchaseErrorMessage(r.code, r.message));
         return;
       }
       onSuccess?.(r.data);
@@ -815,9 +855,40 @@ export function CreditPackConfirmModal({
     }
   };
 
+  const dismiss = () => dismissPurchaseModal(busy, realStage, onClose, setBusy);
+
+  const showRecover =
+    !!onRecoverStuck &&
+    (lastErrCode === 'ITEM_ALREADY_OWNED' ||
+      lastErrCode === 'PENDING_STORE_PURCHASE' ||
+      lastErrCode === 'NO_PENDING');
+
+  const runRecover = async () => {
+    if (!onRecoverStuck) return;
+    setErr(null);
+    setBusy(true);
+    setRealStage('validating');
+    try {
+      const r = await onRecoverStuck();
+      if (!r.ok) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setLastErrCode(r.code);
+        setErr(shopPurchaseErrorMessage(r.code, r.message));
+        return;
+      }
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast('Sparks recovery finished — check your balance.', 'success');
+      onSuccess?.(r.data);
+      onClose();
+    } finally {
+      setBusy(false);
+      setRealStage(null);
+    }
+  };
+
   return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={busy ? undefined : onClose}>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={dismiss}>
+      <Pressable style={styles.backdrop} onPress={busy ? undefined : dismiss}>
         <Pressable onPress={(e) => e.stopPropagation()} style={styles.sheet}>
           <LinearGradient
             colors={[...gradients.economySparks]}
@@ -844,11 +915,37 @@ export function CreditPackConfirmModal({
             </Text>
           ) : (
             <Text style={styles.sheetBody}>
-              Spark packs are billed through the App Store or Google Play. You’ll see localized pricing on the
-              next step{tag ? ` · ${tag}` : ''}.
+              {storeDisplayPrice ? (
+                <>
+                  You’ll be charged{' '}
+                  <Text style={{ fontWeight: '800', color: '#22D3EE' }}>{storeDisplayPrice}</Text> through the App
+                  Store or Google Play
+                  {tag ? ` · ${tag}` : ''}.
+                </>
+              ) : (
+                <>
+                  Spark packs are billed through the App Store or Google Play. You’ll see localized pricing on the next
+                  step{tag ? ` · ${tag}` : ''}.
+                </>
+              )}
             </Text>
           )}
           {err ? <Text style={styles.errorText}>{err}</Text> : null}
+          {showRecover ? (
+            <TouchableOpacity
+              style={styles.recoverSparksBtn}
+              onPress={runRecover}
+              disabled={busy}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Recover Sparks from Google Play"
+            >
+              <Ionicons name="refresh-circle-outline" size={18} color={colors.primary.teal} />
+              <Text style={styles.recoverSparksBtnText}>
+                {busy ? 'Recovering from Google Play…' : 'Recover Sparks (don’t buy again)'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           {busy && stageLabel ? (
             <Text style={styles.stageLabel}>{stageLabel}</Text>
           ) : null}
@@ -890,8 +987,10 @@ export function CreditPackConfirmModal({
               </TouchableOpacity>
             ) : (
               <>
-                <TouchableOpacity style={styles.secondaryBtn} onPress={onClose} disabled={busy} activeOpacity={0.88}>
-                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={dismiss} activeOpacity={0.88}>
+                  <Text style={styles.secondaryBtnText}>
+                    {busy && !canDismissPurchaseModal(busy, realStage) ? 'Please wait…' : 'Cancel'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
@@ -985,6 +1084,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary.teal,
     textDecorationLine: 'underline',
+  },
+  recoverSparksBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.35)',
+    backgroundColor: 'rgba(12,18,32,0.55)',
+  },
+  recoverSparksBtnText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.primary.teal,
   },
   sheetTitle: {
     fontSize: 19,
