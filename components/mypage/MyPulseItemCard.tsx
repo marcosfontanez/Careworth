@@ -2,10 +2,13 @@ import React, { useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Post, ProfileUpdate } from '@/types';
-import { hrefPostFocusComments } from '@/lib/communityRoutes';
+import { hrefPost } from '@/lib/communityRoutes';
 import { pushPostViewer } from '@/lib/postViewerRoute';
+import { useResolvedLinkedPost } from '@/hooks/useQueries';
 import { navigateToCircleRoom, navigateToCircleThread } from '@/lib/communityCache';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePulsePhotoViewer } from '@/contexts/PulsePhotoViewerContext';
+import { buildPulseUpdatePhotoGallery } from '@/lib/media/pulsePhotoGallery';
 import { getMyPulseDisplayType } from '@/utils/myPulseDisplayType';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { openWebUrlSafely } from '@/lib/safeExternalLink';
@@ -75,6 +78,7 @@ export function MyPulseItemCard({
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const photoViewer = usePulsePhotoViewer();
   const displayType = getMyPulseDisplayType(u);
 
   const handleDelete = useCallback(async () => {
@@ -113,17 +117,17 @@ export function MyPulseItemCard({
     onComment?.(u.id);
   }, [onComment, u.id]);
 
+  const resolvedLinkedPost = useResolvedLinkedPost(u.linkedPostId, resolveLinkedPost);
+
   const openSource = useCallback(() => {
     if (u.linkedPostId) {
-      const linked = resolveLinkedPost?.(u.linkedPostId);
-      if (linked) {
-        router.push(
-          hrefPostFocusComments(linked, u.linkedCircleSlug?.trim() || undefined) as any,
-        );
+      const circleSlug = u.linkedCircleSlug?.trim() || undefined;
+      if (resolvedLinkedPost) {
+        router.push(hrefPost(resolvedLinkedPost, circleSlug) as any);
       } else {
         void pushPostViewer(router, u.linkedPostId, {
-          focusComments: true,
-          circle: u.linkedCircleSlug?.trim() || undefined,
+          circle: circleSlug,
+          viewerId: user?.id ?? null,
         });
       }
       return;
@@ -165,7 +169,7 @@ export function MyPulseItemCard({
       return;
     }
     router.push(`/my-pulse/${u.id}` as any);
-  }, [router, u, resolveLinkedPost, queryClient, user?.id]);
+  }, [router, u, resolvedLinkedPost, queryClient, user?.id]);
 
   /**
    * Types where editing the body from the Pulse card is meaningful.
@@ -185,7 +189,7 @@ export function MyPulseItemCard({
 
   switch (displayType) {
     case 'circle': {
-      const linkedPost = u.linkedPostId ? resolveLinkedPost?.(u.linkedPostId) : undefined;
+      const linkedPost = u.linkedPostId ? resolvedLinkedPost : undefined;
       return (
         <MyPulseCircleCard
           update={u}
@@ -201,7 +205,7 @@ export function MyPulseItemCard({
       );
     }
     case 'clip': {
-      const linkedPost = u.linkedPostId ? resolveLinkedPost?.(u.linkedPostId) : undefined;
+      const linkedPost = u.linkedPostId ? resolvedLinkedPost : undefined;
       const thumbnail = u.mediaThumb;
 
       const sourceLabel =
@@ -254,7 +258,13 @@ export function MyPulseItemCard({
         />
       );
     case 'pics': {
-      const linkedPost = u.linkedPostId ? resolveLinkedPost?.(u.linkedPostId) : undefined;
+      const linkedPost = u.linkedPostId ? resolvedLinkedPost : undefined;
+      const handlePhotoPress = (index: number) => {
+        if (!photoViewer.available) return;
+        const items = buildPulseUpdatePhotoGallery(u, linkedPost);
+        if (!items.length) return;
+        photoViewer.open({ items, initialIndex: index });
+      };
       return (
         <MyPulsePicsCard
           update={u}
@@ -265,6 +275,7 @@ export function MyPulseItemCard({
           onComment={handleComment}
           readOnly={readOnly}
           onPress={openSource}
+          onPhotoPress={handlePhotoPress}
           onEdit={forwardedOnEdit}
           editContent={editContent}
           wasEdited={wasEdited}

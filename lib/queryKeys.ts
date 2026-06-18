@@ -142,6 +142,25 @@ export const profileUpdateKeys = {
     ['profileUpdate', id, maybe(viewerId)] as const,
   /** Comments for a single My Pulse update. */
   comments: (id: string) => ['profileUpdateComments', id] as const,
+  /** All pics updates for Media Hub (beyond the 5-slot rail). */
+  mediaHubPics: (ownerUserId: string, viewerId: Nullable<string>) =>
+    ['profileUpdates', 'mediaHubPics', ownerUserId, maybe(viewerId)] as const,
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Pulse Board (visitor shoutouts on My Pulse)
+// ─────────────────────────────────────────────────────────────────────
+export const profileBoardKeys = {
+  root: () => ['profileBoardShoutouts'] as const,
+  forProfile: (ownerUserId: string) =>
+    ['profileBoardShoutouts', 'feed', ownerUserId] as const,
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// My Pulse weekly recap (owner ritual)
+// ─────────────────────────────────────────────────────────────────────
+export const pulseWeeklyRecapKeys = {
+  forUser: (userId: Nullable<string>) => ['pulseWeeklyRecap', maybe(userId)] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────

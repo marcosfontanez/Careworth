@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   LayoutAnimation,
   Platform,
   StyleSheet,
   Text,
+  TouchableOpacity,
   UIManager,
   View,
 } from 'react-native';
@@ -12,14 +13,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { colors, borderRadius, spacing } from '@/theme';
+import { colors, borderRadius, rhythm, spacing } from '@/theme';
 import { profileUpdatesService } from '@/services/profileUpdates';
 import { useAuth } from '@/contexts/AuthContext';
 import { MyPulseItemCard } from './MyPulseItemCard';
 import { MyPulseComposerChips } from './MyPulseComposerChips';
-import { profileUpdateKeys } from '@/lib/queryKeys';
+import { profileUpdateKeys, pulseWeeklyRecapKeys } from '@/lib/queryKeys';
 import { pushPostViewer } from '@/lib/postViewerRoute';
 import { PVSectionHeader } from '@/components/pv/PVSectionHeader';
+import { PulseBottomSheet } from '@/components/ui/pulse/PulseBottomSheet';
 import type { Post, ProfileUpdate } from '@/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -57,6 +59,7 @@ export function MyPulseSection({
   const viewerId = authUser?.id ?? null;
   const prevCount = useRef(updates.length);
   const didMount = useRef(false);
+  const [capInfoOpen, setCapInfoOpen] = useState(false);
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => profileUpdatesService.deleteForUser(id, userId),
@@ -126,6 +129,7 @@ export function MyPulseSection({
       pin ? profileUpdatesService.pin(id) : profileUpdatesService.unpin(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(userId) });
+      queryClient.invalidateQueries({ queryKey: pulseWeeklyRecapKeys.forUser(userId) });
     },
   });
 
@@ -275,16 +279,27 @@ export function MyPulseSection({
         title="My Pulse"
         subtitle={
           readOnly
-            ? 'Their latest 5 updates. Always fresh.'
-            : 'Your latest 5 updates. Always fresh.'
+            ? 'Their latest 5 updates — pin one as a featured moment.'
+            : 'Your latest 5 updates — pin one as a featured moment.'
         }
         rightSlot={
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{count}</Text>
-            <Text style={styles.countTotal}>/5</Text>
+          <View style={styles.countRow}>
+            <View style={styles.countPill}>
+              <Text style={styles.countText}>{count}</Text>
+              <Text style={styles.countTotal}>/5</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setCapInfoOpen(true)}
+              hitSlop={10}
+              style={styles.infoBtn}
+              accessibilityRole="button"
+              accessibilityLabel="How the five update limit works"
+            >
+              <Ionicons name="information-circle-outline" size={20} color={colors.primary.teal} />
+            </TouchableOpacity>
           </View>
         }
-        style={{ marginBottom: spacing.md }}
+        style={{ marginBottom: rhythm.myPulseHeaderGap }}
       />
 
       <MyPulseComposerChips isOwner={!readOnly} />
@@ -319,21 +334,40 @@ export function MyPulseSection({
         </View>
       ) : (
         <View style={styles.stack}>
-          {updates.map((u) => (
-            <MyPulseItemCard
-              key={u.id}
-              update={u}
-              onDelete={onDelete}
-              onTogglePin={onTogglePin}
-              onEdit={readOnly ? undefined : onEdit}
-              onLike={onLike}
-              onComment={onComment}
-              readOnly={readOnly}
-              resolveLinkedPost={resolveLinkedPost}
-            />
+          {updates.map((u, index) => (
+            <View key={u.id}>
+              {u.isPinned && index === 0 ? (
+                <View style={styles.featuredKicker}>
+                  <Ionicons name="sparkles" size={12} color={colors.primary.teal} />
+                  <Text style={styles.featuredKickerText}>Featured Moment</Text>
+                </View>
+              ) : null}
+              <MyPulseItemCard
+                update={u}
+                onDelete={onDelete}
+                onTogglePin={onTogglePin}
+                onEdit={readOnly ? undefined : onEdit}
+                onLike={onLike}
+                onComment={onComment}
+                readOnly={readOnly}
+                resolveLinkedPost={resolveLinkedPost}
+              />
+            </View>
           ))}
         </View>
       )}
+
+      <PulseBottomSheet
+        visible={capInfoOpen}
+        onClose={() => setCapInfoOpen(false)}
+        title="Your 5 Pulse slots"
+        maxHeightRatio={0.42}
+      >
+        <Text style={styles.capInfoBody}>
+          Only your latest 5 Pulse updates show here. Pin one to keep it featured. When you add a
+          new update, your oldest unpinned update rolls off.
+        </Text>
+      </PulseBottomSheet>
     </View>
   );
 }
@@ -343,12 +377,20 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 0,
   },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: rhythm.myPulseItemStackGap,
+  },
+  infoBtn: {
+    padding: rhythm.myPulseItemStackGap / 2,
+  },
   countPill: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: rhythm.cardGap,
+    paddingVertical: rhythm.cardPaddingSmall / 2,
     borderRadius: borderRadius.chip,
     backgroundColor: 'rgba(20,184,166,0.14)',
     borderWidth: 1,
@@ -368,13 +410,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   emptyCard: {
-    marginTop: spacing.sm,
+    marginTop: rhythm.cardPaddingSmall,
     borderRadius: borderRadius.xl,
     backgroundColor: colors.dark.elevated,
     borderWidth: 1,
     borderColor: colors.dark.border,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
+    paddingVertical: rhythm.myPulseEmptyPaddingVertical,
+    paddingHorizontal: rhythm.myPulseEmptyPaddingHorizontal,
     alignItems: 'center',
   },
   emptyIcon: {
@@ -386,7 +428,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20,184,166,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: rhythm.myPulseEmptyIconGap,
   },
   emptyTitle: {
     fontSize: 16,
@@ -394,7 +436,7 @@ const styles = StyleSheet.create({
     color: colors.dark.text,
     textAlign: 'center',
     letterSpacing: -0.2,
-    marginBottom: 6,
+    marginBottom: rhythm.myPulseEmptyTitleGap,
   },
   emptyBody: {
     fontSize: 12.5,
@@ -404,6 +446,26 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
   stack: {
-    marginTop: 2,
+    marginTop: rhythm.myPulseItemStackGap,
+    gap: rhythm.myPulseItemStackGap,
+  },
+  featuredKicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    marginBottom: rhythm.myPulseItemStackGap,
+    marginTop: rhythm.myPulseItemStackGap,
+  },
+  featuredKickerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.55,
+    textTransform: 'uppercase',
+    color: colors.primary.teal,
+  },
+  capInfoBody: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.dark.textSecondary,
   },
 });

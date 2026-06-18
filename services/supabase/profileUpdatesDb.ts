@@ -154,6 +154,44 @@ export const profileUpdatesDb = {
   },
 
   /**
+   * Pics-bearing profile updates for Media Hub — not capped at five like the
+   * My Pulse activity rail. Viewer-scoped `liked` hydration included.
+   */
+  async listPicsForMediaHub(
+    userId: string,
+    limit = 40,
+    viewerId?: string | null,
+  ): Promise<ProfileUpdate[]> {
+    const { data, error } = await supabase
+      .from('profile_updates')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(Math.min(limit * 3, 120));
+
+    if (error) {
+      if (isProfileSurfaceAccessDenied(error)) return [];
+      throw error;
+    }
+
+    const rows = (data ?? []).filter((r: any) => {
+      const urls = r.pics_urls;
+      if (Array.isArray(urls) && urls.some((u: unknown) => String(u ?? '').trim())) {
+        return true;
+      }
+      const t = String(r.type ?? '').trim();
+      return t === 'pics';
+    });
+
+    const trimmed = rows.slice(0, limit);
+    const likedSet = await fetchLikedSet(
+      viewerId ?? null,
+      trimmed.map((r: any) => r.id as string),
+    );
+    return trimmed.map((r: any) => rowToProfileUpdate(r, likedSet.has(r.id)));
+  },
+
+  /**
    * Pin a single profile update to the top of its owner's My Pulse.
    * Delegates to the `pin_profile_update` RPC which (a) verifies the
    * caller owns the row, (b) clears any existing pin for that user, and

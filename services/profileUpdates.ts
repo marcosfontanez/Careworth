@@ -50,6 +50,14 @@ export const profileUpdatesService = {
     return profileUpdatesDb.listForUser(userId, limit, viewerId);
   },
 
+  async getPicsForMediaHub(
+    userId: string,
+    limit = 40,
+    viewerId?: string | null,
+  ): Promise<ProfileUpdate[]> {
+    return profileUpdatesDb.listPicsForMediaHub(userId, limit, viewerId);
+  },
+
   /** Use `null` when missing — TanStack Query must not settle `undefined` from `queryFn`. */
   async getById(id: string, viewerId?: string | null): Promise<ProfileUpdate | null> {
     const row = await profileUpdatesDb.getById(id, viewerId);

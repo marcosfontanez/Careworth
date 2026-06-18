@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -7,6 +7,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +22,13 @@ import { HubTileImage, RecentMediaThumb } from '@/components/mypage/RecentMediaT
 import { FeedClipAttributionBadge } from '@/components/feed/FeedClipAttributionBadge';
 import { profileUpdateKeys, savedPostKeys } from '@/lib/queryKeys';
 import { resolvePostViewerHref } from '@/lib/postViewerRoute';
+import {
+  buildMediaHubPhotoGallery,
+  findGalleryIndexByKey,
+} from '@/lib/media/pulsePhotoGallery';
+import type { PulsePhotoViewerItem } from '@/lib/media/pulsePhotoViewerTypes';
+import { usePulsePhotoViewer } from '@/contexts/PulsePhotoViewerContext';
+import { useLinkedPostsMap, useMediaHubPicsUpdates } from '@/hooks/useQueries';
 import type { Post, ProfileUpdate } from '@/types';
 import { getMyPulseDisplayType, resolvePicsUrls } from '@/utils/myPulseDisplayType';
 import { getDiscoverHorizontalShelfWindow } from '@/lib/feedVideoListWindow';
@@ -107,7 +116,7 @@ type MediaHubItem =
 export function MediaHubSection({
   userId,
   userPosts,
-  profileUpdates,
+  profileUpdates: _profileUpdates,
   isOwner,
   contentLocked = false,
   viewAllRoute = '/my-posts',
@@ -115,7 +124,42 @@ export function MediaHubSection({
   const router = useRouter();
   const queryClient = useQueryClient();
   const showToast = useToast((s) => s.show);
+  const photoViewer = usePulsePhotoViewer();
   const [activeTab, setActiveTab] = useState<TabKey>('recent');
+  const shelfListRef = useRef<FlatList<MediaHubItem>>(null);
+  const shelfScrollByTab = useRef<Record<TabKey, number>>({
+    recent: 0,
+    favorites: 0,
+    photos: 0,
+  });
+
+  const { data: mediaHubPicsUpdates = [] } = useMediaHubPicsUpdates(
+    userId,
+    !contentLocked,
+  );
+
+  const postsById = useMemo(() => {
+    const m = new Map<string, Post>();
+    for (const p of userPosts) m.set(p.id, p);
+    return m;
+  }, [userPosts]);
+
+  const foreignLinkedPostIds = useMemo(() => {
+    const out: string[] = [];
+    for (const u of mediaHubPicsUpdates) {
+      const id = u.linkedPostId?.trim();
+      if (id && !postsById.has(id)) out.push(id);
+    }
+    return out;
+  }, [mediaHubPicsUpdates, postsById]);
+
+  const linkedPostsMap = useLinkedPostsMap(foreignLinkedPostIds);
+
+  const linkedPostsById = useMemo(() => {
+    const m = new Map(postsById);
+    linkedPostsMap.forEach((p, id) => m.set(id, p));
+    return m;
+  }, [postsById, linkedPostsMap]);
 
   const recentVideos = useMemo<MediaHubItem[]>(
     () =>
@@ -146,7 +190,7 @@ export function MediaHubSection({
       out.push({ kind: 'post', key: `post:${post.id}`, post });
     }
 
-    for (const update of profileUpdates ?? []) {
+    for (const update of mediaHubPicsUpdates) {
       /** Match My Pulse card routing: `media_note` photo-only rows are **pics** in the UI but not always `type === 'pics'` in the DB. */
       if (getMyPulseDisplayType(update) !== 'pics') continue;
       const urls = resolvePicsUrls(update);
@@ -166,7 +210,39 @@ export function MediaHubSection({
     }
 
     return out.slice(0, 40);
-  }, [userPosts, profileUpdates]);
+  }, [userPosts, mediaHubPicsUpdates]);
+
+  const restoreShelfScroll = useCallback(() => {
+    const offset = shelfScrollByTab.current[activeTab];
+    requestAnimationFrame(() => {
+      shelfListRef.current?.scrollToOffset({
+        offset,
+        animated: false,
+      });
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    const offset = shelfScrollByTab.current[activeTab];
+    requestAnimationFrame(() => {
+      shelfListRef.current?.scrollToOffset({
+        offset,
+        animated: false,
+      });
+    });
+  }, [activeTab]);
+
+  const openPhotoViewer = useCallback(
+    (gallery: PulsePhotoViewerItem[], itemKey: string) => {
+      if (!photoViewer.available || gallery.length === 0) return;
+      photoViewer.open({
+        items: gallery,
+        initialIndex: findGalleryIndexByKey(gallery, itemKey),
+        onClosed: restoreShelfScroll,
+      });
+    },
+    [photoViewer, restoreShelfScroll],
+  );
 
   /**
    * Keep this query enabled whenever the owner is viewing their hub — not only
@@ -206,20 +282,52 @@ export function MediaHubSection({
         ? favorites
         : photos;
 
+  const photoGalleryItems = useMemo(() => {
+    const updatesById = new Map(mediaHubPicsUpdates.map((u) => [u.id, u] as const));
+    return buildMediaHubPhotoGallery(photos, { updatesById, linkedPostsById });
+  }, [photos, mediaHubPicsUpdates, linkedPostsById]);
+
+  const favoritesPhotoGallery = useMemo(
+    () =>
+      buildMediaHubPhotoGallery(
+        favorites.filter((f) => f.kind === 'post' && f.post.type === 'image'),
+        { linkedPostsById: postsById },
+      ),
+    [favorites, postsById],
+  );
+
   /**
-   * Tap → open. Posts route into the feed; pulse-pic items open the
-   * parent My Pulse update so the viewer can see the caption and the
-   * full gallery for that pin.
+   * Tap → open. Photos tab (and image favorites) expand in the premium
+   * lightbox first; videos keep routing to the post viewer.
    */
   const onOpenItem = useCallback(
     (item: MediaHubItem) => {
+      if (activeTab === 'photos' && photoGalleryItems.length > 0) {
+        openPhotoViewer(photoGalleryItems, item.key);
+        return;
+      }
+
+      if (
+        activeTab === 'favorites' &&
+        item.kind === 'post' &&
+        item.post.type === 'image' &&
+        favoritesPhotoGallery.length > 0
+      ) {
+        openPhotoViewer(favoritesPhotoGallery, item.key);
+        return;
+      }
+
       if (item.kind === 'post') {
-        router.push(resolvePostViewerHref(item.post) as any);
+        router.push(
+          resolvePostViewerHref(item.post, {
+            circle: item.post.linkedCommunitySlug,
+          }) as any,
+        );
       } else {
         router.push(`/my-pulse/${item.updateId}` as any);
       }
     },
-    [router],
+    [activeTab, favoritesPhotoGallery, openPhotoViewer, photoGalleryItems, router],
   );
 
   /**
@@ -245,6 +353,7 @@ export function MediaHubSection({
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['userPosts', userId] });
       queryClient.invalidateQueries({ queryKey: profileUpdateKeys.forUser(userId) });
+      queryClient.invalidateQueries({ queryKey: ['profileUpdates', 'mediaHubPics', userId] });
       queryClient.invalidateQueries({
         queryKey: savedPostKeys.forUser(userId),
         refetchType: 'all',
@@ -382,6 +491,7 @@ export function MediaHubSection({
         <MediaHubEmpty tab={activeTab} isOwner={isOwner} router={router} />
       ) : (
         <FlatList
+          ref={shelfListRef}
           horizontal
           data={items}
           keyExtractor={(item, i) => `${item.key}:${i}`}
@@ -390,6 +500,10 @@ export function MediaHubSection({
           windowSize={MEDIA_HUB_SHELF_WIN.windowSize}
           maxToRenderPerBatch={MEDIA_HUB_SHELF_WIN.maxToRenderPerBatch}
           initialNumToRender={MEDIA_HUB_SHELF_WIN.initialNumToRender}
+          scrollEventThrottle={16}
+          onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            shelfScrollByTab.current[activeTab] = e.nativeEvent.contentOffset.x;
+          }}
           renderItem={({ item }) => (
             <MediaThumbCard
               item={item}
@@ -432,6 +546,8 @@ function MediaThumbCard({
   onRequestDelete: () => void;
 }) {
   const isVideo = item.kind === 'post' && item.post.type === 'video';
+  const isPhoto =
+    item.kind === 'pulse-pic' || (item.kind === 'post' && item.post.type === 'image');
   const isPulsePic = item.kind === 'pulse-pic';
   const processing =
     item.kind === 'post' ? (item.post.mediaProcessingStatus ?? '').trim().toLowerCase() : '';
@@ -469,6 +585,14 @@ function MediaThumbCard({
         <View style={styles.playOverlay} pointerEvents="none">
           <View style={styles.playCircle}>
             <Ionicons name="play" size={14} color="#FFF" />
+          </View>
+        </View>
+      ) : null}
+
+      {isPhoto && !isRendering && !renderFailed ? (
+        <View style={styles.browseOverlay} pointerEvents="none">
+          <View style={styles.browseChip}>
+            <Ionicons name="expand-outline" size={12} color="#FFF" />
           </View>
         </View>
       ) : null}
@@ -740,6 +864,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  browseOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+  },
+  browseChip: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(20,184,166,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
