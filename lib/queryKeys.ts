@@ -198,6 +198,9 @@ export const circleContentKeys = {
     ['circleWelcomeThread', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId] as const,
   topHelpers: (communityId: string) =>
     ['circleTopHelpers', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, communityId] as const,
+  /** Current week's DB-backed prompt for a Circle room (slug-scoped). */
+  weeklyPrompt: (circleSlug: string) =>
+    ['circleWeeklyPrompt', SOCIAL_AVATAR_PAYLOAD_CACHE_VERSION, circleSlug] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────

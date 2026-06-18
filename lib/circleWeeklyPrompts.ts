@@ -92,3 +92,37 @@ export function getWeeklyCirclePrompt(
   }
   return picked;
 }
+
+/** DB row shape needed to prefer a persisted weekly prompt over static fallback. */
+export type DbWeeklyPromptSource = Pick<CircleWeeklyPrompt, 'id' | 'title' | 'body' | 'cta'> & {
+  promptId: string;
+};
+
+/**
+ * Merge order for Circle room weekly prompt card:
+ * 1) DB prompt (attributed via promptId)
+ * 2) metadata override + static fallback via getWeeklyCirclePrompt (no attribution)
+ */
+export function mergeCircleWeeklyPromptForRoom(options: {
+  dbPrompt: DbWeeklyPromptSource | null | undefined;
+  slug: string;
+  accent?: Pick<CircleAccent, 'composerPrompt' | 'vibe'>;
+  metadataOverride?: Pick<CircleWeeklyPrompt, 'title' | 'body' | 'cta'>;
+}): { prompt: CircleWeeklyPrompt; weeklyPromptId: string | null } {
+  const { dbPrompt, slug, accent, metadataOverride } = options;
+  if (dbPrompt?.title && dbPrompt?.body && dbPrompt.promptId) {
+    return {
+      prompt: {
+        id: dbPrompt.id,
+        title: dbPrompt.title,
+        body: dbPrompt.body,
+        cta: dbPrompt.cta,
+      },
+      weeklyPromptId: dbPrompt.promptId,
+    };
+  }
+  return {
+    prompt: getWeeklyCirclePrompt(slug, accent, metadataOverride),
+    weeklyPromptId: null,
+  };
+}

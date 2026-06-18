@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { circleContentService } from '@/services';
 import { useAuth } from '@/contexts/AuthContext';
 import { circleContentKeys } from '@/lib/queryKeys';
+import { circleWeeklyPromptsService } from '@/services/supabase/circleWeeklyPrompts';
 
 /** Viewer Helpful marks on loaded thread replies (batch). */
 export function useCircleReplyHelpfulMap(threadId: string | undefined, replyIds: string[]) {
@@ -70,5 +71,19 @@ export function useCircleTopHelpers(communityId: string | undefined, enabled = t
     queryFn: () => circleContentService.getTopHelpers(cid, 3),
     enabled: enabled && cid.length > 0,
     staleTime: 120_000,
+  });
+}
+
+/** DB-backed weekly prompt for a Circle room — null when none or on read failure. */
+export function useCircleWeeklyPrompt(circleSlug: string | undefined) {
+  const slug = (circleSlug ?? '').trim().toLowerCase();
+  return useQuery({
+    queryKey: circleContentKeys.weeklyPrompt(slug),
+    queryFn: () => circleWeeklyPromptsService.getCurrent(slug),
+    enabled: slug.length > 0,
+    staleTime: 120_000,
+    gcTime: 1000 * 60 * 30,
+    retry: 1,
+    placeholderData: (previousData) => previousData,
   });
 }

@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useCommunity, useCommunityPosts, useCircleThreads, useLikedPostIds, useCircleViewerPostReactions } from '@/hooks/useQueries';
-import { useCircleWelcomeThread, useCircleTopHelpers } from '@/hooks/useCircleQueries';
+import { useCircleWelcomeThread, useCircleTopHelpers, useCircleWeeklyPrompt } from '@/hooks/useCircleQueries';
 import {
   PublicHealthGuardrailBanner,
   shouldShowPublicHealthGuardrail,
@@ -43,7 +43,7 @@ import { useToast } from '@/components/ui/Toast';
 import { isAnonymousConfessionCircle, CIRCLE_JOIN_BETA_NOTE, CONFESSIONS_BETA_DISCLOSURE } from '@/lib/anonymousCircle';
 import { getCircleAccent } from '@/lib/circleAccents';
 import { filterThreadsByFlair, visibleFlairOptionsForThreads, type CircleFlairFilter } from '@/lib/circleFlairs';
-import { getWeeklyCirclePrompt } from '@/lib/circleWeeklyPrompts';
+import { mergeCircleWeeklyPromptForRoom } from '@/lib/circleWeeklyPrompts';
 import { resolveCircleRules, resolveWelcomeCopy, resolveWeeklyPromptOverride } from '@/lib/circleIdentity';
 import { patchPostReactionCounts } from '@/lib/postCacheUpdates';
 import { enqueueAction } from '@/lib/offlineQueue';
@@ -467,20 +467,19 @@ export default function CommunityDetailScreen() {
   );
   const isAnonCircleEarly = isAnonymousConfessionCircle(slug);
   const { data: topHelpers } = useCircleTopHelpers(activeCommunity?.id, !isAnonCircleEarly);
+  const { data: dbWeeklyPrompt } = useCircleWeeklyPrompt(slug);
 
-  /** Static/metadata weekly prompt only — DB AI prompts stay off until cron phase. */
-  const weeklyPrompt = useMemo(() => {
-    if (!activeCommunity) return null;
+  /** DB prompt → metadata override → static fallback (only DB rows get promptId attribution). */
+  const { prompt: weeklyPrompt, weeklyPromptId } = useMemo(() => {
+    if (!activeCommunity) return { prompt: null, weeklyPromptId: null as string | null };
     const accentLocal = getCircleAccent(slug, activeCommunity.accentColor);
-    return getWeeklyCirclePrompt(
+    return mergeCircleWeeklyPromptForRoom({
+      dbPrompt: dbWeeklyPrompt ?? null,
       slug,
-      accentLocal,
-      resolveWeeklyPromptOverride(circleIdentity),
-    );
-  }, [slug, activeCommunity, circleIdentity]);
-
-  /** DB prompt attribution disabled until weekly-prompt automation phase. */
-  const weeklyPromptId = null;
+      accent: accentLocal,
+      metadataOverride: resolveWeeklyPromptOverride(circleIdentity),
+    });
+  }, [slug, activeCommunity, circleIdentity, dbWeeklyPrompt]);
 
   const postsList = useMemo(() => {
     const raw = [...(allPosts ?? [])];
