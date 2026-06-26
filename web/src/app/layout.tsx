@@ -82,7 +82,7 @@ export default async function RootLayout({
   return (
     <html lang={htmlLang} className={`dark ${inter.variable} ${spaceGrotesk.variable} min-h-dvh scroll-smooth`}>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
-        <Script id="pv-auth-callback-redirect" strategy="beforeInteractive">
+        <Script id="pv-auth-callback-redirect" strategy="afterInteractive">
           {`
 (function(){
   try {

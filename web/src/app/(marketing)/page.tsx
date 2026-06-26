@@ -32,6 +32,13 @@ export default async function HomePage() {
         type="image/avif"
         media="(min-width: 1024px)"
       />
+      <link
+        rel="preload"
+        as="image"
+        href={LANDING.hero.mobile.src}
+        type="image/avif"
+        media="(max-width: 1023px)"
+      />
       <HeroSection locale={locale} />
       <Reveal className="pv-cv-section">
         <HomeExperienceShowcase locale={locale} />

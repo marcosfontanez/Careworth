@@ -14,7 +14,7 @@ export function HeroSection({ locale }: { locale: Locale }) {
 
   return (
     <section className="relative isolate overflow-hidden pt-10 pb-14 sm:pt-14 sm:pb-18 lg:pb-20">
-      <WebsiteSectionBackdrop variant="deep" animated />
+      <WebsiteSectionBackdrop variant="deep" />
       <div
         aria-hidden
         className="pointer-events-none absolute -left-32 top-0 -z-10 h-[480px] w-[480px] rounded-full bg-primary/10 blur-[120px]"
@@ -87,8 +87,9 @@ export function HeroSection({ locale }: { locale: Locale }) {
                   alt={LANDING.hero.alt}
                   width={LANDING.hero.mobile.width}
                   height={LANDING.hero.mobile.height}
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
+                  fetchPriority="high"
                   className="block h-auto w-full"
                 />
               </picture>
